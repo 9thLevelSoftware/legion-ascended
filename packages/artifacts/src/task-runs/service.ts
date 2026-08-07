@@ -68,6 +68,25 @@ export interface TaskRunListSuccess {
   readonly ok: true;
   readonly status: "read";
   readonly taskRuns: readonly TaskRunSuccess[];
+  /**
+   * Directory names under `runs/` that produced no entry in `taskRuns`.
+   *
+   * The listing skips a directory whose name is not a run id and a run whose
+   * `task-run.json` will not read, and still reports `ok: true`. Without this
+   * field the result is a silently partial list that presents itself as the
+   * change's runs, and a consumer cannot tell "this change has one run" from
+   * "this change has two runs and one of them is corrupt".
+   *
+   * That distinction is not cosmetic for the ordering gates: they take
+   * `min(startedAt)` over the list, and dropping a run can only move that
+   * minimum later — the direction that makes an approval recorded *after*
+   * execution began look as though it came first. A consumer that cannot see a
+   * skip has no way to refuse to answer, so the answer it gives is a fail-open.
+   *
+   * Empty on every healthy change, so callers that ignore it are unaffected;
+   * the point is that a caller which must be exact now has something to read.
+   */
+  readonly skipped: readonly string[];
   readonly diagnostics: readonly [];
 }
 
@@ -370,7 +389,7 @@ export async function listTaskRunsForChange(input: ListTaskRunsInput): Promise<T
     entries = await readdir(runsRoot, { withFileTypes: true });
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return { ok: true, status: "read", taskRuns: [], diagnostics: [] };
+      return { ok: true, status: "read", taskRuns: [], skipped: [], diagnostics: [] };
     }
     const message = error instanceof Error ? error.message : String(error);
     return failure("invalid", [
@@ -383,15 +402,27 @@ export async function listTaskRunsForChange(input: ListTaskRunsInput): Promise<T
   }
 
   const taskRuns: TaskRunSuccess[] = [];
+  // Every `continue` below records what it dropped. The two skips are not the
+  // same defect — a directory that is not named like a run may be something else
+  // entirely, a run that will not read is a run that exists and is broken — but
+  // they have identical consequences for a caller counting the change's runs, so
+  // both are reported.
+  const skipped: string[] = [];
   for (const entry of entries.filter((candidate) => candidate.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
     const runId = runIdSchema.safeParse(entry.name);
-    if (!runId.success) continue;
+    if (!runId.success) {
+      skipped.push(entry.name);
+      continue;
+    }
     const read = await readTaskRun({
       repositoryRoot: input.repositoryRoot,
       changeId,
       runId: runId.data
     });
-    if (!read.ok) continue;
+    if (!read.ok) {
+      skipped.push(entry.name);
+      continue;
+    }
     taskRuns.push(read);
   }
 
@@ -401,5 +432,5 @@ export async function listTaskRunsForChange(input: ListTaskRunsInput): Promise<T
     return left.document.id.localeCompare(right.document.id);
   });
 
-  return { ok: true, status: "read", taskRuns, diagnostics: [] };
+  return { ok: true, status: "read", taskRuns, skipped, diagnostics: [] };
 }

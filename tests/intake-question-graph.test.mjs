@@ -226,6 +226,138 @@ test("a manual criterion needs a real reason", () => {
   }
 });
 
+const DECLARED_SURFACE_ANSWERS = {
+  ...COMPLETE_ANSWERS,
+  "req-1-ac-1-surface-kind": "integration",
+  "req-1-ac-1-surface-interface": "postgres:5432",
+  "req-1-ac-1-surface-rationale": "The resolver writes through a live schema rather than a fake.",
+  "req-1-ac-1-surface-pins": "ops/compose.test.yml"
+};
+
+test("a half-declared verification surface is refused, never silently dropped", () => {
+  // Dropping it would turn "I said this crosses a boundary" into the same answer
+  // as "nobody said anything" — `unevaluable` at ship — which is the fail-open
+  // this gate exists to close, arriving through the authoring path before any
+  // gate runs. Each of these is unreachable through the graph, which asks the
+  // follow-ups only after a kind is given and marks them required; they are
+  // checked anyway because that `required` flag is one line away from being wrong
+  // and a hand-edited session file reaches every one of them.
+  const base = driveTo(DECLARED_SURFACE_ANSWERS);
+  assert.deepEqual(validateAnswerSet({ answers: base }), []);
+
+  const blank = (nodeId, value = "") =>
+    base.map((entry) => (entry.nodeId === nodeId ? { ...entry, value } : entry));
+
+  for (const [nodeId, code] of [
+    ["req-1-ac-1-surface-interface", "surface_without_interface"],
+    ["req-1-ac-1-surface-rationale", "surface_without_rationale"],
+    ["req-1-ac-1-surface-pins", "surface_without_pins"]
+  ]) {
+    const diagnostics = validateAnswerSet({ answers: blank(nodeId) });
+    assert.ok(
+      diagnostics.some((entry) => entry.code === code),
+      `${nodeId} blank should report ${code}, got ${JSON.stringify(diagnostics)}`
+    );
+  }
+
+  // "tbd" is a non-answer wearing an answer's clothes, and the rationale is the
+  // only check a human has on whether the pins have anything to do with the
+  // command.
+  assert.ok(
+    validateAnswerSet({ answers: blank("req-1-ac-1-surface-rationale", "tbd") }).some(
+      (entry) => entry.code === "surface_without_rationale"
+    )
+  );
+});
+
+test("a pinned path named twice is refused at both intake layers, by name", () => {
+  // `verificationSurfaceSchema.superRefine` refuses a path pinned twice, and
+  // `buildRequirements` calls `requirementSchema.parse` rather than `safeParse`
+  // — so a repeated path escaped both intake layers and surfaced at `--finalize`
+  // as a raw zod issue array with no nodeId, no slot and no recovery. That is
+  // exactly what `mintPinnedReferences`' docblock says it exists to prevent
+  // ("the operator gets a stack trace instead of the question back"), and it was
+  // one line away from the named `invalid_surface_path` and
+  // `too_many_surface_pins` diagnostics covering every other property of the
+  // same answer.
+  //
+  // Both layers are checked because they are reached by different entrances:
+  // `validateAnswer` by `legion start --answer` one question at a time, and
+  // `validateAnswerSet` by `--intake` over a whole file.
+  const repeated = "ops/compose.test.yml, ops/compose.test.yml";
+  const answers = driveTo(DECLARED_SURFACE_ANSWERS).map((entry) =>
+    entry.nodeId === "req-1-ac-1-surface-pins" ? { ...entry, value: repeated } : entry
+  );
+
+  const setDiagnostics = validateAnswerSet({ answers });
+  assert.ok(
+    setDiagnostics.some((entry) => entry.code === "duplicate_surface_path"),
+    JSON.stringify(setDiagnostics)
+  );
+
+  const node = materializeNodes({ answers, injectedNodes: [] }).find(
+    (entry) => entry.id === "req-1-ac-1-surface-pins"
+  );
+  const single = validateAnswer(node, repeated);
+  assert.equal(single.diagnostics[0]?.code, "duplicate_surface_path");
+  assert.match(single.diagnostics[0].message, /named twice/);
+});
+
+test("a verification surface on a human-decided criterion is refused", () => {
+  // A surface says what a *command* reached, and a manual criterion has no
+  // command. The requirement's manual proof arm has nowhere to put one, so
+  // without this check `criterionFor` would drop the declaration in silence and
+  // the operator would never learn the question they answered was discarded.
+  const answers = driveTo(DECLARED_SURFACE_ANSWERS).map((entry) =>
+    entry.nodeId === "req-1-ac-1-proof"
+      ? { ...entry, value: "manual" }
+      : entry.nodeId === "req-1-ac-1-detail"
+        ? { ...entry, value: "Message wording is a judgement call no assertion should freeze." }
+        : entry
+  );
+
+  const diagnostics = validateAnswerSet({ answers });
+  assert.ok(
+    diagnostics.some((entry) => entry.code === "surface_on_manual_criterion"),
+    JSON.stringify(diagnostics)
+  );
+});
+
+test("a declared surface with no pin minted for it is dropped rather than half-written", () => {
+  // `buildRequirements` is pure and synchronous, so the pins are injected. A
+  // caller that supplies a minter answering `undefined` — which is what an
+  // unreadable path resolves to — must not produce a surface with a short
+  // `pinned` array, because `verificationSurfaceSchema` marks it `.min(1)` and a
+  // partial declaration is a claim with nothing behind it. `--finalize` never
+  // reaches this: it resolves every declared path first and refuses by name.
+  const answers = driveTo(DECLARED_SURFACE_ANSWERS);
+
+  const withPins = buildRequirements({
+    answers,
+    projectId: "prj_asset-mapper",
+    createdAt: CREATED_AT,
+    schemaVersion: SCHEMA_VERSION,
+    intakeSessionPath: ".legion/project/intake/itk_x/session.json",
+    mintPin: (artifactPath) => ({ path: artifactPath, sha256: `sha256:${"a".repeat(64)}` })
+  });
+  assert.deepEqual(withPins[0].acceptance.criteria[0].proof.surface, {
+    kind: "integration",
+    interface: "postgres:5432",
+    rationale: "The resolver writes through a live schema rather than a fake.",
+    pinned: [{ path: "ops/compose.test.yml", sha256: `sha256:${"a".repeat(64)}` }]
+  });
+
+  const withoutPins = buildRequirements({
+    answers,
+    projectId: "prj_asset-mapper",
+    createdAt: CREATED_AT,
+    schemaVersion: SCHEMA_VERSION,
+    intakeSessionPath: ".legion/project/intake/itk_x/session.json",
+    mintPin: () => undefined
+  });
+  assert.equal(withoutPins[0].acceptance.criteria[0].proof.surface, undefined);
+});
+
 test("an executable criterion must be a command the runner could actually run", () => {
   assert.deepEqual(parseCommandLine("pnpm test --filter core"), {
     command: "pnpm",
@@ -414,7 +546,11 @@ test("a completed interview builds requirements that match the protocol", () => 
     projectId: "prj_asset-mapper",
     createdAt: CREATED_AT,
     schemaVersion: SCHEMA_VERSION,
-    intakeSessionPath: ".legion/project/intake/itk_x/session.json"
+    intakeSessionPath: ".legion/project/intake/itk_x/session.json",
+    // Neither fixture declares a verification surface, so no path is ever
+    // minted; the injection is required so this call site says so out loud
+    // rather than by omission.
+    mintPin: () => undefined
   });
 
   assert.equal(requirements.length, 2);
@@ -442,7 +578,11 @@ test("the rendered roadmap satisfies the validator its own docs specify", () => 
     projectId: "prj_asset-mapper",
     createdAt: CREATED_AT,
     schemaVersion: SCHEMA_VERSION,
-    intakeSessionPath: ".legion/project/intake/itk_x/session.json"
+    intakeSessionPath: ".legion/project/intake/itk_x/session.json",
+    // Neither fixture declares a verification surface, so no path is ever
+    // minted; the injection is required so this call site says so out loud
+    // rather than by omission.
+    mintPin: () => undefined
   });
   const roadmap = renderRoadmap({
     projectName: "Asset Mapper",

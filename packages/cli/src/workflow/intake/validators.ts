@@ -17,7 +17,12 @@
  * is a thing you have to look at and choose.
  */
 
-import type { IntakeAnswer } from "@legion/protocol";
+import {
+  MAX_ACCEPTANCE_PATHS,
+  artifactPathSchema,
+  verificationSurfaceKindSchema,
+  type IntakeAnswer
+} from "@legion/protocol";
 
 import type { IntakeNode } from "./graph.js";
 import { SKIPPED_VALUE } from "./graph.js";
@@ -31,6 +36,59 @@ export interface IntakeDiagnostic {
 
 export const MAX_BUDGET_FILES = 10_000;
 export const MAX_BUDGET_LINES = 1_000_000;
+
+/** `verificationSurfaceSchema.pinned` caps the array at eight references. */
+export const MAX_SURFACE_PINS = 8;
+
+/** The control plane, which a protected acceptance path may never name. */
+const CONTROL_PLANE_ROOT = ".legion/project";
+
+/**
+ * Whether an answer names the control plane, **case-folded**.
+ *
+ * `.Legion/project/project.json` passed the exact-string form of this check at
+ * the node, at the answer set, in `acceptancePathsSchema` and in the harness, and
+ * on a case-insensitive filesystem resolves to a control artifact the harness
+ * restores *before* it compares — so the run records `pass` for a declaration
+ * that protects nothing, and the same document answers `unevaluable` on a
+ * case-sensitive CI. Refused here as well as in the schema because an intake
+ * refusal names the node and the slot, and being told at the schema is being told
+ * far too late. See `namesControlPlane` in @legion/protocol for the full argument.
+ */
+function namesControlPlane(entry: string): boolean {
+  const folded = entry.toLowerCase();
+  const root = CONTROL_PLANE_ROOT.toLowerCase();
+  return folded === root || folded.startsWith(`${root}/`);
+}
+
+/**
+ * The repository-relative paths a multi-path answer names.
+ *
+ * One answer, several paths, so the operator can write them on separate lines or
+ * separated by commas without being told which. Blank entries are dropped rather
+ * than reported: a trailing newline is not a mistake worth a diagnostic, and the
+ * empty case is caught by there being no paths left.
+ *
+ * Shared by the surface pins and the protected acceptance paths rather than
+ * copied. Two splitters would be two chances for "a, b" and "a\nb" to stop
+ * meaning the same thing in one of them.
+ */
+export function parsePathList(value: string): readonly string[] {
+  return value
+    .split(/[\n,]/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+/** The first entry that appears more than once, or `undefined`. */
+function firstRepeated(values: readonly string[]): string | undefined {
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) return value;
+    seen.add(value);
+  }
+  return undefined;
+}
 
 /**
  * Answers that look like an answer and are not one.
@@ -192,6 +250,27 @@ export function validateAnswer(node: IntakeNode, raw: IntakeAnswer["value"]): Va
     diagnostics: [{ code, message, nodeId: node.id, slot: node.slot }]
   });
 
+  // A skip is an answer — "asked, and declined" — for a node of any kind, and
+  // that is what the batch entrance has always recorded: `handleBatchIntake`
+  // writes `SKIPPED_VALUE` for an unanswered optional node without consulting
+  // this function at all.
+  //
+  // Hoisted above the kind dispatch because the branches below judge `""` as a
+  // *value*: an empty string is not one of a `single` node's options and is not
+  // a boolean, so `legion start --skip` on an optional `single` or `confirm`
+  // node exited 1 on a question the graph itself marked declinable, while the
+  // same node skipped cleanly through `--intake`. Two entrances the module
+  // comment says funnel through one validator disagreed about what optional
+  // means, and the disagreement was unreachable until the first optional node of
+  // either kind — this release's `-surface-kind` — made it reachable.
+  //
+  // `multi` is excluded rather than folded in: it already has a well-defined
+  // empty answer, the empty array, and returning a string for it would record
+  // the wrong type for a list-valued slot.
+  if (!node.required && node.kind !== "multi" && typeof raw === "string" && raw.trim().length === 0) {
+    return { value: SKIPPED_VALUE, diagnostics };
+  }
+
   if (node.kind === "confirm") {
     if (typeof raw === "boolean") return { value: raw, diagnostics };
     const text = asText(raw);
@@ -316,6 +395,93 @@ function validateSlotText(node: IntakeNode, value: string): IntakeDiagnostic | u
     return fail("too_long", "Keep the command or reason to 1024 characters or fewer.");
   }
 
+  // The surface slots have exactly one meaning each, unlike `…criteria.N.detail`
+  // below, so their rules belong here where a bad answer can still be corrected
+  // for the price of retyping one line.
+  if (/^requirements\.\d+\.criteria\.\d+\.surface\.interface$/.test(node.slot) && value.length > 256) {
+    return fail("too_long", "Keep the interface name to 256 characters or fewer.");
+  }
+  if (/^requirements\.\d+\.criteria\.\d+\.surface\.rationale$/.test(node.slot) && value.length > 1_024) {
+    return fail("too_long", "Keep the rationale to 1024 characters or fewer.");
+  }
+  if (/^requirements\.\d+\.criteria\.\d+\.surface\.pins$/.test(node.slot)) {
+    const paths = parsePathList(value);
+    if (paths.length === 0) {
+      return fail(
+        "empty_surface_pins",
+        "Name at least one repository-relative file. A surface pin is what makes the declaration falsifiable; a declaration with nothing to re-hash passes every check vacuously."
+      );
+    }
+    if (paths.length > MAX_SURFACE_PINS) {
+      return fail("too_many_surface_pins", `Name at most ${MAX_SURFACE_PINS} files.`);
+    }
+    // Refused at the node rather than inside `requirementSchema.parse` during
+    // --finalize. `artifactPathSchema` forbids backslashes, drive letters,
+    // leading slashes, spaces and `..`, which is every property of a path pasted
+    // out of a Windows shell.
+    const invalid = paths.find((entry) => !artifactPathSchema.safeParse(entry).success);
+    if (invalid !== undefined) {
+      return fail(
+        "invalid_surface_path",
+        `"${invalid}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`
+      );
+    }
+    // `verificationSurfaceSchema.superRefine` refuses a path pinned twice, and
+    // `buildRequirements` parses rather than safe-parses — so without this the
+    // answer "ops/compose.yml, ops/compose.yml", which is what listing files by
+    // hand produces, was accepted by both intake layers and surfaced at
+    // `--finalize` as a raw zod issue array with no nodeId, no slot and no
+    // recovery. That is precisely what `mintPinnedReferences` says it exists to
+    // prevent one function over.
+    const repeated = firstRepeated(paths);
+    if (repeated !== undefined) {
+      return fail(
+        "duplicate_surface_path",
+        `"${repeated}" is named twice. Pin each file once: two pins on one path assert two different truths about the same bytes.`
+      );
+    }
+    return undefined;
+  }
+
+  // The protected acceptance paths, checked at the node for the same reason the
+  // surface pins are: a bad path can still be corrected here for the price of
+  // retyping one line, and `buildRequirements` parses rather than safe-parses, so
+  // anything that reaches `--finalize` arrives as a raw zod issue array with no
+  // nodeId and no recovery.
+  if (/^requirements\.\d+\.criteria\.\d+\.acceptance-paths$/.test(node.slot)) {
+    const paths = parsePathList(value);
+    // An empty answer is not an error here: the node is optional, and a skip
+    // records `SKIPPED_VALUE` rather than an empty string. Reaching this with
+    // nothing in it means the operator typed whitespace, which is the same
+    // undeclared set and is the honest reading of it.
+    if (paths.length === 0) return undefined;
+    if (paths.length > MAX_ACCEPTANCE_PATHS) {
+      return fail("too_many_acceptance_paths", `Name at most ${MAX_ACCEPTANCE_PATHS} files.`);
+    }
+    const invalid = paths.find((entry) => !artifactPathSchema.safeParse(entry).success);
+    if (invalid !== undefined) {
+      return fail(
+        "invalid_acceptance_path",
+        `"${invalid}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`
+      );
+    }
+    const control = paths.find((entry) => namesControlPlane(entry));
+    if (control !== undefined) {
+      return fail(
+        "control_plane_acceptance_path",
+        `"${control}" is inside ${CONTROL_PLANE_ROOT}, which the guarded harness restores on every run rather than reporting. Name the test file the work must not weaken.`
+      );
+    }
+    const repeated = firstRepeated(paths);
+    if (repeated !== undefined) {
+      return fail(
+        "duplicate_acceptance_path",
+        `"${repeated}" is named twice. Name each file once: the harness hashes them, and two entries for one path are one fact counted twice.`
+      );
+    }
+    return undefined;
+  }
+
   // A criterion's detail carries either the command that decides it or the
   // reason no command can. Which one is settled by the proof node, which the
   // single-answer path cannot see, so the check lives in `validateAnswerSet`.
@@ -344,6 +510,22 @@ export interface CriterionDraft {
   readonly statement: string;
   readonly proof: string;
   readonly detail: string;
+  /**
+   * The verification surface as the operator typed it: empty strings where the
+   * question was declined or never applicable. Kept raw here — minting the pins
+   * needs the filesystem, and this function is pure.
+   */
+  readonly surfaceKind: string;
+  readonly surfaceInterface: string;
+  readonly surfaceRationale: string;
+  readonly surfacePins: string;
+  /**
+   * The protected acceptance paths as the operator typed them, empty when the
+   * question was declined or never applicable. Kept raw for `surfacePins`'
+   * reason and one more: nothing hashes these at any point, so there is nothing
+   * a filesystem read would add.
+   */
+  readonly acceptancePaths: string;
 }
 
 function answerText(answers: ReadonlyMap<string, IntakeAnswer["value"]>, nodeId: string): string | undefined {
@@ -371,13 +553,211 @@ export function requirementDrafts(answers: readonly IntakeAnswer[]): readonly Re
         index: criterion,
         statement: criterionStatement,
         proof: answerText(map, `req-${index}-ac-${criterion}-proof`) ?? "",
-        detail: answerText(map, `req-${index}-ac-${criterion}-detail`) ?? ""
+        detail: answerText(map, `req-${index}-ac-${criterion}-detail`) ?? "",
+        surfaceKind: answerText(map, `req-${index}-ac-${criterion}-surface-kind`) ?? "",
+        surfaceInterface: answerText(map, `req-${index}-ac-${criterion}-surface-interface`) ?? "",
+        surfaceRationale: answerText(map, `req-${index}-ac-${criterion}-surface-rationale`) ?? "",
+        surfacePins: answerText(map, `req-${index}-ac-${criterion}-surface-pins`) ?? "",
+        acceptancePaths: answerText(map, `req-${index}-ac-${criterion}-acceptance-paths`) ?? ""
       });
     }
 
     drafts.push({ index, statement, priority, category, criteria });
   }
   return drafts;
+}
+
+/**
+ * Everything wrong with one criterion's declared verification surface.
+ *
+ * A half-declared surface is refused rather than dropped. Dropping it turns "I
+ * said this crosses a boundary" into the same answer as "nobody said anything" —
+ * `unevaluable` at ship — which is the fail-open family this work exists to
+ * close, arriving through the authoring path before a gate ever runs. Refusing
+ * costs nothing: the answers stay in the session and one `--answer` repairs it.
+ *
+ * Most of these are unreachable through the graph, which asks the follow-ups
+ * only after a kind is given and marks them required. They are checked anyway
+ * because the graph's `required` flag is one line away from being wrong and a
+ * hand-edited session file reaches every one of them.
+ */
+function surfaceDiagnostics(
+  requirementIndex: number,
+  criterion: CriterionDraft
+): readonly IntakeDiagnostic[] {
+  const kind = criterion.surfaceKind.trim();
+  if (kind.length === 0) return [];
+
+  const where = `Requirement ${requirementIndex}, criterion ${criterion.index}`;
+  const nodePrefix = `req-${requirementIndex}-ac-${criterion.index}-surface`;
+  const slotPrefix = `requirements.${requirementIndex}.criteria.${criterion.index}.surface`;
+  const diagnostics: IntakeDiagnostic[] = [];
+
+  if (criterion.proof !== "executable") {
+    // The surface says what a *command* reached. On a criterion a human decides
+    // there is no command, and the requirement's manual proof arm has nowhere to
+    // put one — so without this the declaration would be dropped in silence by
+    // `criterionFor`.
+    return [
+      {
+        code: "surface_on_manual_criterion",
+        message: `${where}: a verification surface describes what a command reaches, and this criterion is decided by a human. Remove the surface, or change the proof to a command.`,
+        nodeId: `${nodePrefix}-kind`,
+        slot: `${slotPrefix}.kind`
+      }
+    ];
+  }
+
+  if (!verificationSurfaceKindSchema.safeParse(kind).success) {
+    diagnostics.push({
+      code: "unknown_surface_kind",
+      message: `${where}: choose one of ${verificationSurfaceKindSchema.options.join(", ")}.`,
+      nodeId: `${nodePrefix}-kind`,
+      slot: `${slotPrefix}.kind`
+    });
+  }
+
+  if (criterion.surfaceInterface.trim().length === 0 || isNonAnswer(criterion.surfaceInterface)) {
+    diagnostics.push({
+      code: "surface_without_interface",
+      message: `${where}: name the interface this command reaches. A surface with no interface names nothing a reviewer can check.`,
+      nodeId: `${nodePrefix}-interface`,
+      slot: `${slotPrefix}.interface`
+    });
+  }
+
+  if (criterion.surfaceRationale.trim().length < 12 || isNonAnswer(criterion.surfaceRationale)) {
+    diagnostics.push({
+      code: "surface_without_rationale",
+      message: `${where}: state what reaching this interface catches that a smaller check would miss. A declared surface with no argument behind it is a claim nobody can review.`,
+      nodeId: `${nodePrefix}-rationale`,
+      slot: `${slotPrefix}.rationale`
+    });
+  }
+
+  const pins = parsePathList(criterion.surfacePins);
+  if (pins.length === 0) {
+    diagnostics.push({
+      code: "surface_without_pins",
+      message: `${where}: name at least one repository-relative file that makes this surface real. legion ship re-hashes them, and a declaration with nothing to re-hash passes every check vacuously.`,
+      nodeId: `${nodePrefix}-pins`,
+      slot: `${slotPrefix}.pins`
+    });
+  } else if (pins.length > MAX_SURFACE_PINS) {
+    diagnostics.push({
+      code: "too_many_surface_pins",
+      message: `${where}: name at most ${MAX_SURFACE_PINS} files.`,
+      nodeId: `${nodePrefix}-pins`,
+      slot: `${slotPrefix}.pins`
+    });
+  } else {
+    for (const pin of pins) {
+      if (artifactPathSchema.safeParse(pin).success) continue;
+      diagnostics.push({
+        code: "invalid_surface_path",
+        message: `${where}: "${pin}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`,
+        nodeId: `${nodePrefix}-pins`,
+        slot: `${slotPrefix}.pins`
+      });
+    }
+    // The uniqueness rule `verificationSurfaceSchema.superRefine` enforces,
+    // checked here as well because `buildRequirements` calls
+    // `requirementSchema.parse` rather than `safeParse`. Without it a path named
+    // twice — what listing files by hand produces — passed both intake layers and
+    // reached the operator at `--finalize` as a raw zod issue array with no
+    // nodeId, no slot and no recovery, one line away from the named
+    // `invalid_surface_path` and `too_many_surface_pins` diagnostics for every
+    // other property of the same answer.
+    const repeated = firstRepeated(pins);
+    if (repeated !== undefined) {
+      diagnostics.push({
+        code: "duplicate_surface_path",
+        message: `${where}: "${repeated}" is named twice. Pin each file once: two pins on one path assert two different truths about the same bytes.`,
+        nodeId: `${nodePrefix}-pins`,
+        slot: `${slotPrefix}.pins`
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+/**
+ * Everything wrong with one criterion's declared protected acceptance paths.
+ *
+ * `surfaceDiagnostics`' argument, over a different subject, and the manual arm is
+ * the one that has to be here rather than in the node rule. The declaration lives
+ * on the executable proof arm alone, so `criterionFor` has nowhere to put it on a
+ * criterion a human decides — and without this it would be dropped in silence,
+ * turning "these tests must not be weakened" into the same answer as "nobody
+ * said", which is the fail-open family this whole series closes, arriving through
+ * the authoring path before a gate ever runs.
+ *
+ * Every rule the node checks is checked again, because the graph's `required`
+ * flag is one line away from being wrong and a hand-edited session file reaches
+ * every one of them.
+ */
+function acceptancePathDiagnostics(
+  requirementIndex: number,
+  criterion: CriterionDraft
+): readonly IntakeDiagnostic[] {
+  const paths = parsePathList(criterion.acceptancePaths);
+  if (paths.length === 0) return [];
+
+  const where = `Requirement ${requirementIndex}, criterion ${criterion.index}`;
+  const nodeId = `req-${requirementIndex}-ac-${criterion.index}-acceptance-paths`;
+  const slot = `requirements.${requirementIndex}.criteria.${criterion.index}.acceptance-paths`;
+
+  if (criterion.proof !== "executable") {
+    return [
+      {
+        code: "acceptance_paths_on_manual_criterion",
+        message: `${where}: a protected acceptance path constrains what an implementer's run may weaken, and this criterion is decided by a human, so no run is constrained by it. Remove the paths, or change the proof to a command.`,
+        nodeId,
+        slot
+      }
+    ];
+  }
+
+  const diagnostics: IntakeDiagnostic[] = [];
+  if (paths.length > MAX_ACCEPTANCE_PATHS) {
+    diagnostics.push({
+      code: "too_many_acceptance_paths",
+      message: `${where}: name at most ${MAX_ACCEPTANCE_PATHS} files.`,
+      nodeId,
+      slot
+    });
+    return diagnostics;
+  }
+  for (const entry of paths) {
+    if (!artifactPathSchema.safeParse(entry).success) {
+      diagnostics.push({
+        code: "invalid_acceptance_path",
+        message: `${where}: "${entry}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`,
+        nodeId,
+        slot
+      });
+      continue;
+    }
+    if (namesControlPlane(entry)) {
+      diagnostics.push({
+        code: "control_plane_acceptance_path",
+        message: `${where}: "${entry}" is inside ${CONTROL_PLANE_ROOT}, which the guarded harness restores on every run rather than reporting. Name the test file the work must not weaken.`,
+        nodeId,
+        slot
+      });
+    }
+  }
+  const repeated = firstRepeated(paths);
+  if (repeated !== undefined) {
+    diagnostics.push({
+      code: "duplicate_acceptance_path",
+      message: `${where}: "${repeated}" is named twice. Name each file once: the harness hashes them, and two entries for one path are one fact counted twice.`,
+      nodeId,
+      slot
+    });
+  }
+  return diagnostics;
 }
 
 export interface ValidateAnswerSetInput {
@@ -428,6 +808,9 @@ export function validateAnswerSet(input: ValidateAnswerSetInput): readonly Intak
     for (const criterion of draft.criteria) {
       const criterionNode = `req-${draft.index}-ac-${criterion.index}-detail`;
       const slot = `requirements.${draft.index}.criteria.${criterion.index}.detail`;
+
+      diagnostics.push(...surfaceDiagnostics(draft.index, criterion));
+      diagnostics.push(...acceptancePathDiagnostics(draft.index, criterion));
 
       if (criterion.proof === "executable") {
         const parsed = parseCommandLine(criterion.detail);

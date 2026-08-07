@@ -10,6 +10,15 @@ import * as z from "zod";
  * does not name. Nine of the fourteen kinds were already unhandled there, so a
  * new kind joins an existing default rather than introducing an unhandled case.
  *
+ * **Re-run for `attestation`, rather than inherited.** The claim above still
+ * holds and the check was made again rather than assumed: `entityNodeId` in
+ * `packages/artifacts/src/traceability/service.ts` names `requirement`,
+ * `oracle`, `task` and `evidence` and returns `undefined` for everything else,
+ * and no other exhaustive `switch` over `entityReferenceSchema.kind` exists in
+ * the tree. An attestation is never a traceability node — it is a governance
+ * record *about* a change, not a link in the requirement-to-evidence chain — so
+ * joining that default is the correct answer rather than a tolerated one.
+ *
  * If a consumer ever needs exhaustive handling, give it an explicit default that
  * surfaces an unsupported-kind diagnostic rather than silently skipping.
  */
@@ -25,6 +34,7 @@ export const ENTITY_ID_KINDS = [
   "evidence",
   "review",
   "approval",
+  "attestation",
   "release",
   "observation",
   "event",
@@ -45,6 +55,7 @@ export const ENTITY_ID_PREFIXES: Record<EntityIdKind, string> = {
   evidence: "evd",
   review: "rev",
   approval: "apv",
+  attestation: "att",
   release: "rel",
   observation: "obs",
   event: "evt",
@@ -88,6 +99,7 @@ export const runIdSchema = idSchema<"RunId">("run", slugSuffixPattern, "Run ID")
 export const evidenceIdSchema = idSchema<"EvidenceId">("evd", slugSuffixPattern, "Evidence ID");
 export const reviewIdSchema = idSchema<"ReviewId">("rev", slugSuffixPattern, "Review ID");
 export const approvalIdSchema = idSchema<"ApprovalId">("apv", slugSuffixPattern, "Approval ID");
+export const attestationIdSchema = idSchema<"AttestationId">("att", slugSuffixPattern, "Attestation ID");
 export const releaseIdSchema = idSchema<"ReleaseId">("rel", slugSuffixPattern, "Release ID");
 export const observationIdSchema = idSchema<"ObservationId">("obs", slugSuffixPattern, "Observation ID");
 export const eventIdSchema = idSchema<"EventId">("evt", timeSortableSuffixPattern, "Event ID");
@@ -104,6 +116,7 @@ export type RunId = z.infer<typeof runIdSchema>;
 export type EvidenceId = z.infer<typeof evidenceIdSchema>;
 export type ReviewId = z.infer<typeof reviewIdSchema>;
 export type ApprovalId = z.infer<typeof approvalIdSchema>;
+export type AttestationId = z.infer<typeof attestationIdSchema>;
 export type ReleaseId = z.infer<typeof releaseIdSchema>;
 export type ObservationId = z.infer<typeof observationIdSchema>;
 export type EventId = z.infer<typeof eventIdSchema>;
@@ -121,6 +134,7 @@ export type EntityId =
   | EvidenceId
   | ReviewId
   | ApprovalId
+  | AttestationId
   | ReleaseId
   | ObservationId
   | EventId
@@ -138,6 +152,7 @@ export const entityIdSchemas = {
   evidence: evidenceIdSchema,
   review: reviewIdSchema,
   approval: approvalIdSchema,
+  attestation: attestationIdSchema,
   release: releaseIdSchema,
   observation: observationIdSchema,
   event: eventIdSchema,
@@ -158,6 +173,7 @@ export const anyEntityIdSchema = z.union([
   evidenceIdSchema,
   reviewIdSchema,
   approvalIdSchema,
+  attestationIdSchema,
   releaseIdSchema,
   observationIdSchema,
   eventIdSchema,

@@ -5,6 +5,7 @@ import {
   LEGION_PROJECT_ROOT,
   artifactReferenceForContent,
   hashContent,
+  listApprovalsForChange,
   readEvidenceIndex,
   readOracleArtifact,
   readTaskGraph,
@@ -27,6 +28,7 @@ import {
   LEGION_PROTOCOL_VERSION,
   buildIdempotencyKey,
   taskRunSchema,
+  type Approval,
   type ArtifactPath,
   type ArtifactReference,
   type EvidenceBundle,
@@ -36,7 +38,8 @@ import {
   type Oracle,
   type TaskContract,
   type TaskRun,
-  type UtcTimestamp
+  type UtcTimestamp,
+  type VerificationSurface
 } from "@legion/protocol";
 
 import { failure, hasFlag, helpResult, stringOption, success, type CliContext, type CliResult } from "../../runtime.js";
@@ -46,7 +49,11 @@ import type { ReconciliationResult } from "../../workflow/diff-reconciliation.js
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionResult } from "../../workflow/executor/index.js";
 import { createVerificationRunner } from "../../workflow/executor/verification-runner.js";
 import { createWorkerBundleRegistry } from "../../workflow/executor/worker-bundles.js";
-import { runGuardedExecution } from "../../workflow/guarded-execution.js";
+import { loadOracleFacts } from "../../workflow/change-planes.js";
+import { acceptanceBaselineFromEvidence } from "../../workflow/acceptance-baseline.js";
+import { runGuardedExecution, type AcceptanceBaseline, type AcceptancePathReport } from "../../workflow/guarded-execution.js";
+import { mintPinnedReferences, type MintPinnedReference } from "../../workflow/pinned-references.js";
+import { isLiveSurfaceReaffirmation } from "../../workflow/ship-gates.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import {
   absoluteArtifactPath,
@@ -165,19 +172,72 @@ export async function handleBuildWorkflow(context: CliContext, changeId?: string
     return blockedBuild(existingTaskRuns.diagnostics, nextAction("legion validate", "Task-run artifacts must be readable before build can continue."));
   }
 
+  // Read once for the whole build, before any task runs. A `legion approve
+  // surface` decision taken between two tasks of one build would otherwise apply
+  // to the second and not the first, and a report should be a snapshot of one
+  // moment.
+  const reaffirmedPin = await loadReaffirmedPins({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+
+  // The acceptance paths every oracle of this change declares, read once before
+  // any task runs and threaded into each dispatch.
+  //
+  // Change-wide rather than per task, and loaded through the gate's own
+  // all-or-nothing plane loader rather than through `oraclesForTask`. Both halves
+  // are load-bearing. `legion plan` materialises one task per executable
+  // criterion, so a task-scoped snapshot leaves task B free to weaken a test task
+  // A's oracle protects — invisible to both tasks' evidence. And `loadOracleFacts`
+  // answers `undefined` for a plane it could not read whole, which reaches the
+  // harness as "unestablished" rather than as the empty set: a partial list is
+  // worse than no list here, because "nothing I snapshotted changed" is trivially
+  // true of a list that lost the oracle protecting the touched file.
+  const changeOracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const acceptancePaths =
+    changeOracles === undefined
+      ? undefined
+      : [...new Set(changeOracles.flatMap((oracle) => oracle.document.acceptancePaths ?? []))].sort();
+  const acceptancePathOracles =
+    changeOracles === undefined
+      ? undefined
+      : changeOracles
+          .filter((oracle) => (oracle.document.acceptancePaths ?? []).length > 0)
+          .map((oracle) => ({
+            oracleId: oracle.document.id,
+            paths: [...(oracle.document.acceptancePaths ?? [])]
+          }));
+
   const nextAttempts = nextAttemptMap(existingTaskRuns.taskRuns);
   const taskRuns: unknown[] = [];
   for (const task of taskgraph.document.tasks) {
     const taskId = taskIdForContractId(task.id);
     const attempt = nextAttempts.get(taskId) ?? 1;
     nextAttempts.set(taskId, attempt + 1);
+    // Recomputed per task, from `producedEntries` rather than from the index on
+    // disk. Both halves matter. Per task, because task A's run can weaken a test
+    // task B is about to snapshot, and B must inherit A's `before` rather than
+    // hash what A left. From `producedEntries`, because the evidence index is
+    // written once at the end of the build, so a reader going to disk inside the
+    // loop would see the previous build's entries and miss this one's.
+    const acceptanceBaseline = await acceptanceBaselineFromEvidence({
+      repositoryRoot: context.repositoryRoot,
+      entries: producedEntries
+    });
     const run = await executeTask({
       context,
       executor: selectedExecutor,
       task,
       attempt,
       taskgraph,
-      priorEntries: producedEntries
+      priorEntries: producedEntries,
+      reaffirmedPin,
+      acceptancePaths,
+      acceptancePathOracles,
+      acceptanceBaseline
     });
     if (!run.ok) {
       if (run.taskRun !== undefined) taskRuns.push(run.taskRun);
@@ -258,6 +318,42 @@ interface ExecuteTaskInput {
   readonly attempt: number;
   readonly taskgraph: Awaited<ReturnType<typeof readTaskGraph>> & { readonly ok: true };
   readonly priorEntries: readonly EvidenceIndexEntry[];
+  /**
+   * Has a named human re-affirmed these bytes for this pinned path?
+   *
+   * Resolved once for the whole build, from the approvals plane, and threaded in
+   * rather than re-read per task: two reads at two instants could answer
+   * differently for the same file within one build.
+   */
+  readonly reaffirmedPin: ReaffirmedPin;
+  /**
+   * The union of every oracle's declared acceptance paths for this change, or
+   * `undefined` when the oracle plane would not read as a complete set. Passed
+   * straight through to the guarded harness, whose input field carries the
+   * argument for the shape.
+   */
+  readonly acceptancePaths: readonly string[] | undefined;
+  /**
+   * Which oracle declares which of those paths.
+   *
+   * Carried beside the union rather than derived from it because the approval
+   * that blesses a modification names an *oracle*, so the persisted report has to
+   * let an auditor walk approval → oracle → path without reading the taskgraph.
+   */
+  readonly acceptancePathOracles: readonly AcceptancePathDeclaration[] | undefined;
+  /**
+   * What earlier runs of this change already recorded as the pre-run state of
+   * those paths. Threaded through rather than derived inside the harness: the
+   * harness reads the working tree, and reading the evidence plane is the
+   * caller's job in every other guarantee it holds.
+   */
+  readonly acceptanceBaseline: AcceptanceBaseline;
+}
+
+/** Which oracle declares which protected acceptance paths. */
+interface AcceptancePathDeclaration {
+  readonly oracleId: Oracle["id"];
+  readonly paths: readonly ArtifactPath[];
 }
 
 interface ExecuteTaskSuccess {
@@ -369,6 +465,8 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     // reconciliation all describe one revision.
     baseGitSha,
     harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
+    acceptancePaths: input.acceptancePaths,
+    acceptanceBaseline: input.acceptanceBaseline,
     run: () =>
       adapter.run({
         repositoryRoot: input.context.repositoryRoot,
@@ -433,12 +531,77 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     });
   }
 
+  // What the run did to the acceptance paths this change's oracles declare,
+  // persisted as a file rather than left as a verdict.
+  //
+  // `diff-observation.json`'s precedent, and the same argument: a verdict alone
+  // leaves an auditor with nothing but the claim the item exists to check. This
+  // records the declaration set, which oracle declares each path, and the
+  // before/after state of every one — so the gate's `unsatisfied` sentence can
+  // point at something that substantiates it, and an operator can see what the
+  // file was before the run in order to put it back.
+  //
+  // The run directory is already in `harnessPaths`, so writing here cannot be
+  // attributed as a touch by either population.
+  const acceptanceReport = guarded.acceptancePaths;
+  const acceptanceVerdict = protectedAcceptanceVerdict(acceptanceReport);
+  let acceptancePathsArtifactPath: ArtifactPath | undefined;
+  if (acceptanceVerdict !== undefined) {
+    acceptancePathsArtifactPath = runArtifactPath({
+      changeId: input.task.changeId,
+      runId,
+      fileName: "protected-paths.json"
+    });
+    await writeProjectTextFile({
+      repositoryRoot: input.context.repositoryRoot,
+      artifactPath: acceptancePathsArtifactPath,
+      text: stableProtocolJson({
+        kind: "protected_paths",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        status: acceptanceReport.status,
+        verdict: acceptanceVerdict,
+        // The one thing an operator staring at an `unknown` has to be told, and
+        // the gate's sentence cannot hold it: *which* half was unestablished —
+        // the oracle plane, or the record of what an earlier run of this change
+        // saw. The cures are different and neither is `legion build`.
+        ...(acceptanceReport.reason === undefined ? {} : { reason: acceptanceReport.reason }),
+        declaredBy: input.acceptancePathOracles ?? [],
+        observations: acceptanceReport.observations
+      })
+    });
+  }
+
   // The verification report, persisted. It existed only in memory, so the
   // `oracle-verification` evidence item had nothing to point at but
   // `executor-result.json` — which is written before the harness runs anything,
   // holds no command results, failing indices or attribution, and can report
   // success while an oracle failed. An auditor following that reference could
   // not substantiate the verdict it was cited for.
+  // Derived once, here, and handed to both consumers: the persisted report, so
+  // an auditor following the `integration-surface-check` reference can see which
+  // surface passed rather than only that one did, and the evidence item, whose
+  // verdict is computed from it.
+  //
+  // The pins are hashed *here*, and the instant is the point. Until this they
+  // were hashed at declaration time and again at ship time, never while the
+  // command ran — so a satisfied gate established "the declared bytes are on
+  // disk now" and "a command passed at some point", and never that the command
+  // passed against the declared bytes. Editing the compose file to name an
+  // in-memory fake, building, then reverting the edit defeated the exact
+  // substitution the declaration exists to make visible.
+  const observePin = await mintPinnedReferences({
+    repositoryRoot: input.context.repositoryRoot,
+    paths: declaredSurfacePinPaths({ task: input.task, verification })
+  });
+  const surfaceChecks = verificationSurfaceChecks({
+    task: input.task,
+    verification,
+    observePin,
+    reaffirmedPin: input.reaffirmedPin
+  });
+
   let verificationArtifactPath: ArtifactPath | undefined;
   if (verification.report !== undefined) {
     verificationArtifactPath = runArtifactPath({
@@ -451,7 +614,9 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
       artifactPath: verificationArtifactPath,
       text: stableProtocolJson({
         kind: "verification_report",
-        schemaVersion: 1,
+        // 2 adds `surfaceChecks`. Additive, so a reader of version 1 still finds
+        // everything it knew about.
+        schemaVersion: 2,
         runId,
         taskId,
         report: verification.report,
@@ -459,7 +624,11 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
         // Oracles the task referenced that produced no executable command:
         // inspection oracles, and any whose execution mode is not `command`.
         // Named so the report says what it did not cover.
-        unevaluatedOracleRefs: verification.unevaluatedOracleRefs ?? []
+        unevaluatedOracleRefs: verification.unevaluatedOracleRefs ?? [],
+        // Which declared verification surface each command carried, and whether
+        // this run reached it. Without this the item cites a file that cannot
+        // substantiate the verdict it was cited for.
+        surfaceChecks
       })
     });
   }
@@ -479,9 +648,13 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     taskgraphPath: input.taskgraph.artifactPath,
     ...(verificationArtifactPath === undefined ? {} : { verificationArtifactPath }),
     verification,
+    surfaceChecks,
     inContract,
     ...(reconciliation === undefined ? {} : { reconciliation }),
-    ...(observationArtifactPath === undefined ? {} : { observationArtifactPath })
+    ...(observationArtifactPath === undefined ? {} : { observationArtifactPath }),
+    ...(acceptanceVerdict === undefined ? {} : { acceptanceVerdict }),
+    ...(acceptancePathsArtifactPath === undefined ? {} : { acceptancePathsArtifactPath }),
+    ...(input.acceptancePathOracles === undefined ? {} : { acceptancePathOracles: input.acceptancePathOracles })
   });
   const completed = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
@@ -695,6 +868,39 @@ function taskRunDocument(input: {
   });
 }
 
+/**
+ * The `protected-acceptance-paths` verdict for one run, or `undefined` when the
+ * item must not be written at all.
+ *
+ * `undefined` is the answer for exactly one state: the declaration set was read
+ * whole and nothing in this change declares a protected acceptance path. That is
+ * a property of the **plan**, not of the run, and the gate decides it at ship
+ * time from the oracles — `integration-surface-check` records the same lesson one
+ * item over, and it transfers verbatim: `evidenceItemVerdict` collapses every
+ * verdict that is not `pass`/`fail` to absence, so spelling "nothing was
+ * declared" as a verdict would arrive at the gate indistinguishable from silence.
+ * It would also go stale, because a replan can declare one after the item is
+ * written.
+ *
+ * A set that could not be established is *not* that state. It is written as
+ * `unknown`, because "the oracle plane would not read" must never be reported as
+ * "nothing is protected".
+ *
+ * A positive fold, and the order matters: any `unknown` dominates, because a path
+ * neither side could resolve is a path this run cannot say anything about, and
+ * folding it into `pass` would certify an acceptance test the run may have
+ * created and immediately weakened.
+ */
+function protectedAcceptanceVerdict(
+  report: AcceptancePathReport
+): "pass" | "fail" | "unknown" | undefined {
+  if (report.status === "unestablished") return "unknown";
+  if (report.observations.length === 0) return undefined;
+  if (report.observations.some((entry) => entry.verdict === "unknown")) return "unknown";
+  if (report.observations.some((entry) => entry.verdict === "changed")) return "fail";
+  return "pass";
+}
+
 async function evidenceEntryForExecution(input: {
   readonly repositoryRoot: string;
   readonly task: TaskContract;
@@ -710,9 +916,19 @@ async function evidenceEntryForExecution(input: {
   readonly taskgraphPath: ArtifactPath;
   readonly verification: ContractVerification;
   readonly verificationArtifactPath?: ArtifactPath;
+  /**
+   * Derived once by the caller and shared with the persisted verification
+   * report, so the item's verdict and the file it cites are the same derivation
+   * rather than two that could disagree.
+   */
+  readonly surfaceChecks: readonly SurfaceCheck[];
   readonly inContract: boolean;
   readonly reconciliation?: ReconciliationResult;
   readonly observationArtifactPath?: ArtifactPath;
+  /** Absent when nothing in the change declares a protected acceptance path. */
+  readonly acceptanceVerdict?: "pass" | "fail" | "unknown";
+  readonly acceptancePathsArtifactPath?: ArtifactPath;
+  readonly acceptancePathOracles?: readonly AcceptancePathDeclaration[];
 }): Promise<EvidenceIndexEntry> {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
@@ -812,6 +1028,76 @@ async function evidenceEntryForExecution(input: {
           ? resultReference
           : await referenceForFile(input.repositoryRoot, input.verificationArtifactPath),
       traceRefs
+    });
+  }
+
+  // Whether verification reached the integration or real interface the plan said
+  // it would. Its own item, for the reason `oracle-verification` is its own item:
+  // "did the contract's commands pass" and "did the ones that cross a boundary
+  // pass" are different questions, and the R2 gate that asks the second had no
+  // producer at all.
+  //
+  // Emitted only when at least one declared surface is *not* `unit`, and that is
+  // the load-bearing line. The other two states this item could be asked about —
+  // nothing declared a surface, and everything declared is `unit` — are decided
+  // by the ship gate from the declarations on the contract and the oracles, at
+  // ship time, because they are properties of the plan rather than of the run.
+  // Deciding "everything is unit" here would have to spell it as a non-pass
+  // verdict, and `evidenceItemVerdict` collapses every verdict that is not
+  // `pass` or `fail` to absence — so an explicit "nothing here crosses a
+  // boundary" would arrive at the gate indistinguishable from silence, which is
+  // the exact negative-becomes-absent fail-open this gate exists to close. It
+  // would also go stale: the item is written at build time and the declarations
+  // can be replanned after it.
+  //
+  // A failing `unit` surface is deliberately not folded in either. That is
+  // already `declared-verification: fail`, and repeating it here would make this
+  // gate a second copy of that one.
+  const surfaceVerdict =
+    input.verification.report === undefined ? undefined : integrationSurfaceVerdict(input.surfaceChecks);
+  if (surfaceVerdict !== undefined) {
+    items.push({
+      id: "integration-surface-check",
+      classification: "test-report",
+      verdict: surfaceVerdict,
+      artifact:
+        input.verificationArtifactPath === undefined
+          ? resultReference
+          : await referenceForFile(input.repositoryRoot, input.verificationArtifactPath),
+      traceRefs
+    });
+  }
+
+  // Whether the run weakened any acceptance test the change's oracles say it
+  // must not. Its own item for `integration-surface-check`'s reason: "did the
+  // contract's commands pass" and "did the run edit the tests that decide it" are
+  // different questions, and until now nothing anywhere asked the second.
+  //
+  // `classification: "trace"` rather than `test-report`: this is an observation
+  // of the working tree across a dispatch, not the result of running anything.
+  //
+  // The per-path trace references are what let the gate tell a covered
+  // declaration from one made *after* the run that produced this item. Without
+  // them a `pass` written before a replan would answer for paths no snapshot ever
+  // contained — the stale-pass family this file has already paid for twice.
+  if (input.acceptanceVerdict !== undefined) {
+    const coverageRefs = (input.acceptancePathOracles ?? []).flatMap((declaration) =>
+      declaration.paths.map((declaredPath) => ({
+        path: declaredPath,
+        anchor: declaration.oracleId,
+        relation: "verifies" as const,
+        entity: { kind: "oracle" as const, id: declaration.oracleId }
+      }))
+    );
+    items.push({
+      id: "protected-acceptance-paths",
+      classification: "trace",
+      verdict: input.acceptanceVerdict,
+      artifact:
+        input.acceptancePathsArtifactPath === undefined
+          ? resultReference
+          : await referenceForFile(input.repositoryRoot, input.acceptancePathsArtifactPath),
+      traceRefs: [...traceRefs, ...coverageRefs]
     });
   }
 
@@ -952,6 +1238,351 @@ interface ContractVerification {
    * manual criteria were never inspected.
    */
   readonly unevaluatedOracleRefs?: readonly string[];
+  /**
+   * The verification surfaces the task's oracles declare, joined by oracle id.
+   *
+   * Carried here rather than added to core's `OracleAttribution` for the reason
+   * core already gives for keeping attribution off `VerificationCommandResult`:
+   * that shape feeds `deriveVerificationReportSha256`, and widening it would move
+   * every recorded report hash for a fact the caller can hold instead. It is also
+   * threaded out of the one `oraclesForTask` load rather than re-read here — a
+   * second read of the same files at a different instant could describe an oracle
+   * other than the one that ran.
+   */
+  readonly oracleSurfaces?: readonly { readonly oracleId: string; readonly surface: VerificationSurface }[];
+}
+
+/**
+ * What happened to one declared verification surface during this run.
+ *
+ * `unrun` is a third outcome and not a rounding of `failed`, because the two
+ * lead somewhere different: a failed integration command is a negative answer an
+ * operator fixes by fixing the code, while a surface whose command never
+ * executed is an unanswered question. Collapsing them would report a boundary
+ * check as broken when nothing tried it.
+ *
+ * `mismatched` is the fourth, and it is the one that closes the epoch gap. The
+ * pins were hashed when the declaration was authored and are hashed again at
+ * ship time — but until this they were never hashed *while the command ran*, so
+ * a `pass` established "the declared bytes are on disk now" and "a command
+ * passed at some point" without ever establishing that the command passed
+ * against the declared bytes. Swap the compose file for one naming an in-memory
+ * fake, build, revert, ship: every check answered yes and the run provably
+ * executed against the fake. It is `mismatched` rather than `failed` because the
+ * code may be perfectly correct — what is unknown is what it was checked
+ * against.
+ */
+type SurfaceOutcome = "passed" | "failed" | "unrun" | "mismatched";
+
+/**
+ * Whether a named human has re-affirmed one pinned file at one digest.
+ *
+ * A function rather than a map, because the rule behind it is the ship gate's own
+ * `isLiveSurfaceReaffirmation` — supersession, expiry, a human decider — and this
+ * module must not restate it.
+ */
+type ReaffirmedPin = (path: string, sha256: string) => boolean;
+
+/** One pinned file of a declared surface, as it stood while the run happened. */
+interface SurfacePinObservation {
+  readonly path: string;
+  readonly declared: string;
+  /** Absent when no readable file was there when the run finished. */
+  readonly observed?: string;
+}
+
+interface SurfaceCheck {
+  /** Where the declaration came from, in the operator's terms. */
+  readonly origin: string;
+  readonly kind: string;
+  readonly interface: string;
+  /** The command index this surface's declaration was attached to, if resolved. */
+  readonly index?: number;
+  readonly outcome: SurfaceOutcome;
+  readonly note?: string;
+  /**
+   * What the surface's pinned files hashed to at the instant of this run.
+   *
+   * Recorded only for non-unit surfaces, because those are the only ones the
+   * ship gate re-checks. Persisted into the verification report so an auditor
+   * following the `integration-surface-check` reference can see *what* the
+   * command was checked against, not merely that it passed.
+   */
+  readonly pins?: readonly SurfacePinObservation[];
+}
+
+/**
+ * Which declared surfaces this run actually exercised.
+ *
+ * The index map is core's: the contract's own verification entries occupy
+ * indices `0..verification.length-1` in declaration order, then each attributed
+ * oracle command follows at the index its `OracleAttribution` records. The
+ * contract half of that is a positional covenant spanning two packages, so it is
+ * *checked* rather than assumed — the executed command and its arguments must
+ * match the entry the surface was declared on, and a mismatch resolves to
+ * `unrun`. A wrong answer here would attribute one command's pass to another
+ * command's declaration, which is the only way this item can lie.
+ *
+ * A surface whose index carries no result at all is `unrun`, and that branch is
+ * the sharpest one: `synthesizeReport` records `failingIndices: []` for a run
+ * that produced no results, so a rule that only intersected failing indices
+ * would call a run that executed nothing a pass.
+ *
+ * Exported for direct testing. The empty-results shape is the one branch a real
+ * build cannot produce on demand — a runner that returns nothing is a defect,
+ * not a fixture — and it is the branch whose failure mode is a false `pass`, so
+ * it is driven from outside rather than left to be reasoned about.
+ */
+export function verificationSurfaceChecks(input: {
+  readonly task: TaskContract;
+  readonly verification: ContractVerification;
+  /**
+   * What each pinned path hashes to *now* — which, at the one call site that
+   * matters, is the instant the commands finished.
+   *
+   * Required rather than optional, and that is the whole point of the parameter.
+   * An optional observer would let a caller omit it and get `passed` for a
+   * declared surface whose bytes nobody checked, which is the exact fail-open the
+   * run-time hash exists to close, reintroduced as a default.
+   */
+  readonly observePin: MintPinnedReference;
+  /**
+   * Has a named human re-affirmed these exact bytes for this path?
+   *
+   * Without this the cure would be self-defeating. A legitimately edited pinned
+   * file is re-affirmed at its *new* digest, but the declaration on the task
+   * contract still records the old one — so the next build would observe bytes
+   * that match no declared digest, record `mismatched` forever, and leave the
+   * change blocked by the command that exists to unblock it. The question this
+   * asks is the one ship asks: were the bytes the command ran against ones a
+   * human declared or re-affirmed?
+   */
+  readonly reaffirmedPin: ReaffirmedPin;
+}): readonly SurfaceCheck[] {
+  const report = input.verification.report;
+  if (report === undefined) return [];
+
+  const checks: SurfaceCheck[] = [];
+  const outcomeAt = (index: number): { readonly outcome: SurfaceOutcome; readonly note?: string } => {
+    const result = report.commands.find((command) => command.index === index);
+    if (result === undefined) {
+      return { outcome: "unrun", note: `No command result was recorded at index ${index}.` };
+    }
+    if (report.failingIndices.includes(index)) return { outcome: "failed" };
+    return { outcome: "passed" };
+  };
+
+  /**
+   * Did this surface's pinned files hold the declared bytes while the run
+   * happened?
+   *
+   * Asked only of non-unit surfaces: a unit surface's pins are never re-checked
+   * by the ship gate, so hashing them here would record a fact nothing reads and
+   * would let an unrelated edit downgrade an item the gate does not consult.
+   *
+   * A mismatch never *upgrades* an outcome, and only ever downgrades `passed`.
+   * A command that failed stays `failed` — the operator's first problem is the
+   * failure — and `passed` is the only outcome for which "checked against the
+   * declared bytes" is load-bearing.
+   */
+  const observe = (
+    surface: VerificationSurface,
+    resolved: { readonly outcome: SurfaceOutcome; readonly note?: string }
+  ): { readonly outcome: SurfaceOutcome; readonly note?: string; readonly pins?: readonly SurfacePinObservation[] } => {
+    if (surface.kind === "unit") return resolved;
+
+    const pins: SurfacePinObservation[] = surface.pinned.map((pin) => {
+      const observed = input.observePin(pin.path);
+      return {
+        path: pin.path,
+        declared: pin.sha256,
+        ...(observed === undefined ? {} : { observed: observed.sha256 })
+      };
+    });
+    const drifted = pins.filter(
+      (pin) =>
+        pin.observed !== pin.declared &&
+        !(pin.observed !== undefined && input.reaffirmedPin(pin.path, pin.observed))
+    );
+    if (drifted.length === 0 || resolved.outcome !== "passed") return { ...resolved, pins };
+
+    return {
+      outcome: "mismatched",
+      note:
+        `The command passed, but ${drifted.map((pin) => pin.path).join(", ")} did not hold the declared bytes while it ` +
+        "ran, so what it was checked against is not what the declaration describes.",
+      pins
+    };
+  };
+
+  for (const [position, entry] of input.task.verification.entries()) {
+    const surface = entry.surface;
+    if (surface === undefined) continue;
+    const origin = `verification entry ${position + 1}`;
+    const result = report.commands.find((command) => command.index === position);
+    if (
+      result !== undefined &&
+      (result.command !== entry.command ||
+        result.args.length !== entry.args.length ||
+        result.args.some((argument, offset) => argument !== entry.args[offset]))
+    ) {
+      checks.push({
+        origin,
+        kind: surface.kind,
+        interface: surface.interface,
+        index: position,
+        ...observe(surface, {
+          outcome: "unrun",
+          note: `The command recorded at index ${position} is not the one this surface was declared on.`
+        })
+      });
+      continue;
+    }
+    checks.push({
+      origin,
+      kind: surface.kind,
+      interface: surface.interface,
+      index: position,
+      ...observe(surface, outcomeAt(position))
+    });
+  }
+
+  const attribution = input.verification.oracleAttribution ?? [];
+  for (const declared of input.verification.oracleSurfaces ?? []) {
+    const origin = `oracle ${declared.oracleId}`;
+    const attributed = attribution.find((entry) => entry.oracleId === declared.oracleId);
+    if (attributed === undefined) {
+      checks.push({
+        origin,
+        kind: declared.surface.kind,
+        interface: declared.surface.interface,
+        ...observe(declared.surface, {
+          outcome: "unrun",
+          note: `Oracle ${declared.oracleId} produced no executable command, so its declared surface was never reached.`
+        })
+      });
+      continue;
+    }
+    checks.push({
+      origin,
+      kind: declared.surface.kind,
+      interface: declared.surface.interface,
+      index: attributed.index,
+      ...observe(declared.surface, outcomeAt(attributed.index))
+    });
+  }
+
+  return checks;
+}
+
+/**
+ * The re-affirmation predicate, resolved from this change's approvals plane.
+ *
+ * A plane that will not read answers `false` for everything, which is the
+ * conservative direction: an unreadable approvals directory becomes "nobody
+ * re-affirmed anything", so a drifted pin stays `mismatched` and the item stays
+ * `unknown`. The opposite default would let an unreadable directory wave through
+ * bytes nobody vouched for.
+ */
+async function loadReaffirmedPins(input: {
+  readonly repositoryRoot: string;
+  readonly changeId: string;
+}): Promise<ReaffirmedPin> {
+  let approvals: readonly Approval[] = [];
+  try {
+    const listed = await listApprovalsForChange(input);
+    if (listed.ok && listed.skipped.length === 0) approvals = listed.approvals.map((entry) => entry.document);
+  } catch {
+    approvals = [];
+  }
+  if (approvals.length === 0) return () => false;
+
+  const evaluatedAt = currentUtcTimestamp();
+  return (path, sha256) =>
+    approvals.some((approval) =>
+      isLiveSurfaceReaffirmation({
+        approval,
+        changeId: input.changeId,
+        path,
+        currentSha256: sha256,
+        evaluatedAt
+      })
+    );
+}
+
+/**
+ * Every path a non-unit declared surface of this task pins.
+ *
+ * Read from the same two places `ship-gates.ts` reads declarations from, and
+ * from the oracle documents this run actually loaded rather than from a second
+ * read — a second read at a different instant could describe an oracle other
+ * than the one that ran.
+ */
+/**
+ * The `integration-surface-check` verdict these checks add up to, or `undefined`
+ * when no such item should be written at all.
+ *
+ * **Extracted and exported because it is the join, and the join was the one thing
+ * no test could see.** `verificationSurfaceChecks` is covered on one side and the
+ * ship gate on the other, but nothing exercised the step that turns an `unrun`
+ * check into an `unknown` verdict — and mutation testing proved it: replacing the
+ * `unrun` arm with `false`, so that a declared real-interface surface nobody
+ * executed is recorded `pass`, left all 812 tests in the tree green. That is the
+ * fail-open this function's comments exist to prevent, reintroducible in one
+ * token with no alarm anywhere.
+ *
+ * `undefined` means "write no item", and it is returned when nothing non-unit was
+ * declared. That is the load-bearing line. The other two states this item could
+ * be asked about — nothing declared a surface, and everything declared is `unit`
+ * — are decided by the ship gate from the declarations, at ship time, because
+ * they are properties of the plan rather than of the run. Deciding "everything is
+ * unit" here would have to spell it as a non-pass verdict, and `evidenceItemVerdict`
+ * collapses every verdict that is not `pass` or `fail` to absence — so an explicit
+ * "nothing here crosses a boundary" would arrive at the gate spelled exactly like
+ * silence, which is the negative-becomes-absent fail-open this gate exists to
+ * close. It would also go stale: the item is written at build time and the
+ * declarations can be replanned after it.
+ *
+ * A failing `unit` surface is deliberately not folded in either. That is already
+ * `declared-verification: fail`, and repeating it here would make this item a
+ * second copy of that one.
+ */
+export function integrationSurfaceVerdict(
+  checks: readonly { readonly kind: string; readonly outcome: SurfaceOutcome }[]
+): "pass" | "fail" | "unknown" | undefined {
+  const nonUnit = checks.filter((check) => check.kind !== "unit");
+  if (nonUnit.length === 0) return undefined;
+
+  if (nonUnit.some((check) => check.outcome === "failed")) return "fail";
+
+  // `unknown`, not `pass`, for two different shapes of not-knowing.
+  //
+  // `unrun` — a declared surface whose command never executed says nothing about
+  // whether the boundary was reached, and `synthesizeReport` records no failing
+  // indices for a run that produced no results, so treating "not among the
+  // failures" as success would certify a run that ran nothing.
+  //
+  // `mismatched` — the command passed, but a pinned file did not hold the
+  // declared bytes while it ran. What the check exercised is not what the
+  // declaration describes, and reverting the file afterwards makes every *later*
+  // hash agree while leaving that fact true.
+  if (nonUnit.some((check) => check.outcome === "unrun" || check.outcome === "mismatched")) return "unknown";
+
+  return "pass";
+}
+
+export function declaredSurfacePinPaths(input: {
+  readonly task: TaskContract;
+  readonly verification: ContractVerification;
+}): readonly string[] {
+  const paths = new Set<string>();
+  const collect = (surface: VerificationSurface | undefined) => {
+    if (surface === undefined || surface.kind === "unit") return;
+    for (const pin of surface.pinned) paths.add(pin.path);
+  };
+  for (const entry of input.task.verification) collect(entry.surface);
+  for (const declared of input.verification.oracleSurfaces ?? []) collect(declared.surface);
+  return [...paths];
 }
 
 /**
@@ -1072,11 +1703,19 @@ async function runContractVerification(input: {
     .filter((oracle) => !attributed.has(oracle.id))
     .map((oracle) => oracle.id);
 
+  // Taken from the documents that were loaded for this run, not re-read. This is
+  // the only place that holds them: `oraclesForTask` returns full `Oracle`s and
+  // everything downstream sees ids and titles.
+  const oracleSurfaces = oracles.loaded.flatMap((oracle) =>
+    oracle.surface === undefined ? [] : [{ oracleId: oracle.id, surface: oracle.surface }]
+  );
+
   return {
     report,
     passed: report.passed,
     oracleAttribution,
     unevaluatedOracleRefs,
+    oracleSurfaces,
     ...(report.passed
       ? {}
       : {

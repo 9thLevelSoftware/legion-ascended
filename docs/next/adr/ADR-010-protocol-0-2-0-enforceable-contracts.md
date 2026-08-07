@@ -3,6 +3,8 @@
 ## Status
 Accepted
 
+Amended by ADR-011. Exactly one consequence below is retired — "`legion ship` cannot report ready for any R2 or R3 change until Phase D produces oracles and specs". Every gate at those tiers now has a producer, and an R2 and an R3 change each ship `ready` end to end. The rule stated in the same paragraph is unchanged: an unevaluable required gate still blocks. Everything else in this ADR stands, and the text below is left as written because it is the record of what was decided at the time.
+
 Recorded retrospectively. The implementation landed in PRs #33, #34 and #35 before this record existed, which the charter does not permit for a breaking architecture decision. That sequencing error is noted here rather than hidden; approval of this ADR is what makes the protocol revision legitimate, and Phase C is the dependent work it gates.
 
 ## Context

@@ -68,6 +68,30 @@ export interface ReviewDecisionListSuccess {
   readonly ok: true;
   readonly status: "read";
   readonly reviews: readonly ReviewDecisionSuccess[];
+  /**
+   * File entries under `reviews/` that produced no entry above.
+   *
+   * The approvals and attestations listings have carried this since they were
+   * written; this one did not, and the reviews plane was the last one a ship gate
+   * reads with no way to tell a short listing from a whole one. That was
+   * harmless while the only gates reading a review asked "does an accepted one
+   * exist" — dropping a file can only make that answer *more* conservative. It
+   * stops being harmless the moment a gate has an `unsatisfied` arm that reads a
+   * review: a rejected or blocking-finding review made unparseable would vanish,
+   * and the gate would answer from the accepted one beside it. That is the
+   * negative-fact-dropped fail-open this series has closed three times, and
+   * `architecture_or_security_review` is the release that would have made it
+   * exploitable.
+   *
+   * **Directories are deliberately not skips.** `submitReview` writes each
+   * review's context pack, prompt and executor logs to `reviews/<reviewId>/`
+   * *before* it writes `<reviewId>.json`, so a subdirectory is the normal state
+   * of this plane and an executor that failed leaves one honestly. Reporting it
+   * would collapse the plane on every failed review run, with no file to correct.
+   *
+   * Empty on every healthy change, so callers that ignore it are unaffected.
+   */
+  readonly skipped: readonly string[];
   readonly diagnostics: readonly [];
 }
 
@@ -370,7 +394,7 @@ export async function listReviewDecisionsForChange(input: ListReviewDecisionsInp
     entries = await readdir(reviewsRoot, { withFileTypes: true });
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return { ok: true, status: "read", reviews: [], diagnostics: [] };
+      return { ok: true, status: "read", reviews: [], skipped: [], diagnostics: [] };
     }
     const message = error instanceof Error ? error.message : String(error);
     return failure("invalid", [
@@ -383,16 +407,26 @@ export async function listReviewDecisionsForChange(input: ListReviewDecisionsInp
   }
 
   const reviews: ReviewDecisionSuccess[] = [];
+  const skipped: string[] = [];
   for (const entry of entries.filter((candidate) => candidate.isFile()).sort((left, right) => left.name.localeCompare(right.name))) {
-    if (!entry.name.endsWith(".json")) continue;
+    if (!entry.name.endsWith(".json")) {
+      skipped.push(entry.name);
+      continue;
+    }
     const reviewId = reviewIdSchema.safeParse(entry.name.slice(0, -".json".length));
-    if (!reviewId.success) continue;
+    if (!reviewId.success) {
+      skipped.push(entry.name);
+      continue;
+    }
     const read = await readReviewDecision({
       repositoryRoot: input.repositoryRoot,
       changeId,
       reviewId: reviewId.data
     });
-    if (!read.ok) continue;
+    if (!read.ok) {
+      skipped.push(entry.name);
+      continue;
+    }
     reviews.push(read);
   }
 
@@ -402,5 +436,5 @@ export async function listReviewDecisionsForChange(input: ListReviewDecisionsInp
     return left.document.id.localeCompare(right.document.id);
   });
 
-  return { ok: true, status: "read", reviews, diagnostics: [] };
+  return { ok: true, status: "read", reviews, skipped, diagnostics: [] };
 }

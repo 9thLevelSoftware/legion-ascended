@@ -39,8 +39,10 @@ import {
 } from "../../runtime.js";
 import { createdAtOption, ownerActor, repositoryReference, slugFromName } from "../input.js";
 import { nextAction, renderNextAction } from "../render.js";
+import { mintPinnedReferences } from "../pinned-references.js";
 import {
   buildRequirements,
+  declaredSurfacePaths,
   enforcementPolicy,
   renderConstitution,
   renderRoadmap,
@@ -962,6 +964,47 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
     );
   }
 
+  // Every declared verification-surface path is hashed here, before anything is
+  // written, through the same resolver `legion ship` re-checks the pin with.
+  //
+  // A path that will not resolve is a refusal rather than a dropped declaration.
+  // Dropping it would give an operator who explicitly said "this crosses a
+  // boundary" the same ship verdict as one who said nothing — `unevaluable` —
+  // which is the fail-open this gate exists to close, arriving through the
+  // authoring path before any gate runs. Refusing costs nothing: the answers are
+  // still in the session, one `--answer` repairs the path, and `--finalize` runs
+  // again having written nothing in between.
+  const declaredPins = declaredSurfacePaths(session.answers);
+  const mintPin = await mintPinnedReferences({
+    repositoryRoot: context.repositoryRoot,
+    paths: declaredPins.map((entry) => entry.path)
+  });
+  const unpinnable: IntakeDiagnostic[] = [];
+  for (const declared of declaredPins) {
+    if (mintPin(declared.path) !== undefined) continue;
+    unpinnable.push({
+      code: "unpinnable_surface",
+      message:
+        `Requirement ${declared.requirementIndex}, criterion ${declared.criterionIndex}: no readable file is at ` +
+        `"${declared.path}", so the surface it pins cannot be recorded. A surface pin is what makes the ` +
+        `declaration falsifiable; name a file that exists, or skip ` +
+        `req-${declared.requirementIndex}-ac-${declared.criterionIndex}-surface-kind to leave the surface undeclared.`,
+      nodeId: `req-${declared.requirementIndex}-ac-${declared.criterionIndex}-surface-pins`,
+      slot: `requirements.${declared.requirementIndex}.criteria.${declared.criterionIndex}.surface.pins`
+    });
+  }
+  if (unpinnable.length > 0) {
+    return failure(
+      {
+        ok: false,
+        status: "invalid",
+        session: sessionPayload(session, answered, total),
+        diagnostics: unpinnable
+      },
+      `The interview is complete but a declared verification surface pins a file that could not be read:\n${renderIntakeDiagnostics(unpinnable)}`
+    );
+  }
+
   const answerFor = (nodeId: string): string => {
     const answer = session.answers.find((entry) => entry.nodeId === nodeId);
     return typeof answer?.value === "string" ? answer.value : "";
@@ -1071,7 +1114,8 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
     projectId,
     createdAt,
     schemaVersion: LEGION_PROTOCOL_VERSION,
-    intakeSessionPath: intakeSessionArtifactPath(session.id)
+    intakeSessionPath: intakeSessionArtifactPath(session.id),
+    mintPin
   });
 
   // Two sessions can now both reach finalize, because the allocator preserves

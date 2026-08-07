@@ -44,6 +44,9 @@
               "evidence-index",
               "task-run",
               "review",
+              "approval",
+              "attestation",
+              "release",
               "archive"
             ]
           },
@@ -1418,6 +1421,68 @@
                   "type": "integer",
                   "exclusiveMinimum": 0,
                   "maximum": 3600000
+                },
+                "surface": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "unit",
+                        "integration",
+                        "real-interface",
+                        "end-to-end"
+                      ]
+                    },
+                    "interface": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "rationale": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "pinned": {
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512,
+                            "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                            "description": "Relative POSIX artifact path inside an approved artifact root."
+                          },
+                          "sha256": {
+                            "type": "string",
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                          },
+                          "mediaType": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9.+-]*\\/[a-z0-9][a-z0-9.+-]*$"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "sha256"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "interface",
+                    "rationale",
+                    "pinned"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -1682,6 +1747,9 @@
                   "evidence-index",
                   "task-run",
                   "review",
+                  "approval",
+                  "attestation",
+                  "release",
                   "archive"
                 ]
               },

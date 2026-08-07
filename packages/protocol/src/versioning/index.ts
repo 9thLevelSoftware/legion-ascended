@@ -1,25 +1,50 @@
 import { schemaVersionSchema, type SchemaVersion } from "../primitives/values.js";
 
 /**
- * Protocol 0.2.0 (Karpathy-method hardening).
+ * Protocol 0.3.0 (ship-gate producers).
  *
- * Breaking shape changes against 0.1.0:
- *  - `taskContract.scope.budget` is required — a task must declare its
- *    blast radius so the post-execution diff can be reconciled against it.
- *  - `taskContract.completion.diffReconciliation` is required.
- *  - `requirement.acceptance.criteria` entries are objects carrying an
- *    explicit proof mode, not bare strings.
+ * 0.2.0 (Karpathy-method hardening) made three things mandatory that 0.1.0 could
+ * not express: `taskContract.scope.budget`, `taskContract.completion.
+ * diffReconciliation`, and criterion objects carrying an explicit proof mode in
+ * place of prose `requirement.acceptance.criteria` strings.
  *
- * 0.1.0 stays in `SUPPORTED_PROTOCOL_VERSIONS` so existing `.legion/project`
- * state remains readable through the upcast migrations.
+ * 0.3.0 adds **no required field and removes none**. What it adds is the
+ * vocabulary the ship gates read: two new entity kinds (`attestation`,
+ * `release`), and optional fields on existing ones — `review.domains`,
+ * `oracle.acceptancePaths`, and the approval subjects and actions the approval
+ * plane grew. Every 0.2.0 document still validates unchanged.
+ *
+ * **So why move the version at all.** Because these are `z.strictObject`s. A
+ * 0.2.0 reader handed a document that exercises one of the new optional fields
+ * rejects it on the unknown key — and it rejects it as malformed, with no way to
+ * tell "written by something newer" from "corrupt". That is precisely the
+ * condition a version exists to signal, and ADR-010's own rejected-alternatives
+ * table refuses shipping a changed shape under the old version on the grounds
+ * that it "would make compatibility claims unfalsifiable and poison every
+ * downstream negotiation". The claim is narrow and should not be overstated:
+ * nothing in this tree's read path calls `negotiateProtocolVersion`, so the
+ * version is a signal to future and external readers rather than a check this
+ * tree currently enforces. `z.strictObject` is what actually refuses.
+ *
+ * 0.1.0 and 0.2.0 both stay in `SUPPORTED_PROTOCOL_VERSIONS` so existing
+ * `.legion/project` state remains readable through the upcast migrations.
+ *
+ * `PREVIOUS_PROTOCOL_VERSION` **moved** with this release: it named 0.1.0 while
+ * 0.2.0 was current, and now names 0.2.0. A reader who assumes it still means
+ * 0.1.0 wants `LEGACY_PROTOCOL_VERSION`. The rename is safe because nothing
+ * outside this file consumed it, and leaving it two versions behind current
+ * would make the name lie.
  */
-export const PREVIOUS_PROTOCOL_VERSION = schemaVersionSchema.parse("0.1.0");
+export const LEGACY_PROTOCOL_VERSION = schemaVersionSchema.parse("0.1.0");
 
-export const CURRENT_PROTOCOL_VERSION = schemaVersionSchema.parse("0.2.0");
+export const PREVIOUS_PROTOCOL_VERSION = schemaVersionSchema.parse("0.2.0");
+
+export const CURRENT_PROTOCOL_VERSION = schemaVersionSchema.parse("0.3.0");
 
 export type CurrentProtocolVersion = typeof CURRENT_PROTOCOL_VERSION;
 
 export const SUPPORTED_PROTOCOL_VERSIONS = [
+  LEGACY_PROTOCOL_VERSION,
   PREVIOUS_PROTOCOL_VERSION,
   CURRENT_PROTOCOL_VERSION
 ] as const;

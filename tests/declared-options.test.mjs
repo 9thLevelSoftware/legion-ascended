@@ -28,11 +28,40 @@ async function scratchRepo(t) {
 
 const IGNORED = [
   { command: "build", args: ["build", "--phase", "3"], flag: "--phase" },
+  // Still refused, and its justification changed in the release that removed
+  // `--canary` from SHIP_HELP: it used to be "advertised in help and refused at
+  // the boundary", which is a defect either way round, and it is now "not
+  // advertised and still refused". Declaring the flag would have been the worse
+  // repair — nothing in `legion ship` reads it, and canary monitoring is a
+  // host-only mode of `/legion:ship`. Observation *planning* is `legion release
+  // plan`, which the help now points at.
   { command: "ship", args: ["ship", "--canary"], flag: "--canary" },
   { command: "plan", args: ["plan", "1", "--auto"], flag: "--auto" },
   { command: "polish", args: ["polish", "--dry-run"], flag: "--dry-run" },
   { command: "validate", args: ["validate", "--fix"], flag: "--fix" },
-  { command: "validate", args: ["validate", "--ci"], flag: "--ci" }
+  { command: "validate", args: ["validate", "--ci"], flag: "--ci" },
+  // `--phase` is what an operator familiar with `legion review` reaches for
+  // first, and `legion approve spec` does not read it: it acts on the latest
+  // change. Declared here because `undeclaredOptionError` returns `undefined`
+  // for a command with no entry in `DECLARED`, so forgetting the new verb's
+  // declaration produces a green tree with the guard disabled on the newest
+  // verb — the exact class of defect the declaration boundary exists to close.
+  { command: "approve", args: ["approve", "spec", "--phase", "1"], flag: "--phase" },
+  // `--approver` is what an operator who has just used `legion approve` reaches
+  // for, and `legion attest` spells the same idea `--attested-by`. The entry
+  // exists for the reason above: a command with no `DECLARED` entry has
+  // `undeclaredOptionError` return `undefined`, so the guard would be silently
+  // disabled on the newest verb and the whole tree would still be green.
+  { command: "attest", args: ["attest", "security-evaluation", "--approver", "dasbl"], flag: "--approver" },
+  // `--approver` again, for the newest verb, and for the same reason a third
+  // time: `legion release plan` records no decider at all — a plan is a checkable
+  // document rather than a decision — so an operator reaching for the flag they
+  // used on `legion approve` must be told it is not read here rather than have it
+  // silently dropped. And, as above, the entry is what proves the `DECLARED`
+  // declaration was not forgotten: without one, `undeclaredOptionError` returns
+  // `undefined` and the option boundary is disabled on the newest verb while the
+  // whole tree stays green.
+  { command: "release", args: ["release", "plan", "--approver", "dasbl"], flag: "--approver" }
 ];
 
 for (const entry of IGNORED) {

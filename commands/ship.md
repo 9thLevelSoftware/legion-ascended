@@ -62,9 +62,46 @@ Project state comes from the CLI, not from files read directly.
               Run `/legion:review` before shipping, or specify a reviewed phase with `--phase N`."
      Exit — do not proceed
 
-   - Check for `--canary` flag: set CANARY_MODE=true if present, strip from arguments
+   - Check for `--canary` flag: set CANARY_MODE=true if present, strip from arguments.
+     `--canary` is a mode of THIS host command and is never passed through to the
+     `legion ship` CLI, which does not read it and refuses it at the option boundary.
+     Pre-release observation planning is `legion release plan`, which writes the
+     release.json the `release_observation_plan` gate reads before anything ships.
 
    Display: "Ship scope: Phase {N} — {phase_name}"
+
+2.5. READ THE GATE COUNTS HONESTLY
+   `legion ship --json` reports `riskGates.satisfied`, `unsatisfied` and
+   `unevaluable`. Do not report the satisfied count as the number of gates that
+   were proven.
+
+   A satisfied count includes every gate whose `satisfied` rests on a named
+   person's decision rather than on a result a program produced. The payload
+   names those separately and they must be read out:
+
+   - `riskGates.waivedGates` — a named human recorded that this check does not
+     apply to this change, with a stated reason. A waiver is a decision, not a
+     result.
+   - `riskGates.humanJudgementGates` — a person's decision stands where a check
+     would. Two things reach this list: an attestation of something no report
+     shape states, and a declared verification surface whose pinned bytes were
+     edited after the check ran and were re-affirmed by `legion approve surface`
+     instead of re-verified. The second one means a real check passed against
+     bytes that are no longer the bytes on disk.
+
+   The same gates arrive as `risk_gate_waived` and `risk_gate_human_judgement`
+   warnings, whose messages name the decider, the instant and — for a
+   re-affirmed pin — the file. If either list is non-empty, say so before saying
+   the change is ready, and name who decided and why. Reporting "all gates
+   satisfied" over them hides exactly the decision they exist to make visible.
+
+   These two lists are the payload's own account of where a human stood in for a
+   check; they are not a proof that no other route exists. Gates that *ask*
+   whether a human approved something — `explicit_human_approval`,
+   `approved_delta_spec`, `approved_spec_and_oracle`,
+   `whole_change_acceptance_evidence`, `protected_acceptance_tests` — are
+   satisfied by the approval plane and are deliberately not listed here, because
+   for them the recorded decision is the result.
 
 3. PRE-SHIP GATE
    Run ship-pipeline Section 1 quality gate checks. Each check must pass before proceeding:
@@ -268,6 +305,10 @@ Project state comes from the CLI, not from files read directly.
        Run `/legion:status` to see updated project state."
 
 8. CANARY MODE (--canary flag)
+   A host-only post-ship mode. The CLI runs no canary probes and no health-check
+   subprocesses; this section is the host doing it. What the CLI checks *before*
+   the ship is the recorded plan — see `legion release plan` — and where a real
+   post-deployment report lands is `legion dev board release-observation`.
    If CANARY_MODE=true:
    a. Display:
       "Entering canary monitoring mode.

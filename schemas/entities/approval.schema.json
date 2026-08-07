@@ -1256,9 +1256,48 @@
           "additionalProperties": false
         },
         "idempotencyKey": {
-          "type": "string",
-          "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
-          "description": "Stable logical operation key: project:change:task:run:effect-kind:target-hash."
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
+              "description": "Stable logical operation key: project:change:task:run:effect-kind:target-hash."
+            },
+            {
+              "type": "string",
+              "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
+              "description": "Stable logical operation key for a change-scoped decision: project:change:effect-kind:target-hash."
+            }
+          ]
+        },
+        "artifacts": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                "description": "Relative POSIX artifact path inside an approved artifact root."
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "Lowercase SHA-256 content hash with sha256: prefix."
+              },
+              "mediaType": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9.+-]*\\/[a-z0-9][a-z0-9.+-]*$"
+              }
+            },
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "additionalProperties": false
+          }
         },
         "expiresAt": {
           "type": "string",
@@ -2577,9 +2616,48 @@
           "additionalProperties": false
         },
         "idempotencyKey": {
-          "type": "string",
-          "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
-          "description": "Stable logical operation key: project:change:task:run:effect-kind:target-hash."
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
+              "description": "Stable logical operation key: project:change:task:run:effect-kind:target-hash."
+            },
+            {
+              "type": "string",
+              "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
+              "description": "Stable logical operation key for a change-scoped decision: project:change:effect-kind:target-hash."
+            }
+          ]
+        },
+        "artifacts": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                "description": "Relative POSIX artifact path inside an approved artifact root."
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "Lowercase SHA-256 content hash with sha256: prefix."
+              },
+              "mediaType": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9.+-]*\\/[a-z0-9][a-z0-9.+-]*$"
+              }
+            },
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "additionalProperties": false
+          }
         },
         "expiresAt": {
           "type": "string",
@@ -3901,9 +3979,48 @@
           "additionalProperties": false
         },
         "idempotencyKey": {
-          "type": "string",
-          "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
-          "description": "Stable logical operation key: project:change:task:run:effect-kind:target-hash."
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
+              "description": "Stable logical operation key: project:change:task:run:effect-kind:target-hash."
+            },
+            {
+              "type": "string",
+              "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
+              "description": "Stable logical operation key for a change-scoped decision: project:change:effect-kind:target-hash."
+            }
+          ]
+        },
+        "artifacts": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                "description": "Relative POSIX artifact path inside an approved artifact root."
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "Lowercase SHA-256 content hash with sha256: prefix."
+              },
+              "mediaType": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9.+-]*\\/[a-z0-9][a-z0-9.+-]*$"
+              }
+            },
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "additionalProperties": false
+          }
         },
         "expiresAt": {
           "type": "string",
@@ -5225,9 +5342,48 @@
           "additionalProperties": false
         },
         "idempotencyKey": {
-          "type": "string",
-          "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
-          "description": "Stable logical operation key: project:change:task:run:effect-kind:target-hash."
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
+              "description": "Stable logical operation key: project:change:task:run:effect-kind:target-hash."
+            },
+            {
+              "type": "string",
+              "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
+              "description": "Stable logical operation key for a change-scoped decision: project:change:effect-kind:target-hash."
+            }
+          ]
+        },
+        "artifacts": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                "description": "Relative POSIX artifact path inside an approved artifact root."
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "Lowercase SHA-256 content hash with sha256: prefix."
+              },
+              "mediaType": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9.+-]*\\/[a-z0-9][a-z0-9.+-]*$"
+              }
+            },
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "additionalProperties": false
+          }
         },
         "expiresAt": {
           "type": "string",
@@ -6546,9 +6702,48 @@
           "additionalProperties": false
         },
         "idempotencyKey": {
-          "type": "string",
-          "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
-          "description": "Stable logical operation key: project:change:task:run:effect-kind:target-hash."
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
+              "description": "Stable logical operation key: project:change:task:run:effect-kind:target-hash."
+            },
+            {
+              "type": "string",
+              "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$",
+              "description": "Stable logical operation key for a change-scoped decision: project:change:effect-kind:target-hash."
+            }
+          ]
+        },
+        "artifacts": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                "description": "Relative POSIX artifact path inside an approved artifact root."
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "Lowercase SHA-256 content hash with sha256: prefix."
+              },
+              "mediaType": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9.+-]*\\/[a-z0-9][a-z0-9.+-]*$"
+              }
+            },
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "additionalProperties": false
+          }
         },
         "expiresAt": {
           "type": "string",

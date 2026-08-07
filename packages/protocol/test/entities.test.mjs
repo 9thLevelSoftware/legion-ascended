@@ -279,7 +279,12 @@ test("P01-T04 generated entity JSON schemas match committed artifacts", async ()
     change: "change.schema.json",
     requirement: "requirement.schema.json",
     decision: "decision.schema.json",
-    oracle: "oracle.schema.json"
+    oracle: "oracle.schema.json",
+    // Added with the entity. This map is hand-maintained and does not enumerate
+    // itself from `entityJsonSchemas`, so a new entity whose committed schema
+    // drifts from its source is caught only by `validate-next`'s
+    // `schema-doc-drift` step — which runs in CI rather than in `pnpm test`.
+    attestation: "attestation.schema.json"
   };
 
   for (const [name, fileName] of Object.entries(expectedFiles)) {

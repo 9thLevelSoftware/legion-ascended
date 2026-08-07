@@ -95,8 +95,11 @@ function legacyTaskContract() {
   };
 }
 
-test("0.2.0 is current and 0.1.0 remains supported", () => {
-  assert.equal(CURRENT_PROTOCOL_VERSION, "0.2.0");
+test("0.1.0 remains supported, and its hop is still not information-preserving", () => {
+  // The current-version claim moved to migrations-0-3-0, asserted once. What
+  // stays here is this hop's own honesty flag: it invents a budget and a proof
+  // mode, so it must never claim to preserve information — a false declaration
+  // would let a downcast be registered against it.
   assert.ok(SUPPORTED_PROTOCOL_VERSIONS.includes("0.1.0"));
   assert.equal(legionProtocol010To020.informationPreserving, false);
 });
@@ -104,8 +107,14 @@ test("0.2.0 is current and 0.1.0 remains supported", () => {
 test("legacy requirements upcast to criterion objects that validate", () => {
   const { record, appliedMigrations } = applyMigrations(legacyRequirement(), { registry: registry() });
 
-  assert.deepEqual(appliedMigrations, ["legion.protocol.0-1-0.to.0-2-0"]);
-  assert.equal(record.schemaVersion, "0.2.0");
+  // Two hops, because the registry targets `CURRENT_PROTOCOL_VERSION` and 0.3.0
+  // is current. The second is the identity; everything asserted below is the
+  // first hop's work surviving it.
+  assert.deepEqual(appliedMigrations, [
+    "legion.protocol.0-1-0.to.0-2-0",
+    "legion.protocol.0-2-0.to.0-3-0"
+  ]);
+  assert.equal(record.schemaVersion, CURRENT_PROTOCOL_VERSION);
 
   const parsed = requirementSchema.parse(record);
   assert.equal(parsed.acceptance.criteria.length, 2);

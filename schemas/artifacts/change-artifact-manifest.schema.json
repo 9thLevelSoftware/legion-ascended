@@ -39,6 +39,9 @@
               "evidence-index",
               "task-run",
               "review",
+              "approval",
+              "attestation",
+              "release",
               "archive"
             ]
           },

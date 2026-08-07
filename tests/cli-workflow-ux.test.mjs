@@ -427,6 +427,7 @@ test("core workflow commands expose command-specific help", async () => {
     ["plan", /legion plan <phase-number>/],
     ["build", /legion build \[--executor codex\|manual\|fake\]/],
     ["review", /legion review \[--executor codex\|manual\|fake\]/],
+    ["approve", /legion approve <subject>/],
     ["status", /legion status/],
     ["validate", /legion validate/],
     ["doctor", /legion doctor/]
@@ -1503,18 +1504,109 @@ test("legion review submits, accepts, advances status, and unlocks ship readines
 
     // Accepting a review advances the workflow to ship_ready; it does not make
     // the change shippable. An R2 phase still requires approved delta specs, a
-    // protected oracle, integration checks and whole-change acceptance
-    // evidence, none of which Legion produces yet, so the gate blocks and names
-    // them. Phase D flips this back to `ready`.
+    // protected oracle, integration checks and a whole-change sign-off, and this
+    // fixture runs neither `legion approve spec` nor an accept with an
+    // `--approver`, declares no verification surface and names no oracle — so
+    // four gates block and the payload names each of them.
+    //
+    // This assertion used to be `some(entry => entry.code === "risk_gate_unevaluable")`
+    // — a shrug at "something is unproven". That was as much as could be said
+    // while no gate had a producer and the blocked payload carried no gate id.
+    // Now that `approved_delta_spec` has one and the diagnostic carries `gate`,
+    // the fixture names it. The difference matters: with the loose assertion, a
+    // later change that satisfied `approved_delta_spec` and broke a different
+    // gate would leave this test green for the wrong reason, and so would one
+    // that stopped deriving R2's gates entirely.
+    //
+    // This fixture is now also the counterweight to the dogfood, which certifies
+    // `ready` for an R2 change from this release onward. Nothing here may be
+    // relaxed to match it: the difference between the two is the whole claim —
+    // an interviewed R2 change with an approved spec, a declared surface and a
+    // named approver ships, and this one, which has none of those, does not.
     const ship = await runCliCapture(["--repository-root", root, "ship", "--json"]);
     assert.equal(ship.exitCode, 1);
     const shipPayload = parseJsonOutput(ship);
     assert.equal(shipPayload.status, "blocked");
     assert.ok(shipPayload.diagnostics.length > 0, "blocked ship should name unproven gates");
-    assert.ok(
-      shipPayload.diagnostics.some((entry) => entry.code === "risk_gate_unevaluable"),
-      "ship should block on unprovable risk gates, not on missing review evidence"
+
+    const deltaSpecGate = shipPayload.diagnostics.filter((entry) => entry.gate === "approved_delta_spec");
+    // One, not one per task. This fixture has a single task, so it passes with
+    // or without the change-scoped collapse — tests/ship-gate-diagnostics holds
+    // that rule against a two-task list, and this only checks that nothing here
+    // duplicates it.
+    assert.equal(deltaSpecGate.length, 1, "the delta-spec gate should be named once, for the change");
+    assert.equal(deltaSpecGate[0].code, "risk_gate_unevaluable");
+    assert.match(deltaSpecGate[0].message, /No approval records anyone approving the delta spec for req_/);
+
+    // The integration gate now has a producer too, and this fixture's interview
+    // declares no verification surface — so it must report the *absent* answer
+    // and not the negative one. That distinction is the whole point of the gate:
+    // `unevaluable` says nobody declared anything, `unsatisfied` would say
+    // somebody declared that nothing crosses a boundary. It also proves the
+    // absent-declaration path is a verdict rather than a crash, which is the
+    // failure mode a gate reading `task.verification` invites.
+    //
+    // Change-scoped, like `approved_delta_spec` above: ADR-006 asks whether
+    // verification reaches the relevant interface *for the change*, and
+    // `legion plan` materializes one task per executable criterion — so a
+    // task-scoped version would let one honestly-declared `unit` criterion block
+    // a change that does reach a real interface. One task here, so this passes
+    // with or without the collapse; the witness is in
+    // tests/verification-surface-gate against a three-task list.
+    const integrationGate = shipPayload.diagnostics.filter(
+      (entry) => entry.gate === "integration_or_real_interface_checks"
     );
+    assert.equal(integrationGate.length, 1, "the integration gate should be named once, for the change");
+    assert.equal(integrationGate[0].code, "risk_gate_unevaluable");
+    assert.match(integrationGate[0].message, /declares a verification surface/);
+    assert.match(
+      integrationGate[0].message,
+      /is not satisfied for chg_/,
+      "a change-scoped verdict names the change as its subject, not the task"
+    );
+
+    // And whole-change acceptance, which this fixture reaches by the one route
+    // that produces its *honest* middle answer: `legion review --accept` with no
+    // `--approver`. Every task's evidence is accepted and nobody named signed
+    // off on the change as a whole, so the bundle records `{status: "ready"}` —
+    // short of accepted, and reported as `unevaluable` rather than as a
+    // negative, because nobody was asked.
+    //
+    // This is also where the R2 answer to "what did the accept actually write"
+    // is pinned. Before this release the gate had no producer at all and this
+    // sentence read "Legion does not yet produce evidence for this gate."
+    const acceptanceGate = shipPayload.diagnostics.filter(
+      (entry) => entry.gate === "whole_change_acceptance_evidence"
+    );
+    assert.equal(acceptanceGate.length, 1, "the acceptance gate should be named once, for the change");
+    assert.equal(acceptanceGate[0].code, "risk_gate_unevaluable");
+    assert.match(acceptanceGate[0].message, /no named approver signed off on the change as a whole/);
+    assert.match(
+      acceptanceGate[0].message,
+      /is not satisfied for chg_/,
+      "a change-scoped verdict names the change as its subject, not the task"
+    );
+
+    // The block has a route out, and this is the assertion that could not be
+    // made before: `legion build` cannot produce an approval, so a blocked ship
+    // that advised only a build sent the operator round a loop. Four gates are
+    // unmet here with three distinct repairs, so the advice cannot claim one
+    // command unblocks the ship — but the command it dispatches must still be one
+    // of the three, not the fallback. That last part is this release's correction:
+    // `nextAction.command` was `legion build` in every mixed state, which is a
+    // command no unmet gate here claims can produce anything.
+    assert.equal(shipPayload.nextAction.command, "legion approve spec --approver <id>");
+    assert.match(shipPayload.nextAction.reason, /legion approve spec/);
+    assert.match(shipPayload.nextAction.reason, /No single command unblocks this ship/);
+    // `legion review`, not `legion review --accept --approver`, and the
+    // difference is the point. This fixture reached `ready` by running the accept
+    // *without* `--approver`, which flipped the covering review from `submitted`
+    // to `accepted` — and `legion review --accept` refuses evidence no clean
+    // submitted review covers, so re-running it here exits 1 with
+    // `review_not_clean`. The gate used to name it anyway, in this exact state,
+    // which is the highest-frequency operator mistake this release introduces.
+    // The route out is a fresh review first, then the accept.
+    assert.match(shipPayload.nextAction.reason, /legion start --intake, legion review\./);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1945,7 +2037,7 @@ for (const retroCase of [
   });
 }
 
-for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "milestone", "retro", "ship", "council"]) {
+for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "milestone", "retro", "ship", "approve", "council"]) {
   test(`legion ${command} has a user-facing contract`, async () => {
     const result = await runCliCapture([command, "--help"]);
     assert.equal(result.exitCode, 0);

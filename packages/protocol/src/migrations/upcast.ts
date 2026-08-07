@@ -1,4 +1,4 @@
-import { LEGION_PROTOCOL_MIGRATIONS } from "./legion-0-2-0.js";
+import { LEGION_PROTOCOL_MIGRATIONS } from "./registry.js";
 import { applyMigrations, createMigrationRegistry } from "./index.js";
 import {
   CURRENT_PROTOCOL_VERSION,

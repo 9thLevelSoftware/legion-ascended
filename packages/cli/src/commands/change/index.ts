@@ -4,6 +4,7 @@ import {
   diffChangeBundle,
   loadChangeBundle,
   planAcceptedChangeArchive,
+  repairChangeProposalPins,
   validateChangeBundle,
   type ArchiveAcceptedChangeInput,
   type CreateChangeBundleInput
@@ -22,6 +23,7 @@ import {
   type CliContext,
   type CliResult
 } from "../../runtime.js";
+import { resolveBaseGitSha } from "../../workflow/change-input.js";
 
 const CHANGE_HELP = `legion dev change <command>
 
@@ -29,6 +31,12 @@ Commands:
   create --input <file>     Create a change bundle from a JSON input object.
   validate <changeId>       Validate a persisted change bundle.
   diff <changeId>           Summarize proposed requirement changes.
+  repoint <changeId>        Re-point recorded artifact inputs at the change
+                            proposal on disk. Repairs a torn acceptance write,
+                            where change.yaml records the sign-off and the task
+                            graph or evidence index still pins the revision
+                            before it. Idempotent; writes nothing when the pins
+                            are already current.
   archive <changeId>        Archive an accepted change into current truth.
 
 Archive options:
@@ -52,6 +60,8 @@ export async function handleChangeCommand(context: CliContext): Promise<CliResul
       return validate(commandContext);
     case "diff":
       return diff(commandContext);
+    case "repoint":
+      return repoint(commandContext);
     case "archive":
       return archive(commandContext);
     default:
@@ -97,6 +107,53 @@ async function validate(context: CliContext): Promise<CliResult> {
 
   const result = await validateChangeBundle({ repositoryRoot: context.repositoryRoot, changeId });
   return fromServiceResult(result as unknown as Record<string, unknown>, result.ok ? "Change is valid." : "Change validation failed.");
+}
+
+/**
+ * Re-point this change's recorded artifact inputs at the change proposal on disk.
+ *
+ * **The route out of a torn acceptance write, and the reason it is a verb rather
+ * than a paragraph of instructions.** `legion review --accept` rewrites
+ * `change.yaml` and then re-points the two artifact-input lists that pin it —
+ * three separate atomic renames with no transaction around them. If the second
+ * or third does not land (a file lock, an anti-virus hold, a read-only checkout,
+ * ENOSPC, a Ctrl-C), the sign-off is on disk and the pins name the revision
+ * before it. Every other verb refused that state: `legion plan` exits with
+ * `artifact_already_exists`, `legion build` does not rewrite
+ * `taskgraph.artifactInputs`, `legion validate` reports valid, `legion ship`
+ * correctly refuses with two `change_traceability_broken`, and a second accept
+ * used to walk the bundle one revision further while repairing nothing. The hand
+ * correction ship advertised was not performable either: editing
+ * `taskgraph.artifactInputs` trips `taskgraph_manifest_inputs_mismatch`, and
+ * repairing that trips `manifest_hash_mismatch` on a hash no command recomputes.
+ *
+ * Read-mostly and idempotent: on a healthy change it substitutes nothing, writes
+ * nothing, and reports zero repairs, so it is safe to run when unsure.
+ */
+async function repoint(context: CliContext): Promise<CliResult> {
+  const changeId = context.args.positionals[0];
+  if (changeId === undefined) return helpResult(CHANGE_HELP);
+
+  const result = await repairChangeProposalPins({
+    repositoryRoot: context.repositoryRoot,
+    changeId,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!result.ok) {
+    return fromServiceResult(result as unknown as Record<string, unknown>, "Change inputs could not be re-pointed.");
+  }
+
+  return success(
+    {
+      ok: true,
+      status: result.repointed.length === 0 ? "current" : "repointed",
+      repointed: result.repointed,
+      diagnostics: []
+    },
+    result.repointed.length === 0
+      ? `${changeId}: recorded artifact inputs already name the change proposal on disk; nothing was written.`
+      : `${changeId}: re-pointed ${result.repointed.map((entry) => entry.artifactPath).join(", ")}.`
+  );
 }
 
 async function diff(context: CliContext): Promise<CliResult> {

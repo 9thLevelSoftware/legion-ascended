@@ -9,6 +9,7 @@ import { loadWorkflowProject, validateWorkflowProject } from "./context.js";
 import { latestEvidenceEntries } from "./evidence-selection.js";
 import { taskIdForContractId } from "./run-artifacts.js";
 import { nextAction, type NextAction } from "./render.js";
+import { APPROVE_BEFORE_BUILD_RECOVERY, derivesApprovalOrderingGate } from "./ship-gates.js";
 
 export type WorkflowStage =
   | "uninitialized"
@@ -161,11 +162,22 @@ export async function resolveWorkflowState(context: CliContext): Promise<Workflo
     };
   }
 
+  // The stage is still `planned`, and only the advice forks.
+  //
+  // Eight pinned assertions and the dogfood harness depend on a planned change
+  // reporting `planned`, and none of them is wrong: the change *is* planned. What
+  // was wrong was the one action attached to it. At R3 the next act is not a build
+  // — `approved_spec_and_oracle` compares the last approval against the first run
+  // start, so a build taken from here is the act that makes the change
+  // unshippable, and `legion status` was one of the three commands review found
+  // advising it. Nothing about the stage machine moves; the sentence does.
   return {
     stage: "planned",
     projectId: project.loaded.project.id,
     currentSpecCount: specs.documents.length,
-    nextAction: nextAction("legion build", "Latest planned change is ready for guided build execution."),
+    nextAction: derivesApprovalOrderingGate(taskgraph.document.tasks)
+      ? nextAction(APPROVE_BEFORE_BUILD_RECOVERY.command, APPROVE_BEFORE_BUILD_RECOVERY.reason)
+      : nextAction("legion build", "Latest planned change is ready for guided build execution."),
     diagnostics: []
   };
 }

@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path46 from "node:path";
+import path50 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -1071,10 +1071,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path47) {
-  if (!path47)
+function getElementAtPath(obj, path51) {
+  if (!path51)
     return obj;
-  return path47.reduce((acc, key) => acc?.[key], obj);
+  return path51.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -1483,11 +1483,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path47, issues) {
+function prefixIssues(path51, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path47);
+    iss.path.unshift(path51);
     return iss;
   });
 }
@@ -1634,16 +1634,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path47 = []) => {
+  const processError = (error52, path51 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path47, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path51, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path51, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path51, ...issue2.path]);
       } else {
-        const fullpath = [...path47, ...issue2.path];
+        const fullpath = [...path51, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -1670,17 +1670,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path47 = []) => {
+  const processError = (error52, path51 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path47, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path51, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path51, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path51, ...issue2.path]);
       } else {
-        const fullpath = [...path47, ...issue2.path];
+        const fullpath = [...path51, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -1712,8 +1712,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path47 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path47) {
+  const path51 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path51) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -14405,13 +14405,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path47 = ref.slice(1).split("/").filter(Boolean);
-  if (path47.length === 0) {
+  const path51 = ref.slice(1).split("/").filter(Boolean);
+  if (path51.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path47[0] === defsKey) {
-    const key = path47[1];
+  if (path51[0] === defsKey) {
+    const key = path51[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -14832,6 +14832,7 @@ var ENTITY_ID_KINDS = [
   "evidence",
   "review",
   "approval",
+  "attestation",
   "release",
   "observation",
   "event",
@@ -14849,6 +14850,7 @@ var ENTITY_ID_PREFIXES = {
   evidence: "evd",
   review: "rev",
   approval: "apv",
+  attestation: "att",
   release: "rel",
   observation: "obs",
   event: "evt",
@@ -14873,6 +14875,7 @@ var runIdSchema = idSchema("run", slugSuffixPattern, "Run ID");
 var evidenceIdSchema = idSchema("evd", slugSuffixPattern, "Evidence ID");
 var reviewIdSchema = idSchema("rev", slugSuffixPattern, "Review ID");
 var approvalIdSchema = idSchema("apv", slugSuffixPattern, "Approval ID");
+var attestationIdSchema = idSchema("att", slugSuffixPattern, "Attestation ID");
 var releaseIdSchema = idSchema("rel", slugSuffixPattern, "Release ID");
 var observationIdSchema = idSchema("obs", slugSuffixPattern, "Observation ID");
 var eventIdSchema = idSchema("evt", timeSortableSuffixPattern, "Event ID");
@@ -14889,6 +14892,7 @@ var entityIdSchemas = {
   evidence: evidenceIdSchema,
   review: reviewIdSchema,
   approval: approvalIdSchema,
+  attestation: attestationIdSchema,
   release: releaseIdSchema,
   observation: observationIdSchema,
   event: eventIdSchema,
@@ -14907,6 +14911,7 @@ var anyEntityIdSchema = union([
   evidenceIdSchema,
   reviewIdSchema,
   approvalIdSchema,
+  attestationIdSchema,
   releaseIdSchema,
   observationIdSchema,
   eventIdSchema,
@@ -14938,6 +14943,7 @@ var artifactReferenceSchema = strictObject({
 });
 var effectKindSchema = string2().regex(/^[a-z][a-z0-9._-]{1,63}$/, "Invalid effect kind").brand();
 var idempotencyKeySchema = string2().regex(/^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$/, "Invalid idempotency key").brand().describe("Stable logical operation key: project:change:task:run:effect-kind:target-hash.");
+var changeScopedIdempotencyKeySchema = string2().regex(/^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$/, "Invalid change-scoped idempotency key").brand().describe("Stable logical operation key for a change-scoped decision: project:change:effect-kind:target-hash.");
 var correlationIdSchema = string2().regex(/^cor_[0-9a-hjkmnp-tv-z]{26}$/, "Invalid correlation ID").brand();
 var paginationCursorSchema = string2().regex(/^cur_[A-Za-z0-9_-]{4,256}$/, "Invalid pagination cursor").brand();
 function createJsonValueSchema(options = {}) {
@@ -14986,11 +14992,20 @@ function buildIdempotencyKey(input) {
   const targetHash = contentHashSchema.parse(input.targetHash);
   return idempotencyKeySchema.parse(`${projectId}:${changeId}:${taskId}:${runId}:${effectKind}:${targetHash}`);
 }
+function buildChangeIdempotencyKey(input) {
+  const projectId = projectIdSchema.parse(input.projectId);
+  const changeId = changeIdSchema.parse(input.changeId);
+  const effectKind = effectKindSchema.parse(input.effectKind);
+  const targetHash = contentHashSchema.parse(input.targetHash);
+  return changeScopedIdempotencyKeySchema.parse(`${projectId}:${changeId}:${effectKind}:${targetHash}`);
+}
 
 // packages/protocol/dist/versioning/index.js
-var PREVIOUS_PROTOCOL_VERSION = schemaVersionSchema.parse("0.1.0");
-var CURRENT_PROTOCOL_VERSION = schemaVersionSchema.parse("0.2.0");
+var LEGACY_PROTOCOL_VERSION = schemaVersionSchema.parse("0.1.0");
+var PREVIOUS_PROTOCOL_VERSION = schemaVersionSchema.parse("0.2.0");
+var CURRENT_PROTOCOL_VERSION = schemaVersionSchema.parse("0.3.0");
 var SUPPORTED_PROTOCOL_VERSIONS = [
+  LEGACY_PROTOCOL_VERSION,
   PREVIOUS_PROTOCOL_VERSION,
   CURRENT_PROTOCOL_VERSION
 ];
@@ -15076,11 +15091,11 @@ function findProtocolMigrationPath(input) {
         continue;
       if (visited.has(migration.toVersion))
         continue;
-      const path47 = [...next.path, migration];
+      const path51 = [...next.path, migration];
       if (migration.toVersion === toVersion)
-        return path47;
+        return path51;
       visited.add(migration.toVersion);
-      queue.push({ version: migration.toVersion, path: path47 });
+      queue.push({ version: migration.toVersion, path: path51 });
     }
     next = queue.shift();
   }
@@ -15182,6 +15197,59 @@ var traceReferenceSchema = strictObject({
   relation: _enum2(["defines", "refines", "supersedes", "covers", "verifies", "records"]),
   entity: scopedEntityReferenceSchema.optional()
 });
+var verificationSurfaceKindSchema = _enum2([
+  "unit",
+  "integration",
+  "real-interface",
+  "end-to-end"
+]);
+var verificationSurfaceSchema = strictObject({
+  kind: verificationSurfaceKindSchema,
+  /** The boundary, as a design document would name it: "POST /v1/orders". */
+  interface: string2().min(1).max(256),
+  /** Why reaching it catches something a smaller check would miss. */
+  rationale: string2().min(1).max(1024),
+  pinned: array(artifactReferenceSchema).min(1).max(8)
+}).superRefine((surface, context) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, reference] of surface.pinned.entries()) {
+    if (seen.has(reference.path)) {
+      context.addIssue({
+        code: "custom",
+        message: "A verification surface may pin a path only once.",
+        path: ["pinned", index, "path"]
+      });
+    }
+    seen.add(reference.path);
+  }
+});
+var CONTROL_PLANE_ROOT = ".legion/project";
+function namesControlPlane(entry) {
+  const folded = entry.toLowerCase();
+  const root = CONTROL_PLANE_ROOT.toLowerCase();
+  return folded === root || folded.startsWith(`${root}/`);
+}
+var MAX_ACCEPTANCE_PATHS = 8;
+var acceptancePathsSchema = array(artifactPathSchema).min(1).max(MAX_ACCEPTANCE_PATHS).superRefine((paths, context) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, entry] of paths.entries()) {
+    if (seen.has(entry)) {
+      context.addIssue({
+        code: "custom",
+        message: "A protected acceptance path may be named only once.",
+        path: [index]
+      });
+    }
+    seen.add(entry);
+    if (namesControlPlane(entry)) {
+      context.addIssue({
+        code: "custom",
+        message: `${CONTROL_PLANE_ROOT} is the control plane, which the guarded harness restores rather than reports. A protected acceptance path names a test the implementer must not weaken, which lives in the repository.`,
+        path: [index]
+      });
+    }
+  }
+});
 var artifactRoleSchema = _enum2([
   "project-manifest",
   "constitution",
@@ -15195,6 +15263,13 @@ var artifactRoleSchema = _enum2([
   "evidence-index",
   "task-run",
   "review",
+  "approval",
+  "attestation",
+  // Widening a `z.enum` keeps every document already on disk valid, which is why
+  // each release that adds an artifact role adds it here rather than minting a
+  // parallel role vocabulary. `release` is the singular per-change release plan
+  // at `.legion/project/changes/<changeId>/release.json`.
+  "release",
   "archive"
 ]);
 var artifactRevisionSchema = strictObject({
@@ -15235,8 +15310,9 @@ var releaseDeploymentSchema = strictObject({
   deploymentId: string2().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/, "Invalid deployment ID"),
   deployedAt: utcTimestampSchema
 });
+var releaseRollbackStrategySchema = _enum2(["revert", "disable", "restore", "manual"]);
 var releaseRollbackPlanSchema = strictObject({
-  strategy: _enum2(["revert", "disable", "restore", "manual"]),
+  strategy: releaseRollbackStrategySchema,
   criteria: array(string2().min(1).max(1024)).min(1),
   evidenceRefs: array(evidenceIdSchema)
 });
@@ -15253,6 +15329,15 @@ var releaseBaseSchema = schemaMetadataSchema.extend({
   environment: releaseEnvironmentSchema,
   releaseIntent: artifactReferenceSchema,
   deployment: releaseDeploymentSchema.optional(),
+  // **`taskRefs` and `healthCriteria` are deliberately not `.min(1)`, and the
+  // gate does not inherit its truth claim from that.** `release_observation_plan`
+  // requires at least one health criterion and coverage of every deriving task,
+  // and it checks both itself — `[].every(...)` is `true`, so a quantifier over
+  // either of these arrays is vacuous at zero length. Tightening the published
+  // schema would change the shape of an entity for a check the gate and
+  // `legion release plan` have to make anyway, and `attestationGateStatus` keeps
+  // its own `sources.length === 0` guard for exactly this reason even though
+  // `.min(1)` forbids it there.
   taskRefs: array(taskIdSchema),
   approvalRefs: array(approvalIdSchema),
   evidenceRefs: array(evidenceIdSchema),
@@ -15315,6 +15400,13 @@ var releaseSchema = discriminatedUnion("status", [
 // packages/protocol/dist/entities/review.js
 var reviewStatusSchema = _enum2(["requested", "submitted", "accepted", "rejected", "superseded", "unknown"]);
 var reviewVerdictSchema = _enum2(["pass", "fail", "unknown", "not_verified", "not_applicable"]);
+var reviewDomainSchema = _enum2([
+  "implementation",
+  "architecture",
+  "security",
+  "performance",
+  "operability"
+]);
 var reviewFindingSeveritySchema = _enum2(["minor", "major", "blocking"]);
 var reviewVerdictsSchema = strictObject({
   specification: reviewVerdictSchema,
@@ -15353,7 +15445,51 @@ var reviewDecisionBaseSchema = schemaMetadataSchema.extend({
   findings: array(reviewFindingSchema),
   supersedes: array(reviewIdSchema),
   evidenceRefs: array(evidenceIdSchema).optional(),
-  traceRefs: array(traceReferenceSchema).optional()
+  traceRefs: array(traceReferenceSchema).optional(),
+  /**
+   * Which domain competences performed this review.
+   *
+   * On the base schema rather than on the `accepted` member, on `acceptedBy`'s
+   * rule below: `z.strictObject` would reject it everywhere else, and a review
+   * that is later rejected or superseded must keep the record — the
+   * architecture-and-security gate's `unsatisfied` arm reads a *rejected* domain
+   * review, and it cannot read one that lost its domain on the way to being
+   * rejected.
+   *
+   * Optional because every review artifact already on disk lacks it. A required
+   * field would make `readReviewDecision` fail to parse an older review, and
+   * `legion ship` would report a broken change rather than an older one — the
+   * worst failure mode for a command whose job is honest reporting. Absent means
+   * a legacy undifferentiated review, which the gate reports `unevaluable`,
+   * never `satisfied`.
+   *
+   * `.min(1)` because `domains: []` is a present field asserting nothing: a
+   * claim-shaped absence, over which every `some` is false and every `every` is
+   * vacuously true. This tree has paid for a quantifier over a possibly-empty set
+   * six times.
+   */
+  domains: array(reviewDomainSchema).min(1).optional(),
+  /**
+   * Who performed the *accept* transition, and when.
+   *
+   * `reviewer` records who produced the review, which for every review Legion
+   * writes is a tool. Accepting one is a second act, by a second actor, and it
+   * had nowhere to live — so a gate asking "did a human approve this" could only
+   * consult `reviewer` or the existence of an accepted row, and both answer a
+   * different question. These two fields are where the accept transition's actor
+   * goes.
+   *
+   * On the base schema rather than on the `accepted` member because
+   * `z.strictObject` would reject them everywhere else, and a review that is
+   * later superseded must keep the record of who accepted it.
+   *
+   * Optional because every review artifact already on disk lacks them. A
+   * required field would make `readReviewDecision` fail to parse an older
+   * review, and `legion ship` would report a broken change rather than an older
+   * one — the worst failure mode for a command whose job is honest reporting.
+   */
+  acceptedBy: actorSchema.optional(),
+  acceptedAt: utcTimestampSchema.optional()
 });
 var openReviewDecisionFields = {
   submittedAt: utcTimestampSchema.optional()
@@ -15392,6 +15528,33 @@ var reviewDecisionSchema = discriminatedUnion("status", [
       code: "custom",
       message: "submittedAt cannot be before createdAt.",
       path: ["submittedAt"]
+    });
+  }
+  if (reviewDecision.domains !== void 0) {
+    const seenDomains = /* @__PURE__ */ new Set();
+    for (const [index, domain2] of reviewDecision.domains.entries()) {
+      if (seenDomains.has(domain2)) {
+        context.addIssue({
+          code: "custom",
+          message: `domains lists ${domain2} more than once.`,
+          path: ["domains", index]
+        });
+      }
+      seenDomains.add(domain2);
+    }
+  }
+  if (reviewDecision.acceptedBy === void 0 !== (reviewDecision.acceptedAt === void 0)) {
+    context.addIssue({
+      code: "custom",
+      message: "acceptedBy and acceptedAt must be recorded together.",
+      path: ["acceptedBy"]
+    });
+  }
+  if (reviewDecision.acceptedAt && reviewDecision.submittedAt && new Date(reviewDecision.acceptedAt).getTime() < new Date(reviewDecision.submittedAt).getTime()) {
+    context.addIssue({
+      code: "custom",
+      message: "acceptedAt cannot be before submittedAt.",
+      path: ["acceptedAt"]
     });
   }
 });
@@ -15455,7 +15618,36 @@ var approvalBaseSchema = schemaMetadataSchema.extend({
   requestedBy: actorSchema,
   requestedAt: utcTimestampSchema,
   scope: approvalScopeSchema,
-  idempotencyKey: idempotencyKeySchema,
+  /**
+   * Which logical operation this decision is.
+   *
+   * Two shapes, admitted here and nowhere else. `idempotencyKeySchema` names a
+   * task and a run, which every approval written before this release does and
+   * which `legion review --accept` still does. A delta-spec approval is taken
+   * between `legion plan` and `legion build`, when no run exists — so it carries
+   * the change-scoped form instead of borrowing ids that would assert an
+   * execution that never happened.
+   *
+   * The union is ordered with the task-scoped form first, so every key already
+   * on disk parses through the branch it was minted by. The two patterns are
+   * disjoint (the effect segment forbids `:`), so which branch a key takes is a
+   * property of the key rather than of the order.
+   */
+  idempotencyKey: union([idempotencyKeySchema, changeScopedIdempotencyKeySchema]),
+  /**
+   * The exact bytes the decision was made against.
+   *
+   * `scope.targets` names *what* was approved by id; this names the content that
+   * was in front of the approver when they said yes. A gate can then ask whether
+   * the thing approved has since been edited, which is the only way "approved"
+   * survives contact with a mutable working tree.
+   *
+   * Optional because no approval on disk has it, and `.min(1)` when present
+   * because an empty array is not "pinned nothing" to a reader — it is a list
+   * every pin check passes vacuously, which is a fail-open produced by a shape
+   * rather than by a mistake. Present therefore means at least one pin.
+   */
+  artifacts: array(artifactReferenceSchema).min(1).optional(),
   expiresAt: utcTimestampSchema.optional()
 });
 var undecidedApprovalFields = {
@@ -16655,6 +16847,129 @@ var apiJsonSchemas = {
   fixtureCorpus: jsonSchemaDocument("https://schemas.9thlevelsoftware.com/legion/api/fixture-corpus.schema.json", "Legion protocol API fixture corpus schema", apiFixtureCorpusSchema)
 };
 
+// packages/protocol/dist/entities/attestation.js
+var attestationKindSchema = _enum2([
+  "independent-baseline",
+  "security-evaluation",
+  "e2e-evaluation",
+  "architecture-review",
+  "rollback-evidence",
+  "forward-fix-evidence",
+  "release-observation"
+]);
+var attestationVerdictSchema = _enum2(["pass", "fail", "unknown", "not_applicable"]);
+var attestationCoverageSchema = discriminatedUnion("kind", [
+  strictObject({ kind: literal("requirement"), id: requirementIdSchema }),
+  strictObject({ kind: literal("task"), id: taskIdSchema })
+]);
+var WAIVER_REASON_MIN_LENGTH = 24;
+function isSubstantiveWaiverReason(value) {
+  const trimmed = value.trim();
+  return trimmed.length >= WAIVER_REASON_MIN_LENGTH && trimmed.split(/\s+/).length >= 2;
+}
+var attestationSchema = schemaMetadataSchema.extend({
+  kind: literal("attestation"),
+  id: attestationIdSchema,
+  projectId: projectIdSchema,
+  changeId: changeIdSchema,
+  attests: attestationKindSchema,
+  verdict: attestationVerdictSchema,
+  attestedBy: actorSchema,
+  attestedAt: utcTimestampSchema,
+  /**
+   * The exact bytes the assertion is about.
+   *
+   * `.min(1)` for `approvalBaseSchema.artifacts`' recorded reason and one
+   * sharper one. An empty array is not "pinned nothing" to a reader — it is a
+   * list every quantifier passes vacuously, which is the fail-open this series
+   * has now paid for five times. And an attestation with no sources is the
+   * whole entity's premise removed: the assertion *is* "these bytes are this
+   * change's evidence", so a record with no bytes asserts a link to nothing.
+   *
+   * Required for `not_applicable` too, and that is deliberate rather than
+   * inherited. The waiver arm is the one `satisfied` verdict in all three
+   * gates with no falsifiable evidence behind it, so it is the last place to
+   * relax a requirement: a waiver cites the ADR, design note or decision
+   * record that supports "this check does not apply here", pinned so it cannot
+   * be edited afterwards.
+   *
+   * `.max(8)` mirrors `verificationSurfaceSchema.pinned`.
+   */
+  sources: array(artifactReferenceSchema).min(1).max(8),
+  covers: array(attestationCoverageSchema).min(1).max(64),
+  statement: string2().min(1).max(2048),
+  /**
+   * Why the check does not apply, on the `not_applicable` verdict and nowhere
+   * else.
+   *
+   * ADR-006 permits a waived gate only as an audited waiver: a named human, a
+   * recorded time, and a reason a reviewer can disagree with. The first two are
+   * the `attestedBy`/`attestedAt` pair and the refinement below; this is the
+   * third, and `isSubstantiveWaiverReason` is what stops it being "n/a" — or a
+   * single 24-character token, which a bare `.min()` accepted.
+   */
+  // `.min()` is kept beside the refinement rather than subsumed by it: the
+  // generated JSON Schema can express a length floor and cannot express a word
+  // count, so dropping it would silently weaken `schemas/entities/
+  // attestation.schema.json` for every consumer outside this process.
+  waiverReason: string2().min(WAIVER_REASON_MIN_LENGTH).max(2048).refine(isSubstantiveWaiverReason, {
+    message: `waiverReason must be at least ${WAIVER_REASON_MIN_LENGTH} characters and more than one word: ADR-006 permits a waived gate only as an audited waiver, and a reason a reviewer can disagree with is a sentence rather than a token.`
+  }).optional()
+}).superRefine((attestation, context) => {
+  const seenPaths = /* @__PURE__ */ new Set();
+  for (const [index, reference] of attestation.sources.entries()) {
+    if (seenPaths.has(reference.path)) {
+      context.addIssue({
+        code: "custom",
+        message: "An attestation may pin a source path only once.",
+        path: ["sources", index, "path"]
+      });
+    }
+    seenPaths.add(reference.path);
+  }
+  const seenCovers = /* @__PURE__ */ new Set();
+  for (const [index, entry] of attestation.covers.entries()) {
+    const key = `${entry.kind}:${entry.id}`;
+    if (seenCovers.has(key)) {
+      context.addIssue({
+        code: "custom",
+        message: "An attestation may name a covered subject only once.",
+        path: ["covers", index, "id"]
+      });
+    }
+    seenCovers.add(key);
+  }
+  if (attestation.verdict === "not_applicable") {
+    if (attestation.waiverReason === void 0) {
+      context.addIssue({
+        code: "custom",
+        message: "A not_applicable attestation requires waiverReason: ADR-006 permits a waived gate only as an audited waiver, which is a named human, a recorded time and a reason a reviewer can disagree with.",
+        path: ["waiverReason"]
+      });
+    }
+    if (attestation.attestedBy.kind !== "human") {
+      context.addIssue({
+        code: "custom",
+        message: `A not_applicable attestation must be made by a human; attestedBy.kind is "${attestation.attestedBy.kind}". A waiver is a person's acceptance of risk, and an automation cannot accept it on their behalf.`,
+        path: ["attestedBy", "kind"]
+      });
+    }
+  } else if (attestation.waiverReason !== void 0) {
+    context.addIssue({
+      code: "custom",
+      message: `waiverReason is only meaningful on a not_applicable attestation; this one records "${attestation.verdict}". A waiver sentence on any other verdict reads as a waiver of that verdict.`,
+      path: ["waiverReason"]
+    });
+  }
+  if (new Date(attestation.attestedAt).getTime() < new Date(attestation.createdAt).getTime()) {
+    context.addIssue({
+      code: "custom",
+      message: "attestedAt cannot be before createdAt.",
+      path: ["attestedAt"]
+    });
+  }
+});
+
 // packages/protocol/dist/entities/change.js
 var changeStatusSchema = _enum2([
   "draft",
@@ -17019,7 +17334,35 @@ var oracleBaseSchema = schemaMetadataSchema.extend({
   sourceArtifacts: array(artifactReferenceSchema).min(1),
   expected: oracleExpectedConditionsSchema,
   requirementCoverage: array(oracleRequirementCoverageSchema).min(1),
-  traceRefs: array(traceReferenceSchema).min(1)
+  traceRefs: array(traceReferenceSchema).min(1),
+  /**
+   * What the command that decides this oracle reaches, copied from the
+   * acceptance criterion that authored it.
+   *
+   * Structurally available on all three oracle types because it lives on the
+   * shared base, and deliberately never written on an `inspectable` one: its
+   * criteria are precisely those no command decides, so a surface there would
+   * claim a command reached something when there is no command.
+   */
+  surface: verificationSurfaceSchema.optional(),
+  /**
+   * The tests an implementer's run must not weaken, copied from the acceptance
+   * criterion that authored it.
+   *
+   * `protectedPaths` above and this are opposites and must never be read as one
+   * population. A `protectedPath` is a control artifact: the guarded harness
+   * restores it and the run is out of contract. An acceptance path is hashed
+   * before dispatch, reported afterwards, and restored by nothing — because a
+   * task may legitimately *add* an acceptance test, and the decision about a
+   * modification belongs to the approval plane rather than to the harness.
+   *
+   * `.optional()` where `protectedPaths` is `.min(1)`, and that asymmetry is
+   * load-bearing: absence has to be a state a gate can check, or "the
+   * declarations are empty" is indistinguishable from "everything declared is
+   * fine". Structurally on the shared base and never written on an `inspectable`
+   * oracle, on `surface`'s rule: its criteria are the ones no command decides.
+   */
+  acceptancePaths: acceptancePathsSchema.optional()
 });
 var oracleSchema = discriminatedUnion("type", [
   oracleBaseSchema.extend({
@@ -17087,7 +17430,9 @@ var requirementCriterionProofSchema = discriminatedUnion("mode", [
     command: string2().min(1).max(256),
     args: array(string2().max(256)).max(64),
     expectedExitCode: number2().int().min(0).max(255),
-    timeoutMs: number2().int().positive().max(36e5).optional()
+    timeoutMs: number2().int().positive().max(36e5).optional(),
+    surface: verificationSurfaceSchema.optional(),
+    acceptancePaths: acceptancePathsSchema.optional()
   }),
   strictObject({
     mode: literal("manual"),
@@ -17198,7 +17543,13 @@ var taskContractVerificationSchema = strictObject({
   command: string2().min(1).max(256),
   args: array(string2().max(256)).max(64),
   expectedExitCode: number2().int().min(0).max(255),
-  timeoutMs: number2().int().positive().max(36e5).optional()
+  timeoutMs: number2().int().positive().max(36e5).optional(),
+  /**
+   * What this command reaches, copied from the acceptance criterion that
+   * authored it. Never derived here, and absent on the project-wide regression
+   * command the planner appends, which nobody declared anything about.
+   */
+  surface: verificationSurfaceSchema.optional()
 });
 var taskContractDiffReconciliationSchema = strictObject({
   required: boolean2(),
@@ -17498,6 +17849,14 @@ var entityJsonSchemas = {
   oracle: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/oracle.schema.json", "Legion protocol oracle entity schema", oracleSchema),
   exploration: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/exploration.schema.json", "Legion protocol exploration entity schema", explorationSchema),
   intakeSession: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/intake-session.schema.json", "Legion protocol intake session entity schema", intakeSessionSchema),
+  // Here rather than in `lifecycleJsonSchemas`, which is spread in below and
+  // would emit the same file. That group is paired with
+  // `lifecycleFixtureCorpusSchema`, a `z.strictObject` that
+  // `packages/protocol/test/lifecycle.test.mjs` parses a committed fixture
+  // through, so a new required key there reddens that suite until the fixture
+  // is extended. An attestation has no lifecycle to fixture; it belongs in the
+  // plain entity group.
+  attestation: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/attestation.schema.json", "Legion protocol attestation entity schema", attestationSchema),
   ...lifecycleJsonSchemas
 };
 
@@ -17599,7 +17958,30 @@ var legionProtocol010To020 = {
     return { ...migrated, schemaVersion: TARGET_VERSION };
   }
 };
-var LEGION_PROTOCOL_MIGRATIONS = [legionProtocol010To020];
+
+// packages/protocol/dist/migrations/legion-0-3-0.js
+var TARGET_VERSION2 = "0.3.0";
+var legionProtocol020To030 = {
+  id: "legion.protocol.0-2-0.to.0-3-0",
+  fromVersion: "0.2.0",
+  toVersion: TARGET_VERSION2,
+  kind: "upcast",
+  description: "Renumber 0.2.0 records to 0.3.0. 0.3.0 adds only optional fields and new entity kinds, so no value is added, removed or rewritten.",
+  preserves: [
+    "every field of every 0.2.0 record: this migration writes schemaVersion and nothing else"
+  ],
+  informationPreserving: true,
+  appliesToKinds: ["requirement", "task-contract"],
+  migrate(record2) {
+    return { ...record2, schemaVersion: TARGET_VERSION2 };
+  }
+};
+
+// packages/protocol/dist/migrations/registry.js
+var LEGION_PROTOCOL_MIGRATIONS = [
+  legionProtocol010To020,
+  legionProtocol020To030
+];
 
 // packages/protocol/dist/migrations/upcast.js
 var cachedRegistry;
@@ -17765,17 +18147,17 @@ function applyMigrations(input, options) {
   const initial = assertVersionedRecord(input);
   const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
   assertSupportedVersion(targetVersion, options.registry, "targetVersion");
-  const path47 = findProtocolMigrationPath({
+  const path51 = findProtocolMigrationPath({
     fromVersion: initial.schemaVersion,
     toVersion: targetVersion,
     migrations: options.registry.migrations
   });
-  if (path47 === null) {
+  if (path51 === null) {
     throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
   }
   let record2 = cloneVersionedRecord(initial);
   const appliedMigrations = [];
-  for (const descriptor of path47) {
+  for (const descriptor of path51) {
     const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
     if (!migration) {
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
@@ -18838,10 +19220,10 @@ function collectScope(taskContract) {
 
 // packages/core/dist/dispatch/blocker.js
 var DISPATCH_BLOCKER_REPORTER = "fresh-context-dispatcher";
-function renderPath(path47) {
-  if (path47.length === 0)
+function renderPath(path51) {
+  if (path51.length === 0)
     return "<root>";
-  return path47.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
+  return path51.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
 }
 function renderIssueReason(issue2) {
   return `code=${issue2.code} path=${renderPath(issue2.path)} :: ${issue2.message}`;
@@ -19566,15 +19948,15 @@ function parseSettings(value) {
   if (result.success)
     return { ok: true, findings: [] };
   const findings = result.error.issues.map((issue2) => {
-    const path47 = issue2.path.join(".");
+    const path51 = issue2.path.join(".");
     if (issue2.code === "unrecognized_keys") {
-      const keys = issue2.keys.map((key) => path47.length === 0 ? key : `${path47}.${key}`);
+      const keys = issue2.keys.map((key) => path51.length === 0 ? key : `${path51}.${key}`);
       return {
-        path: path47,
+        path: path51,
         message: `Unknown setting${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}.`
       };
     }
-    return { path: path47, message: path47.length === 0 ? issue2.message : `${path47}: ${issue2.message}` };
+    return { path: path51, message: path51.length === 0 ? issue2.message : `${path51}: ${issue2.message}` };
   });
   return { ok: false, findings };
 }
@@ -19750,14 +20132,14 @@ var ReleaseObservationBoardAggregator = class {
   aggregate(input) {
     const validated = validateInput(input);
     if (!validated.ok) {
-      const failure14 = deepFreeze4({
+      const failure17 = deepFreeze4({
         ok: false,
         schemaVersion: RELEASE_OBSERVATION_ADAPTER_SCHEMA_VERSION,
         kind: RELEASE_OBSERVATION_ADAPTER_KIND,
         changeId: input.changeId,
         issues: validated.issues
       });
-      return failure14;
+      return failure17;
     }
     const report = input.report;
     const eventType = validated.eventType;
@@ -24676,7 +25058,13 @@ var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
 function parseCliArgs(argv) {
   const positionals = [];
   const options = /* @__PURE__ */ new Map();
+  const repeated = /* @__PURE__ */ new Map();
   const invalidOptions = [];
+  const record2 = (key, value) => {
+    const existing = repeated.get(key);
+    if (existing === void 0) repeated.set(key, [value]);
+    else existing.push(value);
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === void 0) continue;
@@ -24695,6 +25083,7 @@ function parseCliArgs(argv) {
         continue;
       }
       options.set(key, value);
+      record2(key, value);
       continue;
     }
     if (VALUELESS_OPTIONS.has(withoutPrefix)) {
@@ -24704,12 +25093,13 @@ function parseCliArgs(argv) {
     const next = argv[index + 1];
     if (next !== void 0 && !next.startsWith("--")) {
       options.set(withoutPrefix, next);
+      record2(withoutPrefix, next);
       index += 1;
       continue;
     }
     options.set(withoutPrefix, true);
   }
-  return { positionals, options, invalidOptions };
+  return { positionals, options, invalidOptions, repeated };
 }
 function invalidOptionError(args) {
   if (args.invalidOptions.length === 0) return void 0;
@@ -24724,6 +25114,12 @@ function hasFlag(context, key) {
 function stringOption(context, key) {
   const value = context.args.options.get(key);
   return typeof value === "string" ? value : void 0;
+}
+function repeatedStringOptions(context, key) {
+  const recorded = context.args.repeated?.get(key);
+  if (recorded !== void 0) return recorded;
+  const single = stringOption(context, key);
+  return single === void 0 ? [] : [single];
 }
 function requiredStringOption(context, key) {
   const value = stringOption(context, key);
@@ -26219,6 +26615,12 @@ function parseRunId(input) {
 function parseReviewId(input) {
   return reviewIdSchema.parse(input);
 }
+function parseApprovalId(input) {
+  return approvalIdSchema.parse(input);
+}
+function parseAttestationId(input) {
+  return attestationIdSchema.parse(input);
+}
 function artifactPathForRole(input) {
   switch (input.role) {
     case "project-manifest":
@@ -26268,6 +26670,20 @@ function artifactPathForRole(input) {
       const changeId = parseChangeId(input.changeId);
       const reviewId = parseReviewId(input.reviewId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/reviews/${reviewId}.json`);
+    }
+    case "approval": {
+      const changeId = parseChangeId(input.changeId);
+      const approvalId = parseApprovalId(input.approvalId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/approvals/${approvalId}.json`);
+    }
+    case "attestation": {
+      const changeId = parseChangeId(input.changeId);
+      const attestationId = parseAttestationId(input.attestationId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/attestations/${attestationId}.json`);
+    }
+    case "release": {
+      const changeId = parseChangeId(input.changeId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/release.json`);
     }
     case "archive": {
       const changeId = parseChangeId(input.changeId);
@@ -26364,14 +26780,14 @@ function hashContent(content) {
   const hash2 = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash2}`);
 }
-function mediaTypeForArtifactPath(path47) {
-  if (path47.endsWith(".json"))
+function mediaTypeForArtifactPath(path51) {
+  if (path51.endsWith(".json"))
     return "application/json";
-  if (path47.endsWith(".yaml") || path47.endsWith(".yml"))
+  if (path51.endsWith(".yaml") || path51.endsWith(".yml"))
     return "application/yaml";
-  if (path47.endsWith(".md"))
+  if (path51.endsWith(".md"))
     return "text/markdown";
-  if (path47.endsWith(".txt"))
+  if (path51.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -26414,16 +26830,16 @@ function jsonParseLocation(error51, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path47, issues) {
+function schemaDiagnostics(path51, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path47 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path51 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path47
+      path: path51
     });
   });
 }
@@ -27487,7 +27903,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path47 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path51 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -27501,7 +27917,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path47
+        path: path51
       }))
     };
   }
@@ -28499,1384 +28915,6 @@ var changeBundleJsonSchema = jsonSchemaDocument7("https://schemas.9thlevelsoftwa
 
 // packages/artifacts/dist/changes/service.js
 import { readFile as readFile7, stat as stat3 } from "node:fs/promises";
-var INVALID_CHANGE_BUNDLE_PATH = `${PROJECT_ARTIFACT_PATHS.changes}/invalid-change/change.yaml`;
-function isEnoent4(error51) {
-  return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
-}
-function compareStrings(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-function failure4(status2, diagnostics) {
-  return { ok: false, status: status2, diagnostics };
-}
-function changeDiagnostic(input) {
-  return diagnosticForPath({
-    code: input.code,
-    message: input.message,
-    path: input.path ?? INVALID_CHANGE_BUNDLE_PATH
-  });
-}
-function parseChangeId2(input) {
-  const parsed = changeIdSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_change_id",
-      message: issue2.message
-    })));
-  }
-  return parsed.data;
-}
-function parseRequirementId2(input, path47) {
-  const parsed = requirementIdSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_requirement_id",
-      message: issue2.message,
-      path: path47
-    })));
-  }
-  return parsed.data;
-}
-function parseTimestamp2(input) {
-  const parsed = utcTimestampSchema.safeParse(input.value ?? (/* @__PURE__ */ new Date()).toISOString());
-  if (!parsed.success) {
-    return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
-      code: input.code,
-      message: issue2.message,
-      path: input.path
-    })));
-  }
-  return parsed.data;
-}
-function parseBaseGitSha(input, path47) {
-  const parsed = gitShaSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_base_git_sha",
-      message: issue2.message,
-      path: path47
-    })));
-  }
-  return parsed.data;
-}
-function parseOwners(input, path47) {
-  if (input.length === 0) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_owners",
-        message: "At least one owner is required for a change bundle.",
-        path: path47
-      })
-    ]);
-  }
-  const owners = [];
-  const diagnostics = [];
-  for (const owner of input) {
-    const parsed = actorSchema.safeParse(owner);
-    if (!parsed.success) {
-      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
-        code: "invalid_owner",
-        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path47
-      })));
-      continue;
-    }
-    owners.push(parsed.data);
-  }
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  return owners;
-}
-function changePaths(changeId) {
-  const proposal = artifactPathForRole({ role: "proposal", changeId });
-  return {
-    root: `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}`,
-    proposal,
-    deltaSpecRoot: `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/delta-specs`,
-    design: artifactPathForRole({ role: "design", changeId }),
-    decisions: artifactPathForRole({ role: "decision-log", changeId })
-  };
-}
-function frontmatterMarkdown(frontmatter, title, body) {
-  return [
-    "---",
-    stableProtocolJson(frontmatter).trimEnd(),
-    "---",
-    "",
-    `# ${title}`,
-    "",
-    ...body,
-    ""
-  ].join("\n");
-}
-function renderDeltaSpecMarkdown(delta) {
-  return frontmatterMarkdown(delta, `${delta.operation}: ${delta.requirementId}`, [
-    "## Rationale",
-    "",
-    delta.rationale,
-    "",
-    "## Proposed Requirement",
-    "",
-    delta.proposedRequirement === void 0 ? "Requirement is removed." : stableProtocolJson(delta.proposedRequirement).trimEnd()
-  ]);
-}
-function renderDesignMarkdown(design) {
-  return frontmatterMarkdown(design, design.title, [design.body]);
-}
-function renderDecisionLogMarkdown(log) {
-  const lines = log.decisions.flatMap((decision) => [
-    `## ${decision.title}`,
-    "",
-    `- ID: ${decision.id}`,
-    `- Status: ${decision.status}`,
-    `- Rationale: ${decision.rationale}`,
-    ""
-  ]);
-  return frontmatterMarkdown(log, "Decisions", lines);
-}
-function parseMarkdownFrontmatter(input) {
-  const normalized = input.content.replace(/\r\n/g, "\n");
-  if (!normalized.startsWith("---\n")) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "missing_frontmatter",
-        message: "Change artifact must start with JSON frontmatter.",
-        path: input.artifactPath
-      })
-    ]);
-  }
-  const closeIndex = normalized.indexOf("\n---\n", 4);
-  if (closeIndex < 0) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "unterminated_frontmatter",
-        message: "Change artifact frontmatter must close with --- on its own line.",
-        path: input.artifactPath
-      })
-    ]);
-  }
-  let parsedFrontmatter;
-  try {
-    parsedFrontmatter = JSON.parse(normalized.slice(4, closeIndex).trim());
-  } catch (error51) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_frontmatter_json",
-        message: error51 instanceof Error ? error51.message : "Change artifact frontmatter is not valid JSON.",
-        path: input.artifactPath
-      })
-    ]);
-  }
-  const parsed = input.schema.safeParse(parsedFrontmatter);
-  if (!parsed.success) {
-    return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_schema",
-      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-      path: input.artifactPath
-    })));
-  }
-  return { ok: true, document: parsed.data };
-}
-async function readMarkdownArtifact(input) {
-  let resolved;
-  try {
-    resolved = await resolveProjectArtifactPath({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: input.artifactPath
-    });
-  } catch (error51) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_path",
-        message: error51 instanceof Error ? error51.message : String(error51),
-        path: input.artifactPath
-      })
-    ]);
-  }
-  let content;
-  try {
-    content = await readFile7(resolved.absolutePath, "utf8");
-  } catch (error51) {
-    if (isEnoent4(error51)) {
-      return failure4("not_found", [
-        changeDiagnostic({
-          code: "not_found",
-          message: "Change artifact does not exist.",
-          path: resolved.repositoryPath
-        })
-      ]);
-    }
-    throw error51;
-  }
-  const parsed = parseMarkdownFrontmatter({
-    artifactPath: resolved.repositoryPath,
-    content,
-    schema: input.schema
-  });
-  if (!parsed.ok)
-    return parsed;
-  return {
-    document: parsed.document,
-    content,
-    reference: artifactReferenceForContent({
-      path: resolved.repositoryPath,
-      content,
-      mediaType: input.mediaType
-    })
-  };
-}
-async function readCurrentSpecByArtifactPath(input) {
-  let resolved;
-  try {
-    resolved = await resolveProjectArtifactPath({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: input.artifactPath
-    });
-  } catch (error51) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_path",
-        message: error51 instanceof Error ? error51.message : String(error51),
-        path: input.artifactPath
-      })
-    ]);
-  }
-  let content;
-  try {
-    content = await readFile7(resolved.absolutePath, "utf8");
-  } catch (error51) {
-    if (isEnoent4(error51)) {
-      return failure4("not_found", [
-        changeDiagnostic({
-          code: "not_found",
-          message: "Current spec artifact does not exist.",
-          path: resolved.repositoryPath
-        })
-      ]);
-    }
-    throw error51;
-  }
-  const parsed = parseCurrentSpecMarkdown({
-    artifactPath: resolved.repositoryPath,
-    content
-  });
-  if (!parsed.ok)
-    return failure4(parsed.status, parsed.diagnostics);
-  return {
-    ok: true,
-    document: parsed.document,
-    artifactPath: resolved.repositoryPath,
-    reference: artifactReferenceForContent({
-      path: resolved.repositoryPath,
-      content,
-      mediaType: "text/markdown"
-    })
-  };
-}
-async function currentRequirementExists(input) {
-  const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
-  if (!currentSpecs.ok)
-    return failure4(currentSpecs.status, currentSpecs.diagnostics);
-  return currentSpecs.index.entries.some((entry) => entry.requirements.some((requirement) => requirement.id === input.requirementId));
-}
-function bundleIdentityDiagnostics(input) {
-  const diagnostics = [];
-  const expected = input.expectedPaths;
-  const actual = input.bundle.paths;
-  if (input.bundle.change.id !== input.requestedChangeId) {
-    diagnostics.push(changeDiagnostic({
-      code: "change_bundle_identity_mismatch",
-      message: `Loaded change bundle declares ${input.bundle.change.id}, but ${input.requestedChangeId} was requested.`,
-      path: expected.proposal
-    }));
-  }
-  const pathChecks = ["root", "proposal", "deltaSpecRoot", "design", "decisions"];
-  for (const key of pathChecks) {
-    if (actual[key] !== expected[key]) {
-      diagnostics.push(changeDiagnostic({
-        code: "change_bundle_path_mismatch",
-        message: `Loaded change bundle path ${String(key)} must be ${expected[key]}, not ${actual[key]}.`,
-        path: expected.proposal
-      }));
-    }
-  }
-  return diagnostics;
-}
-function deltaEntryDiagnostics(input) {
-  const diagnostics = [];
-  if (input.delta.changeId !== input.changeId) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} declares change ${input.delta.changeId}, not ${input.changeId}.`,
-      path: input.entry.path
-    }));
-  }
-  if (input.delta.requirementId !== input.entry.requirementId) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} declares requirement ${input.delta.requirementId}, not ${input.entry.requirementId}.`,
-      path: input.entry.path
-    }));
-  }
-  if (input.delta.operation !== input.entry.operation) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} declares operation ${input.delta.operation}, not ${input.entry.operation}.`,
-      path: input.entry.path
-    }));
-  }
-  if (!referencesEqual(input.delta.baseCurrentSpec, input.entry.baseCurrentSpec)) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} base current spec does not match the bundle entry.`,
-      path: input.entry.path
-    }));
-  }
-  if (input.delta.baseCurrentSpecRevision !== input.entry.baseCurrentSpecRevision) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} base current spec revision does not match the bundle entry.`,
-      path: input.entry.path
-    }));
-  }
-  if (input.delta.baseRequirementHash !== input.entry.baseRequirementHash) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} base requirement hash does not match the bundle entry.`,
-      path: input.entry.path
-    }));
-  }
-  return diagnostics;
-}
-function changeArtifactIdentityDiagnostics(input) {
-  if (input.actualChangeId === input.expectedChangeId)
-    return [];
-  return [
-    changeDiagnostic({
-      code: input.code,
-      message: `${input.label} declares change ${input.actualChangeId}, not ${input.expectedChangeId}.`,
-      path: input.artifactPath
-    })
-  ];
-}
-function referencesEqual(left, right) {
-  return left?.path === right?.path && left?.sha256 === right?.sha256 && left?.mediaType === right?.mediaType;
-}
-function findRevision(input) {
-  return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
-}
-function conflictDiagnostics(deltas, path47) {
-  const byRequirement = /* @__PURE__ */ new Map();
-  const diagnostics = [];
-  for (const delta of deltas) {
-    const prior = byRequirement.get(delta.requirementId);
-    if (prior !== void 0) {
-      diagnostics.push(changeDiagnostic({
-        code: "conflicting_delta_operations",
-        message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path47
-      }));
-    }
-    byRequirement.set(delta.requirementId, delta.operation);
-  }
-  return diagnostics;
-}
-async function currentSpecMap(input) {
-  const specs = [];
-  const requirements = /* @__PURE__ */ new Map();
-  for (const requested of input.currentSpecs) {
-    const requirementId = parseRequirementId2(requested.requirementId, input.proposalPath);
-    if (typeof requirementId !== "string")
-      return requirementId;
-    const spec = await readCurrentSpec({
-      repositoryRoot: input.repositoryRoot,
-      requirementId
-    });
-    if (!spec.ok) {
-      return failure4(spec.status === "not_found" ? "not_found" : "invalid", spec.diagnostics);
-    }
-    if (spec.document.revision !== requested.expectedRevision) {
-      return failure4("invalid", [
-        changeDiagnostic({
-          code: "stale_change_base",
-          message: `Expected current spec ${requirementId} revision ${requested.expectedRevision}, but current revision is ${spec.document.revision}.`,
-          path: spec.artifactPath
-        })
-      ]);
-    }
-    specs.push(spec);
-    for (const requirement of spec.document.requirements) {
-      requirements.set(requirement.id, {
-        spec,
-        requirement,
-        requirementHash: hashContent(stableProtocolJson(requirement))
-      });
-    }
-  }
-  return { ok: true, specs, requirements };
-}
-async function normalizeDeltaSpecs(input) {
-  const diagnostics = [];
-  const normalizedHeaders = [];
-  const deltas = [];
-  for (const delta of input.deltas) {
-    const requirementId = parseRequirementId2(delta.requirementId, input.proposalPath);
-    if (typeof requirementId !== "string")
-      return requirementId;
-    normalizedHeaders.push({ requirementId, operation: delta.operation });
-  }
-  diagnostics.push(...conflictDiagnostics(normalizedHeaders, input.proposalPath));
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  for (const [index, delta] of input.deltas.entries()) {
-    const requirementId = normalizedHeaders[index]?.requirementId;
-    if (requirementId === void 0)
-      continue;
-    const base = input.baseRequirements.get(requirementId);
-    if ((delta.operation === "modify" || delta.operation === "remove") && base === void 0) {
-      diagnostics.push(changeDiagnostic({
-        code: "missing_delta_base",
-        message: `Delta ${delta.operation} for ${requirementId} has no matching current spec base.`,
-        path: input.proposalPath
-      }));
-      continue;
-    }
-    if (delta.operation === "add" && base !== void 0) {
-      diagnostics.push(changeDiagnostic({
-        code: "add_delta_targets_existing_requirement",
-        message: `Delta add for ${requirementId} targets an existing current requirement.`,
-        path: input.proposalPath
-      }));
-      continue;
-    }
-    if (delta.operation === "add") {
-      const exists = await currentRequirementExists({
-        repositoryRoot: input.repositoryRoot,
-        requirementId
-      });
-      if (typeof exists !== "boolean")
-        return exists;
-      if (exists) {
-        diagnostics.push(changeDiagnostic({
-          code: "add_delta_targets_existing_requirement",
-          message: `Delta add for ${requirementId} targets an existing current requirement.`,
-          path: input.proposalPath
-        }));
-        continue;
-      }
-    }
-    const parsed = changeDeltaSpecSchema.safeParse({
-      schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
-      kind: "delta-spec",
-      changeId: input.changeId,
-      requirementId,
-      operation: delta.operation,
-      ...base === void 0 ? {} : {
-        baseCurrentSpec: base.spec.reference,
-        baseCurrentSpecRevision: base.spec.document.revision,
-        baseRequirementHash: base.requirementHash
-      },
-      ...delta.proposedRequirement === void 0 ? {} : { proposedRequirement: delta.proposedRequirement },
-      ...delta.sections === void 0 ? {} : { sections: delta.sections },
-      rationale: delta.rationale,
-      dependencies: [
-        ...base === void 0 ? [] : [base.spec.reference],
-        ...delta.dependencies ?? []
-      ]
-    });
-    if (!parsed.success) {
-      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
-        code: "invalid_delta_spec",
-        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: input.proposalPath
-      })));
-      continue;
-    }
-    deltas.push(parsed.data);
-  }
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  return { ok: true, deltas };
-}
-function buildDecisionLog(input) {
-  const diagnostics = [];
-  const decisions = [];
-  for (const decision of input.decisions) {
-    const id = decisionIdSchema.safeParse(decision.id);
-    if (!id.success) {
-      diagnostics.push(changeDiagnostic({
-        code: "invalid_decision_id",
-        message: id.error.issues[0]?.message ?? "Invalid decision ID.",
-        path: input.decisionLogPath
-      }));
-      continue;
-    }
-    const createdAt = parseTimestamp2({
-      value: decision.createdAt ?? input.createdAt,
-      path: input.decisionLogPath,
-      code: "invalid_decision_created_at"
-    });
-    if (typeof createdAt !== "string") {
-      diagnostics.push(...createdAt.diagnostics);
-      continue;
-    }
-    const decidedAt = decision.decidedAt === void 0 ? void 0 : parseTimestamp2({
-      value: decision.decidedAt,
-      path: input.decisionLogPath,
-      code: "invalid_decision_decided_at"
-    });
-    if (decidedAt !== void 0 && typeof decidedAt !== "string") {
-      diagnostics.push(...decidedAt.diagnostics);
-      continue;
-    }
-    const parsed = decisionSchema.safeParse({
-      schemaVersion: LEGION_PROTOCOL_VERSION,
-      createdAt,
-      kind: "decision",
-      id: id.data,
-      projectId: input.projectId,
-      title: decision.title,
-      context: decision.context,
-      alternatives: decision.alternatives,
-      rationale: decision.rationale,
-      supersedes: decision.supersedes,
-      affectedArtifacts: input.affectedArtifacts,
-      traceRefs: [
-        {
-          path: input.decisionLogPath,
-          anchor: id.data,
-          relation: "records",
-          entity: { kind: "decision", id: id.data }
-        }
-      ],
-      status: decision.status,
-      ...decision.approver === void 0 ? {} : { approver: decision.approver },
-      ...decidedAt === void 0 ? {} : { decidedAt },
-      ...decision.supersededBy === void 0 ? {} : { supersededBy: decision.supersededBy }
-    });
-    if (!parsed.success) {
-      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
-        code: "invalid_decision",
-        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: input.decisionLogPath
-      })));
-      continue;
-    }
-    decisions.push(parsed.data);
-  }
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  return changeDecisionLogSchema.parse({
-    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
-    kind: "decision-log",
-    changeId: input.changeId,
-    decisions
-  });
-}
-async function writeNewArtifact(input) {
-  try {
-    const write = await writeRevisionedArtifact({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: input.artifactPath,
-      role: input.role,
-      content: input.content,
-      expectedRevision: 0,
-      currentRevision: 0,
-      mediaType: input.mediaType,
-      ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha }
-    });
-    return { ok: true, reference: write.reference, revision: write.revision };
-  } catch (error51) {
-    if (error51 instanceof ArtifactRevisionConflictError) {
-      return failure4("conflict", [
-        changeDiagnostic({
-          code: "revision_conflict",
-          message: error51.message,
-          path: input.artifactPath
-        })
-      ]);
-    }
-    throw error51;
-  }
-}
-async function preflightNewArtifactPaths(input) {
-  const diagnostics = [];
-  for (const artifactPath of input.artifactPaths) {
-    let resolved;
-    try {
-      resolved = await resolveProjectArtifactPath({
-        repositoryRoot: input.repositoryRoot,
-        artifactPath
-      });
-    } catch (error51) {
-      return failure4("invalid", [
-        changeDiagnostic({
-          code: "invalid_path",
-          message: error51 instanceof Error ? error51.message : String(error51),
-          path: artifactPath
-        })
-      ]);
-    }
-    try {
-      await stat3(resolved.absolutePath);
-      diagnostics.push(changeDiagnostic({
-        code: "artifact_already_exists",
-        message: `Change artifact already exists: ${resolved.repositoryPath}.`,
-        path: resolved.repositoryPath
-      }));
-    } catch (error51) {
-      if (isEnoent4(error51))
-        continue;
-      throw error51;
-    }
-  }
-  if (diagnostics.length > 0)
-    return failure4("conflict", diagnostics);
-  return { ok: true };
-}
-function success4(input) {
-  return {
-    ok: true,
-    status: input.status,
-    bundle: input.bundle,
-    deltaSpecs: input.deltaSpecs,
-    design: input.design,
-    decisions: input.decisions,
-    artifactPath: input.artifactPath,
-    reference: input.reference,
-    revision: input.revision,
-    diagnostics: []
-  };
-}
-async function createChangeBundle(input) {
-  const changeId = parseChangeId2(input.changeId);
-  if (typeof changeId !== "string")
-    return changeId;
-  const projectId = projectIdSchema.safeParse(input.projectId);
-  const paths = changePaths(changeId);
-  if (input.deltaSpecs.length === 0) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_delta_specs",
-        message: "At least one delta spec is required to create a change bundle.",
-        path: paths.proposal
-      })
-    ]);
-  }
-  const baseGitSha = parseBaseGitSha(input.baseGitSha, paths.proposal);
-  if (typeof baseGitSha !== "string")
-    return baseGitSha;
-  if (!projectId.success) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_project_id",
-        message: projectId.error.issues[0]?.message ?? "Invalid project ID.",
-        path: paths.proposal
-      })
-    ]);
-  }
-  const owners = parseOwners(input.owners, paths.proposal);
-  if ("diagnostics" in owners)
-    return owners;
-  const createdAt = parseTimestamp2({
-    value: input.createdAt,
-    path: paths.proposal,
-    code: "invalid_created_at"
-  });
-  if (typeof createdAt !== "string")
-    return createdAt;
-  const current = await currentSpecMap({
-    repositoryRoot: input.repositoryRoot,
-    currentSpecs: input.currentSpecs,
-    proposalPath: paths.proposal
-  });
-  if (!current.ok)
-    return current;
-  const normalizedDeltas = await normalizeDeltaSpecs({
-    repositoryRoot: input.repositoryRoot,
-    changeId,
-    proposalPath: paths.proposal,
-    deltas: input.deltaSpecs,
-    baseRequirements: current.requirements
-  });
-  if (!normalizedDeltas.ok)
-    return normalizedDeltas;
-  const deltaArtifacts = normalizedDeltas.deltas.map((delta) => {
-    const artifactPath = artifactPathForRole({
-      role: "delta-spec",
-      changeId,
-      requirementId: delta.requirementId
-    });
-    const content = renderDeltaSpecMarkdown(delta);
-    const revision = artifactRevisionForContent({
-      role: "delta-spec",
-      path: artifactPath,
-      content,
-      revision: 1,
-      mediaType: "text/markdown",
-      baseGitSha
-    });
-    return { delta, artifactPath, content, reference: revision.artifact, revision };
-  });
-  const deltaArtifactsByRequirement = [...deltaArtifacts].sort((left, right) => compareStrings(left.delta.requirementId, right.delta.requirementId));
-  const design = changeDesignDocumentSchema.safeParse({
-    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
-    kind: "change-design",
-    changeId,
-    title: input.design.title,
-    body: input.design.body,
-    dependencies: [
-      ...current.specs.map((spec) => spec.reference),
-      ...input.design.dependencies ?? []
-    ]
-  });
-  if (!design.success) {
-    return failure4("invalid", design.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_design",
-      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-      path: paths.design
-    })));
-  }
-  const designDocument = design.data;
-  const designContent = renderDesignMarkdown(designDocument);
-  const designRevision = artifactRevisionForContent({
-    role: "design",
-    path: paths.design,
-    content: designContent,
-    revision: 1,
-    mediaType: "text/markdown",
-    baseGitSha
-  });
-  const decisionLog = buildDecisionLog({
-    changeId,
-    projectId: projectId.data,
-    createdAt,
-    decisionLogPath: paths.decisions,
-    affectedArtifacts: [designRevision.artifact, ...deltaArtifacts.map((artifact) => artifact.reference)],
-    decisions: input.decisions ?? []
-  });
-  if ("diagnostics" in decisionLog)
-    return decisionLog;
-  const decisionContent = renderDecisionLogMarkdown(decisionLog);
-  const decisionRevision = artifactRevisionForContent({
-    role: "decision-log",
-    path: paths.decisions,
-    content: decisionContent,
-    revision: 1,
-    mediaType: "text/markdown",
-    baseGitSha
-  });
-  const preflight = await preflightNewArtifactPaths({
-    repositoryRoot: input.repositoryRoot,
-    artifactPaths: [
-      ...deltaArtifactsByRequirement.map((artifact) => artifact.artifactPath),
-      paths.design,
-      paths.decisions,
-      paths.proposal
-    ]
-  });
-  if (!preflight.ok)
-    return preflight;
-  const currentSpecsByPath = [...current.specs].sort((left, right) => compareStrings(left.artifactPath, right.artifactPath));
-  const currentRequirementIds = [...current.requirements.keys()].sort(compareStrings);
-  const deltaRequirementIds = normalizedDeltas.deltas.map((delta) => delta.requirementId).sort(compareStrings);
-  const artifactRevisions = [
-    ...deltaArtifactsByRequirement.map((artifact) => artifact.revision),
-    designRevision,
-    decisionRevision
-  ];
-  const change = {
-    schemaVersion: LEGION_PROTOCOL_VERSION,
-    createdAt,
-    kind: "change",
-    id: changeId,
-    projectId: projectId.data,
-    title: input.title,
-    summary: input.summary,
-    status: "draft",
-    currentTruth: {
-      specRefs: currentSpecsByPath.map((spec) => spec.reference),
-      baseSpecHash: hashContent(stableProtocolJson(currentSpecsByPath.map((spec) => ({
-        path: spec.artifactPath,
-        revision: spec.document.revision,
-        reference: spec.reference
-      })))),
-      baseGitSha,
-      requirementIds: currentRequirementIds
-    },
-    proposedTruth: {
-      deltaSpecRefs: deltaArtifactsByRequirement.map((artifact) => artifact.reference),
-      targetSpecHash: hashContent(stableProtocolJson(deltaArtifactsByRequirement.map((artifact) => ({
-        operation: artifact.delta.operation,
-        requirementId: artifact.delta.requirementId,
-        reference: artifact.reference
-      })))),
-      requirementIds: deltaRequirementIds
-    },
-    artifactRevisions,
-    risk: input.risk,
-    acceptance: { status: "not_ready" },
-    decisionRefs: decisionLog.decisions.map((decision) => decision.id),
-    oracleRefs: []
-  };
-  const parsedChange = changeBundleSchema.shape.change.safeParse(change);
-  if (!parsedChange.success) {
-    return failure4("invalid", parsedChange.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_change",
-      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-      path: paths.proposal
-    })));
-  }
-  const bundle = changeBundleSchema.safeParse({
-    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
-    kind: "change-bundle",
-    revision: 1,
-    owners,
-    baseGitSha,
-    paths,
-    change: parsedChange.data,
-    deltas: deltaArtifactsByRequirement.map((artifact) => ({
-      operation: artifact.delta.operation,
-      requirementId: artifact.delta.requirementId,
-      path: artifact.artifactPath,
-      ...artifact.delta.baseCurrentSpec === void 0 ? {} : { baseCurrentSpec: artifact.delta.baseCurrentSpec },
-      ...artifact.delta.baseCurrentSpecRevision === void 0 ? {} : { baseCurrentSpecRevision: artifact.delta.baseCurrentSpecRevision },
-      ...artifact.delta.baseRequirementHash === void 0 ? {} : { baseRequirementHash: artifact.delta.baseRequirementHash },
-      delta: artifact.reference
-    })),
-    artifactRevisions
-  });
-  if (!bundle.success) {
-    return failure4("invalid", bundle.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_change_bundle",
-      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-      path: paths.proposal
-    })));
-  }
-  const bundleDocument = bundle.data;
-  const proposalContent = stableProtocolJson(bundleDocument);
-  for (const artifact of deltaArtifactsByRequirement) {
-    const written = await writeNewArtifact({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: artifact.artifactPath,
-      role: "delta-spec",
-      content: artifact.content,
-      mediaType: "text/markdown",
-      baseGitSha
-    });
-    if (!written.ok)
-      return written;
-  }
-  const writtenDesign = await writeNewArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: paths.design,
-    role: "design",
-    content: designContent,
-    mediaType: "text/markdown",
-    baseGitSha
-  });
-  if (!writtenDesign.ok)
-    return writtenDesign;
-  const writtenDecisions = await writeNewArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: paths.decisions,
-    role: "decision-log",
-    content: decisionContent,
-    mediaType: "text/markdown",
-    baseGitSha
-  });
-  if (!writtenDecisions.ok)
-    return writtenDecisions;
-  const writtenProposal = await writeNewArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: paths.proposal,
-    role: "proposal",
-    content: proposalContent,
-    mediaType: "application/json",
-    baseGitSha
-  });
-  if (!writtenProposal.ok)
-    return writtenProposal;
-  return success4({
-    status: "created",
-    bundle: bundleDocument,
-    deltaSpecs: normalizedDeltas.deltas,
-    design: designDocument,
-    decisions: decisionLog.decisions,
-    artifactPath: paths.proposal,
-    reference: writtenProposal.reference,
-    revision: writtenProposal.revision
-  });
-}
-async function loadChangeBundle(input) {
-  const changeId = parseChangeId2(input.changeId);
-  if (typeof changeId !== "string")
-    return changeId;
-  const paths = changePaths(changeId);
-  const proposal = await readJsonArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: paths.proposal,
-    schema: changeBundleSchema
-  });
-  if (!proposal.ok) {
-    const notFound = proposal.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found");
-    return failure4(notFound ? "not_found" : "invalid", proposal.diagnostics);
-  }
-  const bundle = proposal.value;
-  const diagnostics = [];
-  diagnostics.push(...bundleIdentityDiagnostics({
-    bundle,
-    requestedChangeId: changeId,
-    expectedPaths: paths
-  }));
-  const deltaSpecs = [];
-  for (const entry of bundle.deltas) {
-    const parsed = await readMarkdownArtifact({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: entry.path,
-      mediaType: "text/markdown",
-      schema: changeDeltaSpecSchema
-    });
-    if ("diagnostics" in parsed)
-      return parsed;
-    if (!referencesEqual(parsed.reference, entry.delta)) {
-      diagnostics.push(changeDiagnostic({
-        code: "delta_artifact_mismatch",
-        message: `Delta spec ${entry.path} bytes do not match the change bundle reference.`,
-        path: entry.path
-      }));
-    }
-    diagnostics.push(...deltaEntryDiagnostics({
-      entry,
-      delta: parsed.document,
-      changeId
-    }));
-    deltaSpecs.push(parsed.document);
-  }
-  const design = await readMarkdownArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: bundle.paths.design,
-    mediaType: "text/markdown",
-    schema: changeDesignDocumentSchema
-  });
-  if ("diagnostics" in design)
-    return design;
-  diagnostics.push(...changeArtifactIdentityDiagnostics({
-    artifactPath: bundle.paths.design,
-    actualChangeId: design.document.changeId,
-    expectedChangeId: changeId,
-    code: "design_change_id_mismatch",
-    label: "Design artifact"
-  }));
-  const designRevision = findRevision({ bundle, role: "design", path: bundle.paths.design });
-  if (!referencesEqual(design.reference, designRevision?.artifact)) {
-    diagnostics.push(changeDiagnostic({
-      code: "design_artifact_mismatch",
-      message: "Design bytes do not match the change bundle artifact revision.",
-      path: bundle.paths.design
-    }));
-  }
-  const decisions = await readMarkdownArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: bundle.paths.decisions,
-    mediaType: "text/markdown",
-    schema: changeDecisionLogSchema
-  });
-  if ("diagnostics" in decisions)
-    return decisions;
-  diagnostics.push(...changeArtifactIdentityDiagnostics({
-    artifactPath: bundle.paths.decisions,
-    actualChangeId: decisions.document.changeId,
-    expectedChangeId: changeId,
-    code: "decision_log_change_id_mismatch",
-    label: "Decision log artifact"
-  }));
-  const decisionRevision = findRevision({ bundle, role: "decision-log", path: bundle.paths.decisions });
-  if (!referencesEqual(decisions.reference, decisionRevision?.artifact)) {
-    diagnostics.push(changeDiagnostic({
-      code: "decision_artifact_mismatch",
-      message: "Decision log bytes do not match the change bundle artifact revision.",
-      path: bundle.paths.decisions
-    }));
-  }
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  return success4({
-    status: "read",
-    bundle,
-    deltaSpecs,
-    design: design.document,
-    decisions: decisions.document.decisions,
-    artifactPath: paths.proposal,
-    reference: proposal.reference,
-    revision: artifactRevisionForContent({
-      role: "proposal",
-      path: paths.proposal,
-      content: proposal.bytes,
-      revision: bundle.revision,
-      mediaType: "application/json",
-      baseGitSha: bundle.baseGitSha
-    })
-  });
-}
-async function validateChangeBundle(input) {
-  const loaded = await loadChangeBundle(input);
-  if (!loaded.ok)
-    return loaded;
-  const diagnostics = [];
-  diagnostics.push(...conflictDiagnostics(loaded.bundle.deltas, loaded.bundle.paths.proposal));
-  for (const delta of loaded.bundle.deltas) {
-    if (delta.operation === "add") {
-      const exists = await currentRequirementExists({
-        repositoryRoot: input.repositoryRoot,
-        requirementId: delta.requirementId
-      });
-      if (typeof exists !== "boolean") {
-        diagnostics.push(...exists.diagnostics);
-        continue;
-      }
-      if (exists) {
-        diagnostics.push(changeDiagnostic({
-          code: "add_delta_targets_existing_requirement",
-          message: `Current truth already contains requirement ${delta.requirementId}.`,
-          path: delta.path
-        }));
-      }
-      continue;
-    }
-    if (delta.baseCurrentSpec === void 0) {
-      diagnostics.push(changeDiagnostic({
-        code: "stale_change_base",
-        message: `Current spec base for ${delta.requirementId} is missing from the change bundle.`,
-        path: delta.path
-      }));
-      continue;
-    }
-    const current = await readCurrentSpecByArtifactPath({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: delta.baseCurrentSpec.path
-    });
-    if (!current.ok) {
-      diagnostics.push(changeDiagnostic({
-        code: "stale_change_base",
-        message: `Current spec for ${delta.requirementId} is no longer readable.`,
-        path: delta.path
-      }));
-      continue;
-    }
-    const requirement = current.document.requirements.find((entry) => entry.id === delta.requirementId);
-    const currentRequirementHash = requirement === void 0 ? void 0 : hashContent(stableProtocolJson(requirement));
-    if (!referencesEqual(current.reference, delta.baseCurrentSpec) || current.document.revision !== delta.baseCurrentSpecRevision || currentRequirementHash !== delta.baseRequirementHash) {
-      diagnostics.push(changeDiagnostic({
-        code: "stale_change_base",
-        message: `Current spec base for ${delta.requirementId} changed since this bundle was created.`,
-        path: delta.path
-      }));
-    }
-  }
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  return { ok: true, diagnostics: [] };
-}
-function diffChangeBundle(bundle) {
-  const added = bundle.deltas.filter((delta) => delta.operation === "add").map((delta) => delta.requirementId).sort();
-  const modified = bundle.deltas.filter((delta) => delta.operation === "modify").map((delta) => delta.requirementId).sort();
-  const removed = bundle.deltas.filter((delta) => delta.operation === "remove").map((delta) => delta.requirementId).sort();
-  return { added, modified, removed };
-}
-
-// packages/artifacts/dist/oracles/schema.js
-var ORACLE_ARTIFACT_SCHEMA_VERSION = schemaVersionSchema.parse("0.1.0");
-var oracleArtifactDocumentSchema = strictObject({
-  schemaVersion: schemaVersionSchema,
-  kind: literal("oracle-artifact"),
-  revision: number2().int().positive(),
-  oracle: oracleSchema
-});
-var oracleManifestSchema = strictObject({
-  schemaVersion: schemaVersionSchema,
-  kind: literal("oracle-manifest"),
-  changeId: changeIdSchema,
-  oracles: array(artifactRevisionSchema),
-  manifestHash: contentHashSchema
-});
-function jsonSchemaDocument8(id, title, schema) {
-  return {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: id,
-    title,
-    ...toJSONSchema(schema)
-  };
-}
-var oracleArtifactJsonSchema = jsonSchemaDocument8("https://schemas.9thlevelsoftware.com/legion/artifacts/oracle-artifact.schema.json", "Legion oracle artifact schema", oracleArtifactDocumentSchema);
-var oracleManifestJsonSchema = jsonSchemaDocument8("https://schemas.9thlevelsoftware.com/legion/artifacts/oracle-manifest.schema.json", "Legion oracle manifest schema", oracleManifestSchema);
-
-// packages/artifacts/dist/oracles/service.js
-import { readdir as readdir4 } from "node:fs/promises";
-import path12 from "node:path";
-var INVALID_ORACLE_PATH = ".legion/project/changes/invalid-change/oracle/invalid.yaml";
-function compareStrings2(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-function compareOracleRevisions(left, right) {
-  return compareStrings2(left.artifact.path, right.artifact.path) || compareStrings2(left.artifact.sha256, right.artifact.sha256);
-}
-function failure5(status2, diagnostics) {
-  return { ok: false, status: status2, diagnostics };
-}
-function oracleDiagnostic(input) {
-  return diagnosticForPath({
-    code: input.code,
-    message: input.message,
-    path: input.path ?? INVALID_ORACLE_PATH
-  });
-}
-function schemaDiagnostics2(input) {
-  if (input.issues === void 0 || input.issues.length === 0) {
-    return [oracleDiagnostic({ code: input.code, message: "Oracle artifact failed schema validation.", path: input.path })];
-  }
-  return input.issues.map((issue2) => oracleDiagnostic({
-    code: input.code,
-    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-    path: input.path
-  }));
-}
-function parseChangeId3(input) {
-  const parsed = changeIdSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
-      code: "invalid_change_id",
-      message: issue2.message
-    })));
-  }
-  return parsed.data;
-}
-function parseOracleId2(input, path47) {
-  const parsed = oracleIdSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
-      code: "invalid_oracle_id",
-      message: issue2.message,
-      path: path47
-    })));
-  }
-  return parsed.data;
-}
-function parseBaseGitSha2(input, path47) {
-  if (input === void 0)
-    return void 0;
-  const parsed = gitShaSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
-      code: "invalid_base_git_sha",
-      message: issue2.message,
-      path: path47
-    })));
-  }
-  return parsed.data;
-}
-function oraclePath(changeId, oracleId) {
-  return artifactPathForRole({ role: "oracle", changeId, oracleId });
-}
-function normalizeOracle(input) {
-  const parsed = oracleSchema.safeParse(input.oracle);
-  if (!parsed.success) {
-    return failure5("invalid", schemaDiagnostics2({ code: "invalid_oracle", path: input.artifactPath, issues: parsed.error.issues }));
-  }
-  const diagnostics = [];
-  for (const protectedPath of parsed.data.protectedPaths) {
-    try {
-      canonicalProjectArtifactPath(protectedPath);
-    } catch (error51) {
-      diagnostics.push(oracleDiagnostic({
-        code: "invalid_protected_path",
-        message: error51 instanceof Error ? error51.message : String(error51),
-        path: input.artifactPath
-      }));
-    }
-  }
-  if (diagnostics.length > 0)
-    return failure5("invalid", diagnostics);
-  return parsed.data;
-}
-function oracleArtifactDocument(input) {
-  const parsed = oracleArtifactDocumentSchema.safeParse({
-    schemaVersion: ORACLE_ARTIFACT_SCHEMA_VERSION,
-    kind: "oracle-artifact",
-    revision: input.revision,
-    oracle: input.oracle
-  });
-  if (!parsed.success) {
-    return failure5("invalid", schemaDiagnostics2({ code: "invalid_oracle_artifact", path: input.artifactPath, issues: parsed.error.issues }));
-  }
-  return parsed.data;
-}
-function manifestFor(changeId, oracles) {
-  const sortedOracles = [...oracles].sort(compareOracleRevisions);
-  const manifestInput = {
-    schemaVersion: ORACLE_ARTIFACT_SCHEMA_VERSION,
-    kind: "oracle-manifest",
-    changeId,
-    oracles: sortedOracles
-  };
-  return oracleManifestSchema.parse({
-    ...manifestInput,
-    manifestHash: hashContent(stableProtocolJson(manifestInput))
-  });
-}
-async function writeOracleArtifact(input) {
-  const artifactDocument = oracleArtifactDocument({
-    oracle: input.oracle,
-    revision: input.currentRevision + 1,
-    artifactPath: input.artifactPath
-  });
-  if ("diagnostics" in artifactDocument)
-    return artifactDocument;
-  const content = stableProtocolJson(artifactDocument);
-  try {
-    const write = await writeRevisionedArtifact({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: input.artifactPath,
-      role: "oracle",
-      content,
-      expectedRevision: input.expectedRevision,
-      currentRevision: input.currentRevision,
-      mediaType: "application/json",
-      ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha },
-      ...input.supersedes === void 0 ? {} : { supersedes: input.supersedes }
-    });
-    return {
-      ok: true,
-      status: input.status,
-      document: input.oracle,
-      artifactDocument,
-      artifactPath: write.artifactPath,
-      reference: write.reference,
-      revision: write.revision,
-      diagnostics: []
-    };
-  } catch (error51) {
-    if (error51 instanceof ArtifactRevisionConflictError) {
-      return failure5("conflict", [
-        oracleDiagnostic({
-          code: "revision_conflict",
-          message: error51.message,
-          path: input.artifactPath
-        })
-      ]);
-    }
-    throw error51;
-  }
-}
-async function createOracleArtifact(input) {
-  const changeId = parseChangeId3(input.changeId);
-  if (typeof changeId !== "string")
-    return changeId;
-  const oracleId = parseOracleId2(input.oracle.id, INVALID_ORACLE_PATH);
-  if (typeof oracleId !== "string")
-    return oracleId;
-  const artifactPath = oraclePath(changeId, oracleId);
-  const oracle = normalizeOracle({ oracle: input.oracle, artifactPath });
-  if ("diagnostics" in oracle)
-    return oracle;
-  const baseGitSha = parseBaseGitSha2(input.baseGitSha, artifactPath);
-  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
-    return baseGitSha;
-  return writeOracleArtifact({
-    repositoryRoot: input.repositoryRoot,
-    changeId,
-    oracle,
-    artifactPath,
-    expectedRevision: 0,
-    currentRevision: 0,
-    ...baseGitSha === void 0 ? {} : { baseGitSha },
-    status: "created"
-  });
-}
-async function readOracleArtifact(input) {
-  const changeId = parseChangeId3(input.changeId);
-  if (typeof changeId !== "string")
-    return changeId;
-  const oracleId = parseOracleId2(input.oracleId, INVALID_ORACLE_PATH);
-  if (typeof oracleId !== "string")
-    return oracleId;
-  const artifactPath = oraclePath(changeId, oracleId);
-  const read = await readJsonArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath,
-    schema: oracleArtifactDocumentSchema
-  });
-  if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
-    return failure5(status2, read.diagnostics);
-  }
-  if (read.value.oracle.id !== oracleId) {
-    return failure5("invalid", [
-      oracleDiagnostic({
-        code: "oracle_id_mismatch",
-        message: `Oracle artifact contains ${read.value.oracle.id}, not requested oracle ${oracleId}.`,
-        path: artifactPath
-      })
-    ]);
-  }
-  return {
-    ok: true,
-    status: "read",
-    document: read.value.oracle,
-    artifactDocument: read.value,
-    artifactPath,
-    reference: read.reference,
-    revision: artifactRevisionForContent({
-      role: "oracle",
-      path: artifactPath,
-      content: read.bytes,
-      revision: read.value.revision,
-      mediaType: "application/json"
-    }),
-    diagnostics: []
-  };
-}
-async function deriveOracleManifest(input) {
-  const changeId = parseChangeId3(input.changeId);
-  if (typeof changeId !== "string")
-    return changeId;
-  const oracleDirectory = path12.join(input.repositoryRoot, PROJECT_ARTIFACT_PATHS.changes, changeId, "oracle");
-  let entries;
-  try {
-    entries = await readdir4(oracleDirectory, { withFileTypes: true });
-  } catch (error51) {
-    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
-      return {
-        ok: true,
-        status: "derived",
-        manifest: manifestFor(changeId, []),
-        diagnostics: []
-      };
-    }
-    throw error51;
-  }
-  const oracleRevisions = [];
-  for (const fileName of entries.filter((entry) => entry.isFile() && entry.name.endsWith(".yaml")).map((entry) => entry.name).sort(compareStrings2)) {
-    const oracleArtifactPath = `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/oracle/${fileName}`;
-    const oracleId = parseOracleId2(fileName.slice(0, -".yaml".length), oracleArtifactPath);
-    if (typeof oracleId !== "string")
-      return oracleId;
-    const oracle = await readOracleArtifact({
-      repositoryRoot: input.repositoryRoot,
-      changeId,
-      oracleId
-    });
-    if (!oracle.ok)
-      return oracle;
-    oracleRevisions.push(oracle.revision);
-  }
-  return {
-    ok: true,
-    status: "derived",
-    manifest: manifestFor(changeId, oracleRevisions),
-    diagnostics: []
-  };
-}
 
 // packages/artifacts/dist/taskgraphs/schema.js
 var TASKGRAPH_SCHEMA_VERSION = schemaVersionSchema.parse("0.1.0");
@@ -29926,7 +28964,7 @@ var taskGraphDocumentSchema = strictObject({
     }
   }
 });
-function jsonSchemaDocument9(id, title, schema) {
+function jsonSchemaDocument8(id, title, schema) {
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: id,
@@ -29934,19 +28972,19 @@ function jsonSchemaDocument9(id, title, schema) {
     ...toJSONSchema(schema)
   };
 }
-var changeArtifactManifestJsonSchema = jsonSchemaDocument9("https://schemas.9thlevelsoftware.com/legion/artifacts/change-artifact-manifest.schema.json", "Legion change artifact manifest schema", changeArtifactManifestSchema);
-var taskGraphJsonSchema = jsonSchemaDocument9("https://schemas.9thlevelsoftware.com/legion/artifacts/taskgraph.schema.json", "Legion taskgraph artifact schema", taskGraphDocumentSchema);
+var changeArtifactManifestJsonSchema = jsonSchemaDocument8("https://schemas.9thlevelsoftware.com/legion/artifacts/change-artifact-manifest.schema.json", "Legion change artifact manifest schema", changeArtifactManifestSchema);
+var taskGraphJsonSchema = jsonSchemaDocument8("https://schemas.9thlevelsoftware.com/legion/artifacts/taskgraph.schema.json", "Legion taskgraph artifact schema", taskGraphDocumentSchema);
 
 // packages/artifacts/dist/taskgraphs/service.js
 var INVALID_TASKGRAPH_PATH = ".legion/project/changes/invalid-change/taskgraph.json";
-function compareStrings3(left, right) {
+function compareStrings(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function compareReferences(left, right) {
-  return compareStrings3(left.path, right.path) || compareStrings3(left.sha256, right.sha256);
+  return compareStrings(left.path, right.path) || compareStrings(left.sha256, right.sha256);
 }
 function compareArtifactRevisions(left, right) {
-  return compareStrings3(left.role, right.role) || compareReferences(left.artifact, right.artifact);
+  return compareStrings(left.role, right.role) || compareReferences(left.artifact, right.artifact);
 }
 function artifactInputDiagnostics(input) {
   if (input.artifactInputs.length === 0) {
@@ -29963,7 +29001,7 @@ function artifactInputDiagnostics(input) {
   for (const [index, artifactInput] of input.artifactInputs.entries()) {
     const parsed = artifactRevisionSchema.safeParse(artifactInput);
     if (!parsed.success) {
-      diagnostics.push(...schemaDiagnostics3({
+      diagnostics.push(...schemaDiagnostics2({
         code: "invalid_artifact_inputs",
         path: input.artifactPath,
         issues: parsed.error.issues.map((issue2) => ({
@@ -29984,7 +29022,7 @@ function artifactInputDiagnostics(input) {
   }
   return diagnostics;
 }
-function failure6(status2, diagnostics) {
+function failure4(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function taskGraphDiagnostic(input) {
@@ -29994,7 +29032,7 @@ function taskGraphDiagnostic(input) {
     path: input.path ?? INVALID_TASKGRAPH_PATH
   });
 }
-function schemaDiagnostics3(input) {
+function schemaDiagnostics2(input) {
   if (input.issues === void 0 || input.issues.length === 0) {
     return [taskGraphDiagnostic({ code: input.code, message: "Taskgraph failed schema validation.", path: input.path })];
   }
@@ -30004,36 +29042,36 @@ function schemaDiagnostics3(input) {
     path: input.path
   }));
 }
-function parseChangeId4(input) {
+function parseChangeId2(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
+    return failure4("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path47) {
+function parseBaseGitSha(input, path51) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
-    return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
+    return failure4("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path47
+      path: path51
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path47) {
+function assertExpectedRevision(value, path51) {
   if (!Number.isInteger(value) || value < 0) {
-    return failure6("invalid", [
+    return failure4("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path47
+        path: path51
       })
     ]);
   }
@@ -30099,8 +29137,8 @@ function normalizeTaskGraph(input) {
     artifactPath: input.artifactPath
   });
   if (artifactInputIssues.length > 0)
-    return failure6("invalid", artifactInputIssues);
-  const tasks = [...input.tasks].sort((left, right) => compareStrings3(left.id, right.id));
+    return failure4("invalid", artifactInputIssues);
+  const tasks = [...input.tasks].sort((left, right) => compareStrings(left.id, right.id));
   const documentInput = {
     schemaVersion: TASKGRAPH_SCHEMA_VERSION,
     kind: "taskgraph",
@@ -30115,7 +29153,7 @@ function normalizeTaskGraph(input) {
   };
   const parsed = taskGraphDocumentSchema.safeParse(documentInput);
   if (!parsed.success) {
-    return failure6("invalid", schemaDiagnostics3({ code: "invalid_taskgraph", path: input.artifactPath, issues: parsed.error.issues }));
+    return failure4("invalid", schemaDiagnostics2({ code: "invalid_taskgraph", path: input.artifactPath, issues: parsed.error.issues }));
   }
   return parsed.data;
 }
@@ -30123,7 +29161,7 @@ async function currentTaskGraph(input) {
   return readTaskGraph(input);
 }
 async function writeTaskGraph(input) {
-  const changeId = parseChangeId4(input.changeId);
+  const changeId = parseChangeId2(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const artifactPath = taskgraphPath(changeId);
@@ -30131,7 +29169,7 @@ async function writeTaskGraph(input) {
   const revisionError = assertExpectedRevision(expectedRevision, artifactPath);
   if (revisionError !== void 0)
     return revisionError;
-  const baseGitSha = parseBaseGitSha3(input.baseGitSha, artifactPath);
+  const baseGitSha = parseBaseGitSha(input.baseGitSha, artifactPath);
   if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
     return baseGitSha;
   let supersedes;
@@ -30143,7 +29181,7 @@ async function writeTaskGraph(input) {
     if (!current.ok)
       return current;
     if (current.document.revision !== expectedRevision) {
-      return failure6("conflict", [
+      return failure4("conflict", [
         taskGraphDiagnostic({
           code: "revision_conflict",
           message: `stale artifact revision: expected ${expectedRevision}, current ${current.document.revision}`,
@@ -30186,7 +29224,7 @@ async function writeTaskGraph(input) {
     };
   } catch (error51) {
     if (error51 instanceof ArtifactRevisionConflictError) {
-      return failure6("conflict", [
+      return failure4("conflict", [
         taskGraphDiagnostic({
           code: "revision_conflict",
           message: error51.message,
@@ -30198,7 +29236,7 @@ async function writeTaskGraph(input) {
   }
 }
 async function readTaskGraph(input) {
-  const changeId = parseChangeId4(input.changeId);
+  const changeId = parseChangeId2(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const artifactPath = taskgraphPath(changeId);
@@ -30209,10 +29247,10 @@ async function readTaskGraph(input) {
   });
   if (!read.ok) {
     const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
-    return failure6(status2, read.diagnostics);
+    return failure4(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
-    return failure6("invalid", [
+    return failure4("invalid", [
       taskGraphDiagnostic({
         code: "taskgraph_change_mismatch",
         message: `Taskgraph change ID ${read.value.changeId} does not match requested change ${changeId}.`,
@@ -30225,19 +29263,19 @@ async function readTaskGraph(input) {
     artifactPath
   });
   if (artifactInputIssues.length > 0)
-    return failure6("invalid", artifactInputIssues);
+    return failure4("invalid", artifactInputIssues);
   const manifestInputIssues = manifestInputDiagnostics({
     document: read.value,
     artifactPath
   });
   if (manifestInputIssues.length > 0)
-    return failure6("invalid", manifestInputIssues);
+    return failure4("invalid", manifestInputIssues);
   const manifestDiagnostics = manifestHashDiagnostics({
     manifest: read.value.artifactManifest,
     artifactPath
   });
   if (manifestDiagnostics.length > 0)
-    return failure6("invalid", manifestDiagnostics);
+    return failure4("invalid", manifestDiagnostics);
   return {
     ok: true,
     status: "read",
@@ -30303,7 +29341,7 @@ var evidenceIndexDocumentSchema = strictObject({
     }
   }
 });
-function jsonSchemaDocument10(id, title, schema) {
+function jsonSchemaDocument9(id, title, schema) {
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: id,
@@ -30311,17 +29349,17 @@ function jsonSchemaDocument10(id, title, schema) {
     ...toJSONSchema(schema)
   };
 }
-var evidenceIndexJsonSchema = jsonSchemaDocument10("https://schemas.9thlevelsoftware.com/legion/artifacts/evidence-index.schema.json", "Legion evidence index artifact schema", evidenceIndexDocumentSchema);
+var evidenceIndexJsonSchema = jsonSchemaDocument9("https://schemas.9thlevelsoftware.com/legion/artifacts/evidence-index.schema.json", "Legion evidence index artifact schema", evidenceIndexDocumentSchema);
 
 // packages/artifacts/dist/evidence-index/service.js
 var INVALID_EVIDENCE_INDEX_PATH = ".legion/project/changes/invalid-change/evidence-index.json";
-function compareStrings4(left, right) {
+function compareStrings2(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function compareReferences2(left, right) {
-  return compareStrings4(left.path, right.path) || compareStrings4(left.sha256, right.sha256);
+  return compareStrings2(left.path, right.path) || compareStrings2(left.sha256, right.sha256);
 }
-function failure7(status2, diagnostics) {
+function failure5(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function evidenceDiagnostic(input) {
@@ -30331,7 +29369,7 @@ function evidenceDiagnostic(input) {
     path: input.path ?? INVALID_EVIDENCE_INDEX_PATH
   });
 }
-function schemaDiagnostics4(input) {
+function schemaDiagnostics3(input) {
   if (input.issues === void 0 || input.issues.length === 0) {
     return [evidenceDiagnostic({ code: input.code, message: "Evidence index failed schema validation.", path: input.path })];
   }
@@ -30341,36 +29379,36 @@ function schemaDiagnostics4(input) {
     path: input.path
   }));
 }
-function parseChangeId5(input) {
+function parseChangeId3(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
+    return failure5("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path47) {
+function parseBaseGitSha2(input, path51) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
-    return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
+    return failure5("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path47
+      path: path51
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path47) {
+function assertExpectedRevision2(value, path51) {
   if (!Number.isInteger(value) || value < 0) {
-    return failure7("invalid", [
+    return failure5("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path47
+        path: path51
       })
     ]);
   }
@@ -30397,7 +29435,7 @@ function artifactInputDiagnostics2(input) {
   for (const [index, artifactInput] of input.artifactInputs.entries()) {
     const parsed = artifactRevisionSchema.safeParse(artifactInput);
     if (!parsed.success) {
-      diagnostics.push(...schemaDiagnostics4({
+      diagnostics.push(...schemaDiagnostics3({
         code: "invalid_artifact_inputs",
         path: input.artifactPath,
         issues: parsed.error.issues.map((issue2) => ({
@@ -30523,10 +29561,10 @@ function normalizeEntries(input) {
       artifactPath: input.artifactPath
     });
     if (acceptanceDiagnostics.length > 0)
-      return failure7("invalid", acceptanceDiagnostics);
+      return failure5("invalid", acceptanceDiagnostics);
     const parsed = evidenceIndexEntrySchema.safeParse(entry);
     if (!parsed.success) {
-      return failure7("invalid", schemaDiagnostics4({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
+      return failure5("invalid", schemaDiagnostics3({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
     }
     entries.push(parsed.data);
   }
@@ -30536,8 +29574,8 @@ function normalizeEntries(input) {
     artifactPath: input.artifactPath
   });
   if (diagnostics.length > 0)
-    return failure7("invalid", diagnostics);
-  return entries.sort((left, right) => compareStrings4(left.evidence.id, right.evidence.id));
+    return failure5("invalid", diagnostics);
+  return entries.sort((left, right) => compareStrings2(left.evidence.id, right.evidence.id));
 }
 function evidenceReferences(entries) {
   const referencesByKey = /* @__PURE__ */ new Map();
@@ -30556,7 +29594,7 @@ function normalizeEvidenceIndex(input) {
     artifactPath: input.artifactPath
   });
   if (artifactInputIssues.length > 0)
-    return failure7("invalid", artifactInputIssues);
+    return failure5("invalid", artifactInputIssues);
   const entries = normalizeEntries({
     entries: input.entries,
     changeId: input.changeId,
@@ -30579,12 +29617,12 @@ function normalizeEvidenceIndex(input) {
   };
   const parsed = evidenceIndexDocumentSchema.safeParse(documentInput);
   if (!parsed.success) {
-    return failure7("invalid", schemaDiagnostics4({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
+    return failure5("invalid", schemaDiagnostics3({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
   }
   return parsed.data;
 }
 async function writeEvidenceIndex(input) {
-  const changeId = parseChangeId5(input.changeId);
+  const changeId = parseChangeId3(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const artifactPath = evidenceIndexPath(changeId);
@@ -30592,7 +29630,7 @@ async function writeEvidenceIndex(input) {
   const revisionError = assertExpectedRevision2(expectedRevision, artifactPath);
   if (revisionError !== void 0)
     return revisionError;
-  const baseGitSha = parseBaseGitSha4(input.baseGitSha, artifactPath);
+  const baseGitSha = parseBaseGitSha2(input.baseGitSha, artifactPath);
   if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
     return baseGitSha;
   let supersedes;
@@ -30604,7 +29642,7 @@ async function writeEvidenceIndex(input) {
     if (!current.ok)
       return current;
     if (current.document.revision !== expectedRevision) {
-      return failure7("conflict", [
+      return failure5("conflict", [
         evidenceDiagnostic({
           code: "revision_conflict",
           message: `stale artifact revision: expected ${expectedRevision}, current ${current.document.revision}`,
@@ -30647,7 +29685,7 @@ async function writeEvidenceIndex(input) {
     };
   } catch (error51) {
     if (error51 instanceof ArtifactRevisionConflictError) {
-      return failure7("conflict", [
+      return failure5("conflict", [
         evidenceDiagnostic({
           code: "revision_conflict",
           message: error51.message,
@@ -30659,7 +29697,7 @@ async function writeEvidenceIndex(input) {
   }
 }
 async function readEvidenceIndex(input) {
-  const changeId = parseChangeId5(input.changeId);
+  const changeId = parseChangeId3(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const artifactPath = evidenceIndexPath(changeId);
@@ -30670,10 +29708,10 @@ async function readEvidenceIndex(input) {
   });
   if (!read.ok) {
     const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
-    return failure7(status2, read.diagnostics);
+    return failure5(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
-    return failure7("invalid", [
+    return failure5("invalid", [
       evidenceDiagnostic({
         code: "evidence_index_change_mismatch",
         message: `Evidence index change ID ${read.value.changeId} does not match requested change ${changeId}.`,
@@ -30686,14 +29724,14 @@ async function readEvidenceIndex(input) {
     artifactPath
   });
   if (manifestDiagnostics.length > 0)
-    return failure7("invalid", manifestDiagnostics);
+    return failure5("invalid", manifestDiagnostics);
   const entryDiagnostics = validateEntries({
     entries: read.value.entries,
     changeId,
     artifactPath
   });
   if (entryDiagnostics.length > 0)
-    return failure7("invalid", entryDiagnostics);
+    return failure5("invalid", entryDiagnostics);
   return {
     ok: true,
     status: "read",
@@ -30707,6 +29745,1693 @@ async function readEvidenceIndex(input) {
       revision: read.value.revision,
       mediaType: "application/json"
     }),
+    diagnostics: []
+  };
+}
+
+// packages/artifacts/dist/changes/service.js
+var INVALID_CHANGE_BUNDLE_PATH = `${PROJECT_ARTIFACT_PATHS.changes}/invalid-change/change.yaml`;
+function isEnoent4(error51) {
+  return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
+}
+function compareStrings3(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function failure6(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function changeDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_CHANGE_BUNDLE_PATH
+  });
+}
+function parseChangeId4(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_change_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseRequirementId2(input, path51) {
+  const parsed = requirementIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_requirement_id",
+      message: issue2.message,
+      path: path51
+    })));
+  }
+  return parsed.data;
+}
+function parseTimestamp2(input) {
+  const parsed = utcTimestampSchema.safeParse(input.value ?? (/* @__PURE__ */ new Date()).toISOString());
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
+      code: input.code,
+      message: issue2.message,
+      path: input.path
+    })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha3(input, path51) {
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: path51
+    })));
+  }
+  return parsed.data;
+}
+function parseOwners(input, path51) {
+  if (input.length === 0) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_owners",
+        message: "At least one owner is required for a change bundle.",
+        path: path51
+      })
+    ]);
+  }
+  const owners = [];
+  const diagnostics = [];
+  for (const owner of input) {
+    const parsed = actorSchema.safeParse(owner);
+    if (!parsed.success) {
+      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
+        code: "invalid_owner",
+        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+        path: path51
+      })));
+      continue;
+    }
+    owners.push(parsed.data);
+  }
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  return owners;
+}
+function changePaths(changeId) {
+  const proposal = artifactPathForRole({ role: "proposal", changeId });
+  return {
+    root: `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}`,
+    proposal,
+    deltaSpecRoot: `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/delta-specs`,
+    design: artifactPathForRole({ role: "design", changeId }),
+    decisions: artifactPathForRole({ role: "decision-log", changeId })
+  };
+}
+function frontmatterMarkdown(frontmatter, title, body) {
+  return [
+    "---",
+    stableProtocolJson(frontmatter).trimEnd(),
+    "---",
+    "",
+    `# ${title}`,
+    "",
+    ...body,
+    ""
+  ].join("\n");
+}
+function renderDeltaSpecMarkdown(delta) {
+  return frontmatterMarkdown(delta, `${delta.operation}: ${delta.requirementId}`, [
+    "## Rationale",
+    "",
+    delta.rationale,
+    "",
+    "## Proposed Requirement",
+    "",
+    delta.proposedRequirement === void 0 ? "Requirement is removed." : stableProtocolJson(delta.proposedRequirement).trimEnd()
+  ]);
+}
+function renderDesignMarkdown(design) {
+  return frontmatterMarkdown(design, design.title, [design.body]);
+}
+function renderDecisionLogMarkdown(log) {
+  const lines = log.decisions.flatMap((decision) => [
+    `## ${decision.title}`,
+    "",
+    `- ID: ${decision.id}`,
+    `- Status: ${decision.status}`,
+    `- Rationale: ${decision.rationale}`,
+    ""
+  ]);
+  return frontmatterMarkdown(log, "Decisions", lines);
+}
+function parseMarkdownFrontmatter(input) {
+  const normalized = input.content.replace(/\r\n/g, "\n");
+  if (!normalized.startsWith("---\n")) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "missing_frontmatter",
+        message: "Change artifact must start with JSON frontmatter.",
+        path: input.artifactPath
+      })
+    ]);
+  }
+  const closeIndex = normalized.indexOf("\n---\n", 4);
+  if (closeIndex < 0) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "unterminated_frontmatter",
+        message: "Change artifact frontmatter must close with --- on its own line.",
+        path: input.artifactPath
+      })
+    ]);
+  }
+  let parsedFrontmatter;
+  try {
+    parsedFrontmatter = JSON.parse(normalized.slice(4, closeIndex).trim());
+  } catch (error51) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_frontmatter_json",
+        message: error51 instanceof Error ? error51.message : "Change artifact frontmatter is not valid JSON.",
+        path: input.artifactPath
+      })
+    ]);
+  }
+  const parsed = input.schema.safeParse(parsedFrontmatter);
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_schema",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: input.artifactPath
+    })));
+  }
+  return { ok: true, document: parsed.data };
+}
+async function readMarkdownArtifact(input) {
+  let resolved;
+  try {
+    resolved = await resolveProjectArtifactPath({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath
+    });
+  } catch (error51) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_path",
+        message: error51 instanceof Error ? error51.message : String(error51),
+        path: input.artifactPath
+      })
+    ]);
+  }
+  let content;
+  try {
+    content = await readFile7(resolved.absolutePath, "utf8");
+  } catch (error51) {
+    if (isEnoent4(error51)) {
+      return failure6("not_found", [
+        changeDiagnostic({
+          code: "not_found",
+          message: "Change artifact does not exist.",
+          path: resolved.repositoryPath
+        })
+      ]);
+    }
+    throw error51;
+  }
+  const parsed = parseMarkdownFrontmatter({
+    artifactPath: resolved.repositoryPath,
+    content,
+    schema: input.schema
+  });
+  if (!parsed.ok)
+    return parsed;
+  return {
+    document: parsed.document,
+    content,
+    reference: artifactReferenceForContent({
+      path: resolved.repositoryPath,
+      content,
+      mediaType: input.mediaType
+    })
+  };
+}
+async function readCurrentSpecByArtifactPath(input) {
+  let resolved;
+  try {
+    resolved = await resolveProjectArtifactPath({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath
+    });
+  } catch (error51) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_path",
+        message: error51 instanceof Error ? error51.message : String(error51),
+        path: input.artifactPath
+      })
+    ]);
+  }
+  let content;
+  try {
+    content = await readFile7(resolved.absolutePath, "utf8");
+  } catch (error51) {
+    if (isEnoent4(error51)) {
+      return failure6("not_found", [
+        changeDiagnostic({
+          code: "not_found",
+          message: "Current spec artifact does not exist.",
+          path: resolved.repositoryPath
+        })
+      ]);
+    }
+    throw error51;
+  }
+  const parsed = parseCurrentSpecMarkdown({
+    artifactPath: resolved.repositoryPath,
+    content
+  });
+  if (!parsed.ok)
+    return failure6(parsed.status, parsed.diagnostics);
+  return {
+    ok: true,
+    document: parsed.document,
+    artifactPath: resolved.repositoryPath,
+    reference: artifactReferenceForContent({
+      path: resolved.repositoryPath,
+      content,
+      mediaType: "text/markdown"
+    })
+  };
+}
+async function currentRequirementExists(input) {
+  const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
+  if (!currentSpecs.ok)
+    return failure6(currentSpecs.status, currentSpecs.diagnostics);
+  return currentSpecs.index.entries.some((entry) => entry.requirements.some((requirement) => requirement.id === input.requirementId));
+}
+function bundleIdentityDiagnostics(input) {
+  const diagnostics = [];
+  const expected = input.expectedPaths;
+  const actual = input.bundle.paths;
+  if (input.bundle.change.id !== input.requestedChangeId) {
+    diagnostics.push(changeDiagnostic({
+      code: "change_bundle_identity_mismatch",
+      message: `Loaded change bundle declares ${input.bundle.change.id}, but ${input.requestedChangeId} was requested.`,
+      path: expected.proposal
+    }));
+  }
+  const pathChecks = ["root", "proposal", "deltaSpecRoot", "design", "decisions"];
+  for (const key of pathChecks) {
+    if (actual[key] !== expected[key]) {
+      diagnostics.push(changeDiagnostic({
+        code: "change_bundle_path_mismatch",
+        message: `Loaded change bundle path ${String(key)} must be ${expected[key]}, not ${actual[key]}.`,
+        path: expected.proposal
+      }));
+    }
+  }
+  return diagnostics;
+}
+function deltaEntryDiagnostics(input) {
+  const diagnostics = [];
+  if (input.delta.changeId !== input.changeId) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} declares change ${input.delta.changeId}, not ${input.changeId}.`,
+      path: input.entry.path
+    }));
+  }
+  if (input.delta.requirementId !== input.entry.requirementId) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} declares requirement ${input.delta.requirementId}, not ${input.entry.requirementId}.`,
+      path: input.entry.path
+    }));
+  }
+  if (input.delta.operation !== input.entry.operation) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} declares operation ${input.delta.operation}, not ${input.entry.operation}.`,
+      path: input.entry.path
+    }));
+  }
+  if (!referencesEqual(input.delta.baseCurrentSpec, input.entry.baseCurrentSpec)) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} base current spec does not match the bundle entry.`,
+      path: input.entry.path
+    }));
+  }
+  if (input.delta.baseCurrentSpecRevision !== input.entry.baseCurrentSpecRevision) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} base current spec revision does not match the bundle entry.`,
+      path: input.entry.path
+    }));
+  }
+  if (input.delta.baseRequirementHash !== input.entry.baseRequirementHash) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} base requirement hash does not match the bundle entry.`,
+      path: input.entry.path
+    }));
+  }
+  return diagnostics;
+}
+function changeArtifactIdentityDiagnostics(input) {
+  if (input.actualChangeId === input.expectedChangeId)
+    return [];
+  return [
+    changeDiagnostic({
+      code: input.code,
+      message: `${input.label} declares change ${input.actualChangeId}, not ${input.expectedChangeId}.`,
+      path: input.artifactPath
+    })
+  ];
+}
+function referencesEqual(left, right) {
+  return left?.path === right?.path && left?.sha256 === right?.sha256 && left?.mediaType === right?.mediaType;
+}
+function findRevision(input) {
+  return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
+}
+function conflictDiagnostics(deltas, path51) {
+  const byRequirement = /* @__PURE__ */ new Map();
+  const diagnostics = [];
+  for (const delta of deltas) {
+    const prior = byRequirement.get(delta.requirementId);
+    if (prior !== void 0) {
+      diagnostics.push(changeDiagnostic({
+        code: "conflicting_delta_operations",
+        message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
+        path: path51
+      }));
+    }
+    byRequirement.set(delta.requirementId, delta.operation);
+  }
+  return diagnostics;
+}
+async function currentSpecMap(input) {
+  const specs = [];
+  const requirements = /* @__PURE__ */ new Map();
+  for (const requested of input.currentSpecs) {
+    const requirementId = parseRequirementId2(requested.requirementId, input.proposalPath);
+    if (typeof requirementId !== "string")
+      return requirementId;
+    const spec = await readCurrentSpec({
+      repositoryRoot: input.repositoryRoot,
+      requirementId
+    });
+    if (!spec.ok) {
+      return failure6(spec.status === "not_found" ? "not_found" : "invalid", spec.diagnostics);
+    }
+    if (spec.document.revision !== requested.expectedRevision) {
+      return failure6("invalid", [
+        changeDiagnostic({
+          code: "stale_change_base",
+          message: `Expected current spec ${requirementId} revision ${requested.expectedRevision}, but current revision is ${spec.document.revision}.`,
+          path: spec.artifactPath
+        })
+      ]);
+    }
+    specs.push(spec);
+    for (const requirement of spec.document.requirements) {
+      requirements.set(requirement.id, {
+        spec,
+        requirement,
+        requirementHash: hashContent(stableProtocolJson(requirement))
+      });
+    }
+  }
+  return { ok: true, specs, requirements };
+}
+async function normalizeDeltaSpecs(input) {
+  const diagnostics = [];
+  const normalizedHeaders = [];
+  const deltas = [];
+  for (const delta of input.deltas) {
+    const requirementId = parseRequirementId2(delta.requirementId, input.proposalPath);
+    if (typeof requirementId !== "string")
+      return requirementId;
+    normalizedHeaders.push({ requirementId, operation: delta.operation });
+  }
+  diagnostics.push(...conflictDiagnostics(normalizedHeaders, input.proposalPath));
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  for (const [index, delta] of input.deltas.entries()) {
+    const requirementId = normalizedHeaders[index]?.requirementId;
+    if (requirementId === void 0)
+      continue;
+    const base = input.baseRequirements.get(requirementId);
+    if ((delta.operation === "modify" || delta.operation === "remove") && base === void 0) {
+      diagnostics.push(changeDiagnostic({
+        code: "missing_delta_base",
+        message: `Delta ${delta.operation} for ${requirementId} has no matching current spec base.`,
+        path: input.proposalPath
+      }));
+      continue;
+    }
+    if (delta.operation === "add" && base !== void 0) {
+      diagnostics.push(changeDiagnostic({
+        code: "add_delta_targets_existing_requirement",
+        message: `Delta add for ${requirementId} targets an existing current requirement.`,
+        path: input.proposalPath
+      }));
+      continue;
+    }
+    if (delta.operation === "add") {
+      const exists = await currentRequirementExists({
+        repositoryRoot: input.repositoryRoot,
+        requirementId
+      });
+      if (typeof exists !== "boolean")
+        return exists;
+      if (exists) {
+        diagnostics.push(changeDiagnostic({
+          code: "add_delta_targets_existing_requirement",
+          message: `Delta add for ${requirementId} targets an existing current requirement.`,
+          path: input.proposalPath
+        }));
+        continue;
+      }
+    }
+    const parsed = changeDeltaSpecSchema.safeParse({
+      schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
+      kind: "delta-spec",
+      changeId: input.changeId,
+      requirementId,
+      operation: delta.operation,
+      ...base === void 0 ? {} : {
+        baseCurrentSpec: base.spec.reference,
+        baseCurrentSpecRevision: base.spec.document.revision,
+        baseRequirementHash: base.requirementHash
+      },
+      ...delta.proposedRequirement === void 0 ? {} : { proposedRequirement: delta.proposedRequirement },
+      ...delta.sections === void 0 ? {} : { sections: delta.sections },
+      rationale: delta.rationale,
+      dependencies: [
+        ...base === void 0 ? [] : [base.spec.reference],
+        ...delta.dependencies ?? []
+      ]
+    });
+    if (!parsed.success) {
+      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
+        code: "invalid_delta_spec",
+        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+        path: input.proposalPath
+      })));
+      continue;
+    }
+    deltas.push(parsed.data);
+  }
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  return { ok: true, deltas };
+}
+function buildDecisionLog(input) {
+  const diagnostics = [];
+  const decisions = [];
+  for (const decision of input.decisions) {
+    const id = decisionIdSchema.safeParse(decision.id);
+    if (!id.success) {
+      diagnostics.push(changeDiagnostic({
+        code: "invalid_decision_id",
+        message: id.error.issues[0]?.message ?? "Invalid decision ID.",
+        path: input.decisionLogPath
+      }));
+      continue;
+    }
+    const createdAt = parseTimestamp2({
+      value: decision.createdAt ?? input.createdAt,
+      path: input.decisionLogPath,
+      code: "invalid_decision_created_at"
+    });
+    if (typeof createdAt !== "string") {
+      diagnostics.push(...createdAt.diagnostics);
+      continue;
+    }
+    const decidedAt = decision.decidedAt === void 0 ? void 0 : parseTimestamp2({
+      value: decision.decidedAt,
+      path: input.decisionLogPath,
+      code: "invalid_decision_decided_at"
+    });
+    if (decidedAt !== void 0 && typeof decidedAt !== "string") {
+      diagnostics.push(...decidedAt.diagnostics);
+      continue;
+    }
+    const parsed = decisionSchema.safeParse({
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt,
+      kind: "decision",
+      id: id.data,
+      projectId: input.projectId,
+      title: decision.title,
+      context: decision.context,
+      alternatives: decision.alternatives,
+      rationale: decision.rationale,
+      supersedes: decision.supersedes,
+      affectedArtifacts: input.affectedArtifacts,
+      traceRefs: [
+        {
+          path: input.decisionLogPath,
+          anchor: id.data,
+          relation: "records",
+          entity: { kind: "decision", id: id.data }
+        }
+      ],
+      status: decision.status,
+      ...decision.approver === void 0 ? {} : { approver: decision.approver },
+      ...decidedAt === void 0 ? {} : { decidedAt },
+      ...decision.supersededBy === void 0 ? {} : { supersededBy: decision.supersededBy }
+    });
+    if (!parsed.success) {
+      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
+        code: "invalid_decision",
+        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+        path: input.decisionLogPath
+      })));
+      continue;
+    }
+    decisions.push(parsed.data);
+  }
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  return changeDecisionLogSchema.parse({
+    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
+    kind: "decision-log",
+    changeId: input.changeId,
+    decisions
+  });
+}
+async function writeNewArtifact(input) {
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath,
+      role: input.role,
+      content: input.content,
+      expectedRevision: 0,
+      currentRevision: 0,
+      mediaType: input.mediaType,
+      ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha }
+    });
+    return { ok: true, reference: write.reference, revision: write.revision };
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure6("conflict", [
+        changeDiagnostic({
+          code: "revision_conflict",
+          message: error51.message,
+          path: input.artifactPath
+        })
+      ]);
+    }
+    throw error51;
+  }
+}
+async function preflightNewArtifactPaths(input) {
+  const diagnostics = [];
+  for (const artifactPath of input.artifactPaths) {
+    let resolved;
+    try {
+      resolved = await resolveProjectArtifactPath({
+        repositoryRoot: input.repositoryRoot,
+        artifactPath
+      });
+    } catch (error51) {
+      return failure6("invalid", [
+        changeDiagnostic({
+          code: "invalid_path",
+          message: error51 instanceof Error ? error51.message : String(error51),
+          path: artifactPath
+        })
+      ]);
+    }
+    try {
+      await stat3(resolved.absolutePath);
+      diagnostics.push(changeDiagnostic({
+        code: "artifact_already_exists",
+        message: `Change artifact already exists: ${resolved.repositoryPath}.`,
+        path: resolved.repositoryPath
+      }));
+    } catch (error51) {
+      if (isEnoent4(error51))
+        continue;
+      throw error51;
+    }
+  }
+  if (diagnostics.length > 0)
+    return failure6("conflict", diagnostics);
+  return { ok: true };
+}
+function success4(input) {
+  return {
+    ok: true,
+    status: input.status,
+    bundle: input.bundle,
+    deltaSpecs: input.deltaSpecs,
+    design: input.design,
+    decisions: input.decisions,
+    artifactPath: input.artifactPath,
+    reference: input.reference,
+    revision: input.revision,
+    diagnostics: []
+  };
+}
+async function createChangeBundle(input) {
+  const changeId = parseChangeId4(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const projectId = projectIdSchema.safeParse(input.projectId);
+  const paths = changePaths(changeId);
+  if (input.deltaSpecs.length === 0) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_delta_specs",
+        message: "At least one delta spec is required to create a change bundle.",
+        path: paths.proposal
+      })
+    ]);
+  }
+  const baseGitSha = parseBaseGitSha3(input.baseGitSha, paths.proposal);
+  if (typeof baseGitSha !== "string")
+    return baseGitSha;
+  if (!projectId.success) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_project_id",
+        message: projectId.error.issues[0]?.message ?? "Invalid project ID.",
+        path: paths.proposal
+      })
+    ]);
+  }
+  const owners = parseOwners(input.owners, paths.proposal);
+  if ("diagnostics" in owners)
+    return owners;
+  const createdAt = parseTimestamp2({
+    value: input.createdAt,
+    path: paths.proposal,
+    code: "invalid_created_at"
+  });
+  if (typeof createdAt !== "string")
+    return createdAt;
+  const current = await currentSpecMap({
+    repositoryRoot: input.repositoryRoot,
+    currentSpecs: input.currentSpecs,
+    proposalPath: paths.proposal
+  });
+  if (!current.ok)
+    return current;
+  const normalizedDeltas = await normalizeDeltaSpecs({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    proposalPath: paths.proposal,
+    deltas: input.deltaSpecs,
+    baseRequirements: current.requirements
+  });
+  if (!normalizedDeltas.ok)
+    return normalizedDeltas;
+  const deltaArtifacts = normalizedDeltas.deltas.map((delta) => {
+    const artifactPath = artifactPathForRole({
+      role: "delta-spec",
+      changeId,
+      requirementId: delta.requirementId
+    });
+    const content = renderDeltaSpecMarkdown(delta);
+    const revision = artifactRevisionForContent({
+      role: "delta-spec",
+      path: artifactPath,
+      content,
+      revision: 1,
+      mediaType: "text/markdown",
+      baseGitSha
+    });
+    return { delta, artifactPath, content, reference: revision.artifact, revision };
+  });
+  const deltaArtifactsByRequirement = [...deltaArtifacts].sort((left, right) => compareStrings3(left.delta.requirementId, right.delta.requirementId));
+  const design = changeDesignDocumentSchema.safeParse({
+    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
+    kind: "change-design",
+    changeId,
+    title: input.design.title,
+    body: input.design.body,
+    dependencies: [
+      ...current.specs.map((spec) => spec.reference),
+      ...input.design.dependencies ?? []
+    ]
+  });
+  if (!design.success) {
+    return failure6("invalid", design.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_design",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: paths.design
+    })));
+  }
+  const designDocument = design.data;
+  const designContent = renderDesignMarkdown(designDocument);
+  const designRevision = artifactRevisionForContent({
+    role: "design",
+    path: paths.design,
+    content: designContent,
+    revision: 1,
+    mediaType: "text/markdown",
+    baseGitSha
+  });
+  const decisionLog = buildDecisionLog({
+    changeId,
+    projectId: projectId.data,
+    createdAt,
+    decisionLogPath: paths.decisions,
+    affectedArtifacts: [designRevision.artifact, ...deltaArtifacts.map((artifact) => artifact.reference)],
+    decisions: input.decisions ?? []
+  });
+  if ("diagnostics" in decisionLog)
+    return decisionLog;
+  const decisionContent = renderDecisionLogMarkdown(decisionLog);
+  const decisionRevision = artifactRevisionForContent({
+    role: "decision-log",
+    path: paths.decisions,
+    content: decisionContent,
+    revision: 1,
+    mediaType: "text/markdown",
+    baseGitSha
+  });
+  const preflight = await preflightNewArtifactPaths({
+    repositoryRoot: input.repositoryRoot,
+    artifactPaths: [
+      ...deltaArtifactsByRequirement.map((artifact) => artifact.artifactPath),
+      paths.design,
+      paths.decisions,
+      paths.proposal
+    ]
+  });
+  if (!preflight.ok)
+    return preflight;
+  const currentSpecsByPath = [...current.specs].sort((left, right) => compareStrings3(left.artifactPath, right.artifactPath));
+  const currentRequirementIds = [...current.requirements.keys()].sort(compareStrings3);
+  const deltaRequirementIds = normalizedDeltas.deltas.map((delta) => delta.requirementId).sort(compareStrings3);
+  const artifactRevisions = [
+    ...deltaArtifactsByRequirement.map((artifact) => artifact.revision),
+    designRevision,
+    decisionRevision
+  ];
+  const change = {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "change",
+    id: changeId,
+    projectId: projectId.data,
+    title: input.title,
+    summary: input.summary,
+    status: "draft",
+    currentTruth: {
+      specRefs: currentSpecsByPath.map((spec) => spec.reference),
+      baseSpecHash: hashContent(stableProtocolJson(currentSpecsByPath.map((spec) => ({
+        path: spec.artifactPath,
+        revision: spec.document.revision,
+        reference: spec.reference
+      })))),
+      baseGitSha,
+      requirementIds: currentRequirementIds
+    },
+    proposedTruth: {
+      deltaSpecRefs: deltaArtifactsByRequirement.map((artifact) => artifact.reference),
+      targetSpecHash: hashContent(stableProtocolJson(deltaArtifactsByRequirement.map((artifact) => ({
+        operation: artifact.delta.operation,
+        requirementId: artifact.delta.requirementId,
+        reference: artifact.reference
+      })))),
+      requirementIds: deltaRequirementIds
+    },
+    artifactRevisions,
+    risk: input.risk,
+    acceptance: { status: "not_ready" },
+    decisionRefs: decisionLog.decisions.map((decision) => decision.id),
+    oracleRefs: []
+  };
+  const parsedChange = changeBundleSchema.shape.change.safeParse(change);
+  if (!parsedChange.success) {
+    return failure6("invalid", parsedChange.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_change",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: paths.proposal
+    })));
+  }
+  const bundle = changeBundleSchema.safeParse({
+    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
+    kind: "change-bundle",
+    revision: 1,
+    owners,
+    baseGitSha,
+    paths,
+    change: parsedChange.data,
+    deltas: deltaArtifactsByRequirement.map((artifact) => ({
+      operation: artifact.delta.operation,
+      requirementId: artifact.delta.requirementId,
+      path: artifact.artifactPath,
+      ...artifact.delta.baseCurrentSpec === void 0 ? {} : { baseCurrentSpec: artifact.delta.baseCurrentSpec },
+      ...artifact.delta.baseCurrentSpecRevision === void 0 ? {} : { baseCurrentSpecRevision: artifact.delta.baseCurrentSpecRevision },
+      ...artifact.delta.baseRequirementHash === void 0 ? {} : { baseRequirementHash: artifact.delta.baseRequirementHash },
+      delta: artifact.reference
+    })),
+    artifactRevisions
+  });
+  if (!bundle.success) {
+    return failure6("invalid", bundle.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_change_bundle",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: paths.proposal
+    })));
+  }
+  const bundleDocument = bundle.data;
+  const proposalContent = stableProtocolJson(bundleDocument);
+  for (const artifact of deltaArtifactsByRequirement) {
+    const written = await writeNewArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: artifact.artifactPath,
+      role: "delta-spec",
+      content: artifact.content,
+      mediaType: "text/markdown",
+      baseGitSha
+    });
+    if (!written.ok)
+      return written;
+  }
+  const writtenDesign = await writeNewArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: paths.design,
+    role: "design",
+    content: designContent,
+    mediaType: "text/markdown",
+    baseGitSha
+  });
+  if (!writtenDesign.ok)
+    return writtenDesign;
+  const writtenDecisions = await writeNewArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: paths.decisions,
+    role: "decision-log",
+    content: decisionContent,
+    mediaType: "text/markdown",
+    baseGitSha
+  });
+  if (!writtenDecisions.ok)
+    return writtenDecisions;
+  const writtenProposal = await writeNewArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: paths.proposal,
+    role: "proposal",
+    content: proposalContent,
+    mediaType: "application/json",
+    baseGitSha
+  });
+  if (!writtenProposal.ok)
+    return writtenProposal;
+  return success4({
+    status: "created",
+    bundle: bundleDocument,
+    deltaSpecs: normalizedDeltas.deltas,
+    design: designDocument,
+    decisions: decisionLog.decisions,
+    artifactPath: paths.proposal,
+    reference: writtenProposal.reference,
+    revision: writtenProposal.revision
+  });
+}
+async function loadChangeBundle(input) {
+  const changeId = parseChangeId4(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const paths = changePaths(changeId);
+  const proposal = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: paths.proposal,
+    schema: changeBundleSchema
+  });
+  if (!proposal.ok) {
+    const notFound = proposal.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found");
+    return failure6(notFound ? "not_found" : "invalid", proposal.diagnostics);
+  }
+  const bundle = proposal.value;
+  const diagnostics = [];
+  diagnostics.push(...bundleIdentityDiagnostics({
+    bundle,
+    requestedChangeId: changeId,
+    expectedPaths: paths
+  }));
+  const deltaSpecs = [];
+  for (const entry of bundle.deltas) {
+    const parsed = await readMarkdownArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: entry.path,
+      mediaType: "text/markdown",
+      schema: changeDeltaSpecSchema
+    });
+    if ("diagnostics" in parsed)
+      return parsed;
+    if (!referencesEqual(parsed.reference, entry.delta)) {
+      diagnostics.push(changeDiagnostic({
+        code: "delta_artifact_mismatch",
+        message: `Delta spec ${entry.path} bytes do not match the change bundle reference.`,
+        path: entry.path
+      }));
+    }
+    diagnostics.push(...deltaEntryDiagnostics({
+      entry,
+      delta: parsed.document,
+      changeId
+    }));
+    deltaSpecs.push(parsed.document);
+  }
+  const design = await readMarkdownArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: bundle.paths.design,
+    mediaType: "text/markdown",
+    schema: changeDesignDocumentSchema
+  });
+  if ("diagnostics" in design)
+    return design;
+  diagnostics.push(...changeArtifactIdentityDiagnostics({
+    artifactPath: bundle.paths.design,
+    actualChangeId: design.document.changeId,
+    expectedChangeId: changeId,
+    code: "design_change_id_mismatch",
+    label: "Design artifact"
+  }));
+  const designRevision = findRevision({ bundle, role: "design", path: bundle.paths.design });
+  if (!referencesEqual(design.reference, designRevision?.artifact)) {
+    diagnostics.push(changeDiagnostic({
+      code: "design_artifact_mismatch",
+      message: "Design bytes do not match the change bundle artifact revision.",
+      path: bundle.paths.design
+    }));
+  }
+  const decisions = await readMarkdownArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: bundle.paths.decisions,
+    mediaType: "text/markdown",
+    schema: changeDecisionLogSchema
+  });
+  if ("diagnostics" in decisions)
+    return decisions;
+  diagnostics.push(...changeArtifactIdentityDiagnostics({
+    artifactPath: bundle.paths.decisions,
+    actualChangeId: decisions.document.changeId,
+    expectedChangeId: changeId,
+    code: "decision_log_change_id_mismatch",
+    label: "Decision log artifact"
+  }));
+  const decisionRevision = findRevision({ bundle, role: "decision-log", path: bundle.paths.decisions });
+  if (!referencesEqual(decisions.reference, decisionRevision?.artifact)) {
+    diagnostics.push(changeDiagnostic({
+      code: "decision_artifact_mismatch",
+      message: "Decision log bytes do not match the change bundle artifact revision.",
+      path: bundle.paths.decisions
+    }));
+  }
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  return success4({
+    status: "read",
+    bundle,
+    deltaSpecs,
+    design: design.document,
+    decisions: decisions.document.decisions,
+    artifactPath: paths.proposal,
+    reference: proposal.reference,
+    revision: artifactRevisionForContent({
+      role: "proposal",
+      path: paths.proposal,
+      content: proposal.bytes,
+      revision: bundle.revision,
+      mediaType: "application/json",
+      baseGitSha: bundle.baseGitSha
+    })
+  });
+}
+function namesRevision(recorded, expected) {
+  return recorded.artifact.path === expected.artifact.path && recorded.artifact.sha256 === expected.artifact.sha256 && recorded.revision === expected.revision;
+}
+function namesExactly(previous) {
+  return (entry) => namesRevision(entry, previous);
+}
+function namesSuperseded(current) {
+  return (entry) => entry.artifact.path === current.artifact.path && entry.revision < current.revision;
+}
+function substituteSelected(inputs, select, current) {
+  let substituted = false;
+  const next = inputs.map((entry) => {
+    if (!select(entry))
+      return entry;
+    substituted = true;
+    return current;
+  });
+  return { inputs: next, substituted };
+}
+function repointFailure(input) {
+  return failure6(input.status ?? "invalid", [
+    changeDiagnostic({
+      code: "change_inputs_not_repointed",
+      message: `${input.message} Rerun \`legion dev change repoint <changeId>\` to re-point the recorded inputs at the proposal on disk; until then legion ship reports change_traceability_broken for this change.`,
+      path: input.path
+    })
+  ]);
+}
+async function guardedRepointWrite(operation, onFailure) {
+  let written;
+  try {
+    written = await operation();
+  } catch (error51) {
+    return onFailure(error51 instanceof Error ? error51.message : String(error51), "invalid");
+  }
+  if (written.ok)
+    return written;
+  const result = written;
+  return onFailure(result.diagnostics?.[0]?.message ?? "the write failed", result.status === "conflict" ? "conflict" : "invalid");
+}
+async function repointChangeProposalInputs(input) {
+  return repointProposalPins({ ...input, select: namesExactly(input.previous) });
+}
+async function repointProposalPins(input) {
+  const changeId = parseChangeId4(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const repointed = [];
+  const baseGitSha = input.baseGitSha;
+  const current = input.current;
+  const select = input.select;
+  const taskGraph = await readTaskGraph({ repositoryRoot: input.repositoryRoot, changeId });
+  if (!taskGraph.ok) {
+    if (taskGraph.status === "not_found")
+      return { ok: true, repointed: [], diagnostics: [] };
+    return repointFailure({
+      message: "This change's task graph could not be read, so the input that pins the change proposal could not be re-pointed at it.",
+      path: artifactPathForRole({ role: "taskgraph", changeId })
+    });
+  }
+  const graphInputs = substituteSelected(taskGraph.document.artifactInputs, select, current);
+  let taskGraphRevision;
+  if (graphInputs.substituted) {
+    const written2 = await guardedRepointWrite(() => writeTaskGraph({
+      repositoryRoot: input.repositoryRoot,
+      changeId,
+      tasks: taskGraph.document.tasks,
+      artifactInputs: graphInputs.inputs,
+      expectedRevision: taskGraph.document.revision,
+      ...baseGitSha === void 0 ? {} : { baseGitSha }
+    }), (detail, status2) => repointFailure({
+      message: `This change's task graph could not be re-pointed at the change proposal on disk: ${detail}.`,
+      path: taskGraph.artifactPath,
+      status: status2
+    }));
+    if (!written2.ok)
+      return written2;
+    const graphWrite = written2;
+    repointed.push({
+      artifactPath: graphWrite.artifactPath,
+      from: taskGraph.document.revision,
+      to: graphWrite.document.revision,
+      inputs: [current.artifact.path]
+    });
+    taskGraphRevision = graphWrite.revision;
+  }
+  const evidenceIndex = await readEvidenceIndex({ repositoryRoot: input.repositoryRoot, changeId });
+  if (!evidenceIndex.ok) {
+    if (evidenceIndex.status === "not_found") {
+      return verifyProposalPins({ repositoryRoot: input.repositoryRoot, changeId, current, select, repointed });
+    }
+    return repointFailure({
+      message: "This change's evidence index could not be read, so the input that pins the change proposal could not be re-pointed at it.",
+      path: artifactPathForRole({ role: "evidence-index", changeId })
+    });
+  }
+  const substitutedPaths = [];
+  const proposalInputs = substituteSelected(evidenceIndex.document.artifactManifest.inputs, select, current);
+  if (proposalInputs.substituted)
+    substitutedPaths.push(current.artifact.path);
+  let evidenceInputs = proposalInputs.inputs;
+  if (taskGraphRevision !== void 0) {
+    const graphPin = substituteSelected(evidenceInputs, namesExactly(taskGraph.revision), taskGraphRevision);
+    if (graphPin.substituted)
+      substitutedPaths.push(taskGraphRevision.artifact.path);
+    evidenceInputs = graphPin.inputs;
+  }
+  if (substitutedPaths.length === 0) {
+    return verifyProposalPins({ repositoryRoot: input.repositoryRoot, changeId, current, select, repointed });
+  }
+  const written = await guardedRepointWrite(() => writeEvidenceIndex({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    entries: evidenceIndex.document.entries,
+    artifactInputs: evidenceInputs,
+    expectedRevision: evidenceIndex.document.revision,
+    ...baseGitSha === void 0 ? {} : { baseGitSha }
+  }), (detail, status2) => repointFailure({
+    message: `This change's evidence index could not be re-pointed at the change proposal on disk: ${detail}.`,
+    path: evidenceIndex.artifactPath,
+    status: status2
+  }));
+  if (!written.ok)
+    return written;
+  const indexWrite = written;
+  repointed.push({
+    artifactPath: indexWrite.artifactPath,
+    from: evidenceIndex.document.revision,
+    to: indexWrite.document.revision,
+    inputs: substitutedPaths
+  });
+  return verifyProposalPins({ repositoryRoot: input.repositoryRoot, changeId, current, select, repointed });
+}
+async function verifyProposalPins(input) {
+  const stale = [];
+  const taskGraph = await readTaskGraph({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (taskGraph.ok) {
+    for (const entry of taskGraph.document.artifactInputs) {
+      if (input.select(entry))
+        stale.push(`${taskGraph.artifactPath} still names revision ${entry.revision}`);
+    }
+  } else if (taskGraph.status !== "not_found") {
+    stale.push(`${artifactPathForRole({ role: "taskgraph", changeId: input.changeId })} could not be re-read`);
+  }
+  const evidenceIndex = await readEvidenceIndex({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (evidenceIndex.ok) {
+    for (const entry of evidenceIndex.document.artifactManifest.inputs) {
+      if (input.select(entry))
+        stale.push(`${evidenceIndex.artifactPath} still names revision ${entry.revision}`);
+    }
+  } else if (evidenceIndex.status !== "not_found") {
+    stale.push(`${artifactPathForRole({ role: "evidence-index", changeId: input.changeId })} could not be re-read`);
+  }
+  if (stale.length > 0) {
+    return repointFailure({
+      message: `The change proposal is at revision ${input.current.revision} on disk, but ${stale.join(" and ")} \u2014 another writer changed these artifacts while the re-point was running.`,
+      path: input.current.artifact.path,
+      status: "conflict"
+    });
+  }
+  return { ok: true, repointed: input.repointed, diagnostics: [] };
+}
+async function repairChangeProposalPins(input) {
+  const loaded = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (!loaded.ok)
+    return loaded;
+  return repointProposalPins({
+    repositoryRoot: input.repositoryRoot,
+    changeId: loaded.bundle.change.id,
+    previous: loaded.revision,
+    current: loaded.revision,
+    select: namesSuperseded(loaded.revision),
+    ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha }
+  });
+}
+async function updateChangeAcceptance(input) {
+  const changeId = parseChangeId4(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const paths = changePaths(changeId);
+  if (!Number.isInteger(input.expectedRevision) || input.expectedRevision < 1) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a positive integer; a change bundle is created at revision 1.",
+        path: paths.proposal
+      })
+    ]);
+  }
+  const parsedAcceptance = acceptanceStateSchema.safeParse(input.acceptance);
+  if (!parsedAcceptance.success) {
+    return failure6("invalid", parsedAcceptance.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_acceptance",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: paths.proposal
+    })));
+  }
+  const acceptance = parsedAcceptance.data;
+  let baseGitSha;
+  if (input.baseGitSha !== void 0) {
+    const parsed = parseBaseGitSha3(input.baseGitSha, paths.proposal);
+    if (typeof parsed !== "string")
+      return parsed;
+    baseGitSha = parsed;
+  }
+  const updatedAt = parseTimestamp2({
+    value: input.updatedAt,
+    path: paths.proposal,
+    code: "invalid_updated_at"
+  });
+  if (typeof updatedAt !== "string")
+    return updatedAt;
+  const loaded = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
+  if (!loaded.ok)
+    return loaded;
+  if (loaded.bundle.revision !== input.expectedRevision) {
+    return failure6("conflict", [
+      changeDiagnostic({
+        code: "revision_conflict",
+        message: `stale artifact revision: expected ${input.expectedRevision}, current ${loaded.bundle.revision}`,
+        path: paths.proposal
+      })
+    ]);
+  }
+  const repaired = await repairChangeProposalPins({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    ...baseGitSha === void 0 ? {} : { baseGitSha }
+  });
+  if (!repaired.ok)
+    return repaired;
+  if (stableProtocolJson(loaded.bundle.change.acceptance) === stableProtocolJson(acceptance)) {
+    return {
+      ok: true,
+      status: "unchanged",
+      bundle: loaded.bundle,
+      acceptance: loaded.bundle.change.acceptance,
+      artifactPath: loaded.artifactPath,
+      reference: loaded.reference,
+      revision: loaded.revision,
+      repointed: repaired.repointed,
+      diagnostics: []
+    };
+  }
+  const nextBundle = changeBundleSchema.safeParse({
+    ...loaded.bundle,
+    revision: input.expectedRevision + 1,
+    change: {
+      ...loaded.bundle.change,
+      updatedAt,
+      acceptance
+    }
+  });
+  if (!nextBundle.success) {
+    return failure6("invalid", nextBundle.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_change_bundle",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: paths.proposal
+    })));
+  }
+  let write;
+  try {
+    write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: paths.proposal,
+      role: "proposal",
+      content: stableProtocolJson(nextBundle.data),
+      expectedRevision: input.expectedRevision,
+      currentRevision: input.expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      supersedes: loaded.reference
+    });
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure6("conflict", [
+        changeDiagnostic({
+          code: "revision_conflict",
+          message: error51.message,
+          path: paths.proposal
+        })
+      ]);
+    }
+    throw error51;
+  }
+  const repoint2 = await repointChangeProposalInputs({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    previous: loaded.revision,
+    current: write.revision,
+    ...baseGitSha === void 0 ? {} : { baseGitSha }
+  });
+  if (!repoint2.ok) {
+    return { ...repoint2, written: { artifactPath: write.artifactPath, acceptance, revision: write.revision } };
+  }
+  return {
+    ok: true,
+    status: "updated",
+    bundle: nextBundle.data,
+    acceptance,
+    artifactPath: write.artifactPath,
+    reference: write.reference,
+    revision: write.revision,
+    repointed: [...repaired.repointed, ...repoint2.repointed],
+    diagnostics: []
+  };
+}
+async function validateChangeBundle(input) {
+  const loaded = await loadChangeBundle(input);
+  if (!loaded.ok)
+    return loaded;
+  const diagnostics = [];
+  diagnostics.push(...conflictDiagnostics(loaded.bundle.deltas, loaded.bundle.paths.proposal));
+  for (const delta of loaded.bundle.deltas) {
+    if (delta.operation === "add") {
+      const exists = await currentRequirementExists({
+        repositoryRoot: input.repositoryRoot,
+        requirementId: delta.requirementId
+      });
+      if (typeof exists !== "boolean") {
+        diagnostics.push(...exists.diagnostics);
+        continue;
+      }
+      if (exists) {
+        diagnostics.push(changeDiagnostic({
+          code: "add_delta_targets_existing_requirement",
+          message: `Current truth already contains requirement ${delta.requirementId}.`,
+          path: delta.path
+        }));
+      }
+      continue;
+    }
+    if (delta.baseCurrentSpec === void 0) {
+      diagnostics.push(changeDiagnostic({
+        code: "stale_change_base",
+        message: `Current spec base for ${delta.requirementId} is missing from the change bundle.`,
+        path: delta.path
+      }));
+      continue;
+    }
+    const current = await readCurrentSpecByArtifactPath({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: delta.baseCurrentSpec.path
+    });
+    if (!current.ok) {
+      diagnostics.push(changeDiagnostic({
+        code: "stale_change_base",
+        message: `Current spec for ${delta.requirementId} is no longer readable.`,
+        path: delta.path
+      }));
+      continue;
+    }
+    const requirement = current.document.requirements.find((entry) => entry.id === delta.requirementId);
+    const currentRequirementHash = requirement === void 0 ? void 0 : hashContent(stableProtocolJson(requirement));
+    if (!referencesEqual(current.reference, delta.baseCurrentSpec) || current.document.revision !== delta.baseCurrentSpecRevision || currentRequirementHash !== delta.baseRequirementHash) {
+      diagnostics.push(changeDiagnostic({
+        code: "stale_change_base",
+        message: `Current spec base for ${delta.requirementId} changed since this bundle was created.`,
+        path: delta.path
+      }));
+    }
+  }
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  return { ok: true, diagnostics: [] };
+}
+function diffChangeBundle(bundle) {
+  const added = bundle.deltas.filter((delta) => delta.operation === "add").map((delta) => delta.requirementId).sort();
+  const modified = bundle.deltas.filter((delta) => delta.operation === "modify").map((delta) => delta.requirementId).sort();
+  const removed = bundle.deltas.filter((delta) => delta.operation === "remove").map((delta) => delta.requirementId).sort();
+  return { added, modified, removed };
+}
+
+// packages/artifacts/dist/oracles/schema.js
+var ORACLE_ARTIFACT_SCHEMA_VERSION = schemaVersionSchema.parse("0.1.0");
+var oracleArtifactDocumentSchema = strictObject({
+  schemaVersion: schemaVersionSchema,
+  kind: literal("oracle-artifact"),
+  revision: number2().int().positive(),
+  oracle: oracleSchema
+});
+var oracleManifestSchema = strictObject({
+  schemaVersion: schemaVersionSchema,
+  kind: literal("oracle-manifest"),
+  changeId: changeIdSchema,
+  oracles: array(artifactRevisionSchema),
+  manifestHash: contentHashSchema
+});
+function jsonSchemaDocument10(id, title, schema) {
+  return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: id,
+    title,
+    ...toJSONSchema(schema)
+  };
+}
+var oracleArtifactJsonSchema = jsonSchemaDocument10("https://schemas.9thlevelsoftware.com/legion/artifacts/oracle-artifact.schema.json", "Legion oracle artifact schema", oracleArtifactDocumentSchema);
+var oracleManifestJsonSchema = jsonSchemaDocument10("https://schemas.9thlevelsoftware.com/legion/artifacts/oracle-manifest.schema.json", "Legion oracle manifest schema", oracleManifestSchema);
+
+// packages/artifacts/dist/oracles/service.js
+import { readdir as readdir4 } from "node:fs/promises";
+import path12 from "node:path";
+var INVALID_ORACLE_PATH = ".legion/project/changes/invalid-change/oracle/invalid.yaml";
+function compareStrings4(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function compareOracleRevisions(left, right) {
+  return compareStrings4(left.artifact.path, right.artifact.path) || compareStrings4(left.artifact.sha256, right.artifact.sha256);
+}
+function failure7(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function oracleDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_ORACLE_PATH
+  });
+}
+function schemaDiagnostics4(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [oracleDiagnostic({ code: input.code, message: "Oracle artifact failed schema validation.", path: input.path })];
+  }
+  return input.issues.map((issue2) => oracleDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
+}
+function parseChangeId5(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
+      code: "invalid_change_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseOracleId2(input, path51) {
+  const parsed = oracleIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
+      code: "invalid_oracle_id",
+      message: issue2.message,
+      path: path51
+    })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha4(input, path51) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: path51
+    })));
+  }
+  return parsed.data;
+}
+function oraclePath(changeId, oracleId) {
+  return artifactPathForRole({ role: "oracle", changeId, oracleId });
+}
+function normalizeOracle(input) {
+  const parsed = oracleSchema.safeParse(input.oracle);
+  if (!parsed.success) {
+    return failure7("invalid", schemaDiagnostics4({ code: "invalid_oracle", path: input.artifactPath, issues: parsed.error.issues }));
+  }
+  const diagnostics = [];
+  for (const protectedPath of parsed.data.protectedPaths) {
+    try {
+      canonicalProjectArtifactPath(protectedPath);
+    } catch (error51) {
+      diagnostics.push(oracleDiagnostic({
+        code: "invalid_protected_path",
+        message: error51 instanceof Error ? error51.message : String(error51),
+        path: input.artifactPath
+      }));
+    }
+  }
+  if (diagnostics.length > 0)
+    return failure7("invalid", diagnostics);
+  return parsed.data;
+}
+function oracleArtifactDocument(input) {
+  const parsed = oracleArtifactDocumentSchema.safeParse({
+    schemaVersion: ORACLE_ARTIFACT_SCHEMA_VERSION,
+    kind: "oracle-artifact",
+    revision: input.revision,
+    oracle: input.oracle
+  });
+  if (!parsed.success) {
+    return failure7("invalid", schemaDiagnostics4({ code: "invalid_oracle_artifact", path: input.artifactPath, issues: parsed.error.issues }));
+  }
+  return parsed.data;
+}
+function manifestFor(changeId, oracles) {
+  const sortedOracles = [...oracles].sort(compareOracleRevisions);
+  const manifestInput = {
+    schemaVersion: ORACLE_ARTIFACT_SCHEMA_VERSION,
+    kind: "oracle-manifest",
+    changeId,
+    oracles: sortedOracles
+  };
+  return oracleManifestSchema.parse({
+    ...manifestInput,
+    manifestHash: hashContent(stableProtocolJson(manifestInput))
+  });
+}
+async function writeOracleArtifact(input) {
+  const artifactDocument = oracleArtifactDocument({
+    oracle: input.oracle,
+    revision: input.currentRevision + 1,
+    artifactPath: input.artifactPath
+  });
+  if ("diagnostics" in artifactDocument)
+    return artifactDocument;
+  const content = stableProtocolJson(artifactDocument);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath,
+      role: "oracle",
+      content,
+      expectedRevision: input.expectedRevision,
+      currentRevision: input.currentRevision,
+      mediaType: "application/json",
+      ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha },
+      ...input.supersedes === void 0 ? {} : { supersedes: input.supersedes }
+    });
+    return {
+      ok: true,
+      status: input.status,
+      document: input.oracle,
+      artifactDocument,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure7("conflict", [
+        oracleDiagnostic({
+          code: "revision_conflict",
+          message: error51.message,
+          path: input.artifactPath
+        })
+      ]);
+    }
+    throw error51;
+  }
+}
+async function createOracleArtifact(input) {
+  const changeId = parseChangeId5(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const oracleId = parseOracleId2(input.oracle.id, INVALID_ORACLE_PATH);
+  if (typeof oracleId !== "string")
+    return oracleId;
+  const artifactPath = oraclePath(changeId, oracleId);
+  const oracle = normalizeOracle({ oracle: input.oracle, artifactPath });
+  if ("diagnostics" in oracle)
+    return oracle;
+  const baseGitSha = parseBaseGitSha4(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  return writeOracleArtifact({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    oracle,
+    artifactPath,
+    expectedRevision: 0,
+    currentRevision: 0,
+    ...baseGitSha === void 0 ? {} : { baseGitSha },
+    status: "created"
+  });
+}
+async function readOracleArtifact(input) {
+  const changeId = parseChangeId5(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const oracleId = parseOracleId2(input.oracleId, INVALID_ORACLE_PATH);
+  if (typeof oracleId !== "string")
+    return oracleId;
+  const artifactPath = oraclePath(changeId, oracleId);
+  const read = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath,
+    schema: oracleArtifactDocumentSchema
+  });
+  if (!read.ok) {
+    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    return failure7(status2, read.diagnostics);
+  }
+  if (read.value.oracle.id !== oracleId) {
+    return failure7("invalid", [
+      oracleDiagnostic({
+        code: "oracle_id_mismatch",
+        message: `Oracle artifact contains ${read.value.oracle.id}, not requested oracle ${oracleId}.`,
+        path: artifactPath
+      })
+    ]);
+  }
+  return {
+    ok: true,
+    status: "read",
+    document: read.value.oracle,
+    artifactDocument: read.value,
+    artifactPath,
+    reference: read.reference,
+    revision: artifactRevisionForContent({
+      role: "oracle",
+      path: artifactPath,
+      content: read.bytes,
+      revision: read.value.revision,
+      mediaType: "application/json"
+    }),
+    diagnostics: []
+  };
+}
+async function deriveOracleManifest(input) {
+  const changeId = parseChangeId5(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const oracleDirectory = path12.join(input.repositoryRoot, PROJECT_ARTIFACT_PATHS.changes, changeId, "oracle");
+  let entries;
+  try {
+    entries = await readdir4(oracleDirectory, { withFileTypes: true });
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
+      return {
+        ok: true,
+        status: "derived",
+        manifest: manifestFor(changeId, []),
+        diagnostics: []
+      };
+    }
+    throw error51;
+  }
+  const oracleRevisions = [];
+  for (const fileName of entries.filter((entry) => entry.isFile() && entry.name.endsWith(".yaml")).map((entry) => entry.name).sort(compareStrings4)) {
+    const oracleArtifactPath = `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/oracle/${fileName}`;
+    const oracleId = parseOracleId2(fileName.slice(0, -".yaml".length), oracleArtifactPath);
+    if (typeof oracleId !== "string")
+      return oracleId;
+    const oracle = await readOracleArtifact({
+      repositoryRoot: input.repositoryRoot,
+      changeId,
+      oracleId
+    });
+    if (!oracle.ok)
+      return oracle;
+    oracleRevisions.push(oracle.revision);
+  }
+  return {
+    ok: true,
+    status: "derived",
+    manifest: manifestFor(changeId, oracleRevisions),
     diagnostics: []
   };
 }
@@ -30769,13 +31494,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path47) {
+function assertExpectedRevision3(value, path51) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path47
+        path: path51
       })
     ]);
   }
@@ -30955,7 +31680,7 @@ async function listTaskRunsForChange(input) {
     entries = await readdir5(runsRoot, { withFileTypes: true });
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
-      return { ok: true, status: "read", taskRuns: [], diagnostics: [] };
+      return { ok: true, status: "read", taskRuns: [], skipped: [], diagnostics: [] };
     }
     const message = error51 instanceof Error ? error51.message : String(error51);
     return failure8("invalid", [
@@ -30967,17 +31692,22 @@ async function listTaskRunsForChange(input) {
     ]);
   }
   const taskRuns = [];
+  const skipped = [];
   for (const entry of entries.filter((candidate) => candidate.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
     const runId = runIdSchema.safeParse(entry.name);
-    if (!runId.success)
+    if (!runId.success) {
+      skipped.push(entry.name);
       continue;
+    }
     const read = await readTaskRun({
       repositoryRoot: input.repositoryRoot,
       changeId,
       runId: runId.data
     });
-    if (!read.ok)
+    if (!read.ok) {
+      skipped.push(entry.name);
       continue;
+    }
     taskRuns.push(read);
   }
   taskRuns.sort((left, right) => {
@@ -30986,7 +31716,7 @@ async function listTaskRunsForChange(input) {
       return byCreatedAt;
     return left.document.id.localeCompare(right.document.id);
   });
-  return { ok: true, status: "read", taskRuns, diagnostics: [] };
+  return { ok: true, status: "read", taskRuns, skipped, diagnostics: [] };
 }
 
 // packages/artifacts/dist/reviews/service.js
@@ -31047,13 +31777,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path47) {
+function assertExpectedRevision4(value, path51) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path47
+        path: path51
       })
     ]);
   }
@@ -31233,7 +31963,7 @@ async function listReviewDecisionsForChange(input) {
     entries = await readdir6(reviewsRoot, { withFileTypes: true });
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
-      return { ok: true, status: "read", reviews: [], diagnostics: [] };
+      return { ok: true, status: "read", reviews: [], skipped: [], diagnostics: [] };
     }
     const message = error51 instanceof Error ? error51.message : String(error51);
     return failure9("invalid", [
@@ -31245,19 +31975,26 @@ async function listReviewDecisionsForChange(input) {
     ]);
   }
   const reviews = [];
+  const skipped = [];
   for (const entry of entries.filter((candidate) => candidate.isFile()).sort((left, right) => left.name.localeCompare(right.name))) {
-    if (!entry.name.endsWith(".json"))
+    if (!entry.name.endsWith(".json")) {
+      skipped.push(entry.name);
       continue;
+    }
     const reviewId = reviewIdSchema.safeParse(entry.name.slice(0, -".json".length));
-    if (!reviewId.success)
+    if (!reviewId.success) {
+      skipped.push(entry.name);
       continue;
+    }
     const read = await readReviewDecision({
       repositoryRoot: input.repositoryRoot,
       changeId,
       reviewId: reviewId.data
     });
-    if (!read.ok)
+    if (!read.ok) {
+      skipped.push(entry.name);
       continue;
+    }
     reviews.push(read);
   }
   reviews.sort((left, right) => {
@@ -31266,7 +32003,770 @@ async function listReviewDecisionsForChange(input) {
       return byCreatedAt;
     return left.document.id.localeCompare(right.document.id);
   });
-  return { ok: true, status: "read", reviews, diagnostics: [] };
+  return { ok: true, status: "read", reviews, skipped, diagnostics: [] };
+}
+
+// packages/artifacts/dist/approvals/service.js
+import { readdir as readdir7 } from "node:fs/promises";
+import path15 from "node:path";
+var INVALID_APPROVAL_PATH = ".legion/project/changes/invalid-change/approvals/invalid-approval.json";
+var ARTIFACT_REVISION_METADATA_KEY3 = "artifact_revision";
+function failure10(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function approvalDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_APPROVAL_PATH
+  });
+}
+function schemaDiagnostics7(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [approvalDiagnostic({ code: input.code, message: "Approval failed schema validation.", path: input.path })];
+  }
+  return input.issues.map((issue2) => approvalDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
+}
+function parseChangeId8(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure10("invalid", parsed.error.issues.map((issue2) => approvalDiagnostic({
+      code: "invalid_change_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseApprovalId2(input) {
+  const parsed = approvalIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure10("invalid", parsed.error.issues.map((issue2) => approvalDiagnostic({
+      code: "invalid_approval_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha7(input, artifactPath) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure10("invalid", parsed.error.issues.map((issue2) => approvalDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: artifactPath
+    })));
+  }
+  return parsed.data;
+}
+function assertExpectedRevision5(value, path51) {
+  if (!Number.isInteger(value) || value < 0) {
+    return failure10("invalid", [
+      approvalDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a non-negative integer.",
+        path: path51
+      })
+    ]);
+  }
+  return void 0;
+}
+function approvalPath(changeId, approvalId) {
+  return artifactPathForRole({ role: "approval", changeId, approvalId });
+}
+function storeArtifactRevision3(document, revision) {
+  const parsed = approvalSchema.safeParse({
+    ...document,
+    metadata: {
+      ...document.metadata ?? {},
+      attributes: {
+        ...document.metadata?.attributes ?? {},
+        [ARTIFACT_REVISION_METADATA_KEY3]: revision
+      }
+    }
+  });
+  if (!parsed.success) {
+    return failure10("invalid", schemaDiagnostics7({
+      code: "invalid_approval",
+      path: approvalPath(document.changeId, document.id),
+      issues: parsed.error.issues
+    }));
+  }
+  return parsed.data;
+}
+function storedArtifactRevision3(document) {
+  const value = document.metadata?.attributes?.[ARTIFACT_REVISION_METADATA_KEY3];
+  if (typeof value === "number" && Number.isInteger(value) && value > 0)
+    return value;
+  return 1;
+}
+function identityDiagnostics3(input) {
+  const diagnostics = [];
+  if (input.document.changeId !== input.changeId) {
+    diagnostics.push(approvalDiagnostic({
+      code: "approval_change_mismatch",
+      message: `Approval change ID ${input.document.changeId} does not match requested change ${input.changeId}.`,
+      path: input.artifactPath
+    }));
+  }
+  if (input.document.id !== input.approvalId) {
+    diagnostics.push(approvalDiagnostic({
+      code: "approval_id_mismatch",
+      message: `Approval ID ${input.document.id} does not match requested approval ${input.approvalId}.`,
+      path: input.artifactPath
+    }));
+  }
+  return diagnostics;
+}
+async function writeApproval(input) {
+  const parsed = approvalSchema.safeParse(input.document);
+  if (!parsed.success) {
+    return failure10("invalid", schemaDiagnostics7({
+      code: "invalid_approval",
+      path: INVALID_APPROVAL_PATH,
+      issues: parsed.error.issues
+    }));
+  }
+  const artifactPath = approvalPath(parsed.data.changeId, parsed.data.id);
+  const expectedRevision = input.expectedRevision ?? 0;
+  const revisionError = assertExpectedRevision5(expectedRevision, artifactPath);
+  if (revisionError !== void 0)
+    return revisionError;
+  const baseGitSha = parseBaseGitSha7(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  let supersedes;
+  if (expectedRevision > 0) {
+    const current = await readApproval({
+      repositoryRoot: input.repositoryRoot,
+      changeId: parsed.data.changeId,
+      approvalId: parsed.data.id
+    });
+    if (!current.ok)
+      return current;
+    if (current.revision.revision !== expectedRevision) {
+      return failure10("conflict", [
+        approvalDiagnostic({
+          code: "revision_conflict",
+          message: `stale artifact revision: expected ${expectedRevision}, current ${current.revision.revision}`,
+          path: artifactPath
+        })
+      ]);
+    }
+    supersedes = current.reference;
+  }
+  const document = storeArtifactRevision3(parsed.data, expectedRevision + 1);
+  if ("diagnostics" in document)
+    return document;
+  const content = stableProtocolJson(document);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath,
+      role: "approval",
+      content,
+      expectedRevision,
+      currentRevision: expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      ...supersedes === void 0 ? {} : { supersedes }
+    });
+    return {
+      ok: true,
+      status: expectedRevision === 0 ? "created" : "updated",
+      document,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure10("conflict", [
+        approvalDiagnostic({
+          code: "revision_conflict",
+          message: error51.message,
+          path: artifactPath
+        })
+      ]);
+    }
+    throw error51;
+  }
+}
+async function readApproval(input) {
+  const changeId = parseChangeId8(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const approvalId = parseApprovalId2(input.approvalId);
+  if (typeof approvalId !== "string")
+    return approvalId;
+  const artifactPath = approvalPath(changeId, approvalId);
+  const read = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath,
+    schema: approvalSchema
+  });
+  if (!read.ok) {
+    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    return failure10(status2, read.diagnostics);
+  }
+  const diagnostics = identityDiagnostics3({
+    document: read.value,
+    changeId,
+    approvalId,
+    artifactPath
+  });
+  if (diagnostics.length > 0)
+    return failure10("invalid", diagnostics);
+  const storedRevision = storedArtifactRevision3(read.value);
+  return {
+    ok: true,
+    status: "read",
+    document: read.value,
+    artifactPath,
+    reference: read.reference,
+    revision: artifactRevisionForContent({
+      role: "approval",
+      path: artifactPath,
+      content: read.bytes,
+      revision: storedRevision,
+      mediaType: "application/json"
+    }),
+    diagnostics: []
+  };
+}
+async function listApprovalsForChange(input) {
+  const changeId = parseChangeId8(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const approvalsRoot = path15.join(input.repositoryRoot, ".legion", "project", "changes", changeId, "approvals");
+  let entries;
+  try {
+    entries = await readdir7(approvalsRoot, { withFileTypes: true });
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
+      return { ok: true, status: "read", approvals: [], skipped: [], diagnostics: [] };
+    }
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return failure10("invalid", [
+      approvalDiagnostic({
+        code: "approval_discovery_failed",
+        message,
+        path: ".legion/project/changes/invalid-change/approvals"
+      })
+    ]);
+  }
+  const approvals = [];
+  const skipped = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) {
+      skipped.push(entry.name);
+      continue;
+    }
+    const approvalId = approvalIdSchema.safeParse(entry.name.slice(0, -".json".length));
+    if (!approvalId.success) {
+      skipped.push(entry.name);
+      continue;
+    }
+    const read = await readApproval({
+      repositoryRoot: input.repositoryRoot,
+      changeId,
+      approvalId: approvalId.data
+    });
+    if (!read.ok) {
+      skipped.push(entry.name);
+      continue;
+    }
+    approvals.push(read);
+  }
+  approvals.sort((left, right) => {
+    const byCreatedAt = left.document.createdAt.localeCompare(right.document.createdAt);
+    if (byCreatedAt !== 0)
+      return byCreatedAt;
+    return left.document.id.localeCompare(right.document.id);
+  });
+  return { ok: true, status: "read", approvals, skipped, diagnostics: [] };
+}
+
+// packages/artifacts/dist/attestations/service.js
+import { readdir as readdir8 } from "node:fs/promises";
+import path16 from "node:path";
+var INVALID_ATTESTATION_PATH = ".legion/project/changes/invalid-change/attestations/invalid-attestation.json";
+var ARTIFACT_REVISION_METADATA_KEY4 = "artifact_revision";
+function failure11(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function attestationDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_ATTESTATION_PATH
+  });
+}
+function schemaDiagnostics8(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [
+      attestationDiagnostic({
+        code: input.code,
+        message: "Attestation failed schema validation.",
+        path: input.path
+      })
+    ];
+  }
+  return input.issues.map((issue2) => attestationDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
+}
+function parseChangeId9(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure11("invalid", parsed.error.issues.map((issue2) => attestationDiagnostic({ code: "invalid_change_id", message: issue2.message })));
+  }
+  return parsed.data;
+}
+function parseAttestationId2(input) {
+  const parsed = attestationIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure11("invalid", parsed.error.issues.map((issue2) => attestationDiagnostic({ code: "invalid_attestation_id", message: issue2.message })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha8(input, artifactPath) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure11("invalid", parsed.error.issues.map((issue2) => attestationDiagnostic({ code: "invalid_base_git_sha", message: issue2.message, path: artifactPath })));
+  }
+  return parsed.data;
+}
+function assertExpectedRevision6(value, artifactPath) {
+  if (!Number.isInteger(value) || value < 0) {
+    return failure11("invalid", [
+      attestationDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a non-negative integer.",
+        path: artifactPath
+      })
+    ]);
+  }
+  return void 0;
+}
+function attestationPath(changeId, attestationId) {
+  return artifactPathForRole({ role: "attestation", changeId, attestationId });
+}
+function storeArtifactRevision4(document, revision) {
+  const parsed = attestationSchema.safeParse({
+    ...document,
+    metadata: {
+      ...document.metadata ?? {},
+      attributes: {
+        ...document.metadata?.attributes ?? {},
+        [ARTIFACT_REVISION_METADATA_KEY4]: revision
+      }
+    }
+  });
+  if (!parsed.success) {
+    return failure11("invalid", schemaDiagnostics8({
+      code: "invalid_attestation",
+      path: attestationPath(document.changeId, document.id),
+      issues: parsed.error.issues
+    }));
+  }
+  return parsed.data;
+}
+function storedArtifactRevision4(document) {
+  const value = document.metadata?.attributes?.[ARTIFACT_REVISION_METADATA_KEY4];
+  if (typeof value === "number" && Number.isInteger(value) && value > 0)
+    return value;
+  return 1;
+}
+function identityDiagnostics4(input) {
+  const diagnostics = [];
+  if (input.document.changeId !== input.changeId) {
+    diagnostics.push(attestationDiagnostic({
+      code: "attestation_change_mismatch",
+      message: `Attestation change ID ${input.document.changeId} does not match requested change ${input.changeId}.`,
+      path: input.artifactPath
+    }));
+  }
+  if (input.document.id !== input.attestationId) {
+    diagnostics.push(attestationDiagnostic({
+      code: "attestation_id_mismatch",
+      message: `Attestation ID ${input.document.id} does not match requested attestation ${input.attestationId}.`,
+      path: input.artifactPath
+    }));
+  }
+  return diagnostics;
+}
+async function writeAttestation(input) {
+  const parsed = attestationSchema.safeParse(input.document);
+  if (!parsed.success) {
+    return failure11("invalid", schemaDiagnostics8({
+      code: "invalid_attestation",
+      path: INVALID_ATTESTATION_PATH,
+      issues: parsed.error.issues
+    }));
+  }
+  const artifactPath = attestationPath(parsed.data.changeId, parsed.data.id);
+  const expectedRevision = input.expectedRevision ?? 0;
+  const revisionError = assertExpectedRevision6(expectedRevision, artifactPath);
+  if (revisionError !== void 0)
+    return revisionError;
+  const baseGitSha = parseBaseGitSha8(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  let supersedes;
+  if (expectedRevision > 0) {
+    const current = await readAttestation({
+      repositoryRoot: input.repositoryRoot,
+      changeId: parsed.data.changeId,
+      attestationId: parsed.data.id
+    });
+    if (!current.ok)
+      return current;
+    if (current.revision.revision !== expectedRevision) {
+      return failure11("conflict", [
+        attestationDiagnostic({
+          code: "revision_conflict",
+          message: `stale artifact revision: expected ${expectedRevision}, current ${current.revision.revision}`,
+          path: artifactPath
+        })
+      ]);
+    }
+    supersedes = current.reference;
+  }
+  const document = storeArtifactRevision4(parsed.data, expectedRevision + 1);
+  if ("diagnostics" in document)
+    return document;
+  const content = stableProtocolJson(document);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath,
+      role: "attestation",
+      content,
+      expectedRevision,
+      currentRevision: expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      ...supersedes === void 0 ? {} : { supersedes }
+    });
+    return {
+      ok: true,
+      status: expectedRevision === 0 ? "created" : "updated",
+      document,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure11("conflict", [
+        attestationDiagnostic({ code: "revision_conflict", message: error51.message, path: artifactPath })
+      ]);
+    }
+    throw error51;
+  }
+}
+async function readAttestation(input) {
+  const changeId = parseChangeId9(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const attestationId = parseAttestationId2(input.attestationId);
+  if (typeof attestationId !== "string")
+    return attestationId;
+  const artifactPath = attestationPath(changeId, attestationId);
+  const read = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath,
+    schema: attestationSchema
+  });
+  if (!read.ok) {
+    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    return failure11(status2, read.diagnostics);
+  }
+  const diagnostics = identityDiagnostics4({
+    document: read.value,
+    changeId,
+    attestationId,
+    artifactPath
+  });
+  if (diagnostics.length > 0)
+    return failure11("invalid", diagnostics);
+  const storedRevision = storedArtifactRevision4(read.value);
+  return {
+    ok: true,
+    status: "read",
+    document: read.value,
+    artifactPath,
+    reference: read.reference,
+    revision: artifactRevisionForContent({
+      role: "attestation",
+      path: artifactPath,
+      content: read.bytes,
+      revision: storedRevision,
+      mediaType: "application/json"
+    }),
+    diagnostics: []
+  };
+}
+async function listAttestationsForChange(input) {
+  const changeId = parseChangeId9(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const attestationsRoot = path16.join(input.repositoryRoot, ".legion", "project", "changes", changeId, "attestations");
+  let entries;
+  try {
+    entries = await readdir8(attestationsRoot, { withFileTypes: true });
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
+      return { ok: true, status: "read", attestations: [], skipped: [], diagnostics: [] };
+    }
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return failure11("invalid", [
+      attestationDiagnostic({
+        code: "attestation_discovery_failed",
+        message,
+        path: ".legion/project/changes/invalid-change/attestations"
+      })
+    ]);
+  }
+  const attestations = [];
+  const skipped = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) {
+      skipped.push(entry.name);
+      continue;
+    }
+    const attestationId = attestationIdSchema.safeParse(entry.name.slice(0, -".json".length));
+    if (!attestationId.success) {
+      skipped.push(entry.name);
+      continue;
+    }
+    const read = await readAttestation({
+      repositoryRoot: input.repositoryRoot,
+      changeId,
+      attestationId: attestationId.data
+    });
+    if (!read.ok) {
+      skipped.push(entry.name);
+      continue;
+    }
+    attestations.push(read);
+  }
+  attestations.sort((left, right) => {
+    const byCreatedAt = left.document.createdAt.localeCompare(right.document.createdAt);
+    if (byCreatedAt !== 0)
+      return byCreatedAt;
+    return left.document.id.localeCompare(right.document.id);
+  });
+  return { ok: true, status: "read", attestations, skipped, diagnostics: [] };
+}
+
+// packages/artifacts/dist/releases/service.js
+var INVALID_RELEASE_PATH = ".legion/project/changes/invalid-change/release.json";
+var ARTIFACT_REVISION_METADATA_KEY5 = "artifact_revision";
+function failure12(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function releaseDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_RELEASE_PATH
+  });
+}
+function schemaDiagnostics9(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [
+      releaseDiagnostic({
+        code: input.code,
+        message: "Release failed schema validation.",
+        path: input.path
+      })
+    ];
+  }
+  return input.issues.map((issue2) => releaseDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
+}
+function parseChangeId10(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure12("invalid", parsed.error.issues.map((issue2) => releaseDiagnostic({ code: "invalid_change_id", message: issue2.message })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha9(input, artifactPath) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure12("invalid", parsed.error.issues.map((issue2) => releaseDiagnostic({ code: "invalid_base_git_sha", message: issue2.message, path: artifactPath })));
+  }
+  return parsed.data;
+}
+function assertExpectedRevision7(value, artifactPath) {
+  if (!Number.isInteger(value) || value < 0) {
+    return failure12("invalid", [
+      releaseDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a non-negative integer.",
+        path: artifactPath
+      })
+    ]);
+  }
+  return void 0;
+}
+function releasePath(changeId) {
+  return artifactPathForRole({ role: "release", changeId });
+}
+function storeArtifactRevision5(document, revision) {
+  const parsed = releaseSchema.safeParse({
+    ...document,
+    metadata: {
+      ...document.metadata ?? {},
+      attributes: {
+        ...document.metadata?.attributes ?? {},
+        [ARTIFACT_REVISION_METADATA_KEY5]: revision
+      }
+    }
+  });
+  if (!parsed.success) {
+    return failure12("invalid", schemaDiagnostics9({
+      code: "invalid_release",
+      path: releasePath(document.changeId),
+      issues: parsed.error.issues
+    }));
+  }
+  return parsed.data;
+}
+function storedArtifactRevision5(document) {
+  const value = document.metadata?.attributes?.[ARTIFACT_REVISION_METADATA_KEY5];
+  if (typeof value === "number" && Number.isInteger(value) && value > 0)
+    return value;
+  return 1;
+}
+async function writeRelease(input) {
+  const parsed = releaseSchema.safeParse(input.document);
+  if (!parsed.success) {
+    return failure12("invalid", schemaDiagnostics9({
+      code: "invalid_release",
+      path: INVALID_RELEASE_PATH,
+      issues: parsed.error.issues
+    }));
+  }
+  const artifactPath = releasePath(parsed.data.changeId);
+  const expectedRevision = input.expectedRevision ?? 0;
+  const revisionError = assertExpectedRevision7(expectedRevision, artifactPath);
+  if (revisionError !== void 0)
+    return revisionError;
+  const baseGitSha = parseBaseGitSha9(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  let supersedes;
+  if (expectedRevision > 0) {
+    const current = await readRelease({
+      repositoryRoot: input.repositoryRoot,
+      changeId: parsed.data.changeId
+    });
+    if (!current.ok)
+      return current;
+    if (current.revision.revision !== expectedRevision) {
+      return failure12("conflict", [
+        releaseDiagnostic({
+          code: "revision_conflict",
+          message: `stale artifact revision: expected ${expectedRevision}, current ${current.revision.revision}`,
+          path: artifactPath
+        })
+      ]);
+    }
+    supersedes = current.reference;
+  }
+  const document = storeArtifactRevision5(parsed.data, expectedRevision + 1);
+  if ("diagnostics" in document)
+    return document;
+  const content = stableProtocolJson(document);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath,
+      role: "release",
+      content,
+      expectedRevision,
+      currentRevision: expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      ...supersedes === void 0 ? {} : { supersedes }
+    });
+    return {
+      ok: true,
+      status: expectedRevision === 0 ? "created" : "updated",
+      document,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure12("conflict", [
+        releaseDiagnostic({ code: "revision_conflict", message: error51.message, path: artifactPath })
+      ]);
+    }
+    throw error51;
+  }
+}
+async function readRelease(input) {
+  const changeId = parseChangeId10(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const artifactPath = releasePath(changeId);
+  const read = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath,
+    schema: releaseSchema
+  });
+  if (!read.ok) {
+    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    return failure12(status2, read.diagnostics);
+  }
+  if (read.value.changeId !== changeId) {
+    return failure12("invalid", [
+      releaseDiagnostic({
+        code: "release_change_mismatch",
+        message: `Release change ID ${read.value.changeId} does not match requested change ${changeId}.`,
+        path: artifactPath
+      })
+    ]);
+  }
+  const storedRevision = storedArtifactRevision5(read.value);
+  return {
+    ok: true,
+    status: "read",
+    document: read.value,
+    artifactPath,
+    reference: read.reference,
+    revision: artifactRevisionForContent({
+      role: "release",
+      path: artifactPath,
+      content: read.bytes,
+      revision: storedRevision,
+      mediaType: "application/json"
+    }),
+    diagnostics: []
+  };
 }
 
 // packages/artifacts/dist/traceability/service.js
@@ -31294,8 +32794,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path47) {
-  return nodeId("artifact", path47);
+function artifactNodeId(path51) {
+  return nodeId("artifact", path51);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -31304,7 +32804,7 @@ function traceabilityDiagnostic(input) {
     path: input.path ?? INVALID_TRACEABILITY_PATH
   });
 }
-function failure10(status2, diagnostics, report) {
+function failure13(status2, diagnostics, report) {
   return {
     ok: false,
     status: status2,
@@ -31312,10 +32812,10 @@ function failure10(status2, diagnostics, report) {
     ...report === void 0 ? {} : { report }
   };
 }
-function parseChangeId8(input) {
+function parseChangeId11(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure10("invalid", parsed.error.issues.map((issue2) => traceabilityDiagnostic({
+    return failure13("invalid", parsed.error.issues.map((issue2) => traceabilityDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
@@ -31331,8 +32831,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path47) {
-  const fileName = path47.split("/").at(-1);
+function oracleIdFromPath(path51) {
+  const fileName = path51.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -31447,13 +32947,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path47 = [];
+  const path51 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path47.indexOf(node);
+      const cycleStartIndex = path51.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path47.length; index++) {
-          const cyclicNode = path47[index];
+        for (let index = cycleStartIndex; index < path51.length; index++) {
+          const cyclicNode = path51[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -31463,11 +32963,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path47.push(node);
+    path51.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path47.pop();
+    path51.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -31495,10 +32995,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path47 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path51 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path47,
+        path: path51,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -31966,12 +33466,12 @@ function validateEvidenceTraceTargets(input) {
 async function loadOracles(input) {
   const manifest = await deriveOracleManifest(input);
   if (!manifest.ok)
-    return failure10(manifest.status === "not_found" ? "not_found" : "invalid", manifest.diagnostics);
+    return failure13(manifest.status === "not_found" ? "not_found" : "invalid", manifest.diagnostics);
   const oracles = [];
   for (const revision of manifest.manifest.oracles) {
     const oracleId = oracleIdFromPath(revision.artifact.path);
     if (oracleId === void 0) {
-      return failure10("invalid", [
+      return failure13("invalid", [
         traceabilityDiagnostic({
           code: "invalid_oracle_manifest_path",
           message: `Oracle manifest contains a path that does not end in an oracle ID: ${revision.artifact.path}.`,
@@ -31985,7 +33485,7 @@ async function loadOracles(input) {
       oracleId
     });
     if (!oracle.ok)
-      return failure10(oracle.status === "not_found" ? "not_found" : "invalid", oracle.diagnostics);
+      return failure13(oracle.status === "not_found" ? "not_found" : "invalid", oracle.diagnostics);
     oracles.push(oracle);
   }
   return oracles.sort((left, right) => compareStrings5(left.document.id, right.document.id));
@@ -31993,17 +33493,17 @@ async function loadOracles(input) {
 async function loadTraceabilityArtifacts(input) {
   const change = await loadChangeBundle(input);
   if (!change.ok)
-    return failure10(change.status === "not_found" ? "not_found" : "invalid", change.diagnostics);
+    return failure13(change.status === "not_found" ? "not_found" : "invalid", change.diagnostics);
   const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
   if (!currentSpecs.ok)
-    return failure10(currentSpecs.status === "not_found" ? "not_found" : "invalid", currentSpecs.diagnostics);
+    return failure13(currentSpecs.status === "not_found" ? "not_found" : "invalid", currentSpecs.diagnostics);
   const oracles = await loadOracles(input);
   if ("diagnostics" in oracles)
     return oracles;
   const taskGraph = await readTaskGraph(input);
   if (!taskGraph.ok) {
     if (taskGraph.status === "not_found") {
-      return failure10("invalid", [
+      return failure13("invalid", [
         traceabilityDiagnostic({
           code: "missing_taskgraph",
           message: `Change ${input.changeId} has no taskgraph artifact.`,
@@ -32011,12 +33511,12 @@ async function loadTraceabilityArtifacts(input) {
         })
       ]);
     }
-    return failure10("invalid", taskGraph.diagnostics);
+    return failure13("invalid", taskGraph.diagnostics);
   }
   const evidenceIndex = await readEvidenceIndex(input);
   if (!evidenceIndex.ok) {
     if (evidenceIndex.status === "not_found") {
-      return failure10("invalid", [
+      return failure13("invalid", [
         traceabilityDiagnostic({
           code: "missing_evidence_index",
           message: `Change ${input.changeId} has no evidence-index artifact.`,
@@ -32024,7 +33524,7 @@ async function loadTraceabilityArtifacts(input) {
         })
       ]);
     }
-    return failure10("invalid", evidenceIndex.diagnostics);
+    return failure13("invalid", evidenceIndex.diagnostics);
   }
   return { currentSpecs, change, oracles, taskGraph, evidenceIndex };
 }
@@ -32040,7 +33540,7 @@ function partitionTraceabilityDiagnostics(diagnostics, options = {}) {
   };
 }
 async function validateChangeTraceability(input) {
-  const changeId = parseChangeId8(input.changeId);
+  const changeId = parseChangeId11(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const loaded = await loadTraceabilityArtifacts({
@@ -32051,7 +33551,7 @@ async function validateChangeTraceability(input) {
     return loaded;
   const report = buildGraph(loaded);
   if (report.diagnostics.length > 0)
-    return failure10("invalid", report.diagnostics, report);
+    return failure13("invalid", report.diagnostics, report);
   return {
     ok: true,
     status: "validated",
@@ -32135,7 +33635,7 @@ var INVALID_ARCHIVE_PATH = ".legion/project/changes/invalid-change/archive.json"
 function compareStrings6(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
-function failure11(status2, diagnostics) {
+function failure14(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function archiveDiagnostic(input) {
@@ -32145,23 +33645,23 @@ function archiveDiagnostic(input) {
     path: input.path ?? INVALID_ARCHIVE_PATH
   });
 }
-function parseChangeId9(input) {
+function parseChangeId12(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path47) {
+function parseArchivedAt(input, path51) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
-    return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path47
+      path: path51
     })));
   }
   return parsed.data;
@@ -32182,7 +33682,7 @@ function archiveRecordWithHash(input) {
     archiveHash: expectedArchiveHash(input)
   });
   if (!parsed.success) {
-    return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archive_record",
       message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
       path: archivePath(input.changeId)
@@ -32190,7 +33690,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path47) {
+function archiveHashDiagnostics(record2, path51) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -32198,11 +33698,11 @@ function archiveHashDiagnostics(record2, path47) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path47
+      path: path51
     })
   ];
 }
-async function assertWorktreeTarget(input, path47) {
+async function assertWorktreeTarget(input, path51) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -32212,31 +33712,31 @@ async function assertWorktreeTarget(input, path47) {
     });
     if (result.stdout.trim().length === 0)
       return void 0;
-    return failure11("conflict", [
+    return failure14("conflict", [
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path47
+        path: path51
       })
     ]);
   } catch (error51) {
-    return failure11("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error51 instanceof Error ? error51.message : String(error51),
-        path: path47
+        path: path51
       })
     ]);
   }
 }
 function asArchiveFailure(status2, diagnostics) {
-  return failure11(status2, diagnostics);
+  return failure14(status2, diagnostics);
 }
 function findRevision2(input) {
   const revision = input.change.bundle.artifactRevisions.find((entry) => entry.role === input.role && entry.artifact.path === input.path);
   if (revision !== void 0)
     return revision;
-  return failure11("invalid", [
+  return failure14("invalid", [
     archiveDiagnostic({
       code: "missing_change_artifact_revision",
       message: `Change bundle is missing ${input.role} revision for ${input.path}.`,
@@ -32303,11 +33803,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path47 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path47 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path47)) : remaining;
+    const path51 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path51 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path51)) : remaining;
     return {
-      path: path47,
+      path: path51,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -32365,30 +33865,30 @@ function plannedIndex(entries) {
   });
   if (parsed.success)
     return parsed.data;
-  return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+  return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
     code: "invalid_current_spec_index",
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path47, document) {
+function validatePlannedDocument(path51, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path47,
+    artifactPath: path51,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
     return void 0;
-  return failure11(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
+  return failure14(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
 }
 function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path47, document]) => [path47, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path51, document]) => [path51, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
   if (acceptedAt === void 0) {
-    return failure11("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "change_not_accepted",
         message: "Change must carry accepted acceptance state before archive.",
@@ -32399,7 +33899,7 @@ function buildPlannedSpecs(input) {
   for (const delta of input.change.deltaSpecs) {
     if (delta.operation === "add") {
       if (delta.proposedRequirement === void 0 || delta.sections === void 0) {
-        return failure11("invalid", [
+        return failure14("invalid", [
           archiveDiagnostic({
             code: "ambiguous_delta",
             message: `Add delta ${delta.requirementId} is missing proposed current-spec content.`,
@@ -32407,17 +33907,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path47 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path47)) {
-        return failure11("conflict", [
+      const path51 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path51)) {
+        return failure14("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path47}.`,
-            path: path47
+            message: `Archive add target already exists: ${path51}.`,
+            path: path51
           })
         ]);
       }
-      plannedDocs.set(path47, {
+      plannedDocs.set(path51, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -32430,12 +33930,12 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path47);
+      touchedPaths.add(path51);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
     if (basePath === void 0) {
-      return failure11("invalid", [
+      return failure14("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Current spec base for ${delta.requirementId} is missing from the archive plan.`,
@@ -32445,7 +33945,7 @@ function buildPlannedSpecs(input) {
     }
     const currentDocument = plannedDocs.get(basePath);
     if (currentDocument === void 0) {
-      return failure11("invalid", [
+      return failure14("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Current spec base ${basePath} for ${delta.requirementId} is not loaded.`,
@@ -32457,7 +33957,7 @@ function buildPlannedSpecs(input) {
     let targetPath = basePath;
     if (delta.operation === "modify") {
       if (delta.proposedRequirement === void 0 || delta.sections === void 0) {
-        return failure11("invalid", [
+        return failure14("invalid", [
           archiveDiagnostic({
             code: "ambiguous_delta",
             message: `Modify delta ${delta.requirementId} is missing proposed current-spec content.`,
@@ -32496,7 +33996,7 @@ function buildPlannedSpecs(input) {
   for (const deletePath of [...deletedPaths].sort(compareStrings6)) {
     const beforeEntry = input.currentSpecs.index.entries.find((entry) => entry.path === deletePath);
     if (beforeEntry === void 0) {
-      return failure11("invalid", [
+      return failure14("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Deleted current spec base ${deletePath} is not present in the current spec index.`,
@@ -32605,25 +34105,25 @@ function previewFromPlan(input) {
   });
   if (preview.success)
     return preview.data;
-  return failure11("invalid", preview.error.issues.map((issue2) => archiveDiagnostic({
+  return failure14("invalid", preview.error.issues.map((issue2) => archiveDiagnostic({
     code: "invalid_archive_preview",
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
     path: archivePath(input.changeId)
   })));
 }
 async function buildArchivePlan(input) {
-  const changeId = parseChangeId9(input.changeId);
+  const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path47 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path47);
+  const path51 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path51);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
   if (!change.ok)
     return asArchiveFailure(change.status === "not_found" ? "not_found" : change.status, change.diagnostics);
   if (change.bundle.change.status !== "accepted" || change.bundle.change.acceptance?.status !== "accepted") {
-    return failure11("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "change_not_accepted",
         message: "Only accepted changes can be archived into current truth.",
@@ -32695,7 +34195,7 @@ async function backupFiles(input) {
         artifactPath
       });
     } catch (error51) {
-      return failure11("invalid", [
+      return failure14("invalid", [
         archiveDiagnostic({
           code: "invalid_path",
           message: error51 instanceof Error ? error51.message : String(error51),
@@ -32757,7 +34257,7 @@ async function deletePlannedSpec(input) {
     bytes = await readFile8(resolved.absolutePath);
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
-      return failure11("invalid", [
+      return failure14("invalid", [
         archiveDiagnostic({
           code: "stale_spec_revision",
           message: `Expected current spec ${input.spec.path} to exist before archive removal.`,
@@ -32768,7 +34268,7 @@ async function deletePlannedSpec(input) {
     throw error51;
   }
   if (hashContent(bytes) !== input.spec.before.sha256) {
-    return failure11("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "stale_spec_revision",
         message: `Current spec ${input.spec.path} no longer matches the archived base content.`,
@@ -32783,7 +34283,7 @@ async function deletePlannedSpec(input) {
   if (!parsed.ok)
     return asArchiveFailure(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
   if (parsed.document.revision !== input.spec.expectedRevision) {
-    return failure11("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "stale_spec_revision",
         message: `Expected current spec revision ${input.spec.expectedRevision}, but current revision is ${parsed.document.revision}.`,
@@ -32845,7 +34345,7 @@ async function writeArchiveRecord(input) {
     };
   } catch (error51) {
     if (error51 instanceof ArtifactRevisionConflictError || error51 instanceof Error) {
-      return failure11("conflict", [
+      return failure14("conflict", [
         archiveDiagnostic({
           code: "archive_write_failed",
           message: error51.message,
@@ -32857,40 +34357,40 @@ async function writeArchiveRecord(input) {
   }
 }
 async function readArchiveRecord(input) {
-  const changeId = parseChangeId9(input.changeId);
+  const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path47 = archivePath(changeId);
+  const path51 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path47,
+    artifactPath: path51,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
     const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
-    return failure11(status2, read.diagnostics);
+    return failure14(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
-    return failure11("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path47
+        path: path51
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path47);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path51);
   if (hashDiagnostics.length > 0)
-    return failure11("invalid", hashDiagnostics);
+    return failure14("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path47,
+    artifactPath: path51,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path47,
+      path: path51,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -32899,7 +34399,7 @@ async function readArchiveRecord(input) {
   };
 }
 async function archiveAcceptedChange(input) {
-  const changeId = parseChangeId9(input.changeId);
+  const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const existing = await readArchiveRecord({
@@ -32911,7 +34411,7 @@ async function archiveAcceptedChange(input) {
     if (!current.ok)
       return asArchiveFailure(current.status, current.diagnostics);
     if (current.indexHash !== existing.record.preview.afterSpecHash) {
-      return failure11("conflict", [
+      return failure14("conflict", [
         archiveDiagnostic({
           code: "archive_current_truth_mismatch",
           message: `Current truth hash ${current.indexHash} does not match archived target hash ${existing.record.preview.afterSpecHash}.`,
@@ -32935,7 +34435,7 @@ async function archiveAcceptedChange(input) {
   if (typeof archivedAt !== "string")
     return archivedAt;
   if (input.archivedBy.length === 0) {
-    return failure11("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "invalid_archived_by",
         message: "Archive requires a non-empty archivedBy actor ID.",
@@ -32970,7 +34470,7 @@ async function archiveAcceptedChange(input) {
     }
     if (currentAfterWrites.indexHash !== plan.preview.afterSpecHash) {
       await rollbackFiles(backups, rollbackGuards);
-      return failure11("conflict", [
+      return failure14("conflict", [
         archiveDiagnostic({
           code: "archive_current_truth_mismatch",
           message: `Applied current truth hash ${currentAfterWrites.indexHash} does not match planned hash ${plan.preview.afterSpecHash}.`,
@@ -33015,7 +34515,7 @@ async function archiveAcceptedChange(input) {
     return write;
   } catch (error51) {
     await rollbackFiles(backups, rollbackGuards);
-    return failure11("conflict", [
+    return failure14("conflict", [
       archiveDiagnostic({
         code: "archive_write_failed",
         message: error51 instanceof Error ? error51.message : String(error51),
@@ -33025,6 +34525,401 @@ async function archiveAcceptedChange(input) {
   }
 }
 
+// packages/cli/src/workflow/change-input.ts
+import { execFileSync } from "node:child_process";
+import path17 from "node:path";
+
+// packages/cli/src/workflow/criteria.ts
+var GENERATED_CRITERION_REASON = "Generated by Legion from a roadmap or ad-hoc source that defined no acceptance proof. Replace with an executable criterion before treating this as verified.";
+var MAX_CRITERION_SLUG_LENGTH = 48;
+function criterionIdFor(statement, index) {
+  const slug = statement.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, MAX_CRITERION_SLUG_LENGTH).replace(/-+$/g, "");
+  return slug.length > 0 ? `ac_${slug}-${index + 1}` : `ac_criterion-${index + 1}`;
+}
+function generatedCriterion(statement, index) {
+  return {
+    id: criterionIdFor(statement, index),
+    statement,
+    proof: {
+      mode: "manual",
+      reason: GENERATED_CRITERION_REASON
+    }
+  };
+}
+function generatedCriteria(statements) {
+  return statements.map((statement, index) => generatedCriterion(statement, index));
+}
+
+// packages/cli/src/workflow/phase-requirement.ts
+var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
+function requirementIdInPhase(phase) {
+  return REQUIREMENT_ANCHOR.exec(phase.body)?.[1];
+}
+function partitionCriteria(requirement) {
+  const executable = [];
+  const manual = [];
+  for (const criterion of requirement.acceptance.criteria) {
+    if (criterion.proof.mode === "executable") executable.push(criterion);
+    else manual.push(criterion);
+  }
+  return { executable, manual };
+}
+async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
+  const requirementId = requirementIdInPhase(phase);
+  if (requirementId === void 0) return { ok: "absent" };
+  if (verified !== void 0) {
+    const found = verified.find((entry) => entry.id === requirementId);
+    if (found === void 0) {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+      };
+    }
+    return declinedOrResolved(found, phase);
+  }
+  const set2 = await readRequirementSet(repositoryRoot);
+  if (!set2.ok) {
+    if (set2.status === "not_found") {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, but this project has no requirement set. Re-render the roadmap, or remove the reference.`
+      };
+    }
+    return { ok: false, reason: set2.reason };
+  }
+  const requirement = set2.requirements.find((entry) => entry.id === requirementId);
+  if (requirement === void 0) {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+    };
+  }
+  return declinedOrResolved(requirement, phase);
+}
+function declinedOrResolved(requirement, phase) {
+  if (requirement.priority === "wont") {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
+    };
+  }
+  return { ok: true, resolved: { requirement, ...partitionCriteria(requirement) } };
+}
+var MAX_CRITERION_DESCRIPTION = 1024;
+function clamp(value) {
+  if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
+  return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
+}
+function renderInvocation(command, args) {
+  if (args.length === 0) return `${JSON.stringify(command)} with no arguments`;
+  return `${JSON.stringify(command)} with arguments ${JSON.stringify(args)}`;
+}
+function describeCriterion(criterion) {
+  if (criterion.proof.mode === "executable") {
+    const invocation = renderInvocation(criterion.proof.command, criterion.proof.args);
+    return clamp(
+      `${criterion.statement} \u2014 run ${invocation}; it must exit ${criterion.proof.expectedExitCode}`
+    );
+  }
+  return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
+}
+
+// packages/cli/src/workflow/change-input.ts
+var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
+var MAX_ID_SUFFIX = 64;
+function suffixWithRoom(suffix, tail) {
+  if (suffix.length + tail.length <= MAX_ID_SUFFIX) return `${suffix}${tail}`;
+  const trimmed = suffix.slice(0, MAX_ID_SUFFIX - tail.length).replace(/-+$/, "");
+  return `${trimmed}${tail}`;
+}
+function phaseOracleAssignment(phase, requirement) {
+  const ids = phasePlanIds(phase);
+  if (requirement === void 0) {
+    return { byCriterionId: /* @__PURE__ */ new Map(), inspectionOracleId: ids.oracleId, all: [ids.oracleId] };
+  }
+  const { executable, manual } = partitionCriteria(requirement);
+  const byCriterionId = new Map(
+    executable.map((criterion, index) => [
+      criterion.id,
+      formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`))
+    ])
+  );
+  const criterionIds = [...byCriterionId.values()];
+  const inspectionOracleId = manual.length === 0 && criterionIds.length > 0 ? void 0 : ids.oracleId;
+  return {
+    byCriterionId,
+    inspectionOracleId,
+    all: inspectionOracleId === void 0 ? criterionIds : [...criterionIds, inspectionOracleId]
+  };
+}
+function phaseOracleIds(phase, requirement) {
+  return phaseOracleAssignment(phase, requirement).all;
+}
+function phasePlanIds(phase) {
+  const suffix = phaseIdSuffix(phase);
+  return {
+    suffix,
+    changeId: formatEntityId("change", suffix),
+    requirementId: formatEntityId("requirement", suffix),
+    oracleId: formatEntityId("oracle", suffix),
+    contractId: formatEntityId("contract", suffix)
+  };
+}
+function phaseRiskProfile(phase, recorded) {
+  if (recorded !== void 0) {
+    return riskProfileSchema.parse({
+      tier: recorded.tier,
+      reasons: [recorded.reason, `Phase ${phase.number} workflow plan creates a reviewable change.`]
+    });
+  }
+  return riskProfileSchema.parse({
+    tier: "R2",
+    reasons: [`Phase ${phase.number} workflow plan creates a reviewable change.`]
+  });
+}
+function buildPhaseCurrentSpecInput(options) {
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  if (options.requirement !== void 0) {
+    const authored = requirementSchema.parse({
+      ...options.requirement,
+      traceRefs: withSpecAnchor(options.requirement)
+    });
+    return {
+      repositoryRoot: options.repositoryRoot,
+      document: {
+        primaryRequirementId: authored.id,
+        capability: {
+          id: ids.suffix,
+          title: `Phase ${options.phase.number}: ${options.phase.name}`,
+          status: "active"
+        },
+        requirements: [authored],
+        ...currentSpecTail(options, authored.id)
+      }
+    };
+  }
+  const currentSpecPath = artifactPathForRole({
+    role: "current-spec",
+    requirementId: ids.requirementId
+  });
+  const requirement = requirementSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "requirement",
+    id: ids.requirementId,
+    projectId: options.project.id,
+    priority: "must",
+    category: "behavior",
+    status: "accepted",
+    statement: `Phase ${options.phase.number} (${options.phase.name}) has a resolved planning source.`,
+    acceptance: {
+      language: `Phase ${options.phase.number} planning starts from a resolved source artifact.`,
+      criteria: generatedCriteria([`${options.phase.name} source is available for typed planning.`]),
+      oracleRefs: []
+    },
+    traceRefs: [
+      {
+        path: currentSpecPath,
+        anchor: ids.requirementId,
+        relation: "defines",
+        entity: { kind: "requirement", id: ids.requirementId }
+      }
+    ],
+    supersedes: []
+  });
+  return {
+    repositoryRoot: options.repositoryRoot,
+    document: {
+      primaryRequirementId: ids.requirementId,
+      capability: {
+        id: ids.suffix,
+        title: `Phase ${options.phase.number}: ${options.phase.name}`,
+        status: "active"
+      },
+      requirements: [requirement],
+      ...currentSpecTail(options, ids.requirementId)
+    }
+  };
+}
+function currentSpecTail(options, traceRequirementId) {
+  return {
+    sections: {
+      purpose: `Track phase ${options.phase.number} planning source as current project truth.`,
+      behaviors: `The project can create a typed change proposal for ${options.phase.name}.`,
+      constraints: "The baseline current spec is limited to planning-source availability.",
+      scenarios: `A maintainer can run legion plan ${options.phase.number} from the roadmap source.`,
+      interfaces: "legion plan",
+      compatibility: "The current spec exists so change bundles have explicit current truth.",
+      failureModes: "If the current spec cannot be read or created, planning fails with diagnostics.",
+      traceIds: [traceRequirementId]
+    }
+  };
+}
+function currentUtcTimestamp() {
+  return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
+}
+function resolveBaseGitSha(repositoryRoot) {
+  try {
+    const value = execFileSync("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim().toLowerCase();
+    return gitShaSchema.parse(value);
+  } catch {
+    return gitShaSchema.parse(ZERO_GIT_SHA);
+  }
+}
+function phaseSourceArtifactPath(repositoryRoot, phase) {
+  const relative = path17.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path17.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  return artifactPathSchema.parse(candidate);
+}
+function withSpecAnchor(requirement) {
+  const specPath = artifactPathForRole({ role: "current-spec", requirementId: requirement.id });
+  const anchored = requirement.traceRefs.some(
+    (traceRef) => traceRef.path === specPath && traceRef.anchor === requirement.id && traceRef.relation === "defines" && traceRef.entity?.kind === "requirement" && traceRef.entity.id === requirement.id
+  );
+  if (anchored) return requirement.traceRefs;
+  return [
+    ...requirement.traceRefs,
+    {
+      path: specPath,
+      anchor: requirement.id,
+      relation: "defines",
+      entity: { kind: "requirement", id: requirement.id }
+    }
+  ];
+}
+function buildChangeBundleInput(options) {
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  const baseGitSha = options.baseGitSha ?? resolveBaseGitSha(options.repositoryRoot);
+  const sourcePath = phaseSourceArtifactPath(options.repositoryRoot, options.phase);
+  const owner = firstDecisionOwner(options.project);
+  const deltaRequirementId = options.requirement?.id ?? ids.requirementId;
+  const requirement = options.requirement === void 0 ? requirementSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "requirement",
+    id: ids.requirementId,
+    projectId: options.project.id,
+    priority: "must",
+    category: "behavior",
+    status: "accepted",
+    statement: requirementStatement(options.phase),
+    acceptance: {
+      language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
+      criteria: generatedCriteria(acceptanceCriteria(options.phase)),
+      oracleRefs: [...phaseOracleIds(options.phase)]
+    },
+    traceRefs: [
+      {
+        path: sourcePath,
+        anchor: `phase-${options.phase.number}`,
+        relation: "defines",
+        entity: { kind: "requirement", id: ids.requirementId }
+      }
+    ],
+    supersedes: []
+  }) : requirementSchema.parse({
+    ...options.requirement,
+    // Only this phase's oracle.
+    //
+    // Retaining an imported requirement's earlier oracle IDs was tried and
+    // reverted: `validateChangeTraceability` loads only the current
+    // change's oracle manifest, so every retained ID reports
+    // `missing_oracle_artifact` and archive refuses the change outright.
+    // Carrying historical coverage needs cross-change oracle resolution,
+    // which is a larger piece of work than this.
+    //
+    // Nothing shipped produces a requirement with prior refs — intake
+    // writes `oracleRefs: []` — so no coverage is lost today. The legacy
+    // importer will be the first producer, and it must land together with
+    // that resolution rather than trading a silent loss for a hard block.
+    acceptance: {
+      ...options.requirement.acceptance,
+      oracleRefs: [...phaseOracleIds(options.phase, options.requirement)]
+    },
+    traceRefs: withSpecAnchor(options.requirement)
+  });
+  return {
+    repositoryRoot: options.repositoryRoot,
+    changeId: ids.changeId,
+    projectId: options.project.id,
+    title: `Plan phase ${options.phase.number}: ${options.phase.name}`,
+    summary: summarizePhase(options.phase),
+    owners: [owner],
+    baseGitSha,
+    risk: phaseRiskProfile(options.phase, options.enforcement),
+    createdAt,
+    currentSpecs: [
+      {
+        requirementId: options.currentSpec.document.primaryRequirementId,
+        expectedRevision: options.currentSpec.document.revision
+      }
+    ],
+    deltaSpecs: [
+      {
+        operation: "modify",
+        requirementId: deltaRequirementId,
+        proposedRequirement: requirement,
+        sections: {
+          purpose: summarizePhase(options.phase),
+          behaviors: options.phase.body || `Implement ${options.phase.name}.`,
+          constraints: "Preserve initialized project truth and create reviewable Legion plan artifacts.",
+          scenarios: `A maintainer runs legion plan ${options.phase.number} and receives a change, oracle, and taskgraph for ${options.phase.name}.`,
+          interfaces: "legion plan",
+          compatibility: "Dry-run planning remains preview-only; non-dry-run planning creates typed artifacts.",
+          failureModes: "Artifact service validation failures are returned with typed diagnostics.",
+          traceIds: [deltaRequirementId]
+        },
+        rationale: `Phase ${options.phase.number} needs typed artifacts before build can execute.`
+      }
+    ],
+    design: {
+      title: `Phase ${options.phase.number} implementation plan`,
+      body: [
+        `Source: ${sourcePath}`,
+        "",
+        options.phase.body || `Implement ${options.phase.name}.`
+      ].join("\n")
+    }
+  };
+}
+function firstDecisionOwner(project) {
+  const owner = project.policy.decisionOwners[0];
+  if (owner === void 0) {
+    throw new Error("Project policy must include at least one decision owner.");
+  }
+  return owner;
+}
+function phaseIdSuffix(phase) {
+  const prefix = `phase-${phase.number}-`;
+  const maxNameLength = Math.max(1, 63 - prefix.length);
+  const nameSlug = slugFromText(phase.name).slice(0, maxNameLength).replace(/-+$/g, "");
+  return `${prefix}${nameSlug || "plan"}`;
+}
+function slugFromText(value) {
+  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : "plan";
+}
+function requirementStatement(phase) {
+  return truncate(`Phase ${phase.number} (${phase.name}) must deliver: ${phase.body || phase.name}`, 2048);
+}
+function summarizePhase(phase) {
+  return truncate(phase.body || `Implement ${phase.name}.`, 512);
+}
+function acceptanceCriteria(phase) {
+  const bullets = phase.body.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("- ")).map((line) => line.slice(2).trim()).filter((line) => line.length > 0).slice(0, 8);
+  return bullets.length > 0 ? bullets : [`${phase.name} is implemented and reviewable.`];
+}
+function truncate(value, maxLength) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return normalized.slice(0, maxLength - 1).trimEnd();
+}
+
 // packages/cli/src/commands/change/index.ts
 var CHANGE_HELP = `legion dev change <command>
 
@@ -33032,6 +34927,12 @@ Commands:
   create --input <file>     Create a change bundle from a JSON input object.
   validate <changeId>       Validate a persisted change bundle.
   diff <changeId>           Summarize proposed requirement changes.
+  repoint <changeId>        Re-point recorded artifact inputs at the change
+                            proposal on disk. Repairs a torn acceptance write,
+                            where change.yaml records the sign-off and the task
+                            graph or evidence index still pins the revision
+                            before it. Idempotent; writes nothing when the pins
+                            are already current.
   archive <changeId>        Archive an accepted change into current truth.
 
 Archive options:
@@ -33053,6 +34954,8 @@ async function handleChangeCommand(context) {
       return validate(commandContext);
     case "diff":
       return diff(commandContext);
+    case "repoint":
+      return repoint(commandContext);
     case "archive":
       return archive(commandContext);
     default:
@@ -33091,6 +34994,27 @@ async function validate(context) {
   if (changeId === void 0) return helpResult(CHANGE_HELP);
   const result = await validateChangeBundle({ repositoryRoot: context.repositoryRoot, changeId });
   return fromServiceResult(result, result.ok ? "Change is valid." : "Change validation failed.");
+}
+async function repoint(context) {
+  const changeId = context.args.positionals[0];
+  if (changeId === void 0) return helpResult(CHANGE_HELP);
+  const result = await repairChangeProposalPins({
+    repositoryRoot: context.repositoryRoot,
+    changeId,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!result.ok) {
+    return fromServiceResult(result, "Change inputs could not be re-pointed.");
+  }
+  return success2(
+    {
+      ok: true,
+      status: result.repointed.length === 0 ? "current" : "repointed",
+      repointed: result.repointed,
+      diagnostics: []
+    },
+    result.repointed.length === 0 ? `${changeId}: recorded artifact inputs already name the change proposal on disk; nothing was written.` : `${changeId}: re-pointed ${result.repointed.map((entry) => entry.artifactPath).join(", ")}.`
+  );
 }
 async function diff(context) {
   const changeId = context.args.positionals[0];
@@ -33143,23 +35067,23 @@ async function archive(context) {
 import { execFile as execFileCb } from "node:child_process";
 import { existsSync as existsSync3 } from "node:fs";
 import { readFile as readFile9 } from "node:fs/promises";
-import path16 from "node:path";
+import path19 from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // packages/cli/src/source-root.ts
 import { existsSync as existsSync2 } from "node:fs";
-import path15 from "node:path";
+import path18 from "node:path";
 import { fileURLToPath } from "node:url";
 function resolveCliSourceRoot(importMetaUrl, requiredRelativePath) {
-  const moduleDirectory = path15.dirname(fileURLToPath(importMetaUrl));
+  const moduleDirectory = path18.dirname(fileURLToPath(importMetaUrl));
   const candidates = [
     // Bundled root CLI: dist/legion-cli.mjs -> package root.
-    path15.resolve(moduleDirectory, ".."),
+    path18.resolve(moduleDirectory, ".."),
     // Package CLI build: packages/cli/dist/commands/<group>/index.js -> repo root.
-    path15.resolve(moduleDirectory, "..", "..", "..", "..", "..")
+    path18.resolve(moduleDirectory, "..", "..", "..", "..", "..")
   ];
   for (const candidate of candidates) {
-    if (existsSync2(path15.join(candidate, requiredRelativePath))) return candidate;
+    if (existsSync2(path18.join(candidate, requiredRelativePath))) return candidate;
   }
   return candidates[0] ?? process.cwd();
 }
@@ -33283,23 +35207,23 @@ async function capture(context) {
       "capture script did not return a run directory."
     );
   }
-  const resolvedRunDir = path16.isAbsolute(runDir) ? runDir : path16.join(context.repositoryRoot, runDir);
+  const resolvedRunDir = path19.isAbsolute(runDir) ? runDir : path19.join(context.repositoryRoot, runDir);
   if (!existsSync3(resolvedRunDir)) {
     return failure(
       { ok: false, status: "error", diagnostics: [{ code: "capture_failed", message: `captured run directory not found: ${resolvedRunDir}` }] },
       `captured run directory not found: ${resolvedRunDir}`
     );
   }
-  const manifestPath = path16.join(resolvedRunDir, "run-manifest.json");
-  const scorePath = path16.join(resolvedRunDir, "score.json");
+  const manifestPath = path19.join(resolvedRunDir, "run-manifest.json");
+  const scorePath = path19.join(resolvedRunDir, "score.json");
   const manifest = JSON.parse(await readFile9(manifestPath, "utf8"));
   return success2(
     {
       ok: true,
       status: "captured",
-      runDirectory: path16.relative(context.repositoryRoot, resolvedRunDir),
-      runManifest: path16.relative(context.repositoryRoot, manifestPath),
-      score: existsSync3(scorePath) ? path16.relative(context.repositoryRoot, scorePath) : null,
+      runDirectory: path19.relative(context.repositoryRoot, resolvedRunDir),
+      runManifest: path19.relative(context.repositoryRoot, manifestPath),
+      score: existsSync3(scorePath) ? path19.relative(context.repositoryRoot, scorePath) : null,
       manifest
     },
     `Captured run to ${resolvedRunDir}.`
@@ -33309,7 +35233,7 @@ async function grade(context) {
   if (hasFlag(context, "help")) return helpResult(EVALS_HELP);
   const runDirectory = requiredStringOption(context, "run-directory");
   if (typeof runDirectory !== "string") return runDirectory;
-  const resolvedRunDirectory = path16.resolve(context.repositoryRoot, runDirectory);
+  const resolvedRunDirectory = path19.resolve(context.repositoryRoot, runDirectory);
   const result = await runScript(context, ["scripts/baseline/grade-run.mjs", "--run-directory", resolvedRunDirectory]);
   if (result.exitCode !== 0) return result.cliResult;
   const scorePath = result.stdout.trim().split(/\s+/).pop() ?? "";
@@ -33317,7 +35241,7 @@ async function grade(context) {
     {
       ok: true,
       status: "graded",
-      score: scorePath ? path16.relative(context.repositoryRoot, scorePath) : scorePath
+      score: scorePath ? path19.relative(context.repositoryRoot, scorePath) : scorePath
     },
     `Graded ${runDirectory} -> ${scorePath}.`
   );
@@ -33333,11 +35257,11 @@ async function compare(context) {
     "--repository-root",
     context.repositoryRoot,
     "--v8-dir",
-    path16.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
+    path19.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
     "--v9-dir",
-    path16.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
+    path19.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
     "--output",
-    path16.resolve(context.repositoryRoot, context.args.options.get("output"))
+    path19.resolve(context.repositoryRoot, context.args.options.get("output"))
   ];
   const label = context.args.options.get("label");
   if (typeof label === "string") args.push("--label", label);
@@ -33348,8 +35272,8 @@ async function compare(context) {
     {
       ok: true,
       status: "compared",
-      abComparisonJson: jsonPath ? path16.relative(context.repositoryRoot, jsonPath) : jsonPath,
-      abComparisonMarkdown: mdPath ? path16.relative(context.repositoryRoot, mdPath) : mdPath
+      abComparisonJson: jsonPath ? path19.relative(context.repositoryRoot, jsonPath) : jsonPath,
+      abComparisonMarkdown: mdPath ? path19.relative(context.repositoryRoot, mdPath) : mdPath
     },
     `Compared v8/v9 sealed runs -> ${jsonPath}.`
   );
@@ -33363,13 +35287,13 @@ async function threatModel(context) {
   const args = [
     "scripts/baseline/threat-model.mjs",
     "--run-dir",
-    path16.resolve(context.repositoryRoot, runDir),
+    path19.resolve(context.repositoryRoot, runDir),
     "--output-root",
-    path16.resolve(context.repositoryRoot, outputRoot)
+    path19.resolve(context.repositoryRoot, outputRoot)
   ];
   if (context.repositoryRoot) args.push("--repository-root", context.repositoryRoot);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path16.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path19.resolve(context.repositoryRoot, report));
   const result = await runScript(context, args);
   const verdict = parseJsonVerdict(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -33420,7 +35344,7 @@ function parseJsonVerdict(stdout) {
 }
 async function runScript(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path16.join(V9_SOURCE_ROOT, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path19.join(V9_SOURCE_ROOT, arg) : arg
   );
   try {
     const result = await execFile2(process.execPath, resolvedArgs, {
@@ -33465,12 +35389,12 @@ async function runScript(context, scriptArgs) {
 }
 
 // packages/cli/src/commands/migrate/index.ts
-import path19 from "node:path";
+import path22 from "node:path";
 
 // packages/legacy-bridge/dist/import-codex/index.js
 import { createHash as createHash16 } from "node:crypto";
-import { cp, mkdir as mkdir9, readFile as readFile10, readdir as readdir7, rename as rename3, rm as rm4, stat as stat4, writeFile as writeFile4 } from "node:fs/promises";
-import path17 from "node:path";
+import { cp, mkdir as mkdir9, readFile as readFile10, readdir as readdir9, rename as rename3, rm as rm4, stat as stat4, writeFile as writeFile4 } from "node:fs/promises";
+import path20 from "node:path";
 var REPORT_PATH = ".legion/migration/codex-legion-migration-report.json";
 var LEGACY_PROTOCOL_ROOT = ".legion/legacy-protocol";
 var LEGION_ROOT = ".legion";
@@ -33479,7 +35403,7 @@ function compareStrings7(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath(value) {
-  return value.split(path17.sep).join("/");
+  return value.split(path20.sep).join("/");
 }
 function isEnoent5(error51) {
   return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
@@ -33494,7 +35418,7 @@ async function pathExists3(absolutePath) {
     throw error51;
   }
 }
-function failure12(status2, diagnostics) {
+function failure15(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function diagnostic(input) {
@@ -33512,20 +35436,20 @@ async function listFiles(root) {
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir7(directory, { withFileTypes: true });
+      entries = await readdir9(directory, { withFileTypes: true });
     } catch (error51) {
       if (isEnoent5(error51))
         return;
       throw error51;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
-      const absolutePath = path17.join(directory, entry.name);
+      const absolutePath = path20.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath(path17.relative(root, absolutePath)));
+        files.push(toPosixPath(path20.relative(root, absolutePath)));
     }
   }
   await visit(root);
@@ -33536,15 +35460,15 @@ async function listSymbolicLinks(root, displayedRoot) {
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir7(directory, { withFileTypes: true });
+      entries = await readdir9(directory, { withFileTypes: true });
     } catch (error51) {
       if (isEnoent5(error51))
         return;
       throw error51;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
-      const absolutePath = path17.join(directory, entry.name);
-      const displayedPath = `${displayedRoot}/${toPosixPath(path17.relative(root, absolutePath))}`;
+      const absolutePath = path20.join(directory, entry.name);
+      const displayedPath = `${displayedRoot}/${toPosixPath(path20.relative(root, absolutePath))}`;
       if (entry.isSymbolicLink()) {
         links.push(displayedPath);
         continue;
@@ -33560,7 +35484,7 @@ async function validateNoSymbolicLinks(input) {
   const links = await listSymbolicLinks(input.root, input.displayedRoot);
   if (links.length === 0)
     return void 0;
-  return failure12("conflict", links.map((link) => diagnostic({
+  return failure15("conflict", links.map((link) => diagnostic({
     code: "unsupported_symbolic_link",
     message: "Codex .legion migration cannot preserve symbolic links safely; replace the link with a regular file or migrate it manually.",
     sourcePath: link
@@ -33573,7 +35497,7 @@ async function hashFiles(root, files) {
   for (const file2 of files) {
     hash2.update(file2);
     hash2.update("\0");
-    hash2.update(await readFile10(path17.join(root, ...file2.split("/"))));
+    hash2.update(await readFile10(path20.join(root, ...file2.split("/"))));
     hash2.update("\0");
   }
   return `sha256:${hash2.digest("hex")}`;
@@ -33582,25 +35506,25 @@ async function hashTree(root) {
   return hashFiles(root, await listFiles(root));
 }
 function containsPath(parent, child) {
-  const relative = path17.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path17.isAbsolute(relative);
+  const relative = path20.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path20.isAbsolute(relative);
 }
 function pathsOverlap2(left, right) {
   return containsPath(left, right) || containsPath(right, left);
 }
 function sameResolvedPath(left, right) {
-  const resolvedLeft = path17.resolve(left);
-  const resolvedRight = path17.resolve(right);
+  const resolvedLeft = path20.resolve(left);
+  const resolvedRight = path20.resolve(right);
   if (process.platform === "win32")
     return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot(input) {
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const stagingRoot = path17.resolve(input.stagingRoot);
-  const legacyRoot = path17.join(repositoryRoot, ".legion");
+  const repositoryRoot = path20.resolve(input.repositoryRoot);
+  const stagingRoot = path20.resolve(input.stagingRoot);
+  const legacyRoot = path20.join(repositoryRoot, ".legion");
   if (pathsOverlap2(stagingRoot, repositoryRoot) || pathsOverlap2(stagingRoot, legacyRoot)) {
-    return failure12("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "unsafe_staging_root",
         message: "Staging root must not overlap the repository root or .legion source.",
@@ -33611,11 +35535,11 @@ function safeResolvedStagingRoot(input) {
   return stagingRoot;
 }
 function safeResolvedBackupRoot(input) {
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const backupRoot = path17.resolve(input.backupRoot);
-  const legacyRoot = path17.join(repositoryRoot, ".legion");
+  const repositoryRoot = path20.resolve(input.repositoryRoot);
+  const backupRoot = path20.resolve(input.backupRoot);
+  const legacyRoot = path20.join(repositoryRoot, ".legion");
   if (pathsOverlap2(backupRoot, repositoryRoot) || pathsOverlap2(backupRoot, legacyRoot)) {
-    return failure12("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "unsafe_backup_root",
         message: "Backup root must not overlap the repository root or .legion source.",
@@ -33630,7 +35554,7 @@ function parseUtcTimestamp(input) {
   try {
     return utcTimestampSchema.parse(value);
   } catch (error51) {
-    return failure12("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: input.code,
         message: error51 instanceof Error ? error51.message : "Value is not a valid UTC timestamp.",
@@ -33647,9 +35571,9 @@ function readString(value) {
 }
 function normalizeReportedPath(repositoryRoot, value) {
   const normalized = value.replace(/\\/g, "/");
-  if (path17.isAbsolute(value)) {
-    const relative = path17.relative(repositoryRoot, value);
-    if (relative.length > 0 && !relative.startsWith("..") && !path17.isAbsolute(relative)) {
+  if (path20.isAbsolute(value)) {
+    const relative = path20.relative(repositoryRoot, value);
+    if (relative.length > 0 && !relative.startsWith("..") && !path20.isAbsolute(relative)) {
       return toPosixPath(relative);
     }
   }
@@ -33674,7 +35598,7 @@ function nativeSurface(input) {
   return { path: normalized, source: input.source };
 }
 async function parseCodexManifest(repositoryRoot, legionRoot) {
-  const manifestPath = path17.join(legionRoot, "manifest.json");
+  const manifestPath = path20.join(legionRoot, "manifest.json");
   let parsed;
   try {
     parsed = JSON.parse(await readFile10(manifestPath, "utf8"));
@@ -33835,7 +35759,7 @@ function classifySourceFile(relativePath, generatedPaths) {
 async function sourceInventory(input) {
   const files = [];
   for (const file2 of await listFiles(input.legionRoot)) {
-    const bytes = await readFile10(path17.join(input.legionRoot, ...file2.split("/")));
+    const bytes = await readFile10(path20.join(input.legionRoot, ...file2.split("/")));
     const relativePath = `.legion/${file2}`;
     files.push({
       path: relativePath,
@@ -33876,7 +35800,7 @@ function validateReportMoves(report) {
   }
   if (matchesExpectedMoves)
     return void 0;
-  return failure12("invalid", [
+  return failure15("invalid", [
     diagnostic({
       code: "invalid_migration_moves",
       message: "Dry-run report moves no longer match the reviewed source inventory.",
@@ -33885,18 +35809,18 @@ function validateReportMoves(report) {
   ]);
 }
 async function stageLegacyProtocol(input) {
-  const targetRoot = path17.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path20.join(input.stagingRoot, ".legion", "legacy-protocol");
   await rm4(input.stagingRoot, { recursive: true, force: true });
   await mkdir9(targetRoot, { recursive: true });
   for (const move of input.moves) {
-    const sourcePath = path17.join(input.repositoryRoot, ...move.sourcePath.split("/"));
-    const targetPath = path17.join(input.stagingRoot, ...move.targetPath.split("/"));
-    await mkdir9(path17.dirname(targetPath), { recursive: true });
+    const sourcePath = path20.join(input.repositoryRoot, ...move.sourcePath.split("/"));
+    const targetPath = path20.join(input.stagingRoot, ...move.targetPath.split("/"));
+    await mkdir9(path20.dirname(targetPath), { recursive: true });
     await cp(sourcePath, targetPath);
   }
   const files = [];
   for (const file2 of await listFiles(targetRoot)) {
-    const bytes = await readFile10(path17.join(targetRoot, ...file2.split("/")));
+    const bytes = await readFile10(path20.join(targetRoot, ...file2.split("/")));
     files.push({
       path: `${LEGACY_PROTOCOL_ROOT}/${file2}`,
       sha256: bytesHash(bytes),
@@ -33911,8 +35835,8 @@ async function stageLegacyProtocol(input) {
   };
 }
 async function writeReport(stagingRoot, report) {
-  const reportPath = path17.join(stagingRoot, ...REPORT_PATH.split("/"));
-  await mkdir9(path17.dirname(reportPath), { recursive: true });
+  const reportPath = path20.join(stagingRoot, ...REPORT_PATH.split("/"));
+  await mkdir9(path20.dirname(reportPath), { recursive: true });
   await writeFile4(reportPath, stableProtocolJson(report), "utf8");
 }
 function alreadyMigratedUncertainty(source, moves) {
@@ -33939,10 +35863,10 @@ async function createCodexLegionMigrationDryRun(input) {
   });
   if (typeof createdAt !== "string")
     return createdAt;
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const legionRoot = path17.join(repositoryRoot, ".legion");
+  const repositoryRoot = path20.resolve(input.repositoryRoot);
+  const legionRoot = path20.join(repositoryRoot, ".legion");
   if (!await pathExists3(legionRoot)) {
-    return failure12("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "legacy_legion_root_missing",
         message: "Legacy .legion root does not exist.",
@@ -33993,12 +35917,12 @@ async function createCodexLegionMigrationDryRun(input) {
   };
 }
 async function readReport(stagingRoot) {
-  const reportPath = path17.join(stagingRoot, ...REPORT_PATH.split("/"));
+  const reportPath = path20.join(stagingRoot, ...REPORT_PATH.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(await readFile10(reportPath, "utf8"));
   } catch (error51) {
-    return failure12("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "missing_dry_run_report",
         message: error51 instanceof Error ? error51.message : "Dry-run report could not be read.",
@@ -34007,7 +35931,7 @@ async function readReport(stagingRoot) {
     ]);
   }
   if (!isCodexLegionMigrationReport(parsed)) {
-    return failure12("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "invalid_dry_run_report",
         message: "Dry-run report is missing required Codex Legion migration fields.",
@@ -34030,11 +35954,11 @@ function isBackupManifest(value) {
   return isRecord9(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-backup" && typeof value["createdAt"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["backupPath"] === "string" && typeof value["preMigrationHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedTargetHash(input) {
-  const targetRoot = path17.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path20.join(input.stagingRoot, ".legion", "legacy-protocol");
   const actualHash = await hashTree(targetRoot);
   if (actualHash === input.report.target.treeHash)
     return void 0;
-  return failure12("invalid", [
+  return failure15("invalid", [
     diagnostic({
       code: "staged_legacy_protocol_hash_mismatch",
       message: "Staged legacy protocol bytes no longer match the reviewed dry-run report.",
@@ -34043,10 +35967,10 @@ async function validateStagedTargetHash(input) {
   ]);
 }
 async function validateCurrentSourceHash(input) {
-  const currentHash = await hashTree(path17.join(input.repositoryRoot, ".legion"));
+  const currentHash = await hashTree(path20.join(input.repositoryRoot, ".legion"));
   if (currentHash === input.report.source.treeHash)
     return void 0;
-  return failure12("invalid", [
+  return failure15("invalid", [
     diagnostic({
       code: "source_hash_mismatch",
       message: "Current .legion bytes differ from the reviewed dry-run report.",
@@ -34059,11 +35983,11 @@ function backupId(appliedAt, sourceHash) {
   return `codex-legion-migration-${appliedAt.replace(/[^0-9]/g, "").slice(0, 14)}-${hash2}`;
 }
 async function backupLegionRoot(input) {
-  const legionRoot = path17.join(input.repositoryRoot, ".legion");
+  const legionRoot = path20.join(input.repositoryRoot, ".legion");
   const preMigrationHash = await hashTree(legionRoot);
   const id = backupId(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path17.resolve(input.backupRoot, id);
-  const backupPath = path17.resolve(backupDirectory, "legion");
+  const backupDirectory = path20.resolve(input.backupRoot, id);
+  const backupPath = path20.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists3(legionRoot);
   await rm4(backupDirectory, { recursive: true, force: true });
   await mkdir9(backupDirectory, { recursive: true });
@@ -34080,7 +36004,7 @@ async function backupLegionRoot(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path17.resolve(backupDirectory, "backup-manifest.json");
+  const manifestPath = path20.resolve(backupDirectory, "backup-manifest.json");
   await writeFile4(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
@@ -34090,9 +36014,9 @@ async function backupLegionRoot(input) {
   };
 }
 async function installStagedLegacyProtocol(input) {
-  const legionRoot = path17.join(input.repositoryRoot, ".legion");
-  const destination = path17.join(legionRoot, "legacy-protocol");
-  const stagedLegacyProtocolRoot = path17.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const legionRoot = path20.join(input.repositoryRoot, ".legion");
+  const destination = path20.join(legionRoot, "legacy-protocol");
+  const stagedLegacyProtocolRoot = path20.join(input.stagingRoot, ".legion", "legacy-protocol");
   if (input.report.moves.length > 0) {
     if (await pathExists3(destination)) {
       await mergeStagedLegacyProtocol({
@@ -34100,7 +36024,7 @@ async function installStagedLegacyProtocol(input) {
         destinationRoot: destination
       });
     } else {
-      const temporary = path17.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
+      const temporary = path20.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
       await rm4(temporary, { recursive: true, force: true });
       await cp(stagedLegacyProtocolRoot, temporary, { recursive: true });
       await rename3(temporary, destination);
@@ -34111,13 +36035,13 @@ async function installStagedLegacyProtocol(input) {
     report: input.report
   });
   for (const root of roots) {
-    await rm4(path17.join(legionRoot, root), { recursive: true, force: true });
+    await rm4(path20.join(legionRoot, root), { recursive: true, force: true });
   }
 }
 async function mergeStagedLegacyProtocol(input) {
   for (const file2 of await listFiles(input.stagedRoot)) {
-    const stagedPath = path17.join(input.stagedRoot, ...file2.split("/"));
-    const destinationPath = path17.join(input.destinationRoot, ...file2.split("/"));
+    const stagedPath = path20.join(input.stagedRoot, ...file2.split("/"));
+    const destinationPath = path20.join(input.destinationRoot, ...file2.split("/"));
     const stagedBytes = await readFile10(stagedPath);
     let destinationStat;
     try {
@@ -34128,29 +36052,29 @@ async function mergeStagedLegacyProtocol(input) {
     }
     if (destinationStat !== void 0) {
       if (!destinationStat.isFile()) {
-        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path17.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path20.relative(input.destinationRoot, destinationPath))}.`);
       }
       const destinationBytes = await readFile10(destinationPath);
       if (Buffer.compare(stagedBytes, destinationBytes) !== 0) {
-        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path17.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path20.relative(input.destinationRoot, destinationPath))}.`);
       }
       continue;
     }
-    await mkdir9(path17.dirname(destinationPath), { recursive: true });
+    await mkdir9(path20.dirname(destinationPath), { recursive: true });
     await cp(stagedPath, destinationPath);
   }
 }
 async function cleanupRoots(input) {
-  const legionRoot = path17.join(input.repositoryRoot, ".legion");
+  const legionRoot = path20.join(input.repositoryRoot, ".legion");
   const roots = new Set(input.report.moves.map((move) => topLevelLegionEntry(move.sourcePath.slice(".legion/".length))));
-  for (const entry of await readdir7(legionRoot, { withFileTypes: true })) {
+  for (const entry of await readdir9(legionRoot, { withFileTypes: true })) {
     if (!isReservedLegionRootEntry(entry.name))
       roots.add(entry.name);
   }
   return [...roots].filter((entry) => entry.length > 0).sort(compareStrings7);
 }
 async function installedLegacyProtocolFiles(repositoryRoot) {
-  const targetRoot = path17.join(repositoryRoot, ".legion", "legacy-protocol");
+  const targetRoot = path20.join(repositoryRoot, ".legion", "legacy-protocol");
   return (await listFiles(targetRoot)).map((file2) => `${LEGACY_PROTOCOL_ROOT}/${file2}`);
 }
 async function applyCodexLegionMigration(input) {
@@ -34158,7 +36082,7 @@ async function applyCodexLegionMigration(input) {
   if ("diagnostics" in report)
     return report;
   if (!input.reviewAccepted) {
-    return failure12("blocked", [
+    return failure15("blocked", [
       diagnostic({
         code: "dry_run_review_required",
         message: "Codex .legion migrations require explicit reviewed apply after the dry-run report is inspected.",
@@ -34179,12 +36103,12 @@ async function applyCodexLegionMigration(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
+  const repositoryRoot = path20.resolve(input.repositoryRoot);
   const backupRoot = safeResolvedBackupRoot(input);
   if (typeof backupRoot !== "string")
     return backupRoot;
   const symlinkFailure = await validateNoSymbolicLinks({
-    root: path17.join(repositoryRoot, ".legion"),
+    root: path20.join(repositoryRoot, ".legion"),
     displayedRoot: LEGION_ROOT
   });
   if (symlinkFailure !== void 0)
@@ -34218,7 +36142,7 @@ async function applyCodexLegionMigration(input) {
       });
     } catch {
     }
-    return failure12("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "apply_failed",
         message: error51 instanceof Error ? error51.message : "Codex .legion migration apply failed.",
@@ -34236,7 +36160,7 @@ async function applyCodexLegionMigration(input) {
 }
 async function rollbackCodexLegionMigration(input) {
   let manifest;
-  const backupManifestPath = path17.resolve(input.backupManifestPath);
+  const backupManifestPath = path20.resolve(input.backupManifestPath);
   try {
     const parsed = JSON.parse(await readFile10(backupManifestPath, "utf8"));
     if (!isBackupManifest(parsed)) {
@@ -34244,7 +36168,7 @@ async function rollbackCodexLegionMigration(input) {
     }
     manifest = parsed;
   } catch (error51) {
-    return failure12("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "invalid_backup_manifest",
         message: error51 instanceof Error ? error51.message : "Backup manifest could not be read.",
@@ -34252,10 +36176,10 @@ async function rollbackCodexLegionMigration(input) {
       })
     ]);
   }
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const legionRoot = path17.join(repositoryRoot, ".legion");
+  const repositoryRoot = path20.resolve(input.repositoryRoot);
+  const legionRoot = path20.join(repositoryRoot, ".legion");
   if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
-    return failure12("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "backup_repository_mismatch",
         message: "Backup manifest repositoryRoot does not match the requested repository root.",
@@ -34264,8 +36188,8 @@ async function rollbackCodexLegionMigration(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path17.isAbsolute(manifest.backupPath)) {
-      return failure12("invalid", [
+    if (!path20.isAbsolute(manifest.backupPath)) {
+      return failure15("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must be absolute.",
@@ -34274,7 +36198,7 @@ async function rollbackCodexLegionMigration(input) {
       ]);
     }
     if (!await pathExists3(manifest.backupPath)) {
-      return failure12("invalid", [
+      return failure15("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
           message: "Backup manifest references a missing .legion backup directory.",
@@ -34284,7 +36208,7 @@ async function rollbackCodexLegionMigration(input) {
     }
     const backupHash = await hashTree(manifest.backupPath);
     if (backupHash !== manifest.preMigrationHash) {
-      return failure12("invalid", [
+      return failure15("invalid", [
         diagnostic({
           code: "backup_hash_mismatch",
           message: "Backup bytes no longer match the manifest pre-migration hash.",
@@ -34306,8 +36230,8 @@ async function rollbackCodexLegionMigration(input) {
 
 // packages/legacy-bridge/dist/import-planning/index.js
 import { createHash as createHash17 } from "node:crypto";
-import { cp as cp2, mkdir as mkdir10, readFile as readFile11, readdir as readdir8, realpath as realpath2, rm as rm5, stat as stat5, writeFile as writeFile5 } from "node:fs/promises";
-import path18 from "node:path";
+import { cp as cp2, mkdir as mkdir10, readFile as readFile11, readdir as readdir10, realpath as realpath2, rm as rm5, stat as stat5, writeFile as writeFile5 } from "node:fs/promises";
+import path21 from "node:path";
 import { parse as parseYaml } from "yaml";
 var REPORT_PATH2 = ".legion/project/migration/planning-import-report.json";
 var EMPTY_TREE_HASH2 = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -34315,9 +36239,9 @@ function compareStrings8(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath2(value) {
-  return value.split(path18.sep).join("/");
+  return value.split(path21.sep).join("/");
 }
-function failure13(status2, diagnostics) {
+function failure16(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function diagnostic2(input) {
@@ -34338,7 +36262,7 @@ function hashFiles2(root, files) {
     for (const file2 of files) {
       hash2.update(file2);
       hash2.update("\0");
-      hash2.update(await readFile11(path18.join(root, ...file2.split("/"))));
+      hash2.update(await readFile11(path21.join(root, ...file2.split("/"))));
       hash2.update("\0");
     }
     return `sha256:${hash2.digest("hex")}`;
@@ -34359,20 +36283,20 @@ async function listFiles2(root) {
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir8(directory, { withFileTypes: true });
+      entries = await readdir10(directory, { withFileTypes: true });
     } catch (error51) {
       if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")
         return;
       throw error51;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings8(left.name, right.name))) {
-      const absolutePath = path18.join(directory, entry.name);
+      const absolutePath = path21.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath2(path18.relative(root, absolutePath)));
+        files.push(toPosixPath2(path21.relative(root, absolutePath)));
     }
   }
   await visit(root);
@@ -34412,7 +36336,7 @@ function classifyPlanningFile(relativePath) {
 }
 async function sourceInventory2(planningRoot) {
   if (!await pathExists4(planningRoot)) {
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "planning_root_missing",
         message: "Legacy .planning root does not exist.",
@@ -34422,9 +36346,9 @@ async function sourceInventory2(planningRoot) {
   }
   const files = [];
   for (const file2 of await listFiles2(planningRoot)) {
-    const absolutePath = path18.join(planningRoot, ...file2.split("/"));
+    const absolutePath = path21.join(planningRoot, ...file2.split("/"));
     const bytes = await readFile11(absolutePath);
-    const relativePath = toPosixPath2(path18.join(".planning", file2));
+    const relativePath = toPosixPath2(path21.join(".planning", file2));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -34442,7 +36366,7 @@ function requirementSuffix(code) {
   const normalized = code.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return normalized.length >= 3 ? normalized.slice(0, 63).replace(/-+$/g, "") : `legacy-${normalized}`;
 }
-function truncate(value, maxLength) {
+function truncate2(value, maxLength) {
   if (value.length <= maxLength)
     return value;
   return value.slice(0, maxLength - 1).trimEnd() + ".";
@@ -34459,7 +36383,7 @@ function extractRequirements(projectMarkdown) {
     const suffix = requirementSuffix(code);
     const id = requirementIdSchema.safeParse(`req_${suffix}`);
     if (!id.success) {
-      return failure13("invalid", [
+      return failure16("invalid", [
         diagnostic2({
           code: "invalid_requirement_id",
           message: `Legacy requirement code ${code} cannot be converted to a v9 requirement ID.`,
@@ -34474,7 +36398,7 @@ function extractRequirements(projectMarkdown) {
       code,
       id: id.data,
       sourcePath: ".planning/PROJECT.md",
-      statement: truncate(statement.trim(), 2048),
+      statement: truncate2(statement.trim(), 2048),
       checked: match[1]?.toLowerCase() === "x"
     });
   }
@@ -34526,7 +36450,7 @@ async function parsePlans(planningRoot, inventory) {
     if (file2.classification !== "phase-plan")
       continue;
     const relativeToPlanning = file2.path.slice(".planning/".length);
-    const content = await readFile11(path18.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
+    const content = await readFile11(path21.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
     const frontmatter = parsePlanFrontmatter(content);
     plans.push({
       sourcePath: file2.path,
@@ -34539,7 +36463,7 @@ async function planSummaryConflicts(planningRoot, plans) {
   const conflicts = [];
   for (const plan of plans) {
     const summaryPath = plan.sourcePath.replace(/-PLAN\.md$/, "-SUMMARY.md");
-    const summaryContent = await readUtf8IfExists(path18.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
+    const summaryContent = await readUtf8IfExists(path21.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
     if (summaryContent === void 0)
       continue;
     const summaryFiles = summaryFilesModified(summaryContent);
@@ -34576,7 +36500,7 @@ function unprovenRequirementUncertainties(requirements) {
   ];
 }
 async function stateUncertainties(planningRoot) {
-  const state = await readUtf8IfExists(path18.join(planningRoot, "STATE.md"));
+  const state = await readUtf8IfExists(path21.join(planningRoot, "STATE.md"));
   if (state === void 0)
     return [];
   const uncertainties = [
@@ -34645,7 +36569,7 @@ function requirementDocument(input) {
           // imported requirement, so any later join on criterion id is
           // ambiguous.
           id: importedCriterionId(input.requirement.code),
-          statement: truncate(input.requirement.statement, 1024),
+          statement: truncate2(input.requirement.statement, 1024),
           proof: {
             mode: "manual",
             reason: "Imported from legacy .planning; no acceptance criterion was defined at the source. Author a criterion before planning work against this requirement."
@@ -34671,18 +36595,18 @@ function sectionsForRequirement(requirement) {
   };
 }
 async function writeReport2(stagingRoot, report) {
-  const reportPath = path18.join(stagingRoot, ...REPORT_PATH2.split("/"));
-  await mkdir10(path18.dirname(reportPath), { recursive: true });
+  const reportPath = path21.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  await mkdir10(path21.dirname(reportPath), { recursive: true });
   await writeFile5(reportPath, stableProtocolJson(report), "utf8");
 }
 async function targetInventory(stagingRoot) {
-  const projectRoot = path18.join(stagingRoot, ".legion", "project");
+  const projectRoot = path21.join(stagingRoot, ".legion", "project");
   const files = [];
   for (const file2 of await listFiles2(projectRoot)) {
     if (file2 === "migration/planning-import-report.json")
       continue;
-    const bytes = await readFile11(path18.join(projectRoot, ...file2.split("/")));
-    const relativePath = toPosixPath2(path18.join(".legion/project", file2));
+    const bytes = await readFile11(path21.join(projectRoot, ...file2.split("/")));
+    const relativePath = toPosixPath2(path21.join(".legion/project", file2));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -34697,24 +36621,24 @@ async function targetInventory(stagingRoot) {
   };
 }
 function containsPath2(parent, child) {
-  const relative = path18.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path18.isAbsolute(relative);
+  const relative = path21.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path21.isAbsolute(relative);
 }
 function pathsOverlap3(left, right) {
   return containsPath2(left, right) || containsPath2(right, left);
 }
 async function resolveExistingPathComponents(inputPath) {
-  const resolved = path18.resolve(inputPath);
+  const resolved = path21.resolve(inputPath);
   const suffix = [];
   let candidate = resolved;
   while (!await pathExists4(candidate)) {
-    const parent = path18.dirname(candidate);
+    const parent = path21.dirname(candidate);
     if (parent === candidate)
-      return path18.resolve(candidate, ...suffix);
-    suffix.unshift(path18.basename(candidate));
+      return path21.resolve(candidate, ...suffix);
+    suffix.unshift(path21.basename(candidate));
     candidate = parent;
   }
-  return path18.resolve(await realpath2(candidate), ...suffix);
+  return path21.resolve(await realpath2(candidate), ...suffix);
 }
 async function sameCanonicalPath(left, right) {
   const resolvedLeft = await resolveExistingPathComponents(left);
@@ -34724,11 +36648,11 @@ async function sameCanonicalPath(left, right) {
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot2(input) {
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
-  const planningRoot = path18.resolve(input.planningRoot);
-  const stagingRoot = path18.resolve(input.stagingRoot);
+  const repositoryRoot = path21.resolve(input.repositoryRoot);
+  const planningRoot = path21.resolve(input.planningRoot);
+  const stagingRoot = path21.resolve(input.stagingRoot);
   if (pathsOverlap3(stagingRoot, repositoryRoot) || pathsOverlap3(stagingRoot, planningRoot)) {
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "unsafe_staging_root",
         message: "Staging root must not overlap the repository root or .planning source."
@@ -34738,18 +36662,18 @@ function safeResolvedStagingRoot2(input) {
   return stagingRoot;
 }
 async function safeResolvedBackupRoot2(input) {
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
-  const backupRoot = path18.resolve(input.backupRoot);
-  const legionRoot = path18.join(repositoryRoot, ".legion");
-  const planningRoot = path18.resolve(input.planningRoot);
-  const stagingRoot = path18.resolve(input.stagingRoot);
+  const repositoryRoot = path21.resolve(input.repositoryRoot);
+  const backupRoot = path21.resolve(input.backupRoot);
+  const legionRoot = path21.join(repositoryRoot, ".legion");
+  const planningRoot = path21.resolve(input.planningRoot);
+  const stagingRoot = path21.resolve(input.stagingRoot);
   const realRepositoryRoot = await resolveExistingPathComponents(repositoryRoot);
   const realBackupRoot = await resolveExistingPathComponents(backupRoot);
   const realLegionRoot = await resolveExistingPathComponents(legionRoot);
   const realPlanningRoot = await resolveExistingPathComponents(planningRoot);
   const realStagingRoot = await resolveExistingPathComponents(stagingRoot);
   if (pathsOverlap3(backupRoot, repositoryRoot) || pathsOverlap3(backupRoot, legionRoot) || pathsOverlap3(backupRoot, planningRoot) || pathsOverlap3(backupRoot, stagingRoot) || pathsOverlap3(realBackupRoot, realRepositoryRoot) || pathsOverlap3(realBackupRoot, realLegionRoot) || pathsOverlap3(realBackupRoot, realPlanningRoot) || pathsOverlap3(realBackupRoot, realStagingRoot)) {
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "unsafe_backup_root",
         message: "Backup root must not overlap the repository root, .legion source, planning source, or staging root.",
@@ -34764,7 +36688,7 @@ function parseUtcTimestamp2(input) {
   try {
     return utcTimestampSchema.parse(value);
   } catch (error51) {
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: input.code,
         message: error51 instanceof Error ? error51.message : "Value is not a valid UTC timestamp.",
@@ -34788,9 +36712,9 @@ async function createPlanningImportDryRun(input) {
   const inventory = await sourceInventory2(planningRoot);
   if ("diagnostics" in inventory)
     return inventory;
-  const projectMarkdown = await readUtf8IfExists(path18.join(planningRoot, "PROJECT.md"));
+  const projectMarkdown = await readUtf8IfExists(path21.join(planningRoot, "PROJECT.md"));
   if (projectMarkdown === void 0) {
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "missing_project",
         message: "Legacy .planning/PROJECT.md is required for planning import.",
@@ -34802,7 +36726,7 @@ async function createPlanningImportDryRun(input) {
   if ("diagnostics" in requirements)
     return requirements;
   if (requirements.length === 0) {
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "missing_requirements",
         message: "Legacy .planning/PROJECT.md does not contain importable requirement bullets.",
@@ -34821,7 +36745,7 @@ async function createPlanningImportDryRun(input) {
     createdAt
   });
   if (!initialized.ok) {
-    return failure13("invalid", initialized.diagnostics.map((entry) => diagnostic2({
+    return failure16("invalid", initialized.diagnostics.map((entry) => diagnostic2({
       code: entry.code,
       message: entry.message,
       sourcePath: entry.source.path
@@ -34834,7 +36758,7 @@ async function createPlanningImportDryRun(input) {
       primaryRequirementId: requirement.id,
       capability: {
         id: requirementSuffix(requirement.code),
-        title: truncate(`${requirement.code}: ${requirement.statement}`, 128),
+        title: truncate2(`${requirement.code}: ${requirement.statement}`, 128),
         status: "active"
       },
       requirements: [
@@ -34852,7 +36776,7 @@ async function createPlanningImportDryRun(input) {
       document
     });
     if (!created.ok) {
-      return failure13("invalid", created.diagnostics.map((entry) => diagnostic2({
+      return failure16("invalid", created.diagnostics.map((entry) => diagnostic2({
         code: entry.code,
         message: entry.message,
         sourcePath: entry.source.path
@@ -34907,12 +36831,12 @@ async function createPlanningImportDryRun(input) {
   };
 }
 async function readReport2(stagingRoot) {
-  const reportPath = path18.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  const reportPath = path21.join(stagingRoot, ...REPORT_PATH2.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(await readFile11(reportPath, "utf8"));
   } catch (error51) {
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "missing_dry_run_report",
         message: error51 instanceof Error ? error51.message : "Dry-run report could not be read.",
@@ -34921,7 +36845,7 @@ async function readReport2(stagingRoot) {
     ]);
   }
   if (!isPlanningImportReport(parsed)) {
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "invalid_dry_run_report",
         message: "Dry-run report is missing required planning import fields.",
@@ -34937,11 +36861,11 @@ function backupId2(appliedAt, sourceHash) {
 }
 async function backupLegionRoot2(input) {
   const repositoryRoot = await resolveExistingPathComponents(input.repositoryRoot);
-  const legionRoot = path18.join(repositoryRoot, ".legion");
+  const legionRoot = path21.join(repositoryRoot, ".legion");
   const preImportHash = await hashTree2(legionRoot);
   const id = backupId2(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path18.resolve(input.backupRoot, id);
-  const backupPath = path18.resolve(backupDirectory, "legion");
+  const backupDirectory = path21.resolve(input.backupRoot, id);
+  const backupPath = path21.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists4(legionRoot);
   await rm5(backupDirectory, { recursive: true, force: true });
   await mkdir10(backupDirectory, { recursive: true });
@@ -34958,7 +36882,7 @@ async function backupLegionRoot2(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path18.resolve(backupDirectory, "backup-manifest.json");
+  const manifestPath = path21.resolve(backupDirectory, "backup-manifest.json");
   await writeFile5(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
@@ -34968,9 +36892,9 @@ async function backupLegionRoot2(input) {
   };
 }
 async function installStagedProject(input) {
-  const stagedProject = path18.join(input.stagingRoot, ".legion", "project");
-  const destinationProject = path18.join(input.repositoryRoot, ".legion", "project");
-  await mkdir10(path18.dirname(destinationProject), { recursive: true });
+  const stagedProject = path21.join(input.stagingRoot, ".legion", "project");
+  const destinationProject = path21.join(input.repositoryRoot, ".legion", "project");
+  await mkdir10(path21.dirname(destinationProject), { recursive: true });
   await rm5(destinationProject, { recursive: true, force: true });
   await cp2(stagedProject, destinationProject, { recursive: true });
 }
@@ -34991,11 +36915,11 @@ function isBackupManifest2(value) {
   return isRecord10(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-backup" && typeof value["createdAt"] === "string" && typeof value["backupPath"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["preImportHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedProjectHash(input) {
-  const stagedProject = path18.join(input.stagingRoot, ".legion", "project");
+  const stagedProject = path21.join(input.stagingRoot, ".legion", "project");
   const actualHash = await hashTreeExcluding(stagedProject, ["migration/planning-import-report.json"]);
   if (actualHash === input.report.target.treeHash)
     return void 0;
-  return failure13("invalid", [
+  return failure16("invalid", [
     diagnostic2({
       code: "staged_project_hash_mismatch",
       message: "Staged project bytes no longer match the reviewed dry-run report.",
@@ -35008,7 +36932,7 @@ async function applyPlanningImport(input) {
   if ("diagnostics" in report)
     return report;
   if (!input.reviewAccepted) {
-    return failure13("blocked", [
+    return failure16("blocked", [
       diagnostic2({
         code: "dry_run_review_required",
         message: "Planning imports require explicit reviewed apply after the dry-run report is inspected.",
@@ -35022,9 +36946,9 @@ async function applyPlanningImport(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const destinationProject = path18.join(input.repositoryRoot, ".legion", "project");
+  const destinationProject = path21.join(input.repositoryRoot, ".legion", "project");
   if (await pathExists4(destinationProject) && input.allowReplaceExistingProject !== true) {
-    return failure13("conflict", [
+    return failure16("conflict", [
       diagnostic2({
         code: "destination_contains_v9_project",
         message: "Destination already contains .legion/project; pass allowReplaceExistingProject only after review.",
@@ -35066,7 +36990,7 @@ async function applyPlanningImport(input) {
       });
     } catch {
     }
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "apply_failed",
         message: error51 instanceof Error ? error51.message : "Staged project installation failed.",
@@ -35078,13 +37002,13 @@ async function applyPlanningImport(input) {
     ok: true,
     status: "applied",
     backup,
-    installedFiles: (await listFiles2(path18.join(input.repositoryRoot, ".legion", "project"))).map((file2) => toPosixPath2(path18.join(".legion/project", file2))),
+    installedFiles: (await listFiles2(path21.join(input.repositoryRoot, ".legion", "project"))).map((file2) => toPosixPath2(path21.join(".legion/project", file2))),
     policy: report.policy
   };
 }
 async function rollbackPlanningImport(input) {
   let manifest;
-  const backupManifestPath = path18.resolve(input.backupManifestPath);
+  const backupManifestPath = path21.resolve(input.backupManifestPath);
   try {
     const parsed = JSON.parse(await readFile11(backupManifestPath, "utf8"));
     if (!isBackupManifest2(parsed)) {
@@ -35092,7 +37016,7 @@ async function rollbackPlanningImport(input) {
     }
     manifest = parsed;
   } catch (error51) {
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
         message: error51 instanceof Error ? error51.message : "Backup manifest could not be read.",
@@ -35100,10 +37024,10 @@ async function rollbackPlanningImport(input) {
       })
     ]);
   }
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
-  const legionRoot = path18.join(repositoryRoot, ".legion");
-  if (!path18.isAbsolute(manifest.repositoryRoot)) {
-    return failure13("invalid", [
+  const repositoryRoot = path21.resolve(input.repositoryRoot);
+  const legionRoot = path21.join(repositoryRoot, ".legion");
+  if (!path21.isAbsolute(manifest.repositoryRoot)) {
+    return failure16("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
         message: "Backup manifest repositoryRoot must be absolute.",
@@ -35112,7 +37036,7 @@ async function rollbackPlanningImport(input) {
     ]);
   }
   if (!await sameCanonicalPath(manifest.repositoryRoot, repositoryRoot)) {
-    return failure13("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "backup_repository_mismatch",
         message: "Backup manifest repositoryRoot does not match the requested repository root.",
@@ -35121,8 +37045,8 @@ async function rollbackPlanningImport(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path18.isAbsolute(manifest.backupPath)) {
-      return failure13("invalid", [
+    if (!path21.isAbsolute(manifest.backupPath)) {
+      return failure16("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must be absolute.",
@@ -35133,7 +37057,7 @@ async function rollbackPlanningImport(input) {
     const realBackupPath = await resolveExistingPathComponents(manifest.backupPath);
     const realLegionRoot = await resolveExistingPathComponents(legionRoot);
     if (pathsOverlap3(manifest.backupPath, legionRoot) || pathsOverlap3(realBackupPath, realLegionRoot)) {
-      return failure13("invalid", [
+      return failure16("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must not overlap the requested .legion directory.",
@@ -35142,7 +37066,7 @@ async function rollbackPlanningImport(input) {
       ]);
     }
     if (!await pathExists4(manifest.backupPath)) {
-      return failure13("invalid", [
+      return failure16("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest references a missing .legion backup directory.",
@@ -35152,7 +37076,7 @@ async function rollbackPlanningImport(input) {
     }
     const backupHash = await hashTree2(manifest.backupPath);
     if (backupHash !== manifest.preImportHash) {
-      return failure13("invalid", [
+      return failure16("invalid", [
         diagnostic2({
           code: "backup_hash_mismatch",
           message: "Backup bytes no longer match the manifest pre-import hash.",
@@ -35241,14 +37165,14 @@ async function handlePlanning(context, action) {
   if (action === "dry-run") {
     const planningRootOption = requiredStringOption(context, "planning-root");
     if (typeof planningRootOption !== "string") return planningRootOption;
-    const planningRoot = path19.resolve(context.repositoryRoot, planningRootOption);
+    const planningRoot = path22.resolve(context.repositoryRoot, planningRootOption);
     const stagingRoot = requiredStringOption(context, "staging-root");
     if (typeof stagingRoot !== "string") return stagingRoot;
     const runId = requiredStringOption(context, "run-id");
     if (typeof runId !== "string") return runId;
     const projectPath = requiredStringOption(context, "project");
     if (typeof projectPath !== "string") return projectPath;
-    const projectFile = await readJsonInput(path19.resolve(context.repositoryRoot, projectPath));
+    const projectFile = await readJsonInput(path22.resolve(context.repositoryRoot, projectPath));
     if (isCliResult(projectFile)) return projectFile;
     const project = coercePlanningProjectInput(projectFile, projectPath);
     if ("exitCode" in project) return project;
@@ -35429,7 +37353,7 @@ function projectHuman(result) {
 // packages/cli/src/commands/release/index.ts
 import { execFile as execFileCb2 } from "node:child_process";
 import { promisify as promisify3 } from "node:util";
-import path20 from "node:path";
+import path23 from "node:path";
 var execFile3 = promisify3(execFileCb2);
 var RELEASE_HELP = `legion dev release <command>
 
@@ -35487,10 +37411,10 @@ async function checklist(context) {
   args.push("--repository-root", context.repositoryRoot);
   const validateNextLog = context.args.options.get("validate-next-log");
   if (typeof validateNextLog === "string") {
-    args.push("--validate-next-log", path20.resolve(context.repositoryRoot, validateNextLog));
+    args.push("--validate-next-log", path23.resolve(context.repositoryRoot, validateNextLog));
   }
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path20.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path23.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -35517,13 +37441,13 @@ async function rollbackVerify(context) {
   if (hasFlag(context, "help")) return helpResult(RELEASE_HELP);
   const backupManifest = requiredStringOption(context, "backup-manifest");
   if (typeof backupManifest !== "string") return backupManifest;
-  const resolvedManifest = path20.resolve(context.repositoryRoot, backupManifest);
+  const resolvedManifest = path23.resolve(context.repositoryRoot, backupManifest);
   const args = ["scripts/release/rollback-policy.mjs", "--backup-manifest", resolvedManifest];
   args.push("--repository-root", context.repositoryRoot);
   const source = context.args.options.get("source");
   if (typeof source === "string") args.push("--source", source);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path20.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path23.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -35574,7 +37498,7 @@ function parseJsonVerdict2(stdout) {
 }
 async function runScript2(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path20.join(V9_SOURCE_ROOT2, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path23.join(V9_SOURCE_ROOT2, arg) : arg
   );
   try {
     const result = await execFile3(process.execPath, resolvedArgs, {
@@ -35625,7 +37549,10 @@ var WORKFLOW_COMMANDS = Object.freeze([
   { name: "map", summary: "Generate, refresh, check, or query codebase context." },
   { name: "plan", summary: "Plan a phase or change into typed task contracts." },
   { name: "build", summary: "Execute approved task contracts through a runtime driver." },
+  { name: "approve", summary: "Record a human decision about the change's delta specs." },
+  { name: "attest", summary: "Record a human assertion that pinned files are this change's evidence." },
   { name: "review", summary: "Review task outputs with verification and independent gates." },
+  { name: "release", summary: "Plan how this change's release is observed and taken back." },
   { name: "ship", summary: "Run release readiness, promotion, and observation gates." },
   { name: "retro", summary: "Record retrospective evidence for future planning." },
   { name: "status", summary: "Show workflow state and the next recommended action." },
@@ -35644,7 +37571,10 @@ var DEV_COMMANDS = Object.freeze([
   { name: "board", summary: "Direct operational Kanban, event, claim, and approval operations." },
   { name: "migrate", summary: "Direct legacy import, apply, and rollback operations." },
   { name: "evals", summary: "Release-grade sealed workflow eval operations." },
-  { name: "release", summary: "GA checklist and rollback-policy verifier operations." },
+  // Sharpened so the two `release` names are legible side by side: this one runs
+  // GA scripts against the packaged CLI's own source root and knows nothing about
+  // a change, and the workflow `legion release` writes a change's observation plan.
+  { name: "release", summary: "GA checklist and rollback-policy verifier operations for this repository." },
   { name: "worker", summary: "Validate and inspect worker bundles for extension authors." }
 ]);
 var WORKFLOW_COMMAND_NAMES = new Set(WORKFLOW_COMMANDS.map((entry) => entry.name));
@@ -35688,8 +37618,8 @@ async function handleDevCommand(context) {
 }
 
 // packages/cli/src/workflow/input.ts
-import { execFileSync } from "node:child_process";
-import path21 from "node:path";
+import { execFileSync as execFileSync2 } from "node:child_process";
+import path24 from "node:path";
 function slugFromName(name) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return normalizeProjectSlug(slug.length > 0 ? slug : "legion-project");
@@ -35710,7 +37640,7 @@ function createdAtOption(context) {
 function repositoryReference(repositoryRoot) {
   const git2 = (args) => {
     try {
-      return execFileSync("git", ["-C", repositoryRoot, ...args], {
+      return execFileSync2("git", ["-C", repositoryRoot, ...args], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"]
       }).trim();
@@ -35750,8 +37680,8 @@ function isStableDefaultBranch(branch) {
 }
 
 // packages/cli/src/workflow/intake/driver.ts
-import { lstat as lstat3, readFile as readFile16, writeFile as writeFile8 } from "node:fs/promises";
-import path26 from "node:path";
+import { lstat as lstat3, readFile as readFile17, writeFile as writeFile8 } from "node:fs/promises";
+import path30 from "node:path";
 
 // packages/cli/src/workflow/render.ts
 function nextAction(command, reason) {
@@ -35775,29 +37705,84 @@ function renderDiagnostics(diagnostics) {
   }).join("\n");
 }
 
-// packages/cli/src/workflow/criteria.ts
-var GENERATED_CRITERION_REASON = "Generated by Legion from a roadmap or ad-hoc source that defined no acceptance proof. Replace with an executable criterion before treating this as verified.";
-var MAX_CRITERION_SLUG_LENGTH = 48;
-function criterionIdFor(statement, index) {
-  const slug = statement.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, MAX_CRITERION_SLUG_LENGTH).replace(/-+$/g, "");
-  return slug.length > 0 ? `ac_${slug}-${index + 1}` : `ac_criterion-${index + 1}`;
+// packages/cli/src/workflow/pinned-references.ts
+import { readFile as readFile12, realpath as realpath3 } from "node:fs/promises";
+import path25 from "node:path";
+function isErrorCode(error51, ...codes) {
+  return error51 !== null && typeof error51 === "object" && "code" in error51 && typeof error51.code === "string" && codes.includes(error51.code);
 }
-function generatedCriterion(statement, index) {
+function contains(root, candidate) {
+  const relative = path25.relative(root, candidate);
+  return relative === "" || !relative.startsWith("..") && !path25.isAbsolute(relative);
+}
+function isWindowsStreamPath(artifactPath) {
+  return artifactPath.includes(":");
+}
+function isCaseFoldedAlias(declaredPath, resolvedRelative) {
+  return resolvedRelative !== declaredPath && resolvedRelative.toLowerCase() === declaredPath.toLowerCase();
+}
+async function resolveOne(repositoryRoot, artifactPath, retainContent) {
+  if (isWindowsStreamPath(artifactPath)) return { kind: "unverified" };
+  const segments = artifactPath.split("/");
+  const target = path25.resolve(repositoryRoot, ...segments);
+  if (!contains(path25.resolve(repositoryRoot), target)) return { kind: "unverified" };
+  try {
+    const [realRoot, realTarget] = await Promise.all([realpath3(repositoryRoot), realpath3(target)]);
+    if (!contains(realRoot, realTarget)) return { kind: "unverified" };
+    if (isCaseFoldedAlias(artifactPath, path25.relative(realRoot, realTarget).split(path25.sep).join("/"))) {
+      return { kind: "unverified" };
+    }
+    const bytes = await readFile12(realTarget);
+    return {
+      kind: "hashed",
+      sha256: hashContent(bytes),
+      ...retainContent ? { content: bytes.toString("utf8") } : {}
+    };
+  } catch (error51) {
+    if (isErrorCode(error51, "ENOENT", "ENOTDIR")) return { kind: "missing" };
+    return { kind: "unverified" };
+  }
+}
+async function resolvePinnedReferenceReader(input) {
+  const retain = new Set(input.retainContentFor);
+  const resolved = /* @__PURE__ */ new Map();
+  for (const reference of input.references) {
+    if (resolved.has(reference.path)) continue;
+    resolved.set(
+      reference.path,
+      await resolveOne(input.repositoryRoot, reference.path, retain.has(reference.path))
+    );
+  }
   return {
-    id: criterionIdFor(statement, index),
-    statement,
-    proof: {
-      mode: "manual",
-      reason: GENERATED_CRITERION_REASON
+    verifyPin: (reference) => {
+      const entry = resolved.get(reference.path);
+      if (entry === void 0) return "unverified";
+      if (entry.kind === "missing") return "missing";
+      if (entry.kind === "unverified") return "unverified";
+      return entry.sha256 === reference.sha256 ? "match" : "drift";
+    },
+    contentOf: (reference) => {
+      const entry = resolved.get(reference.path);
+      return entry !== void 0 && entry.kind === "hashed" ? entry.content : void 0;
     }
   };
 }
-function generatedCriteria(statements) {
-  return statements.map((statement, index) => generatedCriterion(statement, index));
+async function mintPinnedReferences(input) {
+  const resolved = /* @__PURE__ */ new Map();
+  for (const artifactPath of input.paths) {
+    if (resolved.has(artifactPath)) continue;
+    resolved.set(artifactPath, await resolveOne(input.repositoryRoot, artifactPath, false));
+  }
+  return (artifactPath) => {
+    const entry = resolved.get(artifactPath);
+    if (entry === void 0 || entry.kind !== "hashed") return void 0;
+    const reference = artifactReferenceSchema.safeParse({ path: artifactPath, sha256: entry.sha256 });
+    return reference.success ? reference.data : void 0;
+  };
 }
 
 // packages/cli/src/workflow/intake/graph.ts
-var INTAKE_GRAPH_VERSION = "1.0.0";
+var INTAKE_GRAPH_VERSION = "1.2.0";
 var MAX_NODE_ID_LENGTH = 64;
 var MAX_REQUIREMENTS = 40;
 var MAX_CRITERIA_PER_REQUIREMENT = 20;
@@ -35826,6 +37811,28 @@ var PROOF_OPTIONS = [
     value: "manual",
     label: "A human decides it",
     description: "No command can decide it. You will be asked why, and the gap stays visible."
+  }
+];
+var SURFACE_OPTIONS = [
+  {
+    value: "unit",
+    label: "Unit \u2014 nothing outside this codebase",
+    description: "Exercises code in this repository only. At risk tier R2 this is a recorded negative: the integration check reports unsatisfied, not unproven."
+  },
+  {
+    value: "integration",
+    label: "Integration \u2014 two of our own parts, really connected",
+    description: "Crosses a boundary inside the system: a real database, a real queue, two services in one process."
+  },
+  {
+    value: "real-interface",
+    label: "Real interface \u2014 the actual thing production talks to",
+    description: "No stub, no mock, no recorded fixture: the live protocol, API or driver."
+  },
+  {
+    value: "end-to-end",
+    label: "End to end \u2014 the whole path a user takes",
+    description: "Entry point to observable outcome, through everything in between."
   }
 ];
 var RISK_OPTIONS = [
@@ -36037,6 +38044,87 @@ function criterionNodes(requirementIndex, criterionIndex, askForAnother = true) 
       required: true,
       dependsOn: notWont
     },
+    // The verification surface, asked once per *executable* criterion and opted
+    // into rather than demanded.
+    //
+    // `dependsOn` names the proof node and nothing else, and one condition
+    // buys both exclusions this needs. `IntakeCondition` permits exactly one
+    // clause per node, and `isNodeApplicable` treats an unanswered dependency as
+    // not applicable — so a `manual` criterion answers `manual` and fails the
+    // `equals`, while a `wont` requirement never answers `-proof` at all and
+    // fails it transitively. Expressing the wont-skip structurally instead would
+    // be the second conditionality mechanism `materializeNodes` warns against.
+    //
+    // Only the kind is optional. The three follow-ups hang off it having been
+    // answered, so declining once removes all four, and answering commits to the
+    // rest — a surface with a kind and no pin is a claim nothing can falsify,
+    // which is strictly worse than the absence a gate reports honestly as
+    // unevaluable. `notEquals: ""` is false both when the kind is unanswered and
+    // when it was declined, since a skip records `SKIPPED_VALUE`.
+    {
+      id: `${prefix}-surface-kind`,
+      section: "requirements",
+      slot: `${slotPrefix}.surface.kind`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: what does this command reach?`,
+      help: "Optional. Skip it to leave the surface undeclared, and legion ship reports the integration check as unproven rather than as answered. Answering commits you to three short follow-ups.",
+      kind: "single",
+      options: SURFACE_OPTIONS,
+      required: false,
+      dependsOn: { nodeId: `${prefix}-proof`, equals: "executable" }
+    },
+    {
+      id: `${prefix}-surface-interface`,
+      section: "requirements",
+      slot: `${slotPrefix}.surface.interface`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: name the interface it reaches.`,
+      help: "The thing on the other side of the boundary, as you would say it out loud: 'postgres:5432', 'POST /v1/orders', 'PricingEngine.quote()'. Quoted back to a reviewer; nothing parses it.",
+      kind: "free-text",
+      required: true,
+      dependsOn: { nodeId: `${prefix}-surface-kind`, notEquals: "" }
+    },
+    {
+      id: `${prefix}-surface-rationale`,
+      section: "requirements",
+      slot: `${slotPrefix}.surface.rationale`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: what does reaching it catch that a smaller check would miss?`,
+      help: "One sentence a reviewer can disagree with. Nothing verifies this claim; it is recorded so a human can refuse it.",
+      kind: "free-text",
+      required: true,
+      dependsOn: { nodeId: `${prefix}-surface-kind`, notEquals: "" }
+    },
+    {
+      id: `${prefix}-surface-pins`,
+      section: "requirements",
+      slot: `${slotPrefix}.surface.pins`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: which files make that true?`,
+      help: "Repository-relative paths, one per line or comma separated \u2014 the compose file that stands the real service up, the schema it is checked against, the harness that connects to it. Legion hashes them now and re-checks them at ship time, so the declaration stops being believed if they change. Name what makes the check real, not the file you are about to write.",
+      kind: "free-text",
+      required: true,
+      dependsOn: { nodeId: `${prefix}-surface-kind`, notEquals: "" }
+    },
+    // The tests this criterion's work must not weaken, asked once per
+    // *executable* criterion and opted into rather than demanded.
+    //
+    // One node rather than the surface's four, and the difference is structural
+    // rather than economical: a surface carries a kind, an interface, a rationale
+    // and a pin set, so declining the kind has to remove the follow-ups. This is a
+    // single multi-valued answer with nothing hanging off it, so the node is its
+    // own opt-in and an empty answer is simply an undeclared set.
+    //
+    // `dependsOn` names the proof node alone, buying both exclusions the same way
+    // the surface nodes do: a `manual` criterion answers `manual` and fails the
+    // `equals`, and a `wont` requirement never answers `-proof` at all and fails
+    // it transitively.
+    {
+      id: `${prefix}-acceptance-paths`,
+      section: "requirements",
+      slot: `${slotPrefix}.acceptance-paths`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: which existing test files must this work not weaken?`,
+      help: "Optional. Repository-relative paths, one per line or comma separated \u2014 the acceptance tests that decide this criterion. Legion hashes them before every run and reports any that changed; changing one needs a named human's approval recorded *before* the run. Name tests that already exist: a path that is not there when a run starts is reported as unknown, never as unchanged. Not under .legion/project, which the harness restores rather than reports.",
+      kind: "free-text",
+      required: false,
+      dependsOn: { nodeId: `${prefix}-proof`, equals: "executable" }
+    },
     ...askForAnother ? [
       {
         id: `${prefix}-more`,
@@ -36154,6 +38242,24 @@ function applicableNodes(input) {
 // packages/cli/src/workflow/intake/validators.ts
 var MAX_BUDGET_FILES = 1e4;
 var MAX_BUDGET_LINES = 1e6;
+var MAX_SURFACE_PINS = 8;
+var CONTROL_PLANE_ROOT2 = ".legion/project";
+function namesControlPlane2(entry) {
+  const folded = entry.toLowerCase();
+  const root = CONTROL_PLANE_ROOT2.toLowerCase();
+  return folded === root || folded.startsWith(`${root}/`);
+}
+function parsePathList(value) {
+  return value.split(/[\n,]/).map((entry) => entry.trim()).filter((entry) => entry.length > 0);
+}
+function firstRepeated(values) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const value of values) {
+    if (seen.has(value)) return value;
+    seen.add(value);
+  }
+  return void 0;
+}
 var NON_ANSWERS = /* @__PURE__ */ new Set([
   "n/a",
   "na",
@@ -36254,6 +38360,9 @@ function validateAnswer(node, raw) {
   const reject = (code, message) => ({
     diagnostics: [{ code, message, nodeId: node.id, slot: node.slot }]
   });
+  if (!node.required && node.kind !== "multi" && typeof raw === "string" && raw.trim().length === 0) {
+    return { value: SKIPPED_VALUE, diagnostics };
+  }
   if (node.kind === "confirm") {
     if (typeof raw === "boolean") return { value: raw, diagnostics };
     const text2 = asText(raw);
@@ -36306,7 +38415,7 @@ function validateSlotText(node, value) {
   });
   if (node.slot === "project.name") {
     if (value.length > 160) return fail("too_long", "Keep the name to 160 characters or fewer.");
-    if (slugFromText(value).length < 3) {
+    if (slugFromText2(value).length < 3) {
       return fail(
         "unslugifiable_name",
         "The name needs at least three letters or digits so it can become a project slug."
@@ -36352,9 +38461,71 @@ function validateSlotText(node, value) {
   if (/^requirements\.\d+\.criteria\.\d+\.detail$/.test(node.slot) && value.length > 1024) {
     return fail("too_long", "Keep the command or reason to 1024 characters or fewer.");
   }
+  if (/^requirements\.\d+\.criteria\.\d+\.surface\.interface$/.test(node.slot) && value.length > 256) {
+    return fail("too_long", "Keep the interface name to 256 characters or fewer.");
+  }
+  if (/^requirements\.\d+\.criteria\.\d+\.surface\.rationale$/.test(node.slot) && value.length > 1024) {
+    return fail("too_long", "Keep the rationale to 1024 characters or fewer.");
+  }
+  if (/^requirements\.\d+\.criteria\.\d+\.surface\.pins$/.test(node.slot)) {
+    const paths = parsePathList(value);
+    if (paths.length === 0) {
+      return fail(
+        "empty_surface_pins",
+        "Name at least one repository-relative file. A surface pin is what makes the declaration falsifiable; a declaration with nothing to re-hash passes every check vacuously."
+      );
+    }
+    if (paths.length > MAX_SURFACE_PINS) {
+      return fail("too_many_surface_pins", `Name at most ${MAX_SURFACE_PINS} files.`);
+    }
+    const invalid = paths.find((entry) => !artifactPathSchema.safeParse(entry).success);
+    if (invalid !== void 0) {
+      return fail(
+        "invalid_surface_path",
+        `"${invalid}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`
+      );
+    }
+    const repeated = firstRepeated(paths);
+    if (repeated !== void 0) {
+      return fail(
+        "duplicate_surface_path",
+        `"${repeated}" is named twice. Pin each file once: two pins on one path assert two different truths about the same bytes.`
+      );
+    }
+    return void 0;
+  }
+  if (/^requirements\.\d+\.criteria\.\d+\.acceptance-paths$/.test(node.slot)) {
+    const paths = parsePathList(value);
+    if (paths.length === 0) return void 0;
+    if (paths.length > MAX_ACCEPTANCE_PATHS) {
+      return fail("too_many_acceptance_paths", `Name at most ${MAX_ACCEPTANCE_PATHS} files.`);
+    }
+    const invalid = paths.find((entry) => !artifactPathSchema.safeParse(entry).success);
+    if (invalid !== void 0) {
+      return fail(
+        "invalid_acceptance_path",
+        `"${invalid}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`
+      );
+    }
+    const control = paths.find((entry) => namesControlPlane2(entry));
+    if (control !== void 0) {
+      return fail(
+        "control_plane_acceptance_path",
+        `"${control}" is inside ${CONTROL_PLANE_ROOT2}, which the guarded harness restores on every run rather than reporting. Name the test file the work must not weaken.`
+      );
+    }
+    const repeated = firstRepeated(paths);
+    if (repeated !== void 0) {
+      return fail(
+        "duplicate_acceptance_path",
+        `"${repeated}" is named twice. Name each file once: the harness hashes them, and two entries for one path are one fact counted twice.`
+      );
+    }
+    return void 0;
+  }
   return void 0;
 }
-function slugFromText(value) {
+function slugFromText2(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64).replace(/-+$/g, "");
 }
 function answerText(answers, nodeId2) {
@@ -36378,12 +38549,151 @@ function requirementDrafts(answers) {
         index: criterion,
         statement: criterionStatement,
         proof: answerText(map2, `req-${index}-ac-${criterion}-proof`) ?? "",
-        detail: answerText(map2, `req-${index}-ac-${criterion}-detail`) ?? ""
+        detail: answerText(map2, `req-${index}-ac-${criterion}-detail`) ?? "",
+        surfaceKind: answerText(map2, `req-${index}-ac-${criterion}-surface-kind`) ?? "",
+        surfaceInterface: answerText(map2, `req-${index}-ac-${criterion}-surface-interface`) ?? "",
+        surfaceRationale: answerText(map2, `req-${index}-ac-${criterion}-surface-rationale`) ?? "",
+        surfacePins: answerText(map2, `req-${index}-ac-${criterion}-surface-pins`) ?? "",
+        acceptancePaths: answerText(map2, `req-${index}-ac-${criterion}-acceptance-paths`) ?? ""
       });
     }
     drafts.push({ index, statement, priority, category, criteria });
   }
   return drafts;
+}
+function surfaceDiagnostics(requirementIndex, criterion) {
+  const kind = criterion.surfaceKind.trim();
+  if (kind.length === 0) return [];
+  const where = `Requirement ${requirementIndex}, criterion ${criterion.index}`;
+  const nodePrefix = `req-${requirementIndex}-ac-${criterion.index}-surface`;
+  const slotPrefix = `requirements.${requirementIndex}.criteria.${criterion.index}.surface`;
+  const diagnostics = [];
+  if (criterion.proof !== "executable") {
+    return [
+      {
+        code: "surface_on_manual_criterion",
+        message: `${where}: a verification surface describes what a command reaches, and this criterion is decided by a human. Remove the surface, or change the proof to a command.`,
+        nodeId: `${nodePrefix}-kind`,
+        slot: `${slotPrefix}.kind`
+      }
+    ];
+  }
+  if (!verificationSurfaceKindSchema.safeParse(kind).success) {
+    diagnostics.push({
+      code: "unknown_surface_kind",
+      message: `${where}: choose one of ${verificationSurfaceKindSchema.options.join(", ")}.`,
+      nodeId: `${nodePrefix}-kind`,
+      slot: `${slotPrefix}.kind`
+    });
+  }
+  if (criterion.surfaceInterface.trim().length === 0 || isNonAnswer(criterion.surfaceInterface)) {
+    diagnostics.push({
+      code: "surface_without_interface",
+      message: `${where}: name the interface this command reaches. A surface with no interface names nothing a reviewer can check.`,
+      nodeId: `${nodePrefix}-interface`,
+      slot: `${slotPrefix}.interface`
+    });
+  }
+  if (criterion.surfaceRationale.trim().length < 12 || isNonAnswer(criterion.surfaceRationale)) {
+    diagnostics.push({
+      code: "surface_without_rationale",
+      message: `${where}: state what reaching this interface catches that a smaller check would miss. A declared surface with no argument behind it is a claim nobody can review.`,
+      nodeId: `${nodePrefix}-rationale`,
+      slot: `${slotPrefix}.rationale`
+    });
+  }
+  const pins = parsePathList(criterion.surfacePins);
+  if (pins.length === 0) {
+    diagnostics.push({
+      code: "surface_without_pins",
+      message: `${where}: name at least one repository-relative file that makes this surface real. legion ship re-hashes them, and a declaration with nothing to re-hash passes every check vacuously.`,
+      nodeId: `${nodePrefix}-pins`,
+      slot: `${slotPrefix}.pins`
+    });
+  } else if (pins.length > MAX_SURFACE_PINS) {
+    diagnostics.push({
+      code: "too_many_surface_pins",
+      message: `${where}: name at most ${MAX_SURFACE_PINS} files.`,
+      nodeId: `${nodePrefix}-pins`,
+      slot: `${slotPrefix}.pins`
+    });
+  } else {
+    for (const pin of pins) {
+      if (artifactPathSchema.safeParse(pin).success) continue;
+      diagnostics.push({
+        code: "invalid_surface_path",
+        message: `${where}: "${pin}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`,
+        nodeId: `${nodePrefix}-pins`,
+        slot: `${slotPrefix}.pins`
+      });
+    }
+    const repeated = firstRepeated(pins);
+    if (repeated !== void 0) {
+      diagnostics.push({
+        code: "duplicate_surface_path",
+        message: `${where}: "${repeated}" is named twice. Pin each file once: two pins on one path assert two different truths about the same bytes.`,
+        nodeId: `${nodePrefix}-pins`,
+        slot: `${slotPrefix}.pins`
+      });
+    }
+  }
+  return diagnostics;
+}
+function acceptancePathDiagnostics(requirementIndex, criterion) {
+  const paths = parsePathList(criterion.acceptancePaths);
+  if (paths.length === 0) return [];
+  const where = `Requirement ${requirementIndex}, criterion ${criterion.index}`;
+  const nodeId2 = `req-${requirementIndex}-ac-${criterion.index}-acceptance-paths`;
+  const slot = `requirements.${requirementIndex}.criteria.${criterion.index}.acceptance-paths`;
+  if (criterion.proof !== "executable") {
+    return [
+      {
+        code: "acceptance_paths_on_manual_criterion",
+        message: `${where}: a protected acceptance path constrains what an implementer's run may weaken, and this criterion is decided by a human, so no run is constrained by it. Remove the paths, or change the proof to a command.`,
+        nodeId: nodeId2,
+        slot
+      }
+    ];
+  }
+  const diagnostics = [];
+  if (paths.length > MAX_ACCEPTANCE_PATHS) {
+    diagnostics.push({
+      code: "too_many_acceptance_paths",
+      message: `${where}: name at most ${MAX_ACCEPTANCE_PATHS} files.`,
+      nodeId: nodeId2,
+      slot
+    });
+    return diagnostics;
+  }
+  for (const entry of paths) {
+    if (!artifactPathSchema.safeParse(entry).success) {
+      diagnostics.push({
+        code: "invalid_acceptance_path",
+        message: `${where}: "${entry}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`,
+        nodeId: nodeId2,
+        slot
+      });
+      continue;
+    }
+    if (namesControlPlane2(entry)) {
+      diagnostics.push({
+        code: "control_plane_acceptance_path",
+        message: `${where}: "${entry}" is inside ${CONTROL_PLANE_ROOT2}, which the guarded harness restores on every run rather than reporting. Name the test file the work must not weaken.`,
+        nodeId: nodeId2,
+        slot
+      });
+    }
+  }
+  const repeated = firstRepeated(paths);
+  if (repeated !== void 0) {
+    diagnostics.push({
+      code: "duplicate_acceptance_path",
+      message: `${where}: "${repeated}" is named twice. Name each file once: the harness hashes them, and two entries for one path are one fact counted twice.`,
+      nodeId: nodeId2,
+      slot
+    });
+  }
+  return diagnostics;
 }
 function validateAnswerSet(input) {
   const diagnostics = [];
@@ -36413,6 +38723,8 @@ function validateAnswerSet(input) {
     for (const criterion of draft.criteria) {
       const criterionNode = `req-${draft.index}-ac-${criterion.index}-detail`;
       const slot = `requirements.${draft.index}.criteria.${criterion.index}.detail`;
+      diagnostics.push(...surfaceDiagnostics(draft.index, criterion));
+      diagnostics.push(...acceptancePathDiagnostics(draft.index, criterion));
       if (criterion.proof === "executable") {
         const parsed = parseCommandLine(criterion.detail);
         if ("error" in parsed) {
@@ -36465,17 +38777,42 @@ function validateAnswerSet(input) {
 var MAX_REQUIREMENT_SLUG = 48;
 var WONT_CRITERION_REASON = "Recorded during intake as out of scope. Nothing is built, so nothing is proven; this criterion exists to keep the decision visible.";
 function requirementIdFor(statement, index) {
-  const slug = slugFromText(statement).slice(0, MAX_REQUIREMENT_SLUG).replace(/-+$/g, "");
+  const slug = slugFromText2(statement).slice(0, MAX_REQUIREMENT_SLUG).replace(/-+$/g, "");
   return slug.length > 0 ? `req_${slug}-${index}` : `req_requirement-${index}`;
 }
 function answerText2(answers, nodeId2) {
   const answer = answers.find((entry) => entry.nodeId === nodeId2);
   return typeof answer?.value === "string" && answer.value.length > 0 ? answer.value : void 0;
 }
-function criterionFor(criterion, index) {
+function surfaceFor(criterion, mintPin) {
+  const kind = criterion.surfaceKind.trim();
+  if (kind.length === 0) return void 0;
+  const paths = parsePathList(criterion.surfacePins);
+  if (paths.length === 0) return void 0;
+  const pinned = [];
+  for (const artifactPath of paths) {
+    const reference = mintPin(artifactPath);
+    if (reference === void 0) return void 0;
+    pinned.push(reference);
+  }
+  return {
+    kind,
+    interface: criterion.surfaceInterface.trim(),
+    rationale: criterion.surfaceRationale.trim(),
+    pinned
+  };
+}
+function acceptancePathsFor(criterion) {
+  const paths = parsePathList(criterion.acceptancePaths);
+  if (paths.length === 0) return void 0;
+  return paths.map((entry) => artifactPathSchema.parse(entry));
+}
+function criterionFor(criterion, index, mintPin) {
   const id = criterionIdFor(criterion.statement, index);
   if (criterion.proof === "executable") {
     const parsed = parseCommandLine(criterion.detail);
+    const surface = surfaceFor(criterion, mintPin);
+    const acceptancePaths = acceptancePathsFor(criterion);
     if (!("error" in parsed)) {
       return {
         id,
@@ -36487,7 +38824,9 @@ function criterionFor(criterion, index) {
           // The interview states this contract explicitly: exit zero means the
           // criterion holds. Asking for an expected code per criterion invites
           // a non-zero answer chosen to make a failing command look fine.
-          expectedExitCode: 0
+          expectedExitCode: 0,
+          ...surface === void 0 ? {} : { surface },
+          ...acceptancePaths === void 0 ? {} : { acceptancePaths }
         }
       };
     }
@@ -36496,7 +38835,12 @@ function criterionFor(criterion, index) {
       statement: criterion.statement,
       proof: {
         mode: "manual",
-        reason: `The recorded command could not be parsed (${parsed.error}) so this criterion is unproven.`
+        // The manual arm has nowhere to put a surface, so a declaration made
+        // against a command that will not parse is lost here. Said out loud in
+        // the artifact rather than dropped in silence: the criterion is already
+        // being downgraded, and losing the declaration with it is the part a
+        // reader would otherwise have no way to notice.
+        reason: `The recorded command could not be parsed (${parsed.error}) so this criterion is unproven.` + (surface === void 0 ? "" : " Its declared verification surface was dropped with it.") + (acceptancePaths === void 0 ? "" : " Its declared protected acceptance paths were dropped with it.")
       }
     };
   }
@@ -36528,7 +38872,7 @@ function buildRequirements(input) {
         statement: `Not built: ${draft.statement}`,
         proof: { mode: "manual", reason: WONT_CRITERION_REASON }
       }
-    ] : draft.criteria.map((criterion, index) => criterionFor(criterion, index));
+    ] : draft.criteria.map((criterion, index) => criterionFor(criterion, index, input.mintPin));
     requirements.push(
       requirementSchema.parse({
         schemaVersion: input.schemaVersion,
@@ -36562,13 +38906,26 @@ function buildRequirements(input) {
   }
   return requirements;
 }
+function declaredSurfacePaths(answers) {
+  const declared = [];
+  for (const draft of requirementDrafts(answers)) {
+    if (draft.priority === "wont") continue;
+    for (const criterion of draft.criteria) {
+      if (criterion.surfaceKind.trim().length === 0) continue;
+      for (const path51 of parsePathList(criterion.surfacePins)) {
+        declared.push({ requirementIndex: draft.index, criterionIndex: criterion.index, path: path51 });
+      }
+    }
+  }
+  return declared;
+}
 function plannedRequirements(requirements) {
   return requirements.filter((requirement) => requirement.priority !== "wont");
 }
 function escapeTableCell(value) {
   return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
 }
-function truncate2(value, limit) {
+function truncate3(value, limit) {
   return value.length <= limit ? value : `${value.slice(0, limit - 1).trimEnd()}\u2026`;
 }
 function bulletList(value) {
@@ -36624,7 +38981,7 @@ function renderRoadmap(input) {
   lines.push("|-------|------|--------------|--------|");
   for (const [index, requirement] of planned.entries()) {
     lines.push(
-      `| ${index + 1} | ${escapeTableCell(truncate2(requirement.statement, 60))} | ${requirement.id} | Pending |`
+      `| ${index + 1} | ${escapeTableCell(truncate3(requirement.statement, 60))} | ${requirement.id} | Pending |`
     );
   }
   if (planned.length === 0) {
@@ -36736,12 +39093,12 @@ function resolvedOpenQuestions(session) {
 
 // packages/cli/src/workflow/intake/exploration-source.ts
 import { createHash as createHash18 } from "node:crypto";
-import { readFile as readFile14 } from "node:fs/promises";
-import path24 from "node:path";
+import { readFile as readFile15 } from "node:fs/promises";
+import path28 from "node:path";
 
 // packages/cli/src/workflow/guidance-run.ts
-import { mkdir as mkdir11, readdir as readdir9, readFile as readFile13 } from "node:fs/promises";
-import path23 from "node:path";
+import { mkdir as mkdir11, readdir as readdir11, readFile as readFile14 } from "node:fs/promises";
+import path27 from "node:path";
 
 // packages/cli/src/workflow/budget.ts
 var DEFAULT_LINES_PER_FILE = 200;
@@ -36776,9 +39133,9 @@ import { execFile as execFile4, spawn } from "node:child_process";
 import { promisify as promisify4 } from "node:util";
 
 // packages/cli/src/workflow/executor/fake-plan.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
+import { execFileSync as execFileSync3 } from "node:child_process";
 import { mkdirSync as mkdirSync2, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import path22 from "node:path";
+import path26 from "node:path";
 var FAKE_PLAN_ENV = "LEGION_FAKE_EXECUTOR_PLAN";
 function readFakeExecutorPlan() {
   const raw = process.env[FAKE_PLAN_ENV];
@@ -36791,9 +39148,9 @@ function readFakeExecutorPlan() {
   }
 }
 function resolveInsideRepository(repositoryRoot, relative) {
-  const root = path22.resolve(repositoryRoot);
-  const absolute = path22.resolve(root, relative);
-  const prefix = root.endsWith(path22.sep) ? root : `${root}${path22.sep}`;
+  const root = path26.resolve(repositoryRoot);
+  const absolute = path26.resolve(root, relative);
+  const prefix = root.endsWith(path26.sep) ? root : `${root}${path26.sep}`;
   return absolute === root || absolute.startsWith(prefix) ? absolute : void 0;
 }
 function applyFakeExecutorPlan(input) {
@@ -36803,7 +39160,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.writes ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path22.dirname(absolute), { recursive: true });
+    mkdirSync2(path26.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     written.push(entry.path);
     staged.push(entry.path);
@@ -36819,7 +39176,7 @@ function applyFakeExecutorPlan(input) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
     try {
-      mkdirSync2(path22.dirname(absolute), { recursive: true });
+      mkdirSync2(path26.dirname(absolute), { recursive: true });
       rmSync(absolute, { force: true });
       symlinkSync(entry.target, absolute);
       written.push(entry.path);
@@ -36829,8 +39186,8 @@ function applyFakeExecutorPlan(input) {
   }
   if (input.plan.commit === true && staged.length > 0) {
     try {
-      execFileSync2("git", ["-C", input.repositoryRoot, "add", "--", ...staged], { stdio: "ignore" });
-      execFileSync2(
+      execFileSync3("git", ["-C", input.repositoryRoot, "add", "--", ...staged], { stdio: "ignore" });
+      execFileSync3(
         "git",
         ["-C", input.repositoryRoot, "-c", "user.email=fake@legion", "-c", "user.name=Fake Executor", "commit", "-m", "fake executor commit"],
         { stdio: "ignore" }
@@ -36841,7 +39198,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.writesAfterCommit ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path22.dirname(absolute), { recursive: true });
+    mkdirSync2(path26.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     if (!written.includes(entry.path)) written.push(entry.path);
   }
@@ -36849,7 +39206,7 @@ function applyFakeExecutorPlan(input) {
 }
 
 // packages/cli/src/workflow/executor/result.ts
-import { readFile as readFile12, writeFile as writeFile6 } from "node:fs/promises";
+import { readFile as readFile13, writeFile as writeFile6 } from "node:fs/promises";
 var SECRET_ASSIGNMENT_RE = /\b(api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;]+)/gi;
 var JSON_CREDENTIAL_RE = /"(?:api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)"\s*:\s*"(?:[^"\\]|\\.)*"/gi;
 function redactTranscript(text) {
@@ -36876,7 +39233,7 @@ async function writeProjectExecutionResult(input) {
 }
 async function readOptionalText(filePath) {
   try {
-    return await readFile12(filePath, "utf8");
+    return await readFile13(filePath, "utf8");
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") return "";
     throw error51;
@@ -37263,7 +39620,7 @@ function guidanceCreatedAt(context) {
   }
 }
 async function createGuidanceRunPaths(input) {
-  const workflowRoot = path23.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
+  const workflowRoot = path27.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
   await mkdir11(workflowRoot, { recursive: true });
   const safeTimestamp = input.createdAt.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+$/g, "");
   const slug = slugFromName(input.slugSource);
@@ -37271,7 +39628,7 @@ async function createGuidanceRunPaths(input) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const runId = `${safeTimestamp}-${slug}${suffix}`;
     const artifactRoot = artifactPathSchema.parse(`.legion/project/workflow/${input.workflow}/${runId}`);
-    const absoluteRunRoot = path23.join(input.repositoryRoot, ...artifactRoot.split("/"));
+    const absoluteRunRoot = path27.join(input.repositoryRoot, ...artifactRoot.split("/"));
     try {
       await mkdir11(absoluteRunRoot);
       return {
@@ -37451,10 +39808,10 @@ async function latestGuidanceRuns(input) {
   const limit = input.limitPerWorkflow ?? 3;
   const runs = [];
   for (const workflow of workflows) {
-    const workflowRoot = path23.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path27.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
-      entries = await readdir9(workflowRoot, { withFileTypes: true });
+      entries = await readdir11(workflowRoot, { withFileTypes: true });
     } catch (error51) {
       if (isNodeErrorCode(error51, "ENOENT")) continue;
       throw error51;
@@ -37462,9 +39819,9 @@ async function latestGuidanceRuns(input) {
     const workflowRuns = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const runPath = path23.join(workflowRoot, entry.name, "workflow-run.json");
+      const runPath = path27.join(workflowRoot, entry.name, "workflow-run.json");
       try {
-        const parsed = JSON.parse(await readFile13(runPath, "utf8"));
+        const parsed = JSON.parse(await readFile14(runPath, "utf8"));
         if (parsed.kind === "workflow_run" && parsed.workflow === workflow) workflowRuns.push(parsed);
       } catch {
         continue;
@@ -37532,7 +39889,7 @@ function explorationArtifactPathOf(run) {
 }
 async function readExplorationRunId(repositoryRoot, artifactPath) {
   try {
-    const raw = await readFile14(path24.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
+    const raw = await readFile15(path28.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
     const parsed = JSON.parse(raw);
     const runId = parsed.runId;
     return typeof runId === "string" ? runId : void 0;
@@ -37583,7 +39940,7 @@ async function loadExploration(repositoryRoot, runId) {
   }
   let raw;
   try {
-    raw = await readFile14(path24.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
+    raw = await readFile15(path28.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
     return { ok: false, reason: `Exploration ${runId} could not be read: ${message}` };
@@ -37675,12 +40032,12 @@ function renderSessionStatus(input) {
 }
 
 // packages/cli/src/workflow/intake/session.ts
-import { mkdir as mkdir12, readFile as readFile15, readdir as readdir10, rename as rename4, rm as rm6, rmdir, stat as stat6, writeFile as writeFile7 } from "node:fs/promises";
-import path25 from "node:path";
+import { mkdir as mkdir12, readFile as readFile16, readdir as readdir12, rename as rename4, rm as rm6, rmdir, stat as stat6, writeFile as writeFile7 } from "node:fs/promises";
+import path29 from "node:path";
 var INTAKE_ROOT = ".legion/project/intake";
 var SESSION_FILE = "session.json";
 function intakeSessionDirectory(repositoryRoot, sessionId) {
-  return path25.join(repositoryRoot, ".legion", "project", "intake", sessionId);
+  return path29.join(repositoryRoot, ".legion", "project", "intake", sessionId);
 }
 function intakeSessionArtifactPath(sessionId) {
   return `${INTAKE_ROOT}/${sessionId}/${SESSION_FILE}`;
@@ -37689,7 +40046,7 @@ function isNodeErrorCode2(error51, code) {
   return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === code);
 }
 function sessionFilePath(repositoryRoot, sessionId) {
-  return path25.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
+  return path29.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
 }
 function nowTimestamp2() {
   return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
@@ -37837,7 +40194,7 @@ function graphVersionMismatch(session, options = {}) {
 async function loadSession(repositoryRoot, sessionId) {
   let text;
   try {
-    text = await readFile15(sessionFilePath(repositoryRoot, sessionId), "utf8");
+    text = await readFile16(sessionFilePath(repositoryRoot, sessionId), "utf8");
   } catch (error51) {
     if (isEnoent6(error51)) return { ok: false, reason: `No intake session ${sessionId} exists.` };
     throw error51;
@@ -37875,8 +40232,8 @@ async function claimSessionDirectory(repositoryRoot, sessionId) {
     repositoryRoot,
     artifactPath: intakeSessionArtifactPath(sessionId)
   });
-  const sessionDirectory = path25.dirname(resolved.absolutePath);
-  await mkdir12(path25.dirname(sessionDirectory), { recursive: true });
+  const sessionDirectory = path29.dirname(resolved.absolutePath);
+  await mkdir12(path29.dirname(sessionDirectory), { recursive: true });
   try {
     await mkdir12(sessionDirectory, { recursive: false });
     return true;
@@ -37892,10 +40249,10 @@ async function releaseSessionId(repositoryRoot, sessionId) {
   }
 }
 async function listSessions(repositoryRoot) {
-  const root = path25.join(repositoryRoot, ".legion", "project", "intake");
+  const root = path29.join(repositoryRoot, ".legion", "project", "intake");
   let entries;
   try {
-    entries = await readdir10(root, { withFileTypes: true });
+    entries = await readdir12(root, { withFileTypes: true });
   } catch (error51) {
     if (isEnoent6(error51)) return [];
     throw error51;
@@ -38419,8 +40776,8 @@ async function handleBatchIntake(context) {
   if (filePath === void 0) return usageError("Provide a file as --intake <file>.");
   let parsed;
   try {
-    const absolute = path26.isAbsolute(filePath) ? filePath : path26.resolve(context.repositoryRoot, filePath);
-    parsed = JSON.parse(await readFile16(absolute, "utf8"));
+    const absolute = path30.isAbsolute(filePath) ? filePath : path30.resolve(context.repositoryRoot, filePath);
+    parsed = JSON.parse(await readFile17(absolute, "utf8"));
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
     return usageError(`Failed to read intake file ${filePath}: ${message}`);
@@ -38577,6 +40934,33 @@ ${renderNextAction(action2)}`
 ${renderIntakeDiagnostics(semantic)}`
     );
   }
+  const declaredPins = declaredSurfacePaths(session.answers);
+  const mintPin = await mintPinnedReferences({
+    repositoryRoot: context.repositoryRoot,
+    paths: declaredPins.map((entry) => entry.path)
+  });
+  const unpinnable = [];
+  for (const declared of declaredPins) {
+    if (mintPin(declared.path) !== void 0) continue;
+    unpinnable.push({
+      code: "unpinnable_surface",
+      message: `Requirement ${declared.requirementIndex}, criterion ${declared.criterionIndex}: no readable file is at "${declared.path}", so the surface it pins cannot be recorded. A surface pin is what makes the declaration falsifiable; name a file that exists, or skip req-${declared.requirementIndex}-ac-${declared.criterionIndex}-surface-kind to leave the surface undeclared.`,
+      nodeId: `req-${declared.requirementIndex}-ac-${declared.criterionIndex}-surface-pins`,
+      slot: `requirements.${declared.requirementIndex}.criteria.${declared.criterionIndex}.surface.pins`
+    });
+  }
+  if (unpinnable.length > 0) {
+    return failure(
+      {
+        ok: false,
+        status: "invalid",
+        session: sessionPayload(session, answered, total),
+        diagnostics: unpinnable
+      },
+      `The interview is complete but a declared verification surface pins a file that could not be read:
+${renderIntakeDiagnostics(unpinnable)}`
+    );
+  }
   const answerFor = (nodeId2) => {
     const answer = session.answers.find((entry) => entry.nodeId === nodeId2);
     return typeof answer?.value === "string" ? answer.value : "";
@@ -38659,7 +41043,8 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     projectId,
     createdAt,
     schemaVersion: LEGION_PROTOCOL_VERSION,
-    intakeSessionPath: intakeSessionArtifactPath2(session.id)
+    intakeSessionPath: intakeSessionArtifactPath2(session.id),
+    mintPin
   });
   const existingSet = await readRequirementSet(context.repositoryRoot);
   if (existingSet.ok && existingSet.set.intakeSessionId !== void 0 && existingSet.set.intakeSessionId !== session.id) {
@@ -38694,7 +41079,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     resolvedQuestions: resolvedOpenQuestions(session),
     createdAt
   });
-  const roadmapPath = path26.join(context.repositoryRoot, ROADMAP_FILE);
+  const roadmapPath = path30.join(context.repositoryRoot, ROADMAP_FILE);
   const roadmap = renderRoadmap({
     projectName: name,
     answers: session.answers,
@@ -38706,7 +41091,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
   if (destination.kind === "refused") {
     notes.push(destination.reason);
   } else if (destination.kind === "file") {
-    const existing = await readFile16(roadmapPath, "utf8");
+    const existing = await readFile17(roadmapPath, "utf8");
     if (existing.includes(ROADMAP_MARKER) || hasFlag(context, "force-roadmap")) {
       await writeFile8(roadmapPath, roadmap, "utf8");
       roadmapWritten = true;
@@ -38910,8 +41295,8 @@ ${rendered}` : "Project initialization failed.";
 
 // packages/cli/src/workflow/codebase-map.ts
 import { createHash as createHash19 } from "node:crypto";
-import { readdir as readdir11, readFile as readFile17, stat as stat7 } from "node:fs/promises";
-import path27 from "node:path";
+import { readdir as readdir13, readFile as readFile18, stat as stat7 } from "node:fs/promises";
+import path31 from "node:path";
 var EXCLUDED_DIRECTORIES = /* @__PURE__ */ new Set([
   ".git",
   ".hg",
@@ -39021,7 +41406,7 @@ async function getLatestCodebaseMap(repositoryRoot) {
     const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : void 0;
     if (artifactPath === void 0) continue;
     try {
-      return JSON.parse(await readFile17(path27.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
+      return JSON.parse(await readFile18(path31.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
     } catch {
       continue;
     }
@@ -39058,26 +41443,26 @@ function queryCodebaseMap(map2, query, limit = 10) {
 }
 function normalizeScope(repositoryRoot, scope) {
   if (scope === void 0 || scope.trim().length === 0 || scope.trim() === ".") return ".";
-  const absolute = path27.resolve(repositoryRoot, scope);
-  const relative = path27.relative(repositoryRoot, absolute).replace(/\\/g, "/");
+  const absolute = path31.resolve(repositoryRoot, scope);
+  const relative = path31.relative(repositoryRoot, absolute).replace(/\\/g, "/");
   if (relative.length === 0) return ".";
-  if (relative.startsWith("../") || path27.isAbsolute(relative)) {
+  if (relative.startsWith("../") || path31.isAbsolute(relative)) {
     throw new Error(`Map scope must stay inside the repository: ${scope}`);
   }
   return relative;
 }
 async function collectSourceFiles(repositoryRoot, scope) {
-  const root = scope === "." ? repositoryRoot : path27.join(repositoryRoot, ...scope.split("/"));
+  const root = scope === "." ? repositoryRoot : path31.join(repositoryRoot, ...scope.split("/"));
   const rootStat = await stat7(root);
   const candidates = rootStat.isFile() ? [root] : await walk(root);
   const files = [];
   for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
-    const relative = path27.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
-    const extension = path27.extname(relative).toLowerCase();
-    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path27.basename(relative))) continue;
+    const relative = path31.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
+    const extension = path31.extname(relative).toLowerCase();
+    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path31.basename(relative))) continue;
     const fileStat = await stat7(absolutePath);
     if (!fileStat.isFile() || fileStat.size > 512 * 1024) continue;
-    const bytes = await readFile17(absolutePath);
+    const bytes = await readFile18(absolutePath);
     if (bytes.includes(0)) continue;
     const text = bytes.toString("utf8");
     const lines = text.split(/\r?\n/u);
@@ -39097,10 +41482,10 @@ async function collectSourceFiles(repositoryRoot, scope) {
 }
 async function walk(root) {
   const files = [];
-  const entries = await readdir11(root, { withFileTypes: true });
+  const entries = await readdir13(root, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name.startsWith(".") && ![".github", ".codex-plugin", ".npmrc", ".nvmrc", ".node-version"].includes(entry.name)) continue;
-    const absolute = path27.join(root, entry.name);
+    const absolute = path31.join(root, entry.name);
     if (entry.isDirectory()) {
       if (EXCLUDED_DIRECTORIES.has(entry.name)) continue;
       files.push(...await walk(absolute));
@@ -39145,7 +41530,7 @@ function fingerprintFiles(files) {
 function renderCodebaseMarkdown(map2) {
   const byExtension = /* @__PURE__ */ new Map();
   for (const file2 of map2.files) {
-    const extension = path27.extname(file2.path).toLowerCase() || "(none)";
+    const extension = path31.extname(file2.path).toLowerCase() || "(none)";
     byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
   }
   const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
@@ -39259,8 +41644,8 @@ function ageInDays(generatedAt, now) {
 }
 
 // packages/cli/src/workflow/traceability-check.ts
-import { readdir as readdir12 } from "node:fs/promises";
-import path28 from "node:path";
+import { readdir as readdir14 } from "node:fs/promises";
+import path32 from "node:path";
 var CHANGES_ROOT = ".legion/project/changes";
 var CURRENT_SPECS_ROOT = ".legion/project/specs";
 function taskgraphArtifactPath(changeId) {
@@ -39285,7 +41670,7 @@ async function guarded(artifactPath, code, read) {
 }
 async function changeIds(repositoryRoot) {
   return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
-    const entries = await readdir12(path28.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
+    const entries = await readdir14(path32.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   });
 }
@@ -39554,12 +41939,12 @@ function renderTraceabilityLine(traceability) {
 }
 
 // packages/cli/src/workflow/state.ts
-import { readdir as readdir14 } from "node:fs/promises";
-import path31 from "node:path";
+import { readdir as readdir16 } from "node:fs/promises";
+import path36 from "node:path";
 
 // packages/cli/src/workflow/context.ts
-import { readdir as readdir13, stat as stat8 } from "node:fs/promises";
-import path29 from "node:path";
+import { readdir as readdir15, stat as stat8 } from "node:fs/promises";
+import path33 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -39585,17 +41970,17 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path29.join(repositoryRoot, ".legion");
+  const legionRoot = path33.join(repositoryRoot, ".legion");
   if (!await pathExists6(legionRoot)) return [];
-  const entries = await readdir13(legionRoot, { withFileTypes: true });
+  const entries = await readdir15(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
   if (unknownEntries.length > 0) {
     return [
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path29.join(legionRoot, "project");
-  const manifestPath = path29.join(projectRoot, "project.json");
+  const projectRoot = path33.join(legionRoot, "project");
+  const manifestPath = path33.join(projectRoot, "project.json");
   if (await pathExists6(projectRoot) && !await pathExists6(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -39655,7 +42040,7 @@ function latestEvidenceEntries(entries) {
 
 // packages/cli/src/workflow/run-artifacts.ts
 import { createHash as createHash20 } from "node:crypto";
-import path30 from "node:path";
+import path34 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -39669,6 +42054,24 @@ function evidenceIdForRun(runId) {
 }
 function reviewIdForChange(input) {
   return formatEntityId("review", derivedSuffix(input.changeId.slice("chg_".length), `-review-${input.sequence}`));
+}
+function approvalIdForSubject(input) {
+  const digest = createHash20("sha256").update(`${input.action}
+${input.subject.kind}
+${input.subject.id}`).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  return formatEntityId(
+    "approval",
+    derivedSuffix(input.changeId.slice("chg_".length), `-approval-${digest}`)
+  );
+}
+function attestationIdForKind(input) {
+  return formatEntityId(
+    "attestation",
+    derivedSuffix(input.changeId.slice("chg_".length), `-attestation-${input.attests}`)
+  );
+}
+function releaseIdForChange(input) {
+  return formatEntityId("release", derivedSuffix(input.changeId.slice("chg_".length), "-release"));
 }
 function derivedSuffix(baseSuffix, tail) {
   const full = `${baseSuffix}${tail}`;
@@ -39689,7 +42092,2899 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path30.join(repositoryRoot, ...artifactPath.split("/"));
+  return path34.join(repositoryRoot, ...artifactPath.split("/"));
+}
+
+// packages/cli/src/workflow/evidence-sources.ts
+import path35 from "node:path";
+function asObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function asArray(value) {
+  return Array.isArray(value) ? value : void 0;
+}
+function keySetEquals(value, expected) {
+  const object2 = asObject(value);
+  if (object2 === void 0) return false;
+  const keys = Object.keys(object2).sort();
+  const wanted = [...expected].sort();
+  return keys.length === wanted.length && keys.every((key, index) => key === wanted[index]);
+}
+function isThreatModel(document) {
+  return typeof document["ok"] === "boolean" && typeof document["run_dir"] === "string" && typeof document["output_root"] === "string" && keySetEquals(document["checks"], ["sandbox", "retention", "redaction"]);
+}
+function isRollbackPolicy(document) {
+  return typeof document["backup_manifest_path"] === "string" && (document["status"] === "restorable" || document["status"] === "blocked") && keySetEquals(document["checks"], ["manifest", "restore_target"]);
+}
+function isAbComparison(document) {
+  const inputs = asObject(document["inputs"]);
+  return asObject(document["v8_summary"]) !== void 0 && asObject(document["v9_summary"]) !== void 0 && asArray(document["scenarios"]) !== void 0 && inputs !== void 0 && typeof inputs["v8_dir"] === "string" && typeof inputs["v9_dir"] === "string";
+}
+function isRunScore(document) {
+  return typeof document["run_id"] === "string" && typeof document["scenario_id"] === "string" && typeof document["deterministic_total"] === "number" && typeof document["critical_failure"] === "boolean" && asObject(document["dimensions"]) !== void 0;
+}
+function describeFindings(findings) {
+  const codes = findings.map((finding) => asObject(finding)?.["code"]).filter((code) => typeof code === "string");
+  return codes.length === 0 ? "" : ` (${codes.join(", ")})`;
+}
+function findingsField(value, where) {
+  if (value === void 0) return { ok: true, findings: [] };
+  const findings = asArray(value);
+  if (findings === void 0) {
+    return {
+      ok: false,
+      reason: `its ${where} field is ${value === null ? "null" : `a ${typeof value}`} rather than an array, so what it records cannot be counted and it cannot be read as green`
+    };
+  }
+  return { ok: true, findings };
+}
+function subchecksClean(checks, blocksSubcheck) {
+  const map2 = asObject(checks);
+  if (map2 === void 0) {
+    return { clean: false, reason: "its checks field is not a map of subchecks" };
+  }
+  for (const [name, value] of Object.entries(map2)) {
+    const check2 = asObject(value);
+    if (check2 === void 0) {
+      return { clean: false, reason: `its ${name} subcheck is not an object` };
+    }
+    if (check2["ok"] !== true) {
+      return {
+        clean: false,
+        reason: `its ${name} subcheck reports ok ${JSON.stringify(check2["ok"])}, whatever the document's summary says`
+      };
+    }
+    const findings = findingsField(check2["findings"], `${name} subcheck's findings`);
+    if (!findings.ok) return { clean: false, reason: findings.reason };
+    const blocking = findings.findings.filter((finding) => blocksSubcheck(finding));
+    if (blocking.length > 0) {
+      return {
+        clean: false,
+        reason: `its ${name} subcheck reports ok true beside ${blocking.length} blocking finding${blocking.length === 1 ? "" : "s"}${describeFindings(blocking)}`
+      };
+    }
+  }
+  return { clean: true, reason: "" };
+}
+function shippedRoot(repositoryRoot) {
+  return path35.isAbsolute(repositoryRoot) ? repositoryRoot : path35.resolve(repositoryRoot);
+}
+function sameTree(declared, repositoryRoot) {
+  const fold = (value) => value.replace(/[\\/]+/g, "/").replace(/\/+$/, "").replace(/^([A-Za-z]):/, (_match, drive) => `${drive.toLowerCase()}:`);
+  return fold(declared) === fold(shippedRoot(repositoryRoot));
+}
+function threatModelVerdict(document) {
+  const field = findingsField(document["findings"], "findings");
+  if (!field.ok) return { clean: false, reason: field.reason };
+  const findings = field.findings;
+  if (document["ok"] !== true) {
+    return {
+      clean: false,
+      reason: `its own ok is ${JSON.stringify(document["ok"])} and it records ${findings.length} finding${findings.length === 1 ? "" : "s"}${describeFindings(findings)}`
+    };
+  }
+  if (findings.length > 0) {
+    return {
+      clean: false,
+      reason: `its ok is true but it still records ${findings.length} finding${findings.length === 1 ? "" : "s"}${describeFindings(findings)}, which scripts/baseline/threat-model.mjs never emits together`
+    };
+  }
+  const subchecks = subchecksClean(document["checks"], () => true);
+  if (!subchecks.clean) return { clean: false, reason: subchecks.reason };
+  return { clean: true, reason: "" };
+}
+function rollbackPolicyVerdict(document, repositoryRoot) {
+  const field = findingsField(document["findings"], "findings");
+  if (!field.ok) return { clean: false, reason: field.reason };
+  const blocksSubcheck = (finding) => asObject(finding)?.["severity"] !== "info";
+  const blocking = field.findings.filter((finding) => blocksSubcheck(finding));
+  if (document["ok"] !== true || document["status"] !== "restorable") {
+    return {
+      clean: false,
+      reason: `its own ok is ${JSON.stringify(document["ok"])} and its status is ${JSON.stringify(
+        document["status"]
+      )}, with ${blocking.length} blocking finding${blocking.length === 1 ? "" : "s"}${describeFindings(blocking)}`
+    };
+  }
+  if (blocking.length > 0) {
+    return {
+      clean: false,
+      reason: `its ok is true but it records ${blocking.length} finding${blocking.length === 1 ? "" : "s"} of severity above info${describeFindings(blocking)}`
+    };
+  }
+  const subchecks = subchecksClean(document["checks"], blocksSubcheck);
+  if (!subchecks.clean) return { clean: false, reason: subchecks.reason };
+  if (repositoryRoot === void 0) {
+    return {
+      clean: false,
+      reason: "the repository it was taken in could not be compared to the repository being shipped, because no repository root reached this reader \u2014 and a rollback verdict that is green about some other filesystem tree says nothing about this one"
+    };
+  }
+  const declared = [
+    ["repository_root", document["repository_root"]],
+    ["manifest.repositoryRoot", asObject(document["manifest"])?.["repositoryRoot"]]
+  ];
+  for (const [field_, value] of declared) {
+    if (typeof value !== "string" || value.length === 0) {
+      return {
+        clean: false,
+        reason: `it does not record a ${field_}, so which filesystem tree it is a verdict about is unstated`
+      };
+    }
+    if (!sameTree(value, repositoryRoot)) {
+      return {
+        clean: false,
+        reason: `its ${field_} is ${JSON.stringify(value)}, which is not the repository being shipped (${shippedRoot(repositoryRoot)}). scripts/release/rollback-policy.mjs raises the blocking manifest_repository_root_match for exactly this mismatch, so the same audit re-run here would be ok: false \u2014 this report is green because it was taken somewhere else`
+      };
+    }
+  }
+  return { clean: true, reason: "" };
+}
+function abComparisonVerdict(document) {
+  const summary = asObject(document["v8_summary"]) ?? {};
+  const runCount = summary["run_count"];
+  if (typeof runCount !== "number" || runCount < 1) {
+    return {
+      clean: false,
+      reason: `its baseline side is empty \u2014 v8_summary.run_count is ${JSON.stringify(
+        runCount
+      )} \u2014 so it is a single-sided aggregate rather than a comparison against a baseline`
+    };
+  }
+  const rows = asArray(document["scenarios"]) ?? [];
+  if (rows.length === 0) {
+    return { clean: false, reason: "it compares no scenarios at all" };
+  }
+  const incomplete = rows.filter((row) => {
+    const entry = asObject(row);
+    if (entry === void 0) return true;
+    return entry["v8_present"] !== true || entry["v9_present"] !== true || entry["v8_score_missing"] === true || entry["v9_score_missing"] === true;
+  });
+  if (incomplete.length > 0) {
+    return {
+      clean: false,
+      reason: `${incomplete.length} of its ${rows.length} scenario rows are missing a run or a score on one side, so the comparison is not over a complete corpus`
+    };
+  }
+  return { clean: true, reason: "" };
+}
+var RUN_SCORE_REFUSAL = "a run score records whether a run terminated and how the scaffold graded it, never what the run produced \u2014 the tampered-run fixture in this repository scores identically to the clean one while its threat model reports a leaked canary, so it cannot carry a pass";
+function classifyDocument(document, enveloped, repositoryRoot) {
+  if (isThreatModel(document)) {
+    const verdict = threatModelVerdict(document);
+    return verdict.clean ? { kind: "clean", shape: "threat-model", enveloped } : { kind: "blocking", shape: "threat-model", enveloped, reason: verdict.reason };
+  }
+  if (isRollbackPolicy(document)) {
+    const verdict = rollbackPolicyVerdict(document, repositoryRoot);
+    return verdict.clean ? { kind: "clean", shape: "rollback-policy", enveloped } : { kind: "blocking", shape: "rollback-policy", enveloped, reason: verdict.reason };
+  }
+  if (isAbComparison(document)) {
+    const verdict = abComparisonVerdict(document);
+    return verdict.clean ? { kind: "clean", shape: "ab-comparison", enveloped } : { kind: "blocking", shape: "ab-comparison", enveloped, reason: verdict.reason };
+  }
+  if (isRunScore(document)) {
+    return { kind: "blocking", shape: "run-score", enveloped, reason: RUN_SCORE_REFUSAL };
+  }
+  return { kind: "unrecognised" };
+}
+function classifyEvidenceSource(bytes, context) {
+  const repositoryRoot = typeof context?.repositoryRoot === "string" ? context.repositoryRoot : void 0;
+  if (bytes === void 0) {
+    return { kind: "unread", reason: "its bytes were not collected by this report" };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(bytes);
+  } catch (error51) {
+    return {
+      kind: "unread",
+      reason: `it is not JSON (${error51 instanceof Error ? error51.message : String(error51)})`
+    };
+  }
+  const document = asObject(parsed);
+  if (document === void 0) {
+    return { kind: "unrecognised" };
+  }
+  const inner = asObject(document["verdict"]);
+  if (inner !== void 0 && typeof document["ok"] === "boolean") {
+    return classifyDocument(inner, true, repositoryRoot);
+  }
+  return classifyDocument(document, false, repositoryRoot);
+}
+var EVIDENCE_SOURCE_PRODUCERS = {
+  "threat-model": "legion dev evals threat-model --report <path> (scripts/baseline/threat-model.mjs)",
+  "rollback-policy": "legion dev release rollback-verify --backup-manifest <path> --report <path> (scripts/release/rollback-policy.mjs), run in this repository \u2014 the verdict records the tree it audited and is read here against the tree being shipped",
+  "ab-comparison": "scripts/baseline/compare-runs.mjs",
+  "run-score": "scripts/baseline/grade-run.mjs"
+};
+var UNRECOGNISED_SOURCE_HINT = "Legion recognises the threat-model report (scripts/baseline/threat-model.mjs), the rollback-policy report (scripts/release/rollback-policy.mjs) and the A/B comparison (scripts/baseline/compare-runs.mjs). Recognition is by document structure, never by filename or directory: none of these reports carries a field naming its own type, and recognising them by path is the inference an attestation exists to replace.";
+
+// packages/cli/src/workflow/ship-gates.ts
+var GATE_SCOPE = {
+  current_task_contract_or_small_change_record: "task",
+  deterministic_verification: "task",
+  evidence_note: "task",
+  task_contract: "task",
+  scoped_implementer_run: "task",
+  evidence_bundle_or_log: "task",
+  lightweight_independent_review: "task",
+  approved_delta_spec: "change",
+  protected_oracle: "task",
+  task_level_independent_review: "task",
+  integration_or_real_interface_checks: "change",
+  whole_change_acceptance_evidence: "change",
+  independent_baseline: "change",
+  approved_spec_and_oracle: "change",
+  architecture_or_security_review: "change",
+  protected_acceptance_tests: "task",
+  security_or_e2e_evaluator: "change",
+  explicit_human_approval: "task",
+  release_observation_plan: "change",
+  rollback_or_forward_fix_evidence: "change"
+};
+function earliestExecutionRun(taskRuns) {
+  let earliest;
+  for (const run of taskRuns ?? []) {
+    const startedAt = run.startedAt;
+    if (startedAt === void 0) continue;
+    const candidate = {
+      startedAt,
+      runId: run.id ?? "an unnamed run",
+      taskId: run.taskId ?? "an unnamed task"
+    };
+    if (earliest === void 0) {
+      earliest = candidate;
+      continue;
+    }
+    if (startedAt < earliest.startedAt) earliest = candidate;
+    else if (startedAt === earliest.startedAt && candidate.runId < earliest.runId) earliest = candidate;
+  }
+  return earliest;
+}
+function evidenceItemVerdict(entries, taskId, itemId) {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === void 0) return void 0;
+  for (const item of entry.evidence.items) {
+    if (item.id !== itemId) continue;
+    if (item.verdict === "pass") return "pass";
+    if (item.verdict === "fail") return "fail";
+  }
+  return void 0;
+}
+function hasEvidence(entries, taskId) {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  return entry !== void 0 && entry.evidence.items.length > 0;
+}
+function hasAcceptedReview(reviews, taskId) {
+  return reviews.some(
+    (review) => review.document.status === "accepted" && review.document.taskId === taskId
+  );
+}
+var REVIEW_ACCEPT_ACTION = "workflow.review.accept";
+var DELTA_SPEC_APPROVE_ACTION = "spec.delta.approve";
+function grantExpiry(approval, evaluatedAt) {
+  if (approval.expiresAt === void 0) return "live";
+  if (evaluatedAt === void 0) return "unknown";
+  return approval.expiresAt <= evaluatedAt ? "lapsed" : "live";
+}
+function idempotencyTargetHash(key) {
+  return /:(sha256:[0-9a-f]{64})$/.exec(key)?.[1];
+}
+function approvedReviewLink(input) {
+  const approvedIds = input.approval.scope.targets.filter((target) => target.kind === "review").map((target) => target.id);
+  if (approvedIds.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} names no review, so it cannot be checked against this task's accepted review.`
+    };
+  }
+  const taskReviews = input.reviews.filter((review) => review.document.taskId === input.taskId);
+  const named = taskReviews.filter((review) => approvedIds.includes(review.document.id));
+  if (named.length !== approvedIds.length) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} records accepting ${approvedIds.join(", ")}, which is not among this task's readable reviews.`
+    };
+  }
+  for (const review of named) {
+    if (review.document.status !== "accepted") {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} records accepting review ${review.document.id}, which is now ${review.document.status}.`
+      };
+    }
+    const superseding = taskReviews.find(
+      (candidate) => candidate.document.id !== review.document.id && (candidate.document.supersedes ?? []).includes(review.document.id)
+    );
+    if (superseding !== void 0) {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} approved review ${review.document.id}, which review ${superseding.document.id} has since superseded.`
+      };
+    }
+    const approvedHash = idempotencyTargetHash(input.approval.idempotencyKey);
+    const currentHash = review.reference?.sha256;
+    if (approvedHash === void 0 || currentHash === void 0) {
+      return {
+        kind: "unknown",
+        reason: `Approval ${input.approval.id} cannot be compared against the bytes of review ${review.document.id}, so what was approved is unestablished.`
+      };
+    }
+    if (approvedHash !== currentHash) {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} was granted against different bytes of review ${review.document.id}, which has been rewritten since.`
+      };
+    }
+  }
+  return { kind: "current" };
+}
+function byDecisionInstant(left, right) {
+  const byInstant = (left.decidedAt ?? "").localeCompare(right.decidedAt ?? "");
+  if (byInstant !== 0) return byInstant;
+  return left.id.localeCompare(right.id);
+}
+function humanApprovalStatus(input) {
+  for (const review of input.reviews) {
+    if (review.document.status !== "accepted") continue;
+    if (review.document.taskId !== input.taskId) continue;
+    const acceptedBy = review.document.acceptedBy;
+    if (acceptedBy === void 0 || acceptedBy.kind === "human") continue;
+    return {
+      status: "unsatisfied",
+      reason: `Review ${review.document.id} was accepted by ${acceptedBy.kind} ${acceptedBy.id}, not by a human.`
+    };
+  }
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no human approval is established."
+    };
+  }
+  const relevant = approvals.filter(
+    (approval) => (
+      // Strict equality against a possibly-absent change id, so facts too
+      // degraded to name their own change match nothing rather than matching
+      // everything. Absence must never widen the set an approval can answer for.
+      approval.changeId === input.change?.changeId && // An approval whose two task claims disagree says two things; the gate
+      // reads neither. The service will persist such a document, so refusing it
+      // here is the only place it is refused.
+      (approval.taskId === void 0 || approval.taskId === input.taskId) && approval.scope.action === REVIEW_ACCEPT_ACTION && approval.scope.targets.some((target) => target.kind === "task" && target.id === input.taskId)
+    )
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "No approval records anyone accepting this task's review."
+    };
+  }
+  const live = [];
+  const lapsed = [];
+  const unknownExpiry = [];
+  const nonHumanGrants = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.change?.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
+    if (newestGrant === void 0) return true;
+    const decidedAt = approval.decidedAt;
+    if (decidedAt === void 0) return true;
+    return decidedAt >= newestGrant.decidedAt;
+  }).sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: newestGrant === void 0 ? `Approval ${blocking.id} for this task's review is ${blocking.status}.` : `Approval ${blocking.id} for this task's review is ${blocking.status}, and no later grant supersedes it.`
+    };
+  }
+  if (newestGrant !== void 0) {
+    const link = approvedReviewLink({ approval: newestGrant, reviews: input.reviews, taskId: input.taskId });
+    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
+    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} accepting this task's review.`
+    };
+  }
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
+    };
+  }
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: "An approval for this task's review is recorded as requested and has not been decided."
+  };
+}
+function approvedDeltaSpecPin(input) {
+  const artifacts = input.approval.artifacts;
+  if (artifacts === void 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no artifact, so which bytes of ${input.delta.requirementId}'s delta spec were approved is unestablished.`
+    };
+  }
+  const pins = artifacts.filter((reference) => reference.path === input.delta.path);
+  if (pins.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no reference to ${input.delta.path}, so it does not say this delta spec was approved.`
+    };
+  }
+  if (pins.length > 1) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins ${pins.length} references to ${input.delta.path}, so which bytes were approved is unestablished.`
+    };
+  }
+  const pin = pins[0];
+  if (pin.sha256 !== input.delta.delta.sha256) {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} was granted against different bytes of ${input.delta.path} than change ${input.changeId} ships.`
+    };
+  }
+  const verdict = input.verifyPin(pin);
+  if (verdict === "match") return { kind: "current" };
+  if (verdict === "drift") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${input.delta.path}, whose bytes have changed since it was granted.`
+    };
+  }
+  if (verdict === "missing") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${input.delta.path}, which is no longer present.`
+    };
+  }
+  return {
+    kind: "unknown",
+    reason: `Approval ${input.approval.id} pins ${input.delta.path}, which this report did not hash, so what was approved cannot be compared against what is on disk.`
+  };
+}
+function deltaSpecApprovalStatus(input) {
+  const relevant = input.approvals.filter(
+    (approval) => (
+      // Strict equality, so facts too degraded to name their own change match
+      // nothing rather than everything. A requirement id is not change-scoped —
+      // the same id can appear in two changes — so this is load-bearing, not
+      // belt-and-braces.
+      approval.changeId === input.changeId && approval.scope.action === DELTA_SPEC_APPROVE_ACTION && approval.scope.targets.some(
+        (target) => target.kind === "requirement" && target.id === input.delta.requirementId
+      )
+    )
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No approval records anyone approving the delta spec for ${input.delta.requirementId}.`
+    };
+  }
+  const misfiled = relevant.find((approval) => approval.taskId !== void 0 || approval.runId !== void 0);
+  if (misfiled !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${misfiled.id} names ${misfiled.taskId ?? misfiled.runId}, but a delta spec belongs to the change rather than to one task or run, so this approval is not read here.`
+    };
+  }
+  const live = [];
+  const lapsed = [];
+  const unknownExpiry = [];
+  const nonHumanGrants = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
+    if (newestGrant === void 0) return true;
+    const decidedAt = approval.decidedAt;
+    if (decidedAt === void 0) return true;
+    return decidedAt >= newestGrant.decidedAt;
+  }).sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: newestGrant === void 0 ? `Approval ${blocking.id} for the delta spec of ${input.delta.requirementId} is ${blocking.status}.` : `Approval ${blocking.id} for the delta spec of ${input.delta.requirementId} is ${blocking.status}, and no later grant supersedes it.`
+    };
+  }
+  if (newestGrant !== void 0) {
+    const link = approvedDeltaSpecPin({
+      approval: newestGrant,
+      delta: input.delta,
+      changeId: input.changeId,
+      verifyPin: input.verifyPin
+    });
+    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
+    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving the delta spec for ${input.delta.requirementId}.`,
+      decidedAt: newestGrant.decidedAt
+    };
+  }
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id} for ${input.delta.requirementId}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
+    };
+  }
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} for ${input.delta.requirementId} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} for ${input.delta.requirementId} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: `An approval for the delta spec of ${input.delta.requirementId} is recorded as requested and has not been decided.`
+  };
+}
+function isLiveDeltaSpecGrant(input) {
+  const outcome = deltaSpecApprovalStatus({
+    approvals: [input.approval],
+    changeId: input.changeId,
+    delta: input.delta,
+    evaluatedAt: input.evaluatedAt,
+    verifyPin: () => "match"
+  });
+  return outcome.status === "satisfied";
+}
+function deltaSpecApprovalGateStatus(input) {
+  const deltas = input.change?.deltas;
+  if (deltas === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The delta specs recorded for this change could not be read, so no delta-spec approval is established."
+    };
+  }
+  if (deltas.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records no delta specs, so there is nothing to have been approved."
+    };
+  }
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no delta-spec approval is established."
+    };
+  }
+  const change = input.change;
+  const outcomes = deltas.map(
+    (delta) => deltaSpecApprovalStatus({
+      approvals,
+      changeId: change.changeId,
+      delta,
+      evaluatedAt: change.evaluatedAt,
+      verifyPin: change.verifyPin
+    })
+  );
+  const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
+  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  const chosen = negative ?? unmet[0];
+  if (chosen !== void 0) {
+    const remainder = unmet.length > 1 ? ` ${unmet.length} of ${deltas.length} delta specs in this change are unmet.` : "";
+    return { status: chosen.status, reason: `${chosen.reason}${remainder}` };
+  }
+  const first = outcomes[0];
+  return {
+    status: "satisfied",
+    reason: deltas.length === 1 ? first.reason : `All ${deltas.length} delta specs in this change are approved. ${first.reason}`
+  };
+}
+var INTEGRATION_SURFACE_ITEM = "integration-surface-check";
+var SURFACE_REAFFIRM_RECOVERY = {
+  command: "legion approve surface --approver <id>",
+  reason: "A file a verification surface pins has been edited since the declaration was made, so the declaration no longer describes what is on disk. If the edit was intended, re-affirm the declaration against the current bytes: that records a named human saying it still describes what they meant, and re-mints the pin. No command re-mints it silently, because that would launder an out-of-band edit into a declaration."
+};
+var SURFACE_BUILD_RECOVERY = {
+  command: "legion build",
+  reason: "This change declares a verification surface beyond unit, and no evidence records it being exercised. Run the build that executes it, then rerun legion ship."
+};
+var SURFACE_DECLARE_RECOVERY = {
+  command: "legion start --intake",
+  reason: "Nothing in this change declares a verification surface that reaches an integration or real interface. Declare one on an executable acceptance criterion and re-plan, or lower the risk tier through an audited risk.override if this change genuinely crosses no boundary."
+};
+function surfaceCheckVerdict(entries, taskId) {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === void 0) return void 0;
+  return entry.evidence.items.find((item) => item.id === INTEGRATION_SURFACE_ITEM)?.verdict;
+}
+var SURFACE_REAFFIRM_ACTION = "verification.surface.reaffirm";
+function surfaceIdentity(surface) {
+  const pins = surface.pinned.map((pin) => `${pin.path}@${pin.sha256}`).slice().sort();
+  return JSON.stringify([surface.kind, surface.interface, pins]);
+}
+function dedupeSurfaces(surfaces) {
+  const byIdentity = /* @__PURE__ */ new Map();
+  for (const declared of surfaces) {
+    const key = surfaceIdentity(declared.surface);
+    const existing = byIdentity.get(key);
+    if (existing === void 0) {
+      byIdentity.set(key, { origins: [...declared.origins], declared });
+      continue;
+    }
+    existing.origins.push(...declared.origins);
+  }
+  return [...byIdentity.values()].map((entry) => ({ ...entry.declared, origins: entry.origins }));
+}
+function declaredVerificationSurfaces(input) {
+  const surfaces = [];
+  for (const [index, entry] of (input.task.verification ?? []).entries()) {
+    if (entry?.surface === void 0) continue;
+    surfaces.push({
+      origins: [`verification entry ${index + 1} of ${input.taskId}`],
+      taskId: input.taskId,
+      surface: entry.surface
+    });
+  }
+  const oracleRefs = input.task.oracleRefs ?? [];
+  let unestablished2;
+  if (oracleRefs.length > 0) {
+    const oracles = input.change?.oracles;
+    for (const oracleId of oracleRefs) {
+      const fact = oracles?.find((entry) => entry.document.id === oracleId);
+      if (fact === void 0) {
+        unestablished2 ??= oracleId;
+        continue;
+      }
+      if (fact.document.surface === void 0) continue;
+      surfaces.push({ origins: [`oracle ${oracleId}`], taskId: input.taskId, surface: fact.document.surface });
+    }
+  }
+  return { surfaces: dedupeSurfaces(surfaces), unestablished: unestablished2 };
+}
+function surfacePinReaffirmation(input) {
+  const approvals = input.change.approvals;
+  if (approvals === void 0) return void 0;
+  const relevant = approvals.filter(
+    (approval) => approval.changeId === input.change.changeId && approval.scope.action === SURFACE_REAFFIRM_ACTION && (approval.artifacts ?? []).some((reference) => reference.path === input.path)
+  );
+  if (relevant.length === 0) return void 0;
+  const live = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") continue;
+    if (grantExpiry(approval, input.change.evaluatedAt) !== "live") continue;
+    live.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  if (newestGrant === void 0) return void 0;
+  const standing = relevant.some(
+    (approval) => (approval.status === "denied" || approval.status === "revoked" || approval.status === "expired") && (approval.decidedAt === void 0 || approval.decidedAt >= newestGrant.decidedAt)
+  );
+  if (standing) return void 0;
+  const reaffirmed = (newestGrant.artifacts ?? []).find((reference) => reference.path === input.path);
+  if (reaffirmed === void 0) return void 0;
+  if (input.change.verifyPin(reaffirmed) !== "match") return void 0;
+  return { by: newestGrant.decidedBy.id, at: newestGrant.decidedAt };
+}
+function isLiveSurfaceReaffirmation(input) {
+  const reaffirmed = surfacePinReaffirmation({
+    path: input.path,
+    change: {
+      changeId: input.changeId,
+      acceptance: void 0,
+      approvals: [input.approval],
+      attestations: void 0,
+      reviews: void 0,
+      deltas: void 0,
+      oracles: void 0,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: input.evaluatedAt,
+      verifyPin: (reference) => reference.sha256 === input.currentSha256 ? "match" : "drift",
+      classifySource: UNREAD_SOURCES
+    }
+  });
+  return reaffirmed !== void 0;
+}
+function surfacePinStatus(input) {
+  const { origins, surface } = input.declared;
+  const describe3 = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
+  const reaffirmed = [];
+  if (surface.pinned.length === 0) {
+    return {
+      unmet: { status: "unevaluable", reason: `${describe3} pins no reference, so there is nothing to check it against.` },
+      reaffirmed
+    };
+  }
+  const change = input.change;
+  const verifyPin = change?.verifyPin;
+  if (change === void 0 || verifyPin === void 0) {
+    return {
+      unmet: {
+        status: "unevaluable",
+        reason: `${describe3} pins ${surface.pinned[0]?.path}, and this report carries no way to re-hash it, so what was declared cannot be compared against what is on disk.`
+      },
+      reaffirmed
+    };
+  }
+  for (const pin of surface.pinned) {
+    const verdict = verifyPin(pin);
+    if (verdict === "match") continue;
+    if (verdict === "drift") {
+      const grant = surfacePinReaffirmation({ path: pin.path, change });
+      if (grant !== void 0) {
+        reaffirmed.push({ path: pin.path, decidedBy: grant.by, decidedAt: grant.at });
+        continue;
+      }
+      return {
+        unmet: {
+          status: "unsatisfied",
+          reason: `${describe3} pins ${pin.path}, whose bytes have changed since the declaration was made. If that edit was intended, re-affirm the declaration against the current bytes with legion approve surface --approver <id>.`,
+          recovery: SURFACE_REAFFIRM_RECOVERY
+        },
+        reaffirmed
+      };
+    }
+    if (verdict === "missing") {
+      return {
+        unmet: { status: "unsatisfied", reason: `${describe3} pins ${pin.path}, which is no longer present.` },
+        reaffirmed
+      };
+    }
+    return {
+      unmet: {
+        status: "unevaluable",
+        reason: `${describe3} pins ${pin.path}, which this report did not hash, so what was declared cannot be compared against what is on disk.`
+      },
+      reaffirmed
+    };
+  }
+  return { reaffirmed };
+}
+function changeVerificationSurfaces(input) {
+  const surfaces = [];
+  const unreadableOracles = [];
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    const declared = declaredVerificationSurfaces({ task, taskId, change: input.change });
+    surfaces.push(...declared.surfaces);
+    if (declared.unestablished !== void 0) unreadableOracles.push(declared.unestablished);
+  }
+  return { surfaces, unreadableOracles };
+}
+function nonUnitSurfaceOutcome(input) {
+  const { origins, surface } = input.declared;
+  const describe3 = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
+  const pin = surfacePinStatus({ declared: input.declared, change: input.change });
+  if (pin.unmet !== void 0) return pin.unmet;
+  const verdict = surfaceCheckVerdict(input.entries, input.declared.taskId);
+  if (verdict === "pass") {
+    if (pin.reaffirmed.length === 0) {
+      return { status: "satisfied", reason: `${describe3} was exercised, and every pinned reference still matches.` };
+    }
+    const newest = [...pin.reaffirmed].sort((left, right) => left.decidedAt < right.decidedAt ? -1 : left.decidedAt > right.decidedAt ? 1 : 0).at(-1);
+    const paths = pin.reaffirmed.map((entry) => entry.path).join(", ");
+    return {
+      status: "satisfied",
+      reason: `${describe3} was exercised, and ${pin.reaffirmed.length} of its pinned reference${pin.reaffirmed.length === 1 ? " no longer matches" : "s no longer match"} the bytes that check ran against (${paths}). ${newest.decidedBy} re-affirmed the declaration against the current bytes at ${newest.decidedAt}; no verification has run against them.`,
+      judgement: {
+        basis: "pin-reaffirmation",
+        // The literal is this function's own gate: `nonUnitSurfaceOutcome` is
+        // reached only from `integrationSurfaceGateStatus`, which answers only
+        // `integration_or_real_interface_checks`. Threading a gate id through two
+        // frames to arrive at a constant would be ceremony, not a check.
+        gate: "integration_or_real_interface_checks",
+        decidedBy: newest.decidedBy,
+        decidedAt: newest.decidedAt,
+        path: paths,
+        interface: surface.interface
+      }
+    };
+  }
+  if (verdict === "fail") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} is covered by a failed integration-surface-check: a declared non-unit verification command did not pass.`
+    };
+  }
+  if (verdict === "unknown") {
+    return {
+      status: "unevaluable",
+      reason: `${describe3} is covered by an integration-surface-check that did not reach every declared non-unit surface, so it may never have been exercised.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: `${describe3} has no integration-surface-check in ${input.declared.taskId}'s latest evidence, so nothing says it was exercised.`,
+    recovery: SURFACE_BUILD_RECOVERY
+  };
+}
+function integrationSurfaceGateStatus(input) {
+  const { surfaces, unreadableOracles } = changeVerificationSurfaces(input);
+  const unreadableOracle = unreadableOracles.length === 0 ? void 0 : `This change names oracle ${unreadableOracles[0]}, which this report could not read, so whether it declares a verification surface is unestablished.`;
+  if (surfaces.length === 0) {
+    if (unreadableOracle !== void 0) return { status: "unevaluable", reason: unreadableOracle };
+    return {
+      status: "unevaluable",
+      reason: "No task contract or oracle in this change declares a verification surface, so whether verification reached an integration or real interface is unestablished. Declare it on an acceptance criterion at intake and re-plan.",
+      recovery: SURFACE_DECLARE_RECOVERY
+    };
+  }
+  const nonUnit = surfaces.filter((declared) => declared.surface.kind !== "unit");
+  if (nonUnit.length === 0 && unreadableOracle === void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Every verification surface this change declares is a unit surface (${surfaces.map((declared) => declared.origins.join(" and ")).join(", ")}), so nothing in this change reaches an integration or real interface. That is a recorded answer, not a missing one.`,
+      recovery: SURFACE_DECLARE_RECOVERY
+    };
+  }
+  const outcomes = nonUnit.map(
+    (declared) => nonUnitSurfaceOutcome({ declared, entries: input.entries, change: input.change })
+  );
+  if (unreadableOracle !== void 0) outcomes.push({ status: "unevaluable", reason: unreadableOracle });
+  const met = outcomes.find((outcome) => outcome.status === "satisfied" && outcome.judgement === void 0) ?? outcomes.find((outcome) => outcome.status === "satisfied");
+  if (met !== void 0) {
+    const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
+    const remainder2 = unmet.length === 0 ? "" : ` ${unmet.length} other declared surface${unmet.length === 1 ? " is" : "s are"} unmet, and this gate is satisfied by the one above rather than by them: ${unmet.map((outcome) => outcome.reason).join(" ")}`;
+    return { ...met, reason: `${met.reason}${remainder2}` };
+  }
+  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  const chosen = negative ?? outcomes[0];
+  const remainder = outcomes.length > 1 ? ` ${outcomes.length} of this change's declared surfaces are unmet.` : "";
+  return { ...chosen, reason: `${chosen.reason}${remainder}` };
+}
+var ACCEPT_RECOVERY = {
+  command: "legion review --accept --approver <id>",
+  reason: "No whole-change sign-off has been recorded for this change, and a clean submitted review already covers its evidence. Accepting it records one, naming a human decision owner from the project manifest."
+};
+var RE_ACCEPT_RECOVERY = {
+  command: "legion review",
+  reason: "A whole-change verdict is already recorded, and `legion review --accept` will not replace it directly: the accept that recorded it flipped every covering review from submitted to accepted, and an accept refuses evidence no clean *submitted* review covers. Submit a fresh review first, then rerun `legion review --accept --approver <id>` \u2014 the promotion re-derives the verdict from scratch, so a recorded block or a sign-off that has gone stale is replaced rather than argued with."
+};
+var REBUILD_RECOVERY = {
+  command: "legion build",
+  reason: "The whole-change sign-off does not cover every task being shipped, because some task has no evidence in this change's index. Build it, review it, then accept: a sign-off cannot cover evidence that does not exist."
+};
+var REVIEW_RECOVERY = {
+  command: "legion review",
+  reason: "This change was re-run after it was signed off, and the newest evidence has not been accepted. Submit a review over it first \u2014 legion review --accept refuses to accept evidence no clean submitted review covers \u2014 and then accept, which re-dates the whole-change sign-off over what is there now."
+};
+var BUNDLE_RECOVERY = {
+  command: "legion dev change validate <changeId>",
+  reason: "This change's bundle could not be read, so nothing is known about whether it was accepted. That command reports what is wrong with it; it does not repair it \u2014 a drifted design, decision log or delta spec is corrected by hand."
+};
+function newestEvidenceAcceptance(entries) {
+  let newest;
+  for (const entry of entries) {
+    if (entry.acceptance.status !== "accepted") continue;
+    const acceptedAt = entry.acceptance.acceptedAt;
+    if (acceptedAt === void 0) continue;
+    if (newest === void 0 || acceptedAt > newest) newest = acceptedAt;
+  }
+  return newest;
+}
+function acceptorCorroboration(input) {
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${input.acceptedBy}, but the approvals recorded for it could not be read, so nothing establishes that the acceptor was a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const named = [];
+  for (const approval of approvals) {
+    if (approval.changeId !== input.change?.changeId) continue;
+    if (approval.scope.action !== REVIEW_ACCEPT_ACTION) continue;
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.id !== input.acceptedBy) continue;
+    named.push(approval);
+  }
+  if (named.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${input.acceptedBy}, but no granted ${REVIEW_ACCEPT_ACTION} approval for this change names that actor, so nothing establishes that the sign-off was taken by a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (!named.some((approval) => approval.decidedBy.kind === "human")) {
+    const kinds = [...new Set(named.map((approval) => approval.decidedBy.kind))].sort().join(", ");
+    return {
+      status: "unsatisfied",
+      reason: `This change records an acceptance by ${input.acceptedBy}, and every granted ${REVIEW_ACCEPT_ACTION} approval naming that actor records it as ${kinds}, not as a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  return void 0;
+}
+function wholeChangeAcceptanceStatus(input) {
+  const acceptance = input.change?.acceptance;
+  if (acceptance == null) {
+    return {
+      status: "unevaluable",
+      reason: "The change bundle for this change could not be read, so whether the change as a whole was accepted is unestablished.",
+      recovery: BUNDLE_RECOVERY
+    };
+  }
+  if (acceptance.status === "not_ready") {
+    return {
+      status: "unevaluable",
+      reason: `This change's acceptance is recorded as not_ready${acceptance.reason === void 0 ? "" : ` (${acceptance.reason})`}: no accept decision has been made about the change as a whole.`,
+      recovery: ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "ready") {
+    return {
+      status: "unevaluable",
+      reason: "This change's acceptance is recorded as ready: every task's evidence was accepted, and no named approver signed off on the change as a whole.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "rejected") {
+    return {
+      status: "unsatisfied",
+      reason: `This change's acceptance is recorded as rejected: ${acceptance.reason}`,
+      recovery: REBUILD_RECOVERY
+    };
+  }
+  if (acceptance.status === "blocked") {
+    return {
+      status: "unsatisfied",
+      reason: `This change's acceptance is recorded as blocked: ${acceptance.reason}`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "superseded") {
+    return {
+      status: "unsatisfied",
+      reason: "This change's acceptance is recorded as superseded, so the recorded sign-off is no longer the current decision.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status !== "accepted") {
+    return {
+      status: "unevaluable",
+      reason: `This change's acceptance is recorded as ${String(
+        acceptance.status
+      )}, which this Legion does not recognize as a whole-change verdict; it was written by a newer protocol or by hand.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const acceptedAt = acceptance.acceptedAt;
+  const acceptedBy = acceptance.acceptedBy;
+  if (acceptedBy === void 0 || acceptedBy.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records an acceptance with no acceptor, so who signed off on the change as a whole is unestablished.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptedAt === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${acceptedBy} with no instant, so it cannot be compared against the evidence it claims to cover.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const evaluatedAt = input.change?.evaluatedAt;
+  if (evaluatedAt !== void 0 && acceptedAt > evaluatedAt) {
+    return {
+      status: "unsatisfied",
+      reason: `This change records an acceptance by ${acceptedBy} at ${acceptedAt}, later than the instant this report was derived (${evaluatedAt}); a sign-off cannot be dated after the moment it is read.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const corroborated = acceptorCorroboration({ change: input.change, acceptedBy });
+  if (corroborated !== void 0) return corroborated;
+  if (input.tasks.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records no tasks, so there is no evidence for a whole-change sign-off to cover.",
+      recovery: REBUILD_RECOVERY
+    };
+  }
+  const latest = latestEvidencePerTask(input.entries);
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    const entry = latest.get(taskId);
+    if (entry === void 0) {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId} has no evidence in this change's index, so the sign-off does not cover it.`,
+        recovery: REBUILD_RECOVERY
+      };
+    }
+    if (entry.acceptance.status === "rejected") {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId}'s latest evidence ${entry.evidence.id} has since been rejected.`,
+        recovery: REBUILD_RECOVERY
+      };
+    }
+    if (entry.acceptance.status !== "accepted") {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId}'s latest evidence ${entry.evidence.id} is not accepted, so this change was re-run after the sign-off and the sign-off does not cover what is there now.`,
+        recovery: REVIEW_RECOVERY
+      };
+    }
+    if (entry.acceptance.acceptedAt === void 0) {
+      return {
+        status: "unevaluable",
+        reason: `${taskId}'s latest evidence ${entry.evidence.id} is accepted with no acceptedAt, so the instant the whole-change sign-off must cover is unestablished.`,
+        recovery: RE_ACCEPT_RECOVERY
+      };
+    }
+  }
+  const newest = newestEvidenceAcceptance(input.entries);
+  if (acceptedAt >= newest) {
+    return {
+      status: "satisfied",
+      reason: `${acceptedBy} accepted this change at ${acceptedAt}, covering all ${input.tasks.length} task${input.tasks.length === 1 ? "" : "s"} and every accepted evidence bundle in it (newest accepted at ${newest}).`
+    };
+  }
+  return {
+    status: "unsatisfied",
+    reason: `${acceptedBy} accepted this change at ${acceptedAt}, which is older than the ${newest} at which this change's task evidence was last accepted: the change was rebuilt and re-accepted per task after the whole-change sign-off, so the sign-off is about work that has since been replaced.`,
+    recovery: RE_ACCEPT_RECOVERY
+  };
+}
+var ORACLE_APPROVE_ACTION = "oracle.approve";
+var ORACLE_APPROVE_RECOVERY = {
+  command: "legion approve oracle --approver <id>",
+  reason: "An oracle this change's tasks are judged against carries no granted approval, and no build produces one: the gate reads the approval plane. Approve every oracle and every delta spec **before** running legion build \u2014 this gate compares the last of those decisions against the instant the first task run started, and nothing re-orders a decision once it has been taken."
+};
+var SPEC_APPROVE_RECOVERY = {
+  command: "legion approve spec --approver <id>",
+  reason: "This change's delta specs are not approved, and no build produces that: the gate reads the approval plane. At R3 `approved_delta_spec` is not derived at all, so this gate is the only reader of a spec.delta.approve grant \u2014 approve them before running legion build, then rerun legion ship."
+};
+var ORACLE_BYTES_RECOVERY = {
+  command: "legion ship",
+  reason: "An oracle document no longer holds the bytes its approval was granted against. No command in Legion rewrites an oracle \u2014 legion plan is create-only and nothing else writes one \u2014 so the file was edited out of band. Restore it to the bytes the approval records, then rerun this to confirm. Re-approving the edited bytes is deliberately not offered: it would launder the edit into a governance record and re-date the decision this gate orders."
+};
+var ORDERING_BUILD_RECOVERY = {
+  command: "legion build",
+  reason: "Every delta spec and oracle of this change is approved and no task has run, so there is no execution for those decisions to have preceded. This is the one unmet state of this gate a build repairs, and running it now is what makes the ordering true."
+};
+var ORDERING_REPLAN_RECOVERY = {
+  command: "legion start --intake",
+  reason: "A specification approved at or after the work started is not an approval the work was done under, and no command re-orders a decision that has already been taken: nothing rewinds or deletes a task run, and re-approving only writes a later decision instant. Plan the remaining work as a new change and approve its delta specs and oracles before building it, or lower the risk tier through an audited risk.override if this change's ordering genuinely does not matter."
+};
+var APPROVE_BEFORE_BUILD_RECOVERY = {
+  command: "legion approve spec --approver <id>",
+  reason: "This change carries R3 work, and R3 derives approved_spec_and_oracle: the gate compares the last approval of its delta specs and oracles against the instant its first task run started. legion build is a one-way door here \u2014 nothing re-orders a decision already taken, so a change built before it is approved can never satisfy that gate. Approve the delta specs, then the oracles with legion approve oracle --approver <id>, and build after that. R3 also derives independent_baseline, which compares an attestation's instant against the same run start: capture and attest a baseline before building if this change is to satisfy that gate on evidence rather than on an audited waiver. R3 further derives protected_acceptance_tests: if this work has to modify an acceptance test its own oracles protect, record that with legion approve protected-paths --approver <id> before building, because that decision has to predate the run too."
+};
+function derivesApprovalOrderingGate(tasks) {
+  return derivesShipGate(tasks, "approved_spec_and_oracle");
+}
+function derivesShipGate(tasks, gateId) {
+  return tasks.some(
+    (task) => deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
+      (gate) => gate.id === gateId
+    )
+  );
+}
+var UNREADABLE_PLANE_RECOVERY = {
+  command: "legion ship",
+  reason: "A change artifact this gate reads would not load as a complete set, so nothing about what was approved is known. No command rewrites a planned artifact \u2014 legion plan is create-only \u2014 so correct or remove the file the other diagnostics in this payload name, then rerun this to confirm the defect is gone. Approving again would not help: the writer reads the same planes and refuses for the same reason."
+};
+var ORDERING_UNREADABLE_RECOVERY = {
+  command: "legion ship",
+  reason: "This change's task runs could not be read as a complete set, so no ordering between an approval and the start of execution can be established. The artifact_plane_incomplete diagnostic in this same payload names the file that could not be read \u2014 remove or correct it, then rerun this."
+};
+var MISFILED_APPROVAL_RECOVERY = {
+  command: "legion ship",
+  reason: "An approval about this subject also names a task or a run, and this gate reads only change-scoped decisions, so it is not read here. No command rewrites an approval's scope \u2014 the approve verbs write neither field \u2014 so delete the approval this verdict names and take the decision again with the approve verb for this subject, then rerun this to confirm."
+};
+function orderingAwareRecovery(recovery, execution) {
+  if (recovery === void 0) return recovery;
+  if (!recovery.command.startsWith("legion approve")) return recovery;
+  if (execution.kind === "started") return ORDERING_REPLAN_RECOVERY;
+  if (execution.kind === "unestablished") return ORDERING_UNREADABLE_RECOVERY;
+  return recovery;
+}
+function executionOrdering(taskRuns) {
+  if (taskRuns === void 0) return { kind: "unestablished" };
+  const earliest = earliestExecutionRun(taskRuns);
+  if (earliest !== void 0) return { kind: "started", ...earliest };
+  return taskRuns.length === 0 ? { kind: "none" } : { kind: "unestablished" };
+}
+function approvedOraclePin(input) {
+  const oracleId = input.oracle.document.id;
+  const oraclePath2 = input.oracle.reference.path;
+  const artifacts = input.approval.artifacts;
+  if (artifacts === void 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no artifact, so which bytes of oracle ${oracleId} were approved is unestablished.`
+    };
+  }
+  const pins = artifacts.filter((reference) => reference.path === oraclePath2);
+  if (pins.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no reference to ${oraclePath2}, so it does not say oracle ${oracleId} was approved.`
+    };
+  }
+  if (pins.length > 1) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins ${pins.length} references to ${oraclePath2}, so which bytes were approved is unestablished.`
+    };
+  }
+  const pin = pins[0];
+  if (pin.sha256 !== input.oracle.reference.sha256) {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} was granted against different bytes of oracle ${oracleId} than change ${input.changeId} now carries: the oracle was edited after it was approved.`
+    };
+  }
+  const verdict = input.verifyPin(pin);
+  if (verdict === "match") return { kind: "current" };
+  if (verdict === "drift") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${oraclePath2}, whose bytes have changed since it was granted.`
+    };
+  }
+  if (verdict === "missing") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${oraclePath2}, which is no longer present.`
+    };
+  }
+  return { kind: "current" };
+}
+function oracleApprovalStatus(input) {
+  const oracleId = input.oracle.document.id;
+  const relevant = input.approvals.filter(
+    (approval) => (
+      // Strict equality against a possibly-absent change id, so facts too
+      // degraded to name their own change match nothing rather than everything.
+      // An oracle id is derived from a phase slug and is not change-scoped, so
+      // this is load-bearing rather than belt-and-braces.
+      approval.changeId === input.changeId && approval.scope.action === ORACLE_APPROVE_ACTION && approval.scope.targets.some((target) => target.kind === "oracle" && target.id === oracleId)
+    )
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No approval records anyone approving oracle ${oracleId}.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+  const misfiled = relevant.find((approval) => approval.taskId !== void 0 || approval.runId !== void 0);
+  if (misfiled !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${misfiled.id} names ${misfiled.taskId ?? misfiled.runId}, but an oracle belongs to the change rather than to one task or run, so this approval is not read here.`,
+      recovery: MISFILED_APPROVAL_RECOVERY
+    };
+  }
+  const live = [];
+  const lapsed = [];
+  const unknownExpiry = [];
+  const nonHumanGrants = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
+    if (newestGrant === void 0) return true;
+    const decidedAt = approval.decidedAt;
+    if (decidedAt === void 0) return true;
+    return decidedAt >= newestGrant.decidedAt;
+  }).sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: newestGrant === void 0 ? `Approval ${blocking.id} for oracle ${oracleId} is ${blocking.status}.` : `Approval ${blocking.id} for oracle ${oracleId} is ${blocking.status}, and no later grant supersedes it.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+  if (newestGrant !== void 0) {
+    const link = approvedOraclePin({
+      approval: newestGrant,
+      oracle: input.oracle,
+      changeId: input.changeId,
+      verifyPin: input.verifyPin
+    });
+    if (link.kind === "stale") {
+      return { status: "unsatisfied", reason: link.reason, recovery: ORACLE_BYTES_RECOVERY };
+    }
+    if (link.kind === "unknown") {
+      return { status: "unevaluable", reason: link.reason, recovery: ORACLE_APPROVE_RECOVERY };
+    }
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving oracle ${oracleId}.`,
+      decidedAt: newestGrant.decidedAt
+    };
+  }
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id} for oracle ${oracleId}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} for oracle ${oracleId} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} for oracle ${oracleId} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: `An approval for oracle ${oracleId} is recorded as requested and has not been decided.`,
+    recovery: ORACLE_APPROVE_RECOVERY
+  };
+}
+function changeOracleDemand(input) {
+  const namedBy = /* @__PURE__ */ new Map();
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    for (const oracleId of task.oracleRefs ?? []) {
+      const tasks = namedBy.get(oracleId) ?? [];
+      if (!tasks.includes(taskId)) tasks.push(taskId);
+      namedBy.set(oracleId, tasks);
+    }
+  }
+  const oracles = input.change?.oracles;
+  const referenced = [];
+  const unresolved = [];
+  for (const oracleId of [...namedBy.keys()].sort()) {
+    const taskIds = namedBy.get(oracleId);
+    const fact = oracles?.find((entry) => entry.document.id === oracleId);
+    if (fact === void 0) {
+      unresolved.push({ oracleId, taskId: taskIds[0] });
+      continue;
+    }
+    referenced.push({ oracleId, taskIds, fact });
+  }
+  const unreferenced = (oracles ?? []).map((entry) => entry.document.id).filter((oracleId) => !namedBy.has(oracleId)).sort();
+  return { referenced, unresolved, unreferenced };
+}
+function approvedSpecAndOracleStatus(input) {
+  const deltas = input.change?.deltas;
+  if (deltas === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The delta specs recorded for this change could not be read, so whether its specification was approved before execution is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  if (deltas.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records no delta specs, so there is no specification to have been approved.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no approval is established.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  if (input.change?.oracles === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The oracles recorded for this change could not be read, so whether the criteria its work is judged against were approved is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  const change = input.change;
+  const demand = changeOracleDemand({ tasks: input.tasks, taskIdFor: input.taskIdFor, change });
+  if (demand.referenced.length === 0 && demand.unresolved.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "No task of this change references an oracle, so there is no oracle whose approval could have preceded execution.",
+      recovery: ORDERING_REPLAN_RECOVERY
+    };
+  }
+  const missing = demand.unresolved[0];
+  if (missing !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Task ${missing.taskId} is judged against oracle ${missing.oracleId}, which is not among the ${change.oracles?.length ?? 0} oracle document${(change.oracles?.length ?? 0) === 1 ? "" : "s"} this change carries, so whether it was approved cannot be established.`,
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  const shipped = new Set(deltas.map((delta) => delta.requirementId));
+  for (const task of input.tasks) {
+    for (const requirementId of task.requirementIds ?? []) {
+      if (shipped.has(requirementId)) continue;
+      return {
+        status: "unevaluable",
+        reason: `Task ${input.taskIdFor(
+          task
+        )} implements requirement ${requirementId}, which this change ships no delta spec for, so whether its specification was approved cannot be established.`,
+        recovery: ORDERING_REPLAN_RECOVERY
+      };
+    }
+  }
+  const outcomes = [
+    ...deltas.map((delta) => {
+      const outcome = deltaSpecApprovalStatus({
+        approvals,
+        changeId: change.changeId,
+        delta,
+        evaluatedAt: change.evaluatedAt,
+        verifyPin: change.verifyPin
+      });
+      return outcome.status === "satisfied" ? outcome : { ...outcome, recovery: SPEC_APPROVE_RECOVERY };
+    }),
+    ...demand.referenced.map(
+      (entry) => oracleApprovalStatus({
+        approvals,
+        changeId: change.changeId,
+        oracle: entry.fact,
+        evaluatedAt: change.evaluatedAt,
+        verifyPin: change.verifyPin
+      })
+    )
+  ];
+  const execution = executionOrdering(change.taskRuns);
+  const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
+  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  const chosen = negative ?? unmet[0];
+  if (chosen !== void 0) {
+    const remainder = unmet.length > 1 ? ` ${unmet.length} of the ${outcomes.length} approvals this gate reads are unmet.` : "";
+    const recovery = orderingAwareRecovery(chosen.recovery, execution);
+    const late = recovery === chosen.recovery ? "" : execution.kind === "started" ? ` Gated execution for this change already began at ${execution.startedAt} (run ${execution.runId} of ${execution.taskId}), so a decision recorded now would be dated after the work it claims to gate: approving cannot satisfy this gate.` : " Whether gated execution for this change has already begun could not be established from its run plane, so whether a decision recorded now would count is unknown: repair the run plane before deciding.";
+    return {
+      ...chosen,
+      reason: `${chosen.reason}${remainder}${late}`,
+      ...recovery === void 0 ? {} : { recovery }
+    };
+  }
+  const taskRuns = change.taskRuns;
+  if (taskRuns === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "Every delta spec and oracle of this change is approved, but its task runs could not be read as a complete set, so no ordering between those decisions and the start of execution can be established.",
+      recovery: ORDERING_UNREADABLE_RECOVERY
+    };
+  }
+  if (taskRuns.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "Every delta spec and oracle of this change is approved, and no task of it has run, so there is nothing for those decisions to have preceded.",
+      recovery: ORDERING_BUILD_RECOVERY
+    };
+  }
+  const earliest = earliestExecutionRun(taskRuns);
+  if (earliest === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Every delta spec and oracle of this change is approved, and none of its ${taskRuns.length} task run${taskRuns.length === 1 ? "" : "s"} records when it started, so no ordering can be established.`,
+      recovery: ORDERING_UNREADABLE_RECOVERY
+    };
+  }
+  let latest;
+  for (const outcome of outcomes) {
+    const decidedAt = outcome.decidedAt;
+    if (decidedAt === void 0) {
+      return {
+        status: "unevaluable",
+        reason: "One of the approvals this gate reads records no decision instant, so the last of these decisions cannot be compared against the start of execution."
+      };
+    }
+    if (latest === void 0 || decidedAt > latest) latest = decidedAt;
+  }
+  const latestDecision = latest;
+  if (latestDecision >= earliest.startedAt) {
+    return {
+      status: "unsatisfied",
+      reason: `The last of the ${outcomes.length} approvals this gate reads was decided at ${latestDecision}, which is ${latestDecision === earliest.startedAt ? "the same instant as" : "not earlier than"} the ${earliest.startedAt} at which gated execution for this change began (run ${earliest.runId} of ${earliest.taskId}). A specification approved at or after the work started is not an approval the work was done under.`,
+      recovery: ORDERING_REPLAN_RECOVERY
+    };
+  }
+  return {
+    status: "satisfied",
+    reason: `All ${deltas.length} delta spec${deltas.length === 1 ? "" : "s"} and ${demand.referenced.length} oracle${demand.referenced.length === 1 ? "" : "s"} of this change were approved before gated execution began: the last of those decisions was taken at ${latestDecision} and the earliest run (${earliest.runId} of ${earliest.taskId}) started at ${earliest.startedAt}.`
+  };
+}
+function isLiveOracleGrant(input) {
+  const outcome = oracleApprovalStatus({
+    approvals: [input.approval],
+    changeId: input.changeId,
+    oracle: input.oracle,
+    evaluatedAt: input.evaluatedAt,
+    verifyPin: () => "unverified"
+  });
+  return outcome.status === "satisfied";
+}
+var ATTESTATION_GATE_KINDS = {
+  independent_baseline: ["independent-baseline"],
+  security_or_e2e_evaluator: ["security-evaluation", "e2e-evaluation"],
+  architecture_or_security_review: ["architecture-review"],
+  release_observation_plan: ["release-observation"],
+  rollback_or_forward_fix_evidence: ["rollback-evidence", "forward-fix-evidence"]
+};
+var GATE_READ_ATTESTATION_KINDS = new Set(
+  Object.values(ATTESTATION_GATE_KINDS).flatMap((kinds) => kinds ?? [])
+);
+var ATTESTATION_EVIDENCE_RULES = {
+  "independent-baseline": { kind: "shapes", shapes: ["ab-comparison"] },
+  "security-evaluation": { kind: "shapes", shapes: ["threat-model"] },
+  "e2e-evaluation": { kind: "none" },
+  "architecture-review": { kind: "human-judgement" },
+  "rollback-evidence": { kind: "shapes", shapes: ["rollback-policy"] },
+  "forward-fix-evidence": { kind: "none" },
+  "release-observation": { kind: "none" }
+};
+function attestationEvidenceRule(attests) {
+  return ATTESTATION_EVIDENCE_RULES[attests];
+}
+function attestCommand(kinds) {
+  return `legion attest ${kinds[0]} --attested-by <id> --source <path>`;
+}
+function attestRecovery(gate, kinds) {
+  const alternatives = kinds.length === 1 ? "" : ` (or ${kinds.slice(1).join(", ")}, which this gate reads too)`;
+  return {
+    command: attestCommand(kinds),
+    reason: `Nothing in this change asserts ${gate}, and no build produces one: the gate reads the attestation plane. Record a ${kinds[0]} attestation${alternatives} citing the report it rests on \u2014 legion attest re-reads that report and refuses a pass over one that is red, and legion ship re-hashes it. If the check genuinely does not apply to this change, record that instead with --verdict not_applicable --waiver-reason <text>, which ADR-006 permits as an audited waiver and which this command echoes as a warning on every payload that carries one.`
+  };
+}
+var ATTESTATION_BYTES_RECOVERY = {
+  command: "legion ship",
+  reason: "An attestation cites a file that no longer holds the bytes it was recorded against. Restore the file to the bytes the attestation pins, then rerun this to confirm. Re-attesting the edited bytes is deliberately not offered: an attestation's whole content is 'these exact bytes are this change's evidence', so re-pinning whatever is there now would launder the edit into the record that was supposed to catch it."
+};
+var ATTESTATION_EVIDENCE_RECOVERY = {
+  command: "legion ship",
+  reason: "An attestation records a pass over a report whose own verdict is negative, and legion ship re-reads that report rather than trusting the record. Attesting again cannot move this \u2014 the writer applies the same check and refuses the same pass. Re-run the check named in this verdict until it passes, re-attest against the report it produces, then rerun this."
+};
+var BASELINE_AFTER_EXECUTION_RECOVERY = {
+  command: "legion start --intake",
+  reason: "A baseline captured after the run it is supposed to be independent of is not one, and no command re-dates an attestation: attesting now writes a later attestedAt and makes this gate strictly worse rather than better. Plan the remaining work as a new change and attest its baseline before building it \u2014 or, if no independent baseline applies to this change at all, record that as an audited waiver with legion attest independent-baseline --verdict not_applicable --waiver-reason <text> --attested-by <id>, which ADR-006 permits and which legion ship echoes as a warning on every payload that carries one."
+};
+var BASELINE_ORDERING_UNREADABLE_RECOVERY = {
+  command: "legion ship",
+  reason: "This change's task runs could not be read as a complete set, so whether its baseline was captured before execution began cannot be established. The artifact_plane_incomplete or task_run_plane_contradicted diagnostic in this same payload names what is missing \u2014 restore or correct it, then rerun this."
+};
+function tasksDeriving(gate, tasks) {
+  return tasks.filter(
+    (task) => deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
+      (derived) => derived.id === gate
+    )
+  );
+}
+function humanExecutorMatching(taskRuns, actorId) {
+  for (const run of taskRuns ?? []) {
+    const claimedBy = run.claimedBy;
+    if (claimedBy === void 0) continue;
+    if (claimedBy.kind !== "human") continue;
+    if (claimedBy.id === actorId) return run;
+  }
+  return void 0;
+}
+function attestationGateStatus(input) {
+  const change = input.change;
+  const attestations = change?.attestations;
+  const absence = input.absenceRecovery ?? attestRecovery(input.gate, input.kinds);
+  const named = input.kinds.join(" or ");
+  if (change === void 0 || attestations === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `The attestations recorded for this change could not be read as a complete set, so whether anyone asserted ${named} for it is unestablished.`,
+      recovery: UNREADABLE_PLANE_RECOVERY,
+      // The dropped file may be a `fail`. See `GateOutcome.concealsNegative`:
+      // this is not the absence of a claim, and the one gate that reads this
+      // plane beside another must not answer from the other one.
+      concealsNegative: true
+    };
+  }
+  const cure = input.requireBeforeExecution === true ? orderingAwareBaselineRecovery(absence, executionOrdering(change.taskRuns)) : absence;
+  const accepted = new Set(input.kinds);
+  const relevant = attestations.filter(
+    // Strict equality against a possibly-absent change id, on the approvals
+    // plane's rule: a record too degraded to name its own change matches nothing
+    // rather than everything. It matters here because an attestation's cited
+    // sources are ordinary repository files shared across changes, so a record
+    // that matched loosely could answer for a change it was never about.
+    (attestation) => attestation.changeId === change.changeId && accepted.has(attestation.attests)
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No attestation records anyone asserting ${named} for change ${change.changeId}.`,
+      recovery: cure
+    };
+  }
+  for (const kind of input.kinds) {
+    const ofKind = relevant.filter((attestation) => attestation.attests === kind);
+    if (ofKind.length > 1) {
+      const ids = ofKind.map((attestation) => attestation.id).sort();
+      return {
+        status: "unevaluable",
+        reason: `Change ${change.changeId} carries ${ofKind.length} attestations of kind ${kind} (${ids.join(", ")}). Legion writes exactly one per change per kind, so these were filed by hand, and answering from either would let a favourable record hide an unfavourable one. Remove the ones that are not the record.`,
+        recovery: MISFILED_ATTESTATION_RECOVERY,
+        // And it dominates the *other producer* too, not only the other kinds.
+        // One of these documents may be the `fail`, so a domain review beside it
+        // would answer the question this arm exists to refuse to answer. See
+        // `GateOutcome.concealsNegative`.
+        concealsNegative: true
+      };
+    }
+  }
+  const outcomes = input.kinds.map((kind) => relevant.find((attestation) => attestation.attests === kind)).filter((attestation) => attestation !== void 0).map(
+    (record2) => attestationRecordStatus({
+      gate: input.gate,
+      change,
+      record: record2,
+      cure,
+      tasks: input.tasks,
+      taskIdFor: input.taskIdFor,
+      ...input.requireBeforeExecution === true ? { requireBeforeExecution: true } : {}
+    })
+  );
+  return combineAttestationOutcomes(outcomes);
+}
+function combineAttestationOutcomes(outcomes) {
+  const first = outcomes[0];
+  if (outcomes.length <= 1) return first;
+  const unsatisfied = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  if (unsatisfied !== void 0) {
+    const others = outcomes.filter((outcome) => outcome !== unsatisfied && outcome.status === "satisfied");
+    if (others.length === 0) return unsatisfied;
+    return {
+      ...unsatisfied,
+      reason: `${unsatisfied.reason} This change also carries ${others.length} favourable attestation${others.length === 1 ? "" : "s"} of another kind this gate reads, and ${others.length === 1 ? "it does" : "they do"} not override the one above: an attestation recorded against this change is a statement somebody made about it, and a later record of a different kind does not unmake it.`
+    };
+  }
+  const satisfied = outcomes.find((outcome) => outcome.status === "satisfied");
+  return satisfied ?? first;
+}
+function attestationRecordStatus(input) {
+  const change = input.change;
+  const record2 = input.record;
+  const cure = input.cure;
+  const describe3 = `Attestation ${record2.id} records ${record2.attestedBy.id} asserting ${record2.attests} for change ${change.changeId}`;
+  if (record2.verdict === "fail") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} as failed: "${record2.statement}"`,
+      recovery: ATTESTATION_EVIDENCE_RECOVERY
+    };
+  }
+  if (record2.verdict === "unknown") {
+    return {
+      status: "unevaluable",
+      reason: `${describe3} with verdict "unknown": a record exists for this question and asserts nothing about it.`,
+      recovery: cure
+    };
+  }
+  if (record2.sources.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `${describe3}, and cites no source, so there is nothing this report can check the assertion against.`,
+      recovery: cure
+    };
+  }
+  for (const source of record2.sources) {
+    const verdict = change.verifyPin(source);
+    if (verdict === "drift") {
+      return {
+        status: "unsatisfied",
+        reason: `${describe3}, and cites ${source.path}, whose bytes have changed since the attestation was recorded.`,
+        recovery: ATTESTATION_BYTES_RECOVERY
+      };
+    }
+    if (verdict === "missing") {
+      return {
+        status: "unsatisfied",
+        reason: `${describe3}, and cites ${source.path}, which is no longer present.`,
+        recovery: ATTESTATION_BYTES_RECOVERY
+      };
+    }
+    if (verdict !== "match") {
+      return {
+        status: "unevaluable",
+        reason: `${describe3}, and cites ${source.path}, which this report did not re-hash, so whether the attestation is still about the bytes on disk is unestablished.`,
+        recovery: UNREADABLE_PLANE_RECOVERY
+      };
+    }
+  }
+  for (const source of record2.sources) {
+    const classified = change.classifySource(source);
+    if (classified.kind === "blocking") {
+      return {
+        status: "unsatisfied",
+        reason: `${describe3}, and cites ${source.path}, which is a ${classified.shape} report that is negative by its own rule: ${classified.reason}. Producing a green one is ${EVIDENCE_SOURCE_PRODUCERS[classified.shape]}; the coupling is named here because nothing in this repository validates these reports against a schema, so a producer that changed its output shape would degrade this check silently.`,
+        recovery: ATTESTATION_EVIDENCE_RECOVERY
+      };
+    }
+  }
+  const deriving = tasksDeriving(input.gate, input.tasks);
+  if (deriving.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `${describe3}, and no task of this change derives ${input.gate}, so there is nothing for the attestation to cover.`,
+      recovery: cure
+    };
+  }
+  const covered = new Set(record2.covers.filter((entry) => entry.kind === "task").map((entry) => entry.id));
+  const uncovered = deriving.map(input.taskIdFor).filter((taskId) => !covered.has(taskId));
+  if (uncovered.length > 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3}, and its covers list names ${covered.size} task${covered.size === 1 ? "" : "s"}, leaving ${uncovered.join(", ")} uncovered. This gate is derived by ${deriving.length} task${deriving.length === 1 ? "" : "s"} of this change and is satisfied only when the attestation claims to speak for all of them.`,
+      recovery: cure
+    };
+  }
+  if (record2.verdict === "not_applicable") {
+    const waiverReason = record2.waiverReason;
+    if (record2.attestedBy.kind !== "human" || waiverReason === void 0) {
+      return {
+        status: "unsatisfied",
+        reason: `${describe3} as not applicable, but a waiver requires a human attester and a recorded reason and this one has ${record2.attestedBy.kind === "human" ? "no reason" : `a ${record2.attestedBy.kind} attester`}. ADR-006 permits a waived gate only as an audited waiver.`,
+        recovery: cure
+      };
+    }
+    return {
+      status: "satisfied",
+      reason: `${input.gate} is waived for change ${change.changeId} by ${record2.attestedBy.id} (human) at ${record2.attestedAt} as not applicable: "${waiverReason}". No evidence was checked for this gate.`,
+      waived: {
+        gate: input.gate,
+        attests: record2.attests,
+        attestedBy: record2.attestedBy.id,
+        attestedAt: record2.attestedAt,
+        reason: waiverReason
+      }
+    };
+  }
+  const rule = ATTESTATION_EVIDENCE_RULES[record2.attests];
+  if (rule.kind === "none") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} as passed, and no report shape in this repository can evidence a ${record2.attests} pass. ${UNRECOGNISED_SOURCE_HINT} Record what is actually established with --verdict unknown, or, if the check does not apply to this change, as an audited waiver with --verdict not_applicable.`,
+      recovery: cure
+    };
+  }
+  if (rule.kind === "human-judgement") {
+    if (record2.attestedBy.kind !== "human") {
+      return {
+        status: "unsatisfied",
+        reason: `${describe3} as passed, and ${record2.attests} is a human judgement no report in this repository states \u2014 so a pass for it is somebody's opinion or it is nothing, and this one was recorded by ${record2.attestedBy.kind} ${record2.attestedBy.id}.`,
+        recovery: cure
+      };
+    }
+    return {
+      status: "satisfied",
+      reason: `${describe3} as passed at ${record2.attestedAt}, against ${record2.sources.length} hash-clean source${record2.sources.length === 1 ? "" : "s"} (${record2.sources.map((source) => source.path).join(", ")}): "${record2.statement}". No report shape in this repository states a ${record2.attests} verdict, so nothing machine-checkable was read. What was checked is that the cited bytes are still the bytes the attester looked at, and that none of them is a report that is red by its own rule.`,
+      judgement: {
+        basis: "attestation",
+        gate: input.gate,
+        attests: record2.attests,
+        attestedBy: record2.attestedBy.id,
+        attestedAt: record2.attestedAt,
+        statement: record2.statement,
+        sources: record2.sources.map((source) => source.path)
+      }
+    };
+  }
+  const admissible = rule.shapes;
+  const admitted = new Set(admissible);
+  const evidencing = record2.sources.filter((source) => {
+    const classified = change.classifySource(source);
+    return classified.kind === "clean" && admitted.has(classified.shape);
+  });
+  if (evidencing.length === 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} as passed, and none of the ${record2.sources.length} file${record2.sources.length === 1 ? "" : "s"} it cites is a ${admissible.join(" or ")} report this report can read a verdict out of. A pass attestation is a claim about a machine-checkable verdict; this one is a sentence. ${UNRECOGNISED_SOURCE_HINT}`,
+      recovery: cure
+    };
+  }
+  if (input.requireBeforeExecution !== true) {
+    return {
+      status: "satisfied",
+      reason: `${describe3} as passed, against ${evidencing.length} hash-clean ${admissible.join("/")} report${evidencing.length === 1 ? "" : "s"} (${evidencing.map((source) => source.path).join(", ")}) whose own verdicts are green.`
+    };
+  }
+  const execution = executionOrdering(change.taskRuns);
+  if (execution.kind === "unestablished") {
+    return {
+      status: "unevaluable",
+      reason: `${describe3} as passed at ${record2.attestedAt}, and this change's task runs could not be read as a complete set, so whether the baseline preceded execution cannot be established.`,
+      recovery: BASELINE_ORDERING_UNREADABLE_RECOVERY
+    };
+  }
+  if (execution.kind === "none") {
+    return {
+      status: "unevaluable",
+      reason: `${describe3} as passed at ${record2.attestedAt}, and no task of this change has run, so there is nothing yet for the baseline to have preceded.`,
+      recovery: ORDERING_BUILD_RECOVERY
+    };
+  }
+  if (record2.attestedAt >= execution.startedAt) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} as passed at ${record2.attestedAt}, which is ${record2.attestedAt === execution.startedAt ? "the same instant as" : "not earlier than"} the ${execution.startedAt} at which gated execution for this change began (run ${execution.runId} of ${execution.taskId}). A baseline captured after the run it is supposed to be independent of is not one.`,
+      recovery: BASELINE_AFTER_EXECUTION_RECOVERY
+    };
+  }
+  const collision = humanExecutorMatching(change.taskRuns, record2.attestedBy.id);
+  if (collision !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} as passed, and run ${collision.id} of this change records ${record2.attestedBy.id} as the executor who claimed it. A baseline captured by the person who then ran the work is not independent of it.`,
+      recovery: BASELINE_AFTER_EXECUTION_RECOVERY
+    };
+  }
+  return {
+    status: "satisfied",
+    reason: `${describe3} as passed at ${record2.attestedAt}, before gated execution began at ${execution.startedAt} (run ${execution.runId} of ${execution.taskId}), against ${evidencing.length} hash-clean ${admissible.join("/")} report${evidencing.length === 1 ? "" : "s"} (${evidencing.map((source) => source.path).join(", ")}) whose own verdicts are green. Independence here is temporal: Legion records no executor identity that varies, so ordering is what carries the claim.`
+  };
+}
+function orderingAwareBaselineRecovery(recovery, execution) {
+  if (execution.kind === "started") return BASELINE_AFTER_EXECUTION_RECOVERY;
+  if (execution.kind === "unestablished") return BASELINE_ORDERING_UNREADABLE_RECOVERY;
+  return recovery;
+}
+var MISFILED_ATTESTATION_RECOVERY = {
+  command: "legion ship",
+  reason: "A change carries more than one attestation of one kind. legion attest derives an attestation's id from the change and the kind alone, so it can never write a second \u2014 these were filed by hand. Delete the ones that are not the record and re-attest if the survivor is not what you meant, then rerun this to confirm."
+};
+function isSatisfyingAttestation(input) {
+  const outcome = attestationGateStatus({
+    gate: input.gate,
+    kinds: input.kinds,
+    tasks: input.tasks,
+    taskIdFor: input.taskIdFor,
+    change: {
+      changeId: input.changeId,
+      acceptance: void 0,
+      approvals: void 0,
+      attestations: [input.attestation],
+      reviews: void 0,
+      deltas: void 0,
+      oracles: void 0,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: void 0,
+      verifyPin: input.verifyPin,
+      classifySource: input.classifySource
+    }
+  });
+  return outcome.status === "satisfied";
+}
+function shipGateWaivers(gates) {
+  const seen = /* @__PURE__ */ new Set();
+  const waivers = [];
+  for (const gate of gates) {
+    const waived = gate.waived;
+    if (waived === void 0) continue;
+    if (seen.has(waived.gate)) continue;
+    seen.add(waived.gate);
+    waivers.push(waived);
+  }
+  return waivers;
+}
+function shipGateHumanJudgements(gates) {
+  const seen = /* @__PURE__ */ new Set();
+  const judgements = [];
+  for (const gate of gates) {
+    const judgement = gate.judgement;
+    if (judgement === void 0) continue;
+    if (seen.has(judgement.gate)) continue;
+    seen.add(judgement.gate);
+    judgements.push(judgement);
+  }
+  return judgements;
+}
+var DOMAIN_REVIEW_GATE_DOMAINS = ["architecture", "security"];
+var DOMAIN_REVIEW_RECOVERY = {
+  command: "legion review --domain architecture",
+  reason: "No review of this change records the domain it was performed in, and no build produces that: this gate reads the review plane. An accepted review says something other than the implementer looked at the work; this gate asks whether an architecture or security competence did, and a review that does not say cannot answer it. Run a review that declares its domain \u2014 --domain architecture, --domain security, or both \u2014 and then legion review --accept --approver <id>, which is the step that turns a submitted review into the accepted one this gate reads. The domain is declared when the review is performed: legion review --accept refuses --domain, because a label applied afterwards records a signature rather than a competence. If no architecture or security question applies to this change, record that as an audited waiver with legion attest architecture-review --verdict not_applicable --waiver-reason <text> --attested-by <id> --source <path>, which ADR-006 permits and which legion ship echoes as a warning on every payload that carries one."
+};
+var DOMAIN_REVIEW_REWORK_RECOVERY = {
+  command: "legion build",
+  reason: "An architecture or security review of this change recorded a defect, and re-running the review is deliberately not offered: legion review --domain writes a fresh review over the same evidence, exits 0, and records the same finding. Fix what the verdict above names, rebuild so the evidence is about the fixed code, then review with the domain again and accept. Attesting cannot move this either \u2014 an architecture-review attestation is combined with this verdict rather than replacing it, and a recorded negative is not unmade by a later record of another kind."
+};
+var SELF_REVIEWED_DOMAIN_RECOVERY = {
+  command: "legion review --domain architecture",
+  reason: "This change's architecture or security sign-off carries the name its run plane records as the executor of the work, and no rebuild and no second record under that name moves it: a review of the work by whoever ran it is not a review of it by anybody else. Have somebody who did not claim a run of this change perform the review \u2014 legion review --domain architecture or --domain security \u2014 and accept it with legion review --accept --approver <their id>. Attesting instead cannot substitute: legion attest architecture-review reads the same run plane and this gate refuses that record for the same reason."
+};
+var DOMAIN_REVIEW_ACCEPT_RECOVERY = {
+  command: "legion review --accept --approver <id>",
+  reason: "A review of this change was performed in an architecture or security domain and nobody has accepted it. This gate reads accepted reviews, because an unaccepted one is a verdict nobody has stood behind. Accepting it names a human decision owner from the project manifest and records the domain review as the change's own."
+};
+function reviewFindingsOf(document) {
+  return document.findings ?? [];
+}
+function reviewDomainsOf(document) {
+  return document.domains ?? [];
+}
+function reviewVerdictsOf(document) {
+  return document.verdicts ?? {};
+}
+function hasBlockingReviewFinding(document) {
+  return reviewFindingsOf(document).some((finding) => finding.severity === "blocking");
+}
+function failingVerdictAxis(document) {
+  const verdicts = reviewVerdictsOf(document);
+  return ["specification", "integration", "evidence"].find((axis) => verdicts[axis] === "fail");
+}
+function nonPassingVerdictAxes(document) {
+  const verdicts = reviewVerdictsOf(document);
+  return ["specification", "integration", "evidence"].map((axis) => ({ axis, verdict: verdicts[axis] ?? "unrecorded" })).filter((entry) => entry.verdict !== "pass");
+}
+function byReviewId(left, right) {
+  return left.document.id.localeCompare(right.document.id);
+}
+function describeDomains(document) {
+  return reviewDomainsOf(document).join(", ");
+}
+function domainReviewOutcome(input) {
+  const change = input.change;
+  const reviews = change?.reviews;
+  if (change === void 0 || reviews === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The reviews recorded for this change could not be read as a complete set, so whether an architecture or security review exists for it is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY,
+      // The dropped file may be the rejection. See `GateOutcome.concealsNegative`
+      // — this arm is the reason that field exists, and an attestation beside it
+      // must not answer for it.
+      concealsNegative: true
+    };
+  }
+  const deriving = tasksDeriving(input.gate, input.tasks);
+  if (deriving.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No task of this change derives ${input.gate}, so there is nothing for a domain review to be about.`,
+      recovery: DOMAIN_REVIEW_RECOVERY
+    };
+  }
+  const derivingIds = deriving.map(input.taskIdFor);
+  const scoped = reviews.filter((review) => review.document.changeId === change.changeId).slice().sort(byReviewId);
+  const scopedById = new Map(scoped.map((review) => [review.document.id, review]));
+  const supersededIds = new Set(
+    scoped.flatMap(
+      (review) => (review.document.supersedes ?? []).filter((id) => {
+        if (id === review.document.id) return false;
+        const superseded = scopedById.get(id);
+        if (superseded === void 0) return false;
+        return superseded.document.taskId === review.document.taskId;
+      })
+    )
+  );
+  const current = scoped.filter((review) => !supersededIds.has(review.document.id));
+  const relevant = current.filter((review) => {
+    const taskId = review.document.taskId;
+    return taskId === void 0 || derivingIds.includes(taskId);
+  });
+  const inDomain = relevant.filter(
+    (review) => reviewDomainsOf(review.document).some((domain2) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain2))
+  );
+  const rejected = inDomain.find((review) => review.document.status === "rejected");
+  if (rejected !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Review ${rejected.document.id} of change ${change.changeId} was performed in ${describeDomains(rejected.document)} and was rejected.`,
+      recovery: DOMAIN_REVIEW_REWORK_RECOVERY
+    };
+  }
+  const blocking = inDomain.find((review) => hasBlockingReviewFinding(review.document));
+  if (blocking !== void 0) {
+    const finding = reviewFindingsOf(blocking.document).find((entry) => entry.severity === "blocking");
+    return {
+      status: "unsatisfied",
+      reason: `Review ${blocking.document.id} of change ${change.changeId} was performed in ${describeDomains(blocking.document)} and records a blocking finding: ${finding?.id} \u2014 "${finding?.title}".`,
+      recovery: DOMAIN_REVIEW_REWORK_RECOVERY
+    };
+  }
+  const failing = inDomain.find((review) => failingVerdictAxis(review.document) !== void 0);
+  if (failing !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Review ${failing.document.id} of change ${change.changeId} was performed in ${describeDomains(failing.document)} and records its ${failingVerdictAxis(failing.document)} verdict as fail.`,
+      recovery: DOMAIN_REVIEW_REWORK_RECOVERY
+    };
+  }
+  const satisfying = inDomain.filter((review) => {
+    const document = review.document;
+    if (document.status !== "accepted") return false;
+    const taskId = document.taskId;
+    if (taskId === void 0 || !derivingIds.includes(taskId)) return false;
+    if (nonPassingVerdictAxes(document).length > 0) return false;
+    return !hasBlockingReviewFinding(document);
+  });
+  if (satisfying.length === 0) {
+    if (inDomain.length === 0) {
+      const supersededDomainReview = scoped.find(
+        (review) => supersededIds.has(review.document.id) && reviewDomainsOf(review.document).some((domain2) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain2))
+      );
+      if (supersededDomainReview !== void 0) {
+        const superseder = scoped.find(
+          (candidate) => (candidate.document.supersedes ?? []).includes(
+            supersededDomainReview.document.id
+          )
+        );
+        return {
+          status: "unevaluable",
+          reason: `Review ${supersededDomainReview.document.id} of change ${change.changeId} was performed in ${describeDomains(supersededDomainReview.document)}, and review ${superseder?.document.id} has since superseded it without recording a domain of its own. The change's current review says nothing about which competence looked at it.`,
+          recovery: DOMAIN_REVIEW_RECOVERY
+        };
+      }
+      const strandedInDomain = current.find(
+        (review) => !relevant.includes(review) && reviewDomainsOf(review.document).some((domain2) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain2))
+      );
+      if (strandedInDomain !== void 0) {
+        return {
+          status: "unevaluable",
+          reason: `Review ${strandedInDomain.document.id} of change ${change.changeId} was performed in ${describeDomains(strandedInDomain.document)}, and is about task ${strandedInDomain.document.taskId}, which is not one of the ${deriving.length} task${deriving.length === 1 ? "" : "s"} deriving ${input.gate} for this change \u2014 a re-plan replaced it, or its tier does not derive this gate. The task${deriving.length === 1 ? "" : "s"} being shipped carry no domain review of their own.`,
+          recovery: DOMAIN_REVIEW_RECOVERY
+        };
+      }
+      const declaring = current.filter((review) => reviewDomainsOf(review.document).length > 0);
+      if (declaring.length === 0) {
+        return {
+          status: "unevaluable",
+          reason: `No review of change ${change.changeId} records the domain it was performed in. An accepted review says that something other than the implementer looked at the work; this gate asks whether an architecture or security competence did, and a review that does not say cannot answer it. Legion recorded no domain on any review written before this release.`,
+          recovery: DOMAIN_REVIEW_RECOVERY
+        };
+      }
+      const declared = [...new Set(declaring.flatMap((review) => reviewDomainsOf(review.document)))].sort();
+      return {
+        status: "unevaluable",
+        reason: `${declaring.length} review${declaring.length === 1 ? "" : "s"} of change ${change.changeId} record the domain they were performed in (${declared.join(", ")}), and none of them is architecture or security.`,
+        recovery: DOMAIN_REVIEW_RECOVERY
+      };
+    }
+    const unaccepted = inDomain.find((review) => review.document.status !== "accepted");
+    if (unaccepted !== void 0) {
+      return {
+        status: "unevaluable",
+        reason: `Review ${unaccepted.document.id} of change ${change.changeId} was performed in ${describeDomains(unaccepted.document)} and is still ${unaccepted.document.status}: nobody has accepted it.`,
+        recovery: DOMAIN_REVIEW_ACCEPT_RECOVERY
+      };
+    }
+    const unverified = inDomain.find((review) => nonPassingVerdictAxes(review.document).length > 0);
+    if (unverified !== void 0) {
+      const axes = nonPassingVerdictAxes(unverified.document).map((entry) => `${entry.axis} is "${entry.verdict}"`).join(", ");
+      return {
+        status: "unevaluable",
+        reason: `Review ${unverified.document.id} of change ${change.changeId} was performed in ${describeDomains(unverified.document)} and was accepted, and ${axes}. This gate is satisfied by a review that says every axis passed; "unknown", "not_verified" and "not_applicable" are not that, and are not failures either.`,
+        recovery: DOMAIN_REVIEW_RECOVERY
+      };
+    }
+    return {
+      status: "unevaluable",
+      reason: `Change ${change.changeId} carries ${inDomain.length} architecture or security review${inDomain.length === 1 ? "" : "s"}, and none of them names a task this gate is derived by, so none speaks for any of the work being shipped.`,
+      recovery: DOMAIN_REVIEW_RECOVERY
+    };
+  }
+  const covered = new Set(satisfying.map((review) => review.document.taskId));
+  const uncovered = derivingIds.filter((taskId) => !covered.has(taskId));
+  if (uncovered.length > 0) {
+    return {
+      status: "unevaluable",
+      reason: `${deriving.length} task${deriving.length === 1 ? "" : "s"} of change ${change.changeId} derive ${input.gate} and ${covered.size} carr${covered.size === 1 ? "ies" : "y"} an accepted architecture or security review, leaving ${uncovered.join(", ")} with none.`,
+      recovery: DOMAIN_REVIEW_RECOVERY
+    };
+  }
+  for (const review of satisfying) {
+    const acceptedBy = review.document.acceptedBy;
+    if (acceptedBy === void 0 || acceptedBy.kind !== "human") continue;
+    const collision = humanExecutorMatching(change.taskRuns, acceptedBy.id);
+    if (collision === void 0) continue;
+    return {
+      status: "unsatisfied",
+      reason: `Review ${review.document.id} of change ${change.changeId} was accepted by ${acceptedBy.id}, and run ${collision.id} of this change records the same person as the executor who claimed it. A domain review signed off by whoever ran the work is not a review of it by anybody else.`,
+      recovery: SELF_REVIEWED_DOMAIN_RECOVERY
+    };
+  }
+  const domains = [...new Set(satisfying.flatMap((review) => reviewDomainsOf(review.document)))].sort();
+  return {
+    status: "satisfied",
+    reason: `Every one of the ${deriving.length} task${deriving.length === 1 ? "" : "s"} of change ${change.changeId} deriving ${input.gate} carries an accepted review performed in ${domains.join(", ")}, with all three verdict axes pass and no blocking finding (${satisfying.map((review) => review.document.id).join(", ")}). What is established is the competence recorded, not the reviewer's independence of the implementer: Legion records no implementer identity that varies.`
+  };
+}
+function combineProducerOutcomes(input) {
+  const { primary, secondary, describePrimary, describeSecondary } = input;
+  const overridden = (reported, other, describeOther) => other.status === "satisfied" ? {
+    ...reported,
+    reason: `${reported.reason} This change also carries a favourable ${describeOther}, and it does not override the verdict above: a record made about this change is a statement somebody made about it, and a record of another kind does not unmake it.`
+  } : reported;
+  const doubted = (reported, other, describeOther) => other.status === "satisfied" ? {
+    ...reported,
+    reason: `${reported.reason} This change also carries a favourable ${describeOther}, and it does not settle the question above: the records this report could not read may be the ones that refuse, and a gate answered from the half it could read is a gate answered around the half it could not.`
+  } : reported;
+  if (primary.status === "unsatisfied") return overridden(primary, secondary, describeSecondary);
+  if (secondary.status === "unsatisfied") return overridden(secondary, primary, describePrimary);
+  if (primary.concealsNegative === true) return doubted(primary, secondary, describeSecondary);
+  if (secondary.concealsNegative === true) return doubted(secondary, primary, describePrimary);
+  if (primary.status === "satisfied") return primary;
+  if (secondary.status === "satisfied") return secondary;
+  return primary;
+}
+function combineDomainReviewOutcomes(review, attested) {
+  return combineProducerOutcomes({
+    primary: review,
+    secondary: attested,
+    describePrimary: "architecture or security review",
+    describeSecondary: "architecture-review attestation"
+  });
+}
+function refuseSelfJudgedDomainAttestation(outcome, change) {
+  const judgement = outcome.judgement;
+  if (outcome.status !== "satisfied" || judgement === void 0 || change === void 0) return outcome;
+  if (judgement.basis !== "attestation") return outcome;
+  const collision = humanExecutorMatching(change.taskRuns, judgement.attestedBy);
+  if (collision === void 0) return outcome;
+  return {
+    status: "unsatisfied",
+    reason: `Attestation of ${judgement.attests} for change ${change.changeId} records ${judgement.attestedBy} asserting it passed, and run ${collision.id} of this change records the same person as the executor who claimed it. An architecture review asserted by whoever ran the work is not a review of it by anybody else \u2014 and this is the arm with nothing machine-checkable behind it, so the attester's word is the whole of what would be established.`,
+    recovery: SELF_REVIEWED_DOMAIN_RECOVERY
+  };
+}
+function domainReviewGateStatus(input) {
+  return combineDomainReviewOutcomes(
+    domainReviewOutcome(input),
+    refuseSelfJudgedDomainAttestation(
+      attestationGateStatus({
+        gate: input.gate,
+        kinds: ATTESTATION_GATE_KINDS[input.gate],
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        absenceRecovery: DOMAIN_REVIEW_RECOVERY
+      }),
+      input.change
+    )
+  );
+}
+function isDomainReviewSatisfying(input) {
+  const outcome = domainReviewOutcome({
+    gate: "architecture_or_security_review",
+    tasks: input.tasks,
+    taskIdFor: input.taskIdFor,
+    change: {
+      changeId: input.changeId,
+      acceptance: void 0,
+      approvals: void 0,
+      attestations: void 0,
+      reviews: input.reviews,
+      deltas: void 0,
+      oracles: void 0,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: void 0,
+      verifyPin: UNRESOLVED_PINS,
+      classifySource: UNREAD_SOURCES
+    }
+  });
+  return outcome.status === "satisfied";
+}
+var RELEASE_STANDING = {
+  requested: "current",
+  staging: "current",
+  deployed: "current",
+  healthy: "current",
+  failed: "failed",
+  rollback_required: "failed",
+  rolled_back: "closed",
+  forward_fix_required: "closed",
+  superseded: "replaced"
+};
+function releaseRecordsNegative(release) {
+  const standing = RELEASE_STANDING[release.status];
+  return standing === "failed" || standing === "closed";
+}
+var RELEASE_EXPOSURE = {
+  local: "prerelease",
+  test: "prerelease",
+  staging: "released",
+  production: "released"
+};
+var RELEASE_PLAN_RECOVERY = {
+  command: "legion release plan --environment <env>",
+  reason: "Nothing in this change records how its release will be observed or taken back, and no build produces that: the gate reads the release plane. Record a plan naming the environment, at least one health criterion, and a rollback strategy with at least one criterion. A plan is checkable before the release, which is what makes this gate answerable at ship time, and it carries no ordering rule \u2014 a plan authored after the build is still a plan, because it constrains the release rather than the run. If this change deploys nothing at all, record that instead with legion attest release-observation --verdict not_applicable --waiver-reason <text> --attested-by <id>, which ADR-006 permits as an audited waiver and which legion ship echoes as a warning on every payload that carries one."
+};
+var RELEASE_REPLAN_RECOVERY = {
+  command: "legion release plan --environment <env> --health-criterion <text>",
+  reason: "This change carries a release plan and it does not answer the question this gate asks. Re-plan it: legion release plan rewrites the same release.json at the next revision, and it applies the gate's own predicate before reporting that there is nothing to write, so a plan it accepts is a plan this gate accepts. It refuses to overwrite a release whose status records a failure or a rollback, so this route cannot turn one of those green \u2014 those arms of this gate print a different recovery for that reason."
+};
+var RELEASE_NEGATIVE_RECOVERY = {
+  command: "legion ship",
+  reason: "This change's release plane records a release that failed or was taken back, and nothing that ships this change repairs that. legion release plan refuses to overwrite a release at one of those statuses \u2014 writing a fresh requested plan over a recorded failure is how a negative gets laundered \u2014 so the follow-up work belongs in a new change. If the record itself is wrong, correct or remove the release.json under this change by hand and rerun this to confirm."
+};
+var RELEASE_ENVIRONMENT_RECOVERY = {
+  command: "legion release plan --environment <staging|production>",
+  reason: "This change carries a release plan for an environment nothing is released into, so it plans the work rather than the release of it. Re-plan it against the environment this change is actually released to. If this change deploys nothing at all, that is the waiver rather than a local plan: legion attest release-observation --verdict not_applicable --waiver-reason <text> --attested-by <id>, which legion ship echoes as a warning on every payload that carries one."
+};
+var UNREADABLE_RELEASE_RECOVERY = {
+  command: "legion ship",
+  reason: "A release plan is present for this change and could not be read, so whether it records a failed release is unknown and this gate reports unevaluable rather than absence. legion release plan deliberately refuses to overwrite an unread record \u2014 writing over one is the one way to silently replace a failed release with a fresh plan \u2014 so correct or remove the file by hand, then rerun this to confirm."
+};
+function taskgraphPathFor(changeId) {
+  try {
+    return artifactPathForRole({ role: "taskgraph", changeId });
+  } catch {
+    return void 0;
+  }
+}
+function releasePlanOutcome(input) {
+  const change = input.change;
+  const fact = change?.release;
+  if (change === void 0 || fact === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The release plan recorded for this change was not read, so whether anything plans how its release will be observed is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY,
+      // The plane was not read whole, and what is in it may be a `failed`
+      // release. See `GateOutcome.concealsNegative`.
+      concealsNegative: true
+    };
+  }
+  if (fact.kind === "unreadable") {
+    return {
+      status: "unevaluable",
+      reason: `${fact.path} is present for change ${change.changeId} and could not be read as a release plan, so whether this change carries one \u2014 and whether the one it carries records a failed release \u2014 is unestablished.`,
+      recovery: UNREADABLE_RELEASE_RECOVERY,
+      concealsNegative: true
+    };
+  }
+  if (fact.kind === "absent") {
+    return {
+      status: "unevaluable",
+      reason: `No release plan is recorded for change ${change.changeId}, so nothing says how its release would be observed or taken back.`,
+      recovery: RELEASE_PLAN_RECOVERY
+    };
+  }
+  const plan = fact.document;
+  const describe3 = `Release plan ${plan.id} for change ${change.changeId}`;
+  if (plan.changeId !== change.changeId) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names change ${plan.changeId} rather than ${change.changeId}, so it is a plan about another change sitting at this change's path.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  const standing = RELEASE_STANDING[plan.status];
+  if (standing === "failed") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} records status "${plan.status}", which is a recorded negative about the release this gate asks about: the plan exists and what happened under it is that the release failed or has to be taken back.`,
+      recovery: RELEASE_NEGATIVE_RECOVERY
+    };
+  }
+  if (standing === "closed") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} records status "${plan.status}", so the release it planned has already been taken back or needs a forward fix. That is a record of what happened rather than a plan for what will, and this change carries no other release plan.`,
+      recovery: RELEASE_NEGATIVE_RECOVERY
+    };
+  }
+  if (standing === "replaced") {
+    return {
+      status: "unevaluable",
+      reason: `${describe3} records status "superseded", and it is the only release plan this change has \u2014 so it says of itself that it is not the current plan, and there is no current plan to read.`,
+      recovery: RELEASE_PLAN_RECOVERY
+    };
+  }
+  if (RELEASE_EXPOSURE[plan.environment] === "prerelease") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names ${plan.environment} as the environment it observes, and nothing is released into ${plan.environment}: it is where the work runs rather than where this change reaches anything. This gate asks how the release is observed and taken back, so a plan for a pre-release environment is a recorded failure to answer it rather than an answer. A change that deploys nothing at all is waived through legion attest release-observation --verdict not_applicable, which is audited, names a human and is echoed on every ship payload that carries one.`,
+      recovery: RELEASE_ENVIRONMENT_RECOVERY
+    };
+  }
+  if (plan.healthCriteria.length === 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names no health criterion, so it plans a release nothing would be observed against. releaseSchema does not bound this array, so an empty one parses; this gate refuses it positively rather than quantifying over it and finding the quantifier vacuously true.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  if (plan.rollbackPlan.criteria.length === 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} declares a ${plan.rollbackPlan.strategy} rollback strategy and no criterion that would trigger it, so nothing says when the release would be taken back.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  const taskgraphPath2 = taskgraphPathFor(change.changeId);
+  if (taskgraphPath2 !== void 0 && plan.releaseIntent.path !== taskgraphPath2) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names ${plan.releaseIntent.path} as the release intent it was planned against, and a plan's task coverage is drawn from this change's task graph at ${taskgraphPath2}. A plan authored against something else records coverage of a set this report cannot check it over.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  const deriving = tasksDeriving("release_observation_plan", input.tasks);
+  if (deriving.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `${describe3} exists, and no task of this change derives release_observation_plan, so there is nothing for a plan to observe.`,
+      recovery: RELEASE_PLAN_RECOVERY
+    };
+  }
+  const covered = new Set(plan.taskRefs.map((taskId) => taskId));
+  if (covered.size === 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names no task at all, so it is a plan that observes none of this change. This gate is derived by ${deriving.length} task${deriving.length === 1 ? "" : "s"} and is satisfied only when the plan speaks for all of them.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  const uncovered = deriving.map(input.taskIdFor).filter((taskId) => !covered.has(taskId));
+  if (uncovered.length > 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names ${covered.size} task${covered.size === 1 ? "" : "s"}, leaving ${uncovered.join(", ")} uncovered. This gate is derived by ${deriving.length} task${deriving.length === 1 ? "" : "s"} of this change and is satisfied only when the plan observes all of them.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  return {
+    status: "satisfied",
+    reason: `${describe3} observes it in ${plan.environment}, an environment this change is released into: ${plan.healthCriteria.length} health criteri${plan.healthCriteria.length === 1 ? "on" : "a"}, a ${plan.rollbackPlan.strategy} rollback plan with ${plan.rollbackPlan.criteria.length} criteri${plan.rollbackPlan.criteria.length === 1 ? "on" : "a"}, and coverage of all ${deriving.length} task${deriving.length === 1 ? "" : "s"} that derive release_observation_plan. This is a plan and not an observation: nothing here records that the release happened or that the criteria held. legion dev board release-observation is where a post-deployment report lands, and it is a different plane that no ship gate reads.`
+  };
+}
+function releaseObservationPlanStatus(input) {
+  return combineProducerOutcomes({
+    primary: releasePlanOutcome(input),
+    secondary: attestationGateStatus({
+      gate: "release_observation_plan",
+      kinds: ATTESTATION_GATE_KINDS.release_observation_plan,
+      change: input.change,
+      tasks: input.tasks,
+      taskIdFor: input.taskIdFor,
+      absenceRecovery: RELEASE_PLAN_RECOVERY
+    }),
+    describePrimary: "release observation plan",
+    describeSecondary: "release-observation attestation"
+  });
+}
+function isSatisfyingReleasePlan(input) {
+  return releasePlanShortfall(input) === void 0;
+}
+function releasePlanShortfall(input) {
+  const outcome = releasePlanOutcome({
+    tasks: input.tasks,
+    taskIdFor: input.taskIdFor,
+    change: {
+      changeId: input.changeId,
+      acceptance: void 0,
+      approvals: void 0,
+      attestations: void 0,
+      reviews: void 0,
+      deltas: void 0,
+      oracles: void 0,
+      taskRuns: void 0,
+      release: { kind: "document", document: input.release },
+      evaluatedAt: void 0,
+      verifyPin: UNRESOLVED_PINS,
+      classifySource: UNREAD_SOURCES
+    }
+  });
+  return outcome.status === "satisfied" ? void 0 : outcome.reason;
+}
+var PROTECTED_ACCEPTANCE_ITEM = "protected-acceptance-paths";
+var PROTECTED_PATHS_MODIFY_ACTION = "oracle.protected-paths.modify";
+var ACCEPTANCE_PATHS_DECLARE_RECOVERY = {
+  command: "legion start --intake",
+  reason: "No oracle in this change names a test the work must not weaken, so there is nothing for the harness to watch and nothing this gate can be satisfied by. Declare the acceptance tests on an executable acceptance criterion at intake and re-plan, or lower the risk tier through an audited risk.override if this change genuinely has no acceptance test to protect."
+};
+var ACCEPTANCE_PATHS_BUILD_RECOVERY = {
+  command: "legion build",
+  reason: "This change declares protected acceptance paths and this task's latest evidence does not record what its run did to them. The observation is taken across a dispatch, so only a run can produce it: build, then rerun legion ship."
+};
+var ACCEPTANCE_PATHS_UNKNOWN_RECOVERY = {
+  command: "legion build",
+  reason: "A declared acceptance path could not be compared on both sides of the run. The cited runs/<runId>/protected-paths.json names which and why. If a declaration points at a file that is not there, correct the path on the criterion and re-plan \u2014 a rebuild will report the same thing. If the report of an earlier run of this change is missing or no longer matches the digest its evidence cites, restore it from version control first: what this change's first run saw is what a later run is judged against, and a build cannot reconstruct a record that was deleted."
+};
+var ACCEPTANCE_PATHS_RESTORE_RECOVERY = {
+  command: "legion build",
+  reason: "A run changed an acceptance test this change's oracles say it must not weaken, and no human decided that before the run started. Restore the path to the pre-run state recorded in this task's runs/<runId>/protected-paths.json and build again; the next run's observation then records pass. Building again *without* restoring records the same fail, because a run is compared against the state this change's first run saw rather than against whatever the last attempt left. Approving now cannot help \u2014 this gate requires the decision to predate the run, and legion approve protected-paths writes a later instant, which makes this strictly worse. If the modification was intended, plan the remaining work as a new change and approve it before building."
+};
+function protectedAcceptanceItem(entries, taskId) {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === void 0) return void 0;
+  return entry.evidence.items.find((item) => item.id === PROTECTED_ACCEPTANCE_ITEM);
+}
+function changeAcceptancePathDeclarations(input) {
+  const oracles = input.change?.oracles;
+  if (oracles === void 0) return { declarations: [], unestablished: true };
+  const declarations = [];
+  for (const oracle of oracles) {
+    const paths = oracle.document.acceptancePaths;
+    if (paths === void 0 || paths.length === 0) continue;
+    declarations.push({ oracleId: oracle.document.id, oracle, paths: [...paths] });
+  }
+  return {
+    declarations: declarations.slice().sort((left, right) => left.oracleId.localeCompare(right.oracleId)),
+    unestablished: false
+  };
+}
+function protectedPathsModifyGrant(input) {
+  const approvals = input.change.approvals;
+  if (approvals === void 0) return void 0;
+  const oracleId = input.oracle.document.id;
+  const relevant = approvals.filter(
+    (approval) => approval.changeId === input.change.changeId && approval.scope.action === PROTECTED_PATHS_MODIFY_ACTION && approval.scope.targets.some((target) => target.kind === "oracle" && target.id === oracleId)
+  );
+  if (relevant.length === 0) return void 0;
+  const live = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") continue;
+    if (grantExpiry(approval, input.change.evaluatedAt) !== "live") continue;
+    live.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  if (newestGrant === void 0) return void 0;
+  const standing = relevant.some(
+    (approval) => (approval.status === "denied" || approval.status === "revoked" || approval.status === "expired") && (approval.decidedAt === void 0 || approval.decidedAt >= newestGrant.decidedAt)
+  );
+  if (standing) return void 0;
+  const oraclePath2 = input.oracle.reference.path;
+  const pins = (newestGrant.artifacts ?? []).filter((reference) => reference.path === oraclePath2);
+  if (pins.length !== 1) return void 0;
+  const pin = pins[0];
+  if (pin.sha256 !== input.oracle.reference.sha256) return void 0;
+  return { by: newestGrant.decidedBy.id, at: newestGrant.decidedAt };
+}
+function isLiveProtectedPathsModifyGrant(input) {
+  const granted = protectedPathsModifyGrant({
+    oracle: input.oracle,
+    change: {
+      changeId: input.changeId,
+      acceptance: void 0,
+      approvals: [input.approval],
+      attestations: void 0,
+      reviews: void 0,
+      deltas: void 0,
+      oracles: void 0,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: input.evaluatedAt,
+      verifyPin: UNRESOLVED_PINS,
+      classifySource: UNREAD_SOURCES
+    }
+  });
+  return granted !== void 0;
+}
+function protectedAcceptancePathsStatus(input) {
+  const { declarations, unestablished: unestablished2 } = changeAcceptancePathDeclarations({ change: input.change });
+  if (unestablished2) {
+    return {
+      status: "unevaluable",
+      reason: "The oracles recorded for this change could not be read as a complete set, so which acceptance tests its runs must not weaken is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  if (declarations.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "No oracle in this change declares a protected acceptance path, so nothing says which tests its runs must not weaken. Nobody said, so nothing is known.",
+      recovery: ACCEPTANCE_PATHS_DECLARE_RECOVERY
+    };
+  }
+  const declaredPaths = declarations.flatMap((declaration) => declaration.paths);
+  const item = protectedAcceptanceItem(input.entries, input.taskId);
+  if (item === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `${input.taskId}'s latest evidence records no ${PROTECTED_ACCEPTANCE_ITEM} item, so nothing says whether its run changed the ${declaredPaths.length} acceptance path(s) this change's oracles declare (${declaredPaths.join(", ")}).`,
+      recovery: ACCEPTANCE_PATHS_BUILD_RECOVERY
+    };
+  }
+  const covered = new Set(
+    (item.traceRefs ?? []).filter((reference) => reference.entity?.kind === "oracle").map((reference) => `${reference.entity?.id ?? ""}
+${reference.path}`)
+  );
+  for (const declaration of declarations) {
+    for (const declaredPath of declaration.paths) {
+      if (covered.has(`${declaration.oracleId}
+${declaredPath}`)) continue;
+      return {
+        status: "unevaluable",
+        reason: `${declaredPath}, declared by oracle ${declaration.oracleId}, is covered by no pre-run snapshot in ${input.taskId}'s latest evidence: it was declared after the run that produced it.`,
+        recovery: ACCEPTANCE_PATHS_BUILD_RECOVERY
+      };
+    }
+  }
+  const artifactPath = item.artifact?.path;
+  const cites = artifactPath === void 0 ? "" : ` ${artifactPath} records what each path was before and after.`;
+  if (item.verdict === "unknown") {
+    return {
+      status: "unevaluable",
+      reason: `${input.taskId}'s run could not compare every protected acceptance path this change's oracles declare on both sides of the dispatch, so whether one was weakened is unestablished.${cites}`,
+      recovery: ACCEPTANCE_PATHS_UNKNOWN_RECOVERY
+    };
+  }
+  if (item.verdict === "fail") {
+    const change = input.change;
+    if (change === void 0 || change.approvals === void 0) {
+      return {
+        status: "unevaluable",
+        reason: `${input.taskId}'s run changed a protected acceptance path, and the approvals recorded for this change could not be read, so whether a human decided that beforehand is unestablished.`,
+        recovery: UNREADABLE_PLANE_RECOVERY
+      };
+    }
+    const execution = executionOrdering(change.taskRuns);
+    if (execution.kind !== "started") {
+      return {
+        status: "unevaluable",
+        reason: `${input.taskId}'s run changed a protected acceptance path, and this change's task runs do not establish when execution began, so whether any decision predates it is unknown.`,
+        recovery: ORDERING_UNREADABLE_RECOVERY
+      };
+    }
+    const unapproved = [];
+    const late = [];
+    const granted = [];
+    for (const declaration of declarations) {
+      const grant = protectedPathsModifyGrant({ oracle: declaration.oracle, change });
+      if (grant === void 0) {
+        unapproved.push(`${declaration.oracleId} (${declaration.paths.join(", ")})`);
+        continue;
+      }
+      if (grant.at >= execution.startedAt) {
+        late.push(`${declaration.oracleId} (decided ${grant.at} by ${grant.by})`);
+        continue;
+      }
+      granted.push(grant);
+    }
+    if (unapproved.length > 0) {
+      return {
+        status: "unsatisfied",
+        reason: `${input.taskId}'s run changed at least one of the ${declaredPaths.length} protected acceptance path(s) this change's oracles declare, and no granted ${PROTECTED_PATHS_MODIFY_ACTION} approval decided before run ${execution.runId} started at ${execution.startedAt} permits it for ${unapproved.join("; ")}.${cites}`,
+        recovery: ACCEPTANCE_PATHS_RESTORE_RECOVERY
+      };
+    }
+    if (late.length > 0) {
+      return {
+        status: "unsatisfied",
+        reason: `${input.taskId}'s run changed a protected acceptance path, and the decision permitting it was taken at or after run ${execution.runId} of ${execution.taskId} started at ${execution.startedAt}: ${late.join("; ")}. A decision taken after the work is not a decision the work was done under, and nothing re-orders one already taken.${cites}`,
+        recovery: ACCEPTANCE_PATHS_RESTORE_RECOVERY
+      };
+    }
+    const first = granted[0];
+    return {
+      status: "satisfied",
+      reason: `${input.taskId}'s run changed a protected acceptance path, and ${first.by} approved modifying the paths every declaring oracle protects at ${first.at}, before run ${execution.runId} started at ${execution.startedAt}, against the oracle bytes this change still carries.${cites}`
+    };
+  }
+  if (item.verdict === "pass") {
+    return {
+      status: "satisfied",
+      reason: `Every protected acceptance path this change's oracles declare (${declaredPaths.join(", ")}) still matches the state this change's first run recorded for it, as of ${input.taskId}'s latest run: nothing that run did, and nothing done between this change's runs, weakened them.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: `${input.taskId}'s ${PROTECTED_ACCEPTANCE_ITEM} item records the verdict "${String(item.verdict)}", which this gate cannot read as an answer about whether a protected acceptance path was weakened.`,
+    recovery: ACCEPTANCE_PATHS_BUILD_RECOVERY
+  };
+}
+function fromVerdict(verdict, itemId) {
+  if (verdict === "pass") return { status: "satisfied", reason: `Evidence records a passing ${itemId}.` };
+  if (verdict === "fail") return { status: "unsatisfied", reason: `Evidence records a failed ${itemId}.` };
+  return { status: "unevaluable", reason: `No ${itemId} evidence was recorded for this task.` };
+}
+function evaluateGate(input) {
+  const { gate, taskId, entries, reviews } = input;
+  switch (gate.id) {
+    case "task_contract":
+    case "current_task_contract_or_small_change_record":
+      return { status: "satisfied", reason: "A typed task contract defines this work." };
+    case "deterministic_verification":
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "declared-verification"), "declared-verification");
+    case "scoped_implementer_run":
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "diff-reconciliation"), "diff-reconciliation");
+    case "evidence_note":
+    case "evidence_bundle_or_log":
+      return hasEvidence(entries, taskId) ? { status: "satisfied", reason: "A reviewable evidence bundle was recorded." } : { status: "unsatisfied", reason: "No evidence bundle exists for this task." };
+    case "lightweight_independent_review":
+    case "task_level_independent_review":
+      return hasAcceptedReview(reviews, taskId) ? { status: "satisfied", reason: "An accepted review decision exists for this task." } : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
+    case "explicit_human_approval":
+      return humanApprovalStatus({ change: input.change, reviews, taskId });
+    case "approved_delta_spec":
+      return deltaSpecApprovalGateStatus({ change: input.change });
+    case "protected_oracle":
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
+    case "integration_or_real_interface_checks":
+      return integrationSurfaceGateStatus({
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        entries,
+        change: input.change
+      });
+    case "whole_change_acceptance_evidence":
+      return wholeChangeAcceptanceStatus({
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        entries
+      });
+    case "approved_spec_and_oracle":
+      return approvedSpecAndOracleStatus({
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
+    case "independent_baseline":
+    case "security_or_e2e_evaluator":
+    case "rollback_or_forward_fix_evidence": {
+      const kinds = ATTESTATION_GATE_KINDS[gate.id];
+      return attestationGateStatus({
+        gate: gate.id,
+        kinds,
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        // Only this one. `security_or_e2e_evaluator` evaluates the implemented
+        // change, which necessarily comes after it, and rollback evidence is
+        // about the repository as it stands — an ordering rule on either would
+        // make an honest attestation permanently unsatisfiable.
+        ...gate.id === "independent_baseline" ? { requireBeforeExecution: true } : {}
+      });
+    }
+    case "architecture_or_security_review":
+      return domainReviewGateStatus({
+        gate: gate.id,
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
+    case "protected_acceptance_tests":
+      return protectedAcceptancePathsStatus({ taskId, entries, change: input.change });
+    case "release_observation_plan":
+      return releaseObservationPlanStatus({
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
+    default:
+      return {
+        status: "unevaluable",
+        reason: "Legion does not yet produce evidence for this gate."
+      };
+  }
+}
+var UNRESOLVED_PINS = () => "unverified";
+var UNREAD_SOURCES = () => ({
+  kind: "unread",
+  reason: "this report carries no way to read a cited source"
+});
+function shipGatePinnedReferences(input) {
+  return [
+    // The delta spec bytes `approved_delta_spec` compares an approval against.
+    ...input.deltas?.map((delta) => delta.delta) ?? [],
+    // The oracle documents themselves, which `approved_spec_and_oracle` compares
+    // an oracle approval's pin against.
+    ...input.oracles?.map((oracle) => oracle.reference) ?? [],
+    // The files an oracle's declared verification surface pins.
+    ...input.oracles?.flatMap((oracle) => oracle.document.surface?.pinned ?? []) ?? [],
+    // The files a task contract's declared verification surface pins. Ordinary
+    // repository files rather than project artifacts, which is the case
+    // `pinned-references.ts` resolves paths for itself.
+    ...input.tasks.flatMap((task) => (task.verification ?? []).flatMap((entry) => entry.surface?.pinned ?? [])),
+    // The bytes any approval was decided against.
+    ...input.approvals?.flatMap((approval) => approval.artifacts ?? []) ?? [],
+    // The reports any attestation cites. The sixth family, and the first whose
+    // paths are guaranteed to be *outside* `.legion/project` — an attestation
+    // pins `docs/next/evidence/...`, which is exactly the case
+    // `pinned-references.ts` resolves paths itself for. It is also the family
+    // whose omission would be least visible: an attestation whose sources
+    // answered `unverified` would pin its gate at `unevaluable` forever, which
+    // is indistinguishable at the readiness arithmetic from nobody having
+    // attested anything.
+    ...input.attestations?.flatMap((attestation) => attestation.sources) ?? []
+    // **No family for protected acceptance paths, deliberately.** The
+    // `oracle.protected-paths.modify` approval pins the *oracle document* the
+    // approver read, and that reference is already collected twice over — as an
+    // oracle reference and as an approval artifact. The acceptance test files
+    // themselves are not pinned by anything and must not be: this gate certifies
+    // what a run did across one dispatch, and the digests that answer that live in
+    // the run artifact rather than in a declaration. Stated rather than omitted,
+    // because a dropped family fails silently and in the direction of looking
+    // correct, and the next reader would otherwise have to guess whether the
+    // omission was a decision.
+    //
+    // **And no family for `releaseIntent`, deliberately, on a measurement rather
+    // than a preference.** `releaseBaseSchema.releaseIntent` is a required
+    // `artifactReferenceSchema`, so a seventh family is the obvious reading — and
+    // it would break the gate it was added for. `legion review --accept` calls
+    // `updateChangeAcceptance`, which writes `change.yaml` and then re-points
+    // `taskgraph.json` and `evidence-index.json` through
+    // `repointChangeProposalInputs`: every candidate referent of `releaseIntent`
+    // moves bytes during the accept. A digest recorded before it would answer
+    // `drift`, and `release_observation_plan` would report `unsatisfied` for a
+    // governance write that changed no task and no criterion. What replaces the
+    // pin is strictly stronger rather than weaker: the gate compares
+    // `releaseIntent.path` against the change's own task graph path and
+    // re-derives the coverage claim against the *live* taskgraph on every ship,
+    // which is a check a digest could not make at all.
+    //
+    // `shipGateSourcePaths` does not move either: a release plan cites no report,
+    // so there are no bytes for `classifyEvidenceSource` to read.
+  ];
+}
+function shipGateSourcePaths(attestations) {
+  return (attestations ?? []).flatMap((attestation) => attestation.sources.map((source) => source.path));
+}
+function normalizeChangeFacts(change) {
+  if (change === null || typeof change !== "object") return void 0;
+  const facts = change;
+  if (typeof facts.verifyPin === "function" && typeof facts.classifySource === "function") return facts;
+  return {
+    ...facts,
+    ...typeof facts.verifyPin === "function" ? {} : { verifyPin: UNRESOLVED_PINS },
+    ...typeof facts.classifySource === "function" ? {} : { classifySource: UNREAD_SOURCES }
+  };
+}
+function deriveShipGates(input) {
+  const change = normalizeChangeFacts(input.change);
+  const gates = [];
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    const derived = deriveGateSet({
+      tier: task.risk.tier,
+      gatesByTier: DEFAULT_RISK_POLICY.gatesByTier
+    });
+    for (const gate of derived) {
+      const { concealsNegative: _combinationOnly, ...outcome } = evaluateGate({
+        gate,
+        task,
+        taskId,
+        entries: input.entries,
+        reviews: input.reviews,
+        change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
+      const scope = GATE_SCOPE[gate.id];
+      gates.push({
+        ...outcome,
+        gate: gate.id,
+        label: gate.label,
+        taskId,
+        scope,
+        subjectId: scope === "change" && change !== void 0 ? change.changeId : taskId
+      });
+    }
+  }
+  const satisfied = gates.filter((entry) => entry.status === "satisfied").length;
+  const unsatisfied = gates.filter((entry) => entry.status === "unsatisfied").length;
+  const unevaluable = gates.filter((entry) => entry.status === "unevaluable").length;
+  return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 && unevaluable === 0 };
+}
+function shipGateDiagnostics(input) {
+  const reported = /* @__PURE__ */ new Set();
+  const diagnostics = [];
+  for (const gate of input.gates) {
+    if (gate.status === "satisfied") continue;
+    if (gate.scope === "change") {
+      if (reported.has(gate.gate)) continue;
+      reported.add(gate.gate);
+    }
+    diagnostics.push({
+      code: gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
+      gate: gate.gate,
+      message: `${gate.label} is not satisfied for ${gate.subjectId}: ${gate.reason}`,
+      path: input.path
+    });
+  }
+  return diagnostics;
+}
+var GATE_RECOVERY = {
+  current_task_contract_or_small_change_record: void 0,
+  deterministic_verification: void 0,
+  evidence_note: void 0,
+  task_contract: void 0,
+  scoped_implementer_run: void 0,
+  evidence_bundle_or_log: void 0,
+  lightweight_independent_review: void 0,
+  approved_delta_spec: {
+    command: "legion approve spec --approver <id>",
+    reason: "This change's delta specs are not approved, and no build produces that: the gate reads the approval plane. Approve them, then rerun legion ship."
+  },
+  protected_oracle: void 0,
+  task_level_independent_review: void 0,
+  // This gate has four unmet states with four different cures, so its verdict
+  // carries its own `recovery` and `shipGateRecovery` prefers that over this
+  // entry. What stays here is the state a table *can* answer for and the one an
+  // operator is most likely to be in: a pinned file legitimately edited after the
+  // declaration was made. Leaving it `undefined` would mean a caller holding only
+  // a gate id — a payload renderer, a future summary — had no route out of the
+  // one state where a route out is the whole point of this release's fix.
+  integration_or_real_interface_checks: SURFACE_REAFFIRM_RECOVERY,
+  // Four unmet states with four repairs here too, so the verdict carries its own
+  // and `shipGateRecovery` prefers that. What stays in the table is the state a
+  // caller holding only a gate id can be answered for, and the one every change
+  // bundle written before this release is in: `acceptance: {status: "not_ready"}`,
+  // which nothing had ever moved.
+  whole_change_acceptance_evidence: ACCEPT_RECOVERY,
+  // Six unmet states with five cures — no record, a `fail`, a drifted or absent
+  // source, a cited report that is red, a `covers` list that leaves a deriving
+  // task out, and a baseline dated after the run it claims to precede — so the
+  // verdict carries its own and `shipGateRecovery` prefers that. What stays here
+  // is the state a caller holding only a gate id can be answered for, and the one
+  // every change written before this release is in: nothing attests a baseline,
+  // because nothing could.
+  //
+  // Deliberately **not** the post-execution cure. That one is reachable only
+  // after a build, and a table entry assuming it would tell an operator who has
+  // attested nothing that their only route out is to re-plan.
+  independent_baseline: attestRecovery("independent_baseline", ["independent-baseline"]),
+  // Six unmet states with four different cures, so the verdict carries its own
+  // and `shipGateRecovery` prefers that. What stays here is the state a caller
+  // holding only a gate id can be answered for, and the one every R3 change
+  // written before this release is in: no oracle approval exists at all, because
+  // nothing could write one. It is deliberately *not* the ordering cure — that
+  // one is reachable only after a build, and a table entry that assumed it would
+  // tell an operator who has approved nothing to re-plan.
+  approved_spec_and_oracle: ORACLE_APPROVE_RECOVERY,
+  // Seven unmet states with four cures — no domain recorded anywhere, a domain
+  // that is not architecture or security, a domain review nobody accepted, one
+  // whose axes reached no verdict, a superseded one, a rejected or
+  // blocking-finding or failing one, and a coverage gap — so the verdict carries
+  // its own and `shipGateRecovery` prefers that. What stays here is the state a
+  // caller holding only a gate id can be answered for, and the one every change
+  // written before this release is in: no review says which domain it examined,
+  // because nothing could record it.
+  //
+  // Deliberately **not** the rework cure. That one is reachable only after a
+  // domain review has recorded a defect, and a table entry assuming it would tell
+  // an operator who has reviewed nothing to go and build.
+  architecture_or_security_review: DOMAIN_REVIEW_RECOVERY,
+  // Eight unmet states with four cures — an unreadable oracle plane, no
+  // declaration anywhere, no item in this task's evidence, a declaration made
+  // after the run, an `unknown` observation, an unreadable approvals plane, an
+  // unestablished ordering, and a change with no decision behind it — so the
+  // verdict carries its own and `shipGateRecovery` prefers that. What stays here
+  // is the state a caller holding only a gate id can be answered for, and the one
+  // every change on disk today is in: no oracle declares a protected acceptance
+  // path, because until this release nothing could.
+  //
+  // Deliberately **not** `legion approve protected-paths`. That decision must
+  // predate the run, so a table entry naming it would tell an operator who has
+  // already built to run a command that exits 0, writes a later instant, and
+  // converts a repairable `unevaluable` into a permanent `unsatisfied` — the
+  // exact one-way door `orderingAwareRecovery` exists to keep this file out of.
+  protected_acceptance_tests: ACCEPTANCE_PATHS_DECLARE_RECOVERY,
+  // Five unmet states with four cures, so the verdict carries its own. The table
+  // holds the absence, which is where every change written before this release
+  // is. There is no ordering rule on this gate: evaluating the implemented
+  // change necessarily comes after implementing it.
+  security_or_e2e_evaluator: attestRecovery("security_or_e2e_evaluator", [
+    "security-evaluation",
+    "e2e-evaluation"
+  ]),
+  explicit_human_approval: void 0,
+  // Six unmet states with three cures — no plan, a plan whose status records a
+  // failed or taken-back release, a plan with no health criterion, one whose
+  // rollback plan has no criterion, one that covers only part of the change, and
+  // a `release.json` that will not read — so the verdict carries its own and
+  // `shipGateRecovery` prefers that. What stays here is the state a caller
+  // holding only a gate id can be answered for, and the one every change on disk
+  // is in: nothing plans the release, because until this release nothing could.
+  //
+  // Leaving this `undefined` was measurable, not theoretical. On an R3 change
+  // already built, reviewed and accepted, this was the *only* unmet gate — so
+  // `shipGateRecovery` found no recovery among the unmet set, fell back to ship's
+  // own `{command: "legion build"}`, and advised a build on a change that had
+  // already been built. That is the exits-0-and-still-blocked loop this series
+  // exists to close, emitted by the aggregator.
+  release_observation_plan: RELEASE_PLAN_RECOVERY,
+  rollback_or_forward_fix_evidence: attestRecovery("rollback_or_forward_fix_evidence", [
+    "rollback-evidence",
+    "forward-fix-evidence"
+  ])
+};
+function shipGateRecovery(input) {
+  const unmet = input.gates.filter((gate) => gate.status !== "satisfied");
+  if (unmet.length === 0) return input.fallback;
+  const unmetIds = [...new Set(unmet.map((gate) => gate.gate))];
+  const recoveries = unmetIds.map((id) => unmet.find((gate) => gate.gate === id)?.recovery ?? GATE_RECOVERY[id]).filter((entry) => entry !== void 0);
+  if (recoveries.length === 0) return input.fallback;
+  const distinct = [...new Set(recoveries.map((entry) => entry.command))];
+  const only = recoveries[0];
+  if (distinct.length === 1) {
+    const unnamed = unmetIds.length - recoveries.length;
+    return unnamed === 0 ? only : {
+      command: only.command,
+      reason: `${only.reason} ${unnamed} other unmet gate${unnamed === 1 ? " has" : "s have"} no command that produces its evidence, so this repairs what can be repaired rather than unblocking the ship.`
+    };
+  }
+  return {
+    command: only.command,
+    reason: `${input.fallback.reason} Of those, ${distinct.length} have a command that can produce the missing evidence: ${distinct.join(", ")}. No single command unblocks this ship; ${only.command} is the first of them in gate order.`
+  };
 }
 
 // packages/cli/src/workflow/state.ts
@@ -39773,7 +45068,7 @@ async function resolveWorkflowState(context) {
     repositoryRoot: context.repositoryRoot,
     changeId: latestChange.changeId
   });
-  if (evidence.ok && reviews.ok && hasAcceptedReview(reviews.reviews) && hasAcceptedEvidence(evidence.document.entries)) {
+  if (evidence.ok && reviews.ok && hasAcceptedReview2(reviews.reviews) && hasAcceptedEvidence(evidence.document.entries)) {
     return {
       stage: "ship_ready",
       projectId: project.loaded.project.id,
@@ -39804,21 +45099,21 @@ async function resolveWorkflowState(context) {
     stage: "planned",
     projectId: project.loaded.project.id,
     currentSpecCount: specs.documents.length,
-    nextAction: nextAction("legion build", "Latest planned change is ready for guided build execution."),
+    nextAction: derivesApprovalOrderingGate(taskgraph.document.tasks) ? nextAction(APPROVE_BEFORE_BUILD_RECOVERY.command, APPROVE_BEFORE_BUILD_RECOVERY.reason) : nextAction("legion build", "Latest planned change is ready for guided build execution."),
     diagnostics: []
   };
 }
-function hasAcceptedReview(reviews) {
+function hasAcceptedReview2(reviews) {
   return reviews.some((review) => review.document.status === "accepted");
 }
 function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function listWorkflowChanges(repositoryRoot) {
-  const changesRoot = path31.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path36.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
-    entries = await readdir14(changesRoot, { withFileTypes: true });
+    entries = await readdir16(changesRoot, { withFileTypes: true });
   } catch (error51) {
     if (isNodeErrorCode3(error51, "ENOENT")) {
       return noWorkflowChange(changesRoot);
@@ -39871,7 +45166,7 @@ async function findLatestWorkflowChangeId(repositoryRoot) {
   const listed = await listWorkflowChanges(repositoryRoot);
   if (!listed.ok) return listed;
   const latest = listed.changes.at(-1);
-  if (latest === void 0) return noWorkflowChange(path31.join(repositoryRoot, ".legion", "project", "changes"));
+  if (latest === void 0) return noWorkflowChange(path36.join(repositoryRoot, ".legion", "project", "changes"));
   return { ok: true, changeId: latest.changeId };
 }
 async function isChangeComplete(input) {
@@ -40012,380 +45307,6 @@ async function resolveMapStatus(context) {
   };
 }
 
-// packages/cli/src/workflow/change-input.ts
-import { execFileSync as execFileSync3 } from "node:child_process";
-import path32 from "node:path";
-
-// packages/cli/src/workflow/phase-requirement.ts
-var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
-function requirementIdInPhase(phase) {
-  return REQUIREMENT_ANCHOR.exec(phase.body)?.[1];
-}
-function partitionCriteria(requirement) {
-  const executable = [];
-  const manual = [];
-  for (const criterion of requirement.acceptance.criteria) {
-    if (criterion.proof.mode === "executable") executable.push(criterion);
-    else manual.push(criterion);
-  }
-  return { executable, manual };
-}
-async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
-  const requirementId = requirementIdInPhase(phase);
-  if (requirementId === void 0) return { ok: "absent" };
-  if (verified !== void 0) {
-    const found = verified.find((entry) => entry.id === requirementId);
-    if (found === void 0) {
-      return {
-        ok: false,
-        reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
-      };
-    }
-    return declinedOrResolved(found, phase);
-  }
-  const set2 = await readRequirementSet(repositoryRoot);
-  if (!set2.ok) {
-    if (set2.status === "not_found") {
-      return {
-        ok: false,
-        reason: `Phase ${phase.number} names requirement ${requirementId}, but this project has no requirement set. Re-render the roadmap, or remove the reference.`
-      };
-    }
-    return { ok: false, reason: set2.reason };
-  }
-  const requirement = set2.requirements.find((entry) => entry.id === requirementId);
-  if (requirement === void 0) {
-    return {
-      ok: false,
-      reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
-    };
-  }
-  return declinedOrResolved(requirement, phase);
-}
-function declinedOrResolved(requirement, phase) {
-  if (requirement.priority === "wont") {
-    return {
-      ok: false,
-      reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
-    };
-  }
-  return { ok: true, resolved: { requirement, ...partitionCriteria(requirement) } };
-}
-var MAX_CRITERION_DESCRIPTION = 1024;
-function clamp(value) {
-  if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
-  return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
-}
-function renderInvocation(command, args) {
-  if (args.length === 0) return `${JSON.stringify(command)} with no arguments`;
-  return `${JSON.stringify(command)} with arguments ${JSON.stringify(args)}`;
-}
-function describeCriterion(criterion) {
-  if (criterion.proof.mode === "executable") {
-    const invocation = renderInvocation(criterion.proof.command, criterion.proof.args);
-    return clamp(
-      `${criterion.statement} \u2014 run ${invocation}; it must exit ${criterion.proof.expectedExitCode}`
-    );
-  }
-  return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
-}
-
-// packages/cli/src/workflow/change-input.ts
-var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
-var MAX_ID_SUFFIX = 64;
-function suffixWithRoom(suffix, tail) {
-  if (suffix.length + tail.length <= MAX_ID_SUFFIX) return `${suffix}${tail}`;
-  const trimmed = suffix.slice(0, MAX_ID_SUFFIX - tail.length).replace(/-+$/, "");
-  return `${trimmed}${tail}`;
-}
-function phaseOracleAssignment(phase, requirement) {
-  const ids = phasePlanIds(phase);
-  if (requirement === void 0) {
-    return { byCriterionId: /* @__PURE__ */ new Map(), inspectionOracleId: ids.oracleId, all: [ids.oracleId] };
-  }
-  const { executable, manual } = partitionCriteria(requirement);
-  const byCriterionId = new Map(
-    executable.map((criterion, index) => [
-      criterion.id,
-      formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`))
-    ])
-  );
-  const criterionIds = [...byCriterionId.values()];
-  const inspectionOracleId = manual.length === 0 && criterionIds.length > 0 ? void 0 : ids.oracleId;
-  return {
-    byCriterionId,
-    inspectionOracleId,
-    all: inspectionOracleId === void 0 ? criterionIds : [...criterionIds, inspectionOracleId]
-  };
-}
-function phaseOracleIds(phase, requirement) {
-  return phaseOracleAssignment(phase, requirement).all;
-}
-function phasePlanIds(phase) {
-  const suffix = phaseIdSuffix(phase);
-  return {
-    suffix,
-    changeId: formatEntityId("change", suffix),
-    requirementId: formatEntityId("requirement", suffix),
-    oracleId: formatEntityId("oracle", suffix),
-    contractId: formatEntityId("contract", suffix)
-  };
-}
-function phaseRiskProfile(phase, recorded) {
-  if (recorded !== void 0) {
-    return riskProfileSchema.parse({
-      tier: recorded.tier,
-      reasons: [recorded.reason, `Phase ${phase.number} workflow plan creates a reviewable change.`]
-    });
-  }
-  return riskProfileSchema.parse({
-    tier: "R2",
-    reasons: [`Phase ${phase.number} workflow plan creates a reviewable change.`]
-  });
-}
-function buildPhaseCurrentSpecInput(options) {
-  const ids = phasePlanIds(options.phase);
-  const createdAt = options.createdAt ?? currentUtcTimestamp();
-  if (options.requirement !== void 0) {
-    const authored = requirementSchema.parse({
-      ...options.requirement,
-      traceRefs: withSpecAnchor(options.requirement)
-    });
-    return {
-      repositoryRoot: options.repositoryRoot,
-      document: {
-        primaryRequirementId: authored.id,
-        capability: {
-          id: ids.suffix,
-          title: `Phase ${options.phase.number}: ${options.phase.name}`,
-          status: "active"
-        },
-        requirements: [authored],
-        ...currentSpecTail(options, authored.id)
-      }
-    };
-  }
-  const currentSpecPath = artifactPathForRole({
-    role: "current-spec",
-    requirementId: ids.requirementId
-  });
-  const requirement = requirementSchema.parse({
-    schemaVersion: LEGION_PROTOCOL_VERSION,
-    createdAt,
-    kind: "requirement",
-    id: ids.requirementId,
-    projectId: options.project.id,
-    priority: "must",
-    category: "behavior",
-    status: "accepted",
-    statement: `Phase ${options.phase.number} (${options.phase.name}) has a resolved planning source.`,
-    acceptance: {
-      language: `Phase ${options.phase.number} planning starts from a resolved source artifact.`,
-      criteria: generatedCriteria([`${options.phase.name} source is available for typed planning.`]),
-      oracleRefs: []
-    },
-    traceRefs: [
-      {
-        path: currentSpecPath,
-        anchor: ids.requirementId,
-        relation: "defines",
-        entity: { kind: "requirement", id: ids.requirementId }
-      }
-    ],
-    supersedes: []
-  });
-  return {
-    repositoryRoot: options.repositoryRoot,
-    document: {
-      primaryRequirementId: ids.requirementId,
-      capability: {
-        id: ids.suffix,
-        title: `Phase ${options.phase.number}: ${options.phase.name}`,
-        status: "active"
-      },
-      requirements: [requirement],
-      ...currentSpecTail(options, ids.requirementId)
-    }
-  };
-}
-function currentSpecTail(options, traceRequirementId) {
-  return {
-    sections: {
-      purpose: `Track phase ${options.phase.number} planning source as current project truth.`,
-      behaviors: `The project can create a typed change proposal for ${options.phase.name}.`,
-      constraints: "The baseline current spec is limited to planning-source availability.",
-      scenarios: `A maintainer can run legion plan ${options.phase.number} from the roadmap source.`,
-      interfaces: "legion plan",
-      compatibility: "The current spec exists so change bundles have explicit current truth.",
-      failureModes: "If the current spec cannot be read or created, planning fails with diagnostics.",
-      traceIds: [traceRequirementId]
-    }
-  };
-}
-function currentUtcTimestamp() {
-  return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
-}
-function resolveBaseGitSha(repositoryRoot) {
-  try {
-    const value = execFileSync3("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim().toLowerCase();
-    return gitShaSchema.parse(value);
-  } catch {
-    return gitShaSchema.parse(ZERO_GIT_SHA);
-  }
-}
-function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path32.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path32.isAbsolute(relative) ? relative : ".legion/project/project.json";
-  return artifactPathSchema.parse(candidate);
-}
-function withSpecAnchor(requirement) {
-  const specPath = artifactPathForRole({ role: "current-spec", requirementId: requirement.id });
-  const anchored = requirement.traceRefs.some(
-    (traceRef) => traceRef.path === specPath && traceRef.anchor === requirement.id && traceRef.relation === "defines" && traceRef.entity?.kind === "requirement" && traceRef.entity.id === requirement.id
-  );
-  if (anchored) return requirement.traceRefs;
-  return [
-    ...requirement.traceRefs,
-    {
-      path: specPath,
-      anchor: requirement.id,
-      relation: "defines",
-      entity: { kind: "requirement", id: requirement.id }
-    }
-  ];
-}
-function buildChangeBundleInput(options) {
-  const ids = phasePlanIds(options.phase);
-  const createdAt = options.createdAt ?? currentUtcTimestamp();
-  const baseGitSha = options.baseGitSha ?? resolveBaseGitSha(options.repositoryRoot);
-  const sourcePath = phaseSourceArtifactPath(options.repositoryRoot, options.phase);
-  const owner = firstDecisionOwner(options.project);
-  const deltaRequirementId = options.requirement?.id ?? ids.requirementId;
-  const requirement = options.requirement === void 0 ? requirementSchema.parse({
-    schemaVersion: LEGION_PROTOCOL_VERSION,
-    createdAt,
-    kind: "requirement",
-    id: ids.requirementId,
-    projectId: options.project.id,
-    priority: "must",
-    category: "behavior",
-    status: "accepted",
-    statement: requirementStatement(options.phase),
-    acceptance: {
-      language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
-      criteria: generatedCriteria(acceptanceCriteria(options.phase)),
-      oracleRefs: [...phaseOracleIds(options.phase)]
-    },
-    traceRefs: [
-      {
-        path: sourcePath,
-        anchor: `phase-${options.phase.number}`,
-        relation: "defines",
-        entity: { kind: "requirement", id: ids.requirementId }
-      }
-    ],
-    supersedes: []
-  }) : requirementSchema.parse({
-    ...options.requirement,
-    // Only this phase's oracle.
-    //
-    // Retaining an imported requirement's earlier oracle IDs was tried and
-    // reverted: `validateChangeTraceability` loads only the current
-    // change's oracle manifest, so every retained ID reports
-    // `missing_oracle_artifact` and archive refuses the change outright.
-    // Carrying historical coverage needs cross-change oracle resolution,
-    // which is a larger piece of work than this.
-    //
-    // Nothing shipped produces a requirement with prior refs — intake
-    // writes `oracleRefs: []` — so no coverage is lost today. The legacy
-    // importer will be the first producer, and it must land together with
-    // that resolution rather than trading a silent loss for a hard block.
-    acceptance: {
-      ...options.requirement.acceptance,
-      oracleRefs: [...phaseOracleIds(options.phase, options.requirement)]
-    },
-    traceRefs: withSpecAnchor(options.requirement)
-  });
-  return {
-    repositoryRoot: options.repositoryRoot,
-    changeId: ids.changeId,
-    projectId: options.project.id,
-    title: `Plan phase ${options.phase.number}: ${options.phase.name}`,
-    summary: summarizePhase(options.phase),
-    owners: [owner],
-    baseGitSha,
-    risk: phaseRiskProfile(options.phase, options.enforcement),
-    createdAt,
-    currentSpecs: [
-      {
-        requirementId: options.currentSpec.document.primaryRequirementId,
-        expectedRevision: options.currentSpec.document.revision
-      }
-    ],
-    deltaSpecs: [
-      {
-        operation: "modify",
-        requirementId: deltaRequirementId,
-        proposedRequirement: requirement,
-        sections: {
-          purpose: summarizePhase(options.phase),
-          behaviors: options.phase.body || `Implement ${options.phase.name}.`,
-          constraints: "Preserve initialized project truth and create reviewable Legion plan artifacts.",
-          scenarios: `A maintainer runs legion plan ${options.phase.number} and receives a change, oracle, and taskgraph for ${options.phase.name}.`,
-          interfaces: "legion plan",
-          compatibility: "Dry-run planning remains preview-only; non-dry-run planning creates typed artifacts.",
-          failureModes: "Artifact service validation failures are returned with typed diagnostics.",
-          traceIds: [deltaRequirementId]
-        },
-        rationale: `Phase ${options.phase.number} needs typed artifacts before build can execute.`
-      }
-    ],
-    design: {
-      title: `Phase ${options.phase.number} implementation plan`,
-      body: [
-        `Source: ${sourcePath}`,
-        "",
-        options.phase.body || `Implement ${options.phase.name}.`
-      ].join("\n")
-    }
-  };
-}
-function firstDecisionOwner(project) {
-  const owner = project.policy.decisionOwners[0];
-  if (owner === void 0) {
-    throw new Error("Project policy must include at least one decision owner.");
-  }
-  return owner;
-}
-function phaseIdSuffix(phase) {
-  const prefix = `phase-${phase.number}-`;
-  const maxNameLength = Math.max(1, 63 - prefix.length);
-  const nameSlug = slugFromText2(phase.name).slice(0, maxNameLength).replace(/-+$/g, "");
-  return `${prefix}${nameSlug || "plan"}`;
-}
-function slugFromText2(value) {
-  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug.length > 0 ? slug : "plan";
-}
-function requirementStatement(phase) {
-  return truncate3(`Phase ${phase.number} (${phase.name}) must deliver: ${phase.body || phase.name}`, 2048);
-}
-function summarizePhase(phase) {
-  return truncate3(phase.body || `Implement ${phase.name}.`, 512);
-}
-function acceptanceCriteria(phase) {
-  const bullets = phase.body.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("- ")).map((line) => line.slice(2).trim()).filter((line) => line.length > 0).slice(0, 8);
-  return bullets.length > 0 ? bullets : [`${phase.name} is implemented and reviewable.`];
-}
-function truncate3(value, maxLength) {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maxLength) return normalized;
-  return normalized.slice(0, maxLength - 1).trimEnd();
-}
-
 // packages/cli/src/workflow/oracle-input.ts
 var MAX_ORACLE_INSTRUCTIONS = 4096;
 var OMISSION_FOOTER_RESERVE = 160;
@@ -40441,6 +45362,19 @@ function executableOracles(options, criteria) {
       owner,
       protectedPaths: [options.change.artifactPath],
       sourceArtifacts: [options.change.reference],
+      // The criterion's own declaration, copied whole. Read off the same
+      // `ExecutableCriterion` object `taskgraph-input.ts` reads it from — one
+      // `resolvePhaseRequirement` call produces both — so the contract's copy and
+      // the oracle's copy cannot disagree. That is the rule the comment above
+      // `oracleIdsFor` records the cost of breaking, applied to a second field.
+      ...criterion.proof.surface === void 0 ? {} : { surface: criterion.proof.surface },
+      // The criterion's declared protected acceptance paths, copied the same way
+      // and off the same object, for the same reason. `protectedPaths` above is
+      // untouched: it names the control artifacts the guarded harness *restores*,
+      // and widening it to hold acceptance tests would make every path in it
+      // eligible for rollback. The two arrays are opposite disciplines and are
+      // kept as two fields so no reader can union them by accident.
+      ...criterion.proof.acceptancePaths === void 0 ? {} : { acceptancePaths: [...criterion.proof.acceptancePaths] },
       expected: {
         preconditions: ["The phase change bundle exists and validates."],
         postconditions: [description],
@@ -40555,8 +45489,8 @@ function buildOracleArtifactInputs(options) {
 }
 
 // packages/cli/src/workflow/phase-compat.ts
-import { readFile as readFile18 } from "node:fs/promises";
-import path33 from "node:path";
+import { readFile as readFile19 } from "node:fs/promises";
+import path37 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -40604,17 +45538,17 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path33.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path33.join(context.repositoryRoot, "ROADMAP.md")
+    path37.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path37.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path33.isAbsolute(roadmapPath) ? roadmapPath : path33.resolve(repositoryRoot, roadmapPath);
+  return path37.isAbsolute(roadmapPath) ? roadmapPath : path37.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
-    return await readFile18(sourcePath, "utf8");
+    return await readFile19(sourcePath, "utf8");
   } catch (error51) {
     if (isEnoent8(error51)) return void 0;
     throw error51;
@@ -40628,8 +45562,8 @@ function phaseChangeIdPrefix(phaseNumber) {
 }
 
 // packages/cli/src/workflow/retro-index.ts
-import { readFile as readFile19 } from "node:fs/promises";
-import path34 from "node:path";
+import { readFile as readFile20 } from "node:fs/promises";
+import path38 from "node:path";
 var STAGED_ENTRY_FILE = "retro-entry.json";
 var RETRO_INDEX_ARTIFACT_PATH = ".legion/project/workflow/retro/retro-index.json";
 var EMPTY_INDEX = Object.freeze({
@@ -40652,9 +45586,9 @@ function isRetroIndexEntry(value) {
   return typeof entry["id"] === "string" && typeof entry["createdAt"] === "string" && typeof entry["artifactPath"] === "string" && typeof entry["summary"] === "string" && (entry["scopedChangeIds"] === void 0 || Array.isArray(entry["scopedChangeIds"]) && entry["scopedChangeIds"].every((id) => typeof id === "string")) && (entry["scopeLabel"] === void 0 || typeof entry["scopeLabel"] === "string") && Array.isArray(entry["actions"]) && entry["actions"].every(isRetroAction);
 }
 async function readRetroIndex(repositoryRoot) {
-  const indexPath = path34.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
+  const indexPath = path38.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
   try {
-    const parsed = JSON.parse(await readFile19(indexPath, "utf8"));
+    const parsed = JSON.parse(await readFile20(indexPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null) return EMPTY_INDEX;
     const candidate = parsed;
     if (candidate["kind"] !== "retro_index" || !Array.isArray(candidate["retrospectives"])) return EMPTY_INDEX;
@@ -40711,7 +45645,8 @@ function phaseVerification(options, scoped = options.requirement?.executable ?? 
     // criterion could produce an oracle and a task contract that disagree about
     // the timeout for the identical command — invisible only because intake
     // never sets timeoutMs, and observable the moment both are executed.
-    timeoutMs: Math.min(criterion.proof.timeoutMs ?? 6e5, MAX_VERIFICATION_TIMEOUT_MS)
+    timeoutMs: Math.min(criterion.proof.timeoutMs ?? 6e5, MAX_VERIFICATION_TIMEOUT_MS),
+    ...criterion.proof.surface === void 0 ? {} : { surface: criterion.proof.surface }
   }));
   const project = options.enforcement === void 0 ? { command: "legion", args: ["validate"], expectedExitCode: 0, timeoutMs: 12e4 } : {
     command: options.enforcement.verification.command,
@@ -40719,7 +45654,7 @@ function phaseVerification(options, scoped = options.requirement?.executable ?? 
     expectedExitCode: 0,
     timeoutMs: 6e5
   };
-  const key = (entry) => JSON.stringify({ ...entry, args: [...entry.args] }, Object.keys(entry).sort());
+  const key = (entry) => JSON.stringify([entry.command, [...entry.args], entry.expectedExitCode, entry.timeoutMs]);
   const seen = new Set(criteria.map(key));
   return seen.has(key(project)) ? criteria : [...criteria, project];
 }
@@ -41079,6 +46014,7 @@ async function handlePlanWorkflow(context) {
   if (!taskgraph.ok) {
     return artifactCreationFailure("taskgraph", taskgraph.status, taskgraph.diagnostics, action);
   }
+  const plannedAction = derivesApprovalOrderingGate(taskgraph.document.tasks) ? nextAction(APPROVE_BEFORE_BUILD_RECOVERY.command, APPROVE_BEFORE_BUILD_RECOVERY.reason) : action;
   return success2(
     {
       ok: true,
@@ -41104,10 +46040,10 @@ async function handlePlanWorkflow(context) {
       },
       autoRefine: hasFlag(context, "auto-refine"),
       retrospectiveActions: retroActions,
-      nextAction: action,
+      nextAction: plannedAction,
       diagnostics: []
     },
-    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action, retroActions)
+    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, plannedAction, retroActions)
   );
 }
 function parsePhaseNumber(value) {
@@ -41181,11 +46117,11 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action, retroActio
 
 // packages/cli/src/commands/workflow/build.ts
 import { execFileSync as execFileSync6 } from "node:child_process";
-import { readFile as readFile21 } from "node:fs/promises";
+import { readFile as readFile22 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
-import { readdir as readdir15, readFile as readFile20 } from "node:fs/promises";
-import path35 from "node:path";
+import { readdir as readdir17, readFile as readFile21 } from "node:fs/promises";
+import path39 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -41349,19 +46285,19 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path35.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path39.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
-      entries = await readdir15(workflowRoot, { withFileTypes: true });
+      entries = await readdir17(workflowRoot, { withFileTypes: true });
     } catch (error51) {
       if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") continue;
       throw error51;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path35.join(workflowRoot, entry.name, "workflow-run.json") : path35.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path39.join(workflowRoot, entry.name, "workflow-run.json") : path39.join(workflowRoot, entry.name);
       let text = "";
       try {
-        text = await readFile20(absolutePath, "utf8");
+        text = await readFile21(absolutePath, "utf8");
       } catch {
         continue;
       }
@@ -41377,9 +46313,9 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path35.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path39.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
-    const text = await readFile20(indexPath, "utf8");
+    const text = await readFile21(indexPath, "utf8");
     return ["```json", truncate4(text.trim(), 4e3), "```"].join("\n");
   } catch {
     return "No learned project guidance found.";
@@ -41395,7 +46331,7 @@ function truncate4(text, maxLength) {
 import { spawn as spawn2 } from "node:child_process";
 import { createHash as createHash21 } from "node:crypto";
 import { existsSync as existsSync4 } from "node:fs";
-import path36 from "node:path";
+import path40 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
@@ -41404,7 +46340,7 @@ var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args) {
   if (command !== "legion") return { command, args };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path36.join(sourceRoot, ...LEGION_BIN.split("/"));
+  const binPath = path40.join(sourceRoot, ...LEGION_BIN.split("/"));
   if (!existsSync4(binPath)) return { command, args };
   return { command: process.execPath, args: [binPath, ...args] };
 }
@@ -41522,7 +46458,7 @@ function createVerificationRunner(options) {
 // packages/cli/src/workflow/executor/worker-bundles.ts
 import { createHash as createHash22 } from "node:crypto";
 import { readFileSync } from "node:fs";
-import path37 from "node:path";
+import path41 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
 var BUNDLE_INDEX = "bundles/index.json";
 var WorkerBundleIntegrityError = class extends Error {
@@ -41538,7 +46474,7 @@ function sha256Hex5(value) {
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path37.join(root, ...BUNDLE_INDEX.split("/"));
+  const indexPath = path41.join(root, ...BUNDLE_INDEX.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(indexPath, "utf8"));
@@ -41565,7 +46501,7 @@ function loadWorkerBundles(sourceRoot) {
       );
     }
     {
-      const promptPath = path37.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      const promptPath = path41.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
         promptBody = readFileSync(promptPath, "utf8");
@@ -41598,17 +46534,180 @@ function createWorkerBundleRegistry(options) {
   };
 }
 
+// packages/cli/src/workflow/change-planes.ts
+async function absentOnFailure(read) {
+  try {
+    return await read();
+  } catch {
+    return void 0;
+  }
+}
+async function loadOracleFacts(input) {
+  const manifest = await absentOnFailure(
+    () => deriveOracleManifest({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  if (manifest === void 0 || !manifest.ok) return void 0;
+  const oracles = [];
+  for (const revision of manifest.manifest.oracles) {
+    const fileName = revision.artifact.path.split("/").at(-1);
+    if (fileName === void 0 || !fileName.endsWith(".yaml")) return void 0;
+    const oracle = await absentOnFailure(
+      () => readOracleArtifact({
+        repositoryRoot: input.repositoryRoot,
+        changeId: input.changeId,
+        oracleId: fileName.slice(0, -".yaml".length)
+      })
+    );
+    if (oracle === void 0 || !oracle.ok) return void 0;
+    oracles.push({ document: oracle.document, reference: oracle.reference });
+  }
+  return oracles;
+}
+async function loadReleaseFact(input) {
+  const path51 = releaseArtifactPath(input.changeId);
+  const read = await absentOnFailure(
+    () => readRelease({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  if (read === void 0) return { kind: "unreadable", path: path51 };
+  if (read.ok) return { kind: "document", document: read.document };
+  if (read.status === "not_found") return { kind: "absent" };
+  return { kind: "unreadable", path: path51 };
+}
+function releaseArtifactPath(changeId) {
+  try {
+    return artifactPathForRole({ role: "release", changeId });
+  } catch {
+    return ".legion/project/changes";
+  }
+}
+
+// packages/cli/src/workflow/acceptance-baseline.ts
+var PROTECTED_ACCEPTANCE_ITEM2 = "protected-acceptance-paths";
+var PROTECTED_PATHS_REPORT_KIND = "protected_paths";
+var PROTECTED_PATHS_REPORT_SCHEMA_VERSION = 1;
+function unestablished(reason) {
+  return { status: "unestablished", reason, states: /* @__PURE__ */ new Map() };
+}
+function readState(value) {
+  if (value === null || typeof value !== "object") return void 0;
+  const record2 = value;
+  const kind = record2["kind"];
+  if (kind === "absent") return { kind: "absent" };
+  if (kind === "directory") return { kind: "directory" };
+  if (kind === "file") {
+    const sha2563 = record2["sha256"];
+    return typeof sha2563 === "string" && sha2563.length > 0 ? { kind: "file", sha256: sha2563 } : void 0;
+  }
+  if (kind === "symlink") {
+    const target = record2["target"];
+    if (target === void 0) return { kind: "symlink", target: void 0 };
+    return typeof target === "string" ? { kind: "symlink", target } : void 0;
+  }
+  if (kind === "unreadable") {
+    const reason = record2["reason"];
+    return typeof reason === "string" ? { kind: "unreadable", reason } : void 0;
+  }
+  return void 0;
+}
+function readReport3(text, at) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return `${at} is not readable JSON`;
+  }
+  if (parsed === null || typeof parsed !== "object") return `${at} is not a JSON object`;
+  const record2 = parsed;
+  if (record2["kind"] !== PROTECTED_PATHS_REPORT_KIND) {
+    return `${at} does not declare itself a ${PROTECTED_PATHS_REPORT_KIND} report`;
+  }
+  if (record2["schemaVersion"] !== PROTECTED_PATHS_REPORT_SCHEMA_VERSION) {
+    return `${at} records schema version ${String(record2["schemaVersion"])}, which this reader cannot read a pre-run state out of`;
+  }
+  const observations = record2["observations"];
+  if (!Array.isArray(observations)) return `${at} records no observation list`;
+  const pairs = [];
+  for (const observation of observations) {
+    if (observation === null || typeof observation !== "object") return `${at} records an observation that is not an object`;
+    const entry = observation;
+    const observedPath = entry["path"];
+    if (typeof observedPath !== "string" || observedPath.length === 0) {
+      return `${at} records an observation with no path`;
+    }
+    const before = readState(entry["before"]);
+    if (before === void 0) return `${at} records a pre-run state for ${observedPath} that this reader cannot read`;
+    pairs.push({ path: observedPath, before });
+  }
+  return pairs;
+}
+function sameState(left, right) {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "file" && right.kind === "file") return left.sha256 === right.sha256;
+  if (left.kind === "symlink" && right.kind === "symlink") return left.target === right.target;
+  return true;
+}
+async function acceptanceBaselineFromEvidence(input) {
+  const cited = [];
+  for (const entry of input.entries) {
+    const item = entry.evidence.items.find((candidate) => candidate.id === PROTECTED_ACCEPTANCE_ITEM2);
+    if (item === void 0) continue;
+    const reference = item.artifact;
+    if (reference === void 0) {
+      return unestablished(
+        `${entry.evidence.id} records a ${PROTECTED_ACCEPTANCE_ITEM2} item citing no report, so what its run saw before dispatch cannot be read back.`
+      );
+    }
+    cited.push({ at: `${reference.path} (cited by ${entry.evidence.id})`, reference });
+  }
+  if (cited.length === 0) return { status: "established", states: /* @__PURE__ */ new Map() };
+  const reader = await resolvePinnedReferenceReader({
+    repositoryRoot: input.repositoryRoot,
+    references: cited.map((entry) => entry.reference),
+    retainContentFor: cited.map((entry) => entry.reference.path)
+  });
+  const states = /* @__PURE__ */ new Map();
+  const contradicted = /* @__PURE__ */ new Set();
+  for (const { at, reference } of cited) {
+    const verdict = reader.verifyPin(reference);
+    if (verdict !== "match") {
+      return unestablished(
+        `${at} ${verdict === "missing" ? "is no longer there" : verdict === "drift" ? "no longer hashes to the digest its evidence cites" : "could not be verified"}, so the pre-run state of this change's acceptance paths cannot be read back.`
+      );
+    }
+    const text = reader.contentOf(reference);
+    if (text === void 0) return unestablished(`${at} could not be read.`);
+    const pairs = readReport3(text, at);
+    if (typeof pairs === "string") return unestablished(`${pairs}, so the pre-run state of this change's acceptance paths cannot be read back.`);
+    for (const pair of pairs) {
+      if (pair.before.kind === "unreadable") continue;
+      const held = states.get(pair.path);
+      if (held === void 0) {
+        states.set(pair.path, pair.before);
+        continue;
+      }
+      if (!sameState(held, pair.before)) contradicted.add(pair.path);
+    }
+  }
+  for (const contradictedPath of contradicted) {
+    states.set(contradictedPath, {
+      kind: "unreadable",
+      reason: "prior runs of this change recorded different pre-run states for it, so which one this run must be judged against is unestablished"
+    });
+  }
+  return { status: "established", states };
+}
+
 // packages/cli/src/workflow/guarded-execution.ts
 import { execFileSync as execFileSync5 } from "node:child_process";
 import { createHash as createHash24 } from "node:crypto";
-import { mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import path40 from "node:path";
+import { lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import path44 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync4 } from "node:child_process";
 import { createHash as createHash23 } from "node:crypto";
 import { readFileSync as readFileSync2, rmSync as rmSync2, statSync } from "node:fs";
-import path38 from "node:path";
+import path42 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
   return {
@@ -41685,7 +46784,7 @@ function observeWorkingTreeDiff(input) {
       if (filePath.length === 0) continue;
       if (code === "??") {
         created.add(filePath);
-        lines.set(filePath, countUntrackedLines(path38.join(input.repositoryRoot, filePath)));
+        lines.set(filePath, countUntrackedLines(path42.join(input.repositoryRoot, filePath)));
       } else if (!lines.has(filePath)) {
         lines.set(filePath, 0);
       }
@@ -41701,7 +46800,7 @@ function observeWorkingTreeDiff(input) {
     path: filePath,
     linesChanged,
     isNew: created.has(filePath),
-    contentSha256: hashFileContent(path38.join(input.repositoryRoot, filePath))
+    contentSha256: hashFileContent(path42.join(input.repositoryRoot, filePath))
   }));
   return {
     status: "clean",
@@ -41816,11 +46915,11 @@ function reconcileTaskDiff(input) {
 
 // packages/cli/src/workflow/project-files.ts
 import { lstatSync, readdirSync } from "node:fs";
-import path39 from "node:path";
+import path43 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
   try {
-    const rootStat = lstatSync(path39.join(repositoryRoot, relativeRoot));
+    const rootStat = lstatSync(path43.join(repositoryRoot, relativeRoot));
     if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
     }
@@ -41833,7 +46932,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
   const walk2 = (relative) => {
     let entries;
     try {
-      entries = readdirSync(path39.join(repositoryRoot, relative), { withFileTypes: true });
+      entries = readdirSync(path43.join(repositoryRoot, relative), { withFileTypes: true });
     } catch {
       return;
     }
@@ -41850,7 +46949,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
       if (!entry.isFile()) continue;
       let size;
       try {
-        size = lstatSync(path39.join(repositoryRoot, child)).size;
+        size = lstatSync(path43.join(repositoryRoot, child)).size;
       } catch {
         size = void 0;
       }
@@ -41865,6 +46964,11 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
 var MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 function isHarnessPath(relative, harnessPaths) {
   return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
+}
+function isInsideControlPlane(relative) {
+  const folded = relative.toLowerCase();
+  const root = LEGION_PROJECT_ROOT.toLowerCase();
+  return folded === root || folded.startsWith(`${root}/`);
 }
 function digestOf(absolute) {
   try {
@@ -41898,7 +47002,7 @@ function snapshotProtectedState(input) {
   const entries = /* @__PURE__ */ new Map();
   for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
-    const absolute = path40.join(input.repositoryRoot, entry.path);
+    const absolute = path44.join(input.repositoryRoot, entry.path);
     if (entry.kind === "symlink") {
       entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
       continue;
@@ -41915,6 +47019,92 @@ function snapshotProtectedState(input) {
   }
   return { entries, staged: stagedProtectedPaths(input.repositoryRoot) };
 }
+function classifyAcceptancePath(repositoryRoot, relative, harnessPaths) {
+  if (!artifactPathSchema.safeParse(relative).success) {
+    return { kind: "unreadable", reason: "is not a repository-relative path" };
+  }
+  if (relative.includes(":")) {
+    return { kind: "unreadable", reason: "names a Windows alternate data stream" };
+  }
+  if (isInsideControlPlane(relative)) {
+    return { kind: "unreadable", reason: `is inside ${LEGION_PROJECT_ROOT}, which is restored rather than reported` };
+  }
+  if (isHarnessPath(relative, harnessPaths)) {
+    return { kind: "unreadable", reason: "is written by the harness for this run" };
+  }
+  const absolute = path44.join(repositoryRoot, relative);
+  const contained = path44.relative(repositoryRoot, absolute);
+  if (contained.startsWith("..") || path44.isAbsolute(contained)) {
+    return { kind: "unreadable", reason: "resolves outside the repository" };
+  }
+  let stat10;
+  try {
+    stat10 = lstatSync2(absolute);
+  } catch (error51) {
+    const code = error51.code;
+    if (code === "ENOENT" || code === "ENOTDIR") return { kind: "absent" };
+    return { kind: "unreadable", reason: `could not be inspected (${code ?? "unknown error"})` };
+  }
+  if (stat10.isSymbolicLink()) return { kind: "symlink", target: readTarget(absolute) };
+  if (stat10.isDirectory()) return { kind: "directory" };
+  if (!stat10.isFile()) return { kind: "unreadable", reason: "is not a regular file" };
+  const sha2563 = digestOf(absolute);
+  if (sha2563 === void 0) return { kind: "unreadable", reason: "could not be read" };
+  return { kind: "file", sha256: sha2563 };
+}
+function snapshotAcceptancePaths(input) {
+  const entries = /* @__PURE__ */ new Map();
+  for (const relative of input.paths) {
+    if (entries.has(relative)) continue;
+    const anchored = input.anchors.get(relative);
+    entries.set(
+      relative,
+      anchored ?? classifyAcceptancePath(input.repositoryRoot, relative, input.harnessPaths)
+    );
+  }
+  return entries;
+}
+function sameAcceptanceState(before, after) {
+  if (before.kind === "file" && after.kind === "file") return before.sha256 === after.sha256;
+  if (before.kind === "symlink" && after.kind === "symlink") {
+    return before.target !== void 0 && before.target === after.target;
+  }
+  return before.kind === "directory" && after.kind === "directory";
+}
+function acceptanceNote(before, after) {
+  if (before.kind === "absent") return "created";
+  if (after.kind === "absent") return "deleted";
+  if (before.kind !== after.kind) return "kind-changed";
+  if (before.kind === "symlink") return "retargeted";
+  return "modified";
+}
+function observeAcceptancePaths(input) {
+  const observations = [];
+  for (const [relative, before] of input.before) {
+    const after = classifyAcceptancePath(input.repositoryRoot, relative, input.harnessPaths);
+    if (before.kind === "absent" && after.kind === "absent") {
+      observations.push({ path: relative, before, after, verdict: "unknown" });
+      continue;
+    }
+    if (before.kind === "unreadable" || after.kind === "unreadable" || before.kind === "directory" || after.kind === "directory") {
+      observations.push({ path: relative, before, after, verdict: "unknown" });
+      continue;
+    }
+    if (sameAcceptanceState(before, after)) {
+      observations.push({ path: relative, before, after, verdict: "unchanged" });
+      continue;
+    }
+    const note = acceptanceNote(before, after);
+    observations.push({
+      path: relative,
+      before,
+      after,
+      verdict: "changed",
+      ...note === void 0 ? {} : { note }
+    });
+  }
+  return observations.sort((left, right) => left.path.localeCompare(right.path));
+}
 function protectedPathsTouched(input) {
   const touched = /* @__PURE__ */ new Set();
   const current = new Map(
@@ -41926,7 +47116,7 @@ function protectedPathsTouched(input) {
       touched.add(relative);
       continue;
     }
-    const absolute = path40.join(input.repositoryRoot, relative);
+    const absolute = path44.join(input.repositoryRoot, relative);
     const nowIsSymlink = now.kind === "symlink";
     if (before.kind === "symlink" || nowIsSymlink) {
       if (before.kind !== "symlink" || !nowIsSymlink) {
@@ -42009,7 +47199,7 @@ function restoreProtectedFiles(input) {
   const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
   const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
   for (const relative of ordered) {
-    const absolute = path40.join(input.repositoryRoot, relative);
+    const absolute = path44.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
     if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
       restored.push(relative);
@@ -42023,14 +47213,14 @@ function restoreProtectedFiles(input) {
       }
       if (before.kind === "file") {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path40.dirname(absolute), { recursive: true });
+        mkdirSync3(path44.dirname(absolute), { recursive: true });
         writeFileSync2(absolute, before.bytes);
         restored.push(relative);
         continue;
       }
       if (before.kind === "symlink" && before.target !== void 0) {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path40.dirname(absolute), { recursive: true });
+        mkdirSync3(path44.dirname(absolute), { recursive: true });
         symlinkSync2(before.target, absolute);
         restored.push(relative);
         continue;
@@ -42052,6 +47242,11 @@ function restoreProtectedFiles(input) {
     unrestored: [...unrestored, ...indexFailures]
   };
 }
+function acceptanceUnestablishedReason(input) {
+  if (input.acceptancePaths === void 0 || input.acceptancePaths.length === 0) return void 0;
+  if (input.acceptanceBaseline.status === "established") return void 0;
+  return input.acceptanceBaseline.reason ?? "What this change's earlier runs recorded about its protected acceptance paths could not be read back, so this run has nothing established to compare against.";
+}
 async function runGuardedExecution(input) {
   const before = observeWorkingTreeDiff({
     repositoryRoot: input.repositoryRoot,
@@ -42060,6 +47255,13 @@ async function runGuardedExecution(input) {
   const state = snapshotProtectedState({
     repositoryRoot: input.repositoryRoot,
     harnessPaths: input.harnessPaths
+  });
+  const acceptanceUnestablished = acceptanceUnestablishedReason(input);
+  const acceptanceBefore = input.acceptancePaths === void 0 || acceptanceUnestablished !== void 0 ? void 0 : snapshotAcceptancePaths({
+    repositoryRoot: input.repositoryRoot,
+    paths: input.acceptancePaths,
+    harnessPaths: input.harnessPaths,
+    anchors: input.acceptanceBaseline.states
   });
   let result;
   let thrown;
@@ -42117,6 +47319,18 @@ async function runGuardedExecution(input) {
     reasons.push(...reconciliation.violations.map((violation) => violation.message));
   }
   const inContract = reasons.length === 0;
+  const acceptancePaths = acceptanceBefore === void 0 ? {
+    status: "unestablished",
+    observations: [],
+    reason: acceptanceUnestablished ?? "The oracles of this change would not read as a complete set, so which acceptance tests its runs must not weaken is unestablished."
+  } : {
+    status: "established",
+    observations: observeAcceptancePaths({
+      repositoryRoot: input.repositoryRoot,
+      harnessPaths: input.harnessPaths,
+      before: acceptanceBefore
+    })
+  };
   if (result === void 0) {
     result = {
       ok: false,
@@ -42133,7 +47347,8 @@ async function runGuardedExecution(input) {
     inContract,
     restored: containment.restored,
     unrestored: containment.unrestored,
-    ...inContract ? {} : { blockedReason: reasons.join(" ") }
+    ...inContract ? {} : { blockedReason: reasons.join(" ") },
+    acceptancePaths
   };
 }
 
@@ -42223,19 +47438,40 @@ async function handleBuildWorkflow(context, changeId) {
   if (!existingTaskRuns.ok) {
     return blockedBuild(existingTaskRuns.diagnostics, nextAction("legion validate", "Task-run artifacts must be readable before build can continue."));
   }
+  const reaffirmedPin = await loadReaffirmedPins({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const changeOracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const acceptancePaths = changeOracles === void 0 ? void 0 : [...new Set(changeOracles.flatMap((oracle) => oracle.document.acceptancePaths ?? []))].sort();
+  const acceptancePathOracles = changeOracles === void 0 ? void 0 : changeOracles.filter((oracle) => (oracle.document.acceptancePaths ?? []).length > 0).map((oracle) => ({
+    oracleId: oracle.document.id,
+    paths: [...oracle.document.acceptancePaths ?? []]
+  }));
   const nextAttempts = nextAttemptMap(existingTaskRuns.taskRuns);
   const taskRuns = [];
   for (const task of taskgraph.document.tasks) {
     const taskId = taskIdForContractId(task.id);
     const attempt = nextAttempts.get(taskId) ?? 1;
     nextAttempts.set(taskId, attempt + 1);
+    const acceptanceBaseline = await acceptanceBaselineFromEvidence({
+      repositoryRoot: context.repositoryRoot,
+      entries: producedEntries
+    });
     const run = await executeTask({
       context,
       executor: selectedExecutor,
       task,
       attempt,
       taskgraph,
-      priorEntries: producedEntries
+      priorEntries: producedEntries,
+      reaffirmedPin,
+      acceptancePaths,
+      acceptancePathOracles,
+      acceptanceBaseline
     });
     if (!run.ok) {
       if (run.taskRun !== void 0) taskRuns.push(run.taskRun);
@@ -42380,6 +47616,8 @@ async function executeTask(input) {
     // reconciliation all describe one revision.
     baseGitSha,
     harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
+    acceptancePaths: input.acceptancePaths,
+    acceptanceBaseline: input.acceptanceBaseline,
     run: () => adapter.run({
       repositoryRoot: input.context.repositoryRoot,
       changeId: input.task.changeId,
@@ -42435,6 +47673,45 @@ async function executeTask(input) {
       })
     });
   }
+  const acceptanceReport = guarded2.acceptancePaths;
+  const acceptanceVerdict = protectedAcceptanceVerdict(acceptanceReport);
+  let acceptancePathsArtifactPath;
+  if (acceptanceVerdict !== void 0) {
+    acceptancePathsArtifactPath = runArtifactPath({
+      changeId: input.task.changeId,
+      runId,
+      fileName: "protected-paths.json"
+    });
+    await writeProjectTextFile({
+      repositoryRoot: input.context.repositoryRoot,
+      artifactPath: acceptancePathsArtifactPath,
+      text: stableProtocolJson({
+        kind: "protected_paths",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        status: acceptanceReport.status,
+        verdict: acceptanceVerdict,
+        // The one thing an operator staring at an `unknown` has to be told, and
+        // the gate's sentence cannot hold it: *which* half was unestablished —
+        // the oracle plane, or the record of what an earlier run of this change
+        // saw. The cures are different and neither is `legion build`.
+        ...acceptanceReport.reason === void 0 ? {} : { reason: acceptanceReport.reason },
+        declaredBy: input.acceptancePathOracles ?? [],
+        observations: acceptanceReport.observations
+      })
+    });
+  }
+  const observePin = await mintPinnedReferences({
+    repositoryRoot: input.context.repositoryRoot,
+    paths: declaredSurfacePinPaths({ task: input.task, verification })
+  });
+  const surfaceChecks = verificationSurfaceChecks({
+    task: input.task,
+    verification,
+    observePin,
+    reaffirmedPin: input.reaffirmedPin
+  });
   let verificationArtifactPath;
   if (verification.report !== void 0) {
     verificationArtifactPath = runArtifactPath({
@@ -42447,7 +47724,9 @@ async function executeTask(input) {
       artifactPath: verificationArtifactPath,
       text: stableProtocolJson({
         kind: "verification_report",
-        schemaVersion: 1,
+        // 2 adds `surfaceChecks`. Additive, so a reader of version 1 still finds
+        // everything it knew about.
+        schemaVersion: 2,
         runId,
         taskId,
         report: verification.report,
@@ -42455,7 +47734,11 @@ async function executeTask(input) {
         // Oracles the task referenced that produced no executable command:
         // inspection oracles, and any whose execution mode is not `command`.
         // Named so the report says what it did not cover.
-        unevaluatedOracleRefs: verification.unevaluatedOracleRefs ?? []
+        unevaluatedOracleRefs: verification.unevaluatedOracleRefs ?? [],
+        // Which declared verification surface each command carried, and whether
+        // this run reached it. Without this the item cites a file that cannot
+        // substantiate the verdict it was cited for.
+        surfaceChecks
       })
     });
   }
@@ -42474,9 +47757,13 @@ async function executeTask(input) {
     taskgraphPath: input.taskgraph.artifactPath,
     ...verificationArtifactPath === void 0 ? {} : { verificationArtifactPath },
     verification,
+    surfaceChecks,
     inContract,
     ...reconciliation === void 0 ? {} : { reconciliation },
-    ...observationArtifactPath === void 0 ? {} : { observationArtifactPath }
+    ...observationArtifactPath === void 0 ? {} : { observationArtifactPath },
+    ...acceptanceVerdict === void 0 ? {} : { acceptanceVerdict },
+    ...acceptancePathsArtifactPath === void 0 ? {} : { acceptancePathsArtifactPath },
+    ...input.acceptancePathOracles === void 0 ? {} : { acceptancePathOracles: input.acceptancePathOracles }
   });
   const completed = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
@@ -42652,10 +47939,17 @@ function taskRunDocument(input) {
     manifest
   });
 }
+function protectedAcceptanceVerdict(report) {
+  if (report.status === "unestablished") return "unknown";
+  if (report.observations.length === 0) return void 0;
+  if (report.observations.some((entry) => entry.verdict === "unknown")) return "unknown";
+  if (report.observations.some((entry) => entry.verdict === "changed")) return "fail";
+  return "pass";
+}
 async function evidenceEntryForExecution(input) {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
-  const logBytes = await readFile21(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
+  const logBytes = await readFile22(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
   const command = commandForEvidence(input.result, logBytes, input.startedAt, input.finishedAt);
   const traceRefs = [
     {
@@ -42730,6 +48024,33 @@ async function evidenceEntryForExecution(input) {
       traceRefs
     });
   }
+  const surfaceVerdict = input.verification.report === void 0 ? void 0 : integrationSurfaceVerdict(input.surfaceChecks);
+  if (surfaceVerdict !== void 0) {
+    items.push({
+      id: "integration-surface-check",
+      classification: "test-report",
+      verdict: surfaceVerdict,
+      artifact: input.verificationArtifactPath === void 0 ? resultReference : await referenceForFile(input.repositoryRoot, input.verificationArtifactPath),
+      traceRefs
+    });
+  }
+  if (input.acceptanceVerdict !== void 0) {
+    const coverageRefs = (input.acceptancePathOracles ?? []).flatMap(
+      (declaration) => declaration.paths.map((declaredPath) => ({
+        path: declaredPath,
+        anchor: declaration.oracleId,
+        relation: "verifies",
+        entity: { kind: "oracle", id: declaration.oracleId }
+      }))
+    );
+    items.push({
+      id: "protected-acceptance-paths",
+      classification: "trace",
+      verdict: input.acceptanceVerdict,
+      artifact: input.acceptancePathsArtifactPath === void 0 ? resultReference : await referenceForFile(input.repositoryRoot, input.acceptancePathsArtifactPath),
+      traceRefs: [...traceRefs, ...coverageRefs]
+    });
+  }
   if (reconciliation !== void 0) {
     const observationReference = input.observationArtifactPath === void 0 ? resultReference : await referenceForFile(input.repositoryRoot, input.observationArtifactPath);
     items.push({
@@ -42790,7 +48111,7 @@ function commandForEvidence(result, logBytes, startedAt, endedAt) {
   };
 }
 async function referenceForFile(repositoryRoot, artifactPath) {
-  const bytes = await readFile21(absoluteArtifactPath(repositoryRoot, artifactPath));
+  const bytes = await readFile22(absoluteArtifactPath(repositoryRoot, artifactPath));
   return artifactReferenceForContent({
     path: artifactPath,
     content: bytes
@@ -42821,6 +48142,127 @@ function nextAttemptMap(taskRuns) {
     if (nextAttempt > current) attempts.set(run.document.taskId, nextAttempt);
   }
   return attempts;
+}
+function verificationSurfaceChecks(input) {
+  const report = input.verification.report;
+  if (report === void 0) return [];
+  const checks = [];
+  const outcomeAt = (index) => {
+    const result = report.commands.find((command) => command.index === index);
+    if (result === void 0) {
+      return { outcome: "unrun", note: `No command result was recorded at index ${index}.` };
+    }
+    if (report.failingIndices.includes(index)) return { outcome: "failed" };
+    return { outcome: "passed" };
+  };
+  const observe = (surface, resolved) => {
+    if (surface.kind === "unit") return resolved;
+    const pins = surface.pinned.map((pin) => {
+      const observed = input.observePin(pin.path);
+      return {
+        path: pin.path,
+        declared: pin.sha256,
+        ...observed === void 0 ? {} : { observed: observed.sha256 }
+      };
+    });
+    const drifted = pins.filter(
+      (pin) => pin.observed !== pin.declared && !(pin.observed !== void 0 && input.reaffirmedPin(pin.path, pin.observed))
+    );
+    if (drifted.length === 0 || resolved.outcome !== "passed") return { ...resolved, pins };
+    return {
+      outcome: "mismatched",
+      note: `The command passed, but ${drifted.map((pin) => pin.path).join(", ")} did not hold the declared bytes while it ran, so what it was checked against is not what the declaration describes.`,
+      pins
+    };
+  };
+  for (const [position, entry] of input.task.verification.entries()) {
+    const surface = entry.surface;
+    if (surface === void 0) continue;
+    const origin = `verification entry ${position + 1}`;
+    const result = report.commands.find((command) => command.index === position);
+    if (result !== void 0 && (result.command !== entry.command || result.args.length !== entry.args.length || result.args.some((argument, offset) => argument !== entry.args[offset]))) {
+      checks.push({
+        origin,
+        kind: surface.kind,
+        interface: surface.interface,
+        index: position,
+        ...observe(surface, {
+          outcome: "unrun",
+          note: `The command recorded at index ${position} is not the one this surface was declared on.`
+        })
+      });
+      continue;
+    }
+    checks.push({
+      origin,
+      kind: surface.kind,
+      interface: surface.interface,
+      index: position,
+      ...observe(surface, outcomeAt(position))
+    });
+  }
+  const attribution = input.verification.oracleAttribution ?? [];
+  for (const declared of input.verification.oracleSurfaces ?? []) {
+    const origin = `oracle ${declared.oracleId}`;
+    const attributed = attribution.find((entry) => entry.oracleId === declared.oracleId);
+    if (attributed === void 0) {
+      checks.push({
+        origin,
+        kind: declared.surface.kind,
+        interface: declared.surface.interface,
+        ...observe(declared.surface, {
+          outcome: "unrun",
+          note: `Oracle ${declared.oracleId} produced no executable command, so its declared surface was never reached.`
+        })
+      });
+      continue;
+    }
+    checks.push({
+      origin,
+      kind: declared.surface.kind,
+      interface: declared.surface.interface,
+      index: attributed.index,
+      ...observe(declared.surface, outcomeAt(attributed.index))
+    });
+  }
+  return checks;
+}
+async function loadReaffirmedPins(input) {
+  let approvals = [];
+  try {
+    const listed = await listApprovalsForChange(input);
+    if (listed.ok && listed.skipped.length === 0) approvals = listed.approvals.map((entry) => entry.document);
+  } catch {
+    approvals = [];
+  }
+  if (approvals.length === 0) return () => false;
+  const evaluatedAt = currentUtcTimestamp();
+  return (path51, sha2563) => approvals.some(
+    (approval) => isLiveSurfaceReaffirmation({
+      approval,
+      changeId: input.changeId,
+      path: path51,
+      currentSha256: sha2563,
+      evaluatedAt
+    })
+  );
+}
+function integrationSurfaceVerdict(checks) {
+  const nonUnit = checks.filter((check2) => check2.kind !== "unit");
+  if (nonUnit.length === 0) return void 0;
+  if (nonUnit.some((check2) => check2.outcome === "failed")) return "fail";
+  if (nonUnit.some((check2) => check2.outcome === "unrun" || check2.outcome === "mismatched")) return "unknown";
+  return "pass";
+}
+function declaredSurfacePinPaths(input) {
+  const paths = /* @__PURE__ */ new Set();
+  const collect = (surface) => {
+    if (surface === void 0 || surface.kind === "unit") return;
+    for (const pin of surface.pinned) paths.add(pin.path);
+  };
+  for (const entry of input.task.verification) collect(entry.surface);
+  for (const declared of input.verification.oracleSurfaces ?? []) collect(declared.surface);
+  return [...paths];
 }
 function prepareWorkerContext(input) {
   let registry2;
@@ -42873,11 +48315,15 @@ async function runContractVerification(input) {
   });
   const attributed = new Set(oracleAttribution.map((entry) => entry.oracleId));
   const unevaluatedOracleRefs = oracles.loaded.filter((oracle) => !attributed.has(oracle.id)).map((oracle) => oracle.id);
+  const oracleSurfaces = oracles.loaded.flatMap(
+    (oracle) => oracle.surface === void 0 ? [] : [{ oracleId: oracle.id, surface: oracle.surface }]
+  );
   return {
     report,
     passed: report.passed,
     oracleAttribution,
     unevaluatedOracleRefs,
+    oracleSurfaces,
     ...report.passed ? {} : {
       blockedReason: `Verification failed for ${report.failingIndices.length} of ${report.commands.length} declared command(s).${describeFailingOracles(report.failingIndices, oracleAttribution)} ${issues.map((issue2) => issue2.message).join(" ")}`.trim()
     }
@@ -42994,15 +48440,101 @@ function blockedBuild(diagnostics, action, extras = {}) {
   );
 }
 
+// packages/cli/src/workflow/approver.ts
+var PROJECT_MANIFEST_PATH2 = ".legion/project/project.json";
+function requiresHumanApproval(tasks) {
+  return tasks.some(
+    (task) => deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
+      (gate) => gate.id === "explicit_human_approval"
+    )
+  );
+}
+function requiresDomainReview(tasks) {
+  return tasks.some(
+    (task) => deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
+      (gate) => gate.id === "architecture_or_security_review"
+    )
+  );
+}
+function describeDecisionOwners(owners) {
+  if (owners.length === 0) return "none";
+  return owners.map((owner) => `${owner.displayName ?? owner.id} (${owner.kind})`).join(", ");
+}
+function resolveApprover(input) {
+  const matches = input.decisionOwners.filter(
+    (owner) => owner.id === input.raw || owner.displayName === input.raw
+  );
+  if (matches.length === 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "approver_unknown",
+          message: `--approver "${input.raw}" is not a decision owner of this project. Recorded decision owners: ${describeDecisionOwners(input.decisionOwners)}. Add the approver to project.policy.decisionOwners, or accept as a recorded owner. Legion does not create an approver from the value given.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ]
+    };
+  }
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "approver_ambiguous",
+          message: `--approver "${input.raw}" matches more than one decision owner (${matches.map((owner) => owner.id).join(", ")}). Name the approver by its exact actor id.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ]
+    };
+  }
+  const approver = matches[0];
+  if (approver.kind !== "human") {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "approver_not_human",
+          message: `--approver "${input.raw}" resolves to a decision owner whose kind is "${approver.kind}". The explicit_human_approval gate asks whether a human approved this change; a non-human owner cannot answer it.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ]
+    };
+  }
+  return { ok: true, approver };
+}
+
 // packages/cli/src/commands/workflow/review.ts
-var REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--reject-reason <text>] [--auto] [--max-cycles <n>]
+var REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--domain <d>]... [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
 
 Review collected build evidence. A submitted passing review still requires explicit human acceptance.
 
+--approver names a human decision owner recorded in .legion/project/project.json. It is
+required when a task in the change derives the explicit_human_approval risk gate.
+
+--domain names the competence this review was performed in: implementation,
+architecture, security, performance or operability. Repeat it for more than one. It is
+read only on a run that performs a review \u2014 legion review --accept refuses it, because a
+domain is declared when the review happens rather than when it is signed. legion ship's
+architecture_or_security_review gate reads architecture and security, and reports
+unevaluable for a review that records no domain at all.
+
+--accept also records the change's whole-change acceptance, which legion ship reads:
+"accepted" with an approver and clean traceability, "ready" without an approver, and
+"blocked" with the defect named when traceability reports one.
+
 Examples:
   legion review --executor fake
+  legion review --domain architecture --domain security --executor fake
   legion review --accept
+  legion review --accept --approver dasbl
   legion review --auto --max-cycles 3 --executor codex`;
+var REVIEW_ACCEPT_ACTION2 = "workflow.review.accept";
+var REVIEW_GATE_ACTOR = {
+  kind: "tool",
+  id: "legion-review",
+  displayName: "Legion Review Gate"
+};
 async function handleReviewWorkflow(context) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(REVIEW_HELP);
@@ -43029,6 +48561,17 @@ async function handleReviewWorkflow(context) {
   if (!taskgraph.ok) {
     return blockedReview(taskgraph.diagnostics, planAction);
   }
+  const approver = await resolveReviewApprover(context, {
+    tasks: taskgraph.document.tasks,
+    accepting: hasFlag(context, "accept") || hasFlag(context, "auto"),
+    taskgraphPath: taskgraph.artifactPath,
+    phase: phaseOption
+  });
+  if (!approver.ok) return approver.result;
+  const domains = resolveReviewDomains(context, {
+    submitting: !hasFlag(context, "accept") && stringOption(context, "reject-reason") === void 0
+  });
+  if (!domains.ok) return domains.result;
   const taskCount = taskgraph.document.tasks.length;
   if (hasFlag(context, "dry-run")) {
     const action2 = nextAction(
@@ -43071,7 +48614,7 @@ async function handleReviewWorkflow(context) {
     );
   }
   if (hasFlag(context, "accept")) {
-    return acceptLatestReview(context, evidence);
+    return acceptLatestReview(context, evidence, approver.approver, taskgraph.document.tasks);
   }
   const rejectReason = stringOption(context, "reject-reason");
   if (rejectReason !== void 0) {
@@ -43086,13 +48629,16 @@ async function handleReviewWorkflow(context) {
       executor: selectedExecutor,
       taskgraph,
       evidence,
+      ...approver.approver === void 0 ? {} : { approver: approver.approver },
+      ...domains.domains.length === 0 ? {} : { domains: domains.domains },
       ...phaseOption === void 0 ? {} : { phase: phaseOption }
     });
   }
   const submitted = await submitReview(context, {
     executor: selectedExecutor,
     taskgraph,
-    evidence
+    evidence,
+    ...domains.domains.length === 0 ? {} : { domains: domains.domains }
   });
   if (!submitted.ok) {
     return blockedReview(submitted.diagnostics, nextAction("legion build", "Review could not be submitted until build evidence is usable."));
@@ -43104,6 +48650,12 @@ async function handleReviewWorkflow(context) {
     scopedCommand("legion review --accept", phaseOption),
     "A passing review was submitted and needs human acceptance."
   ) : nextAction("legion build", "Address review findings and collect new evidence.");
+  const warnings = domainReviewWarnings({
+    tasks: taskgraph.document.tasks,
+    changeId: taskgraph.document.changeId,
+    reviews: submitted.reviews,
+    accepting: false
+  });
   return success2(
     {
       ok: true,
@@ -43112,6 +48664,7 @@ async function handleReviewWorkflow(context) {
         review: reviewSummary(firstReview)
       },
       reviews: submitted.reviews.map(reviewSummary),
+      ...warnings.length === 0 ? {} : { warnings },
       evidenceIndex: evidence.artifactPath,
       nextAction: action,
       diagnostics: []
@@ -43120,6 +48673,7 @@ async function handleReviewWorkflow(context) {
       "Review submitted.",
       `Reviews: ${submitted.reviews.length}.`,
       clean ? "Verdict: pass." : `Findings: ${findingCount}.`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
       renderNextAction(action)
     ].join("\n")
   );
@@ -43127,6 +48681,121 @@ async function handleReviewWorkflow(context) {
 function scopedCommand(command, phase) {
   if (phase === void 0) return command;
   return `${command} --phase ${phase}`;
+}
+function resolveReviewDomains(context, input) {
+  const supported = reviewDomainSchema.options.join(", ");
+  if (context.args.options.get("domain") === true) {
+    return {
+      ok: false,
+      result: usageError(
+        `Missing required value for --domain. Supported domains: ${supported}. Example: legion review --domain architecture.`
+      )
+    };
+  }
+  const raw = [...new Set(repeatedStringOptions(context, "domain").map((value) => value.trim()))].filter(
+    (value) => value.length > 0
+  );
+  if (raw.length === 0) return { ok: true, domains: [] };
+  if (!input.submitting) {
+    return {
+      ok: false,
+      result: usageError(
+        "legion review reads --domain only on a run that performs a review. --accept records who accepted a review that already exists and --reject-reason records a rejection; a domain stamped on either would say a competence looked at the work when what happened was a signature. Run legion review --domain architecture first, then legion review --accept --approver <id>."
+      )
+    };
+  }
+  const domains = [];
+  for (const value of raw) {
+    const parsed = reviewDomainSchema.safeParse(value);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        result: usageError(`Unknown review domain: --domain ${value}. Supported domains: ${supported}.`)
+      };
+    }
+    domains.push(parsed.data);
+  }
+  return { ok: true, domains };
+}
+function domainReviewWarnings(input) {
+  if (!requiresDomainReview(input.tasks)) return [];
+  const satisfied = input.accepting ? isDomainReviewSatisfying({
+    reviews: input.reviews,
+    changeId: input.changeId,
+    tasks: input.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id)
+  }) : input.reviews.some(
+    (review) => (review.document.domains ?? []).some((domain2) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain2))
+  );
+  if (satisfied) return [];
+  return [
+    {
+      code: "review_domain_not_recorded",
+      message: input.accepting ? "A task in this change derives the architecture_or_security_review risk gate, and no review this accept recorded was performed in the architecture or security domain \u2014 so legion ship still reports that gate unevaluable and the change cannot ship. Nothing here is wrong and nothing was rolled back: the approval and the acceptance are real. Run legion review --domain architecture (or --domain security, or both) and accept again, or record an audited waiver with legion attest architecture-review --verdict not_applicable --waiver-reason <text> --attested-by <id> --source <path>." : "A task in this change derives the architecture_or_security_review risk gate, and this review records no domain \u2014 so legion ship reports that gate unevaluable and the change cannot ship. Re-run as legion review --domain architecture (or --domain security, or both) before accepting. A domain is declared when the review is performed: legion review --accept does not take --domain and cannot add one afterwards."
+    }
+  ];
+}
+async function resolveReviewApprover(context, input) {
+  const raw = stringOption(context, "approver")?.trim();
+  if (context.args.options.get("approver") === true || raw === "") {
+    return {
+      ok: false,
+      result: usageError("Missing required value for --approver. Example: legion review --accept --approver dasbl.")
+    };
+  }
+  if (raw !== void 0 && !input.accepting) {
+    return {
+      ok: false,
+      result: usageError(
+        "legion review reads --approver only with --accept or --auto. An approver on a run that accepts nothing records nobody, so it is refused rather than ignored."
+      )
+    };
+  }
+  const required2 = input.accepting && requiresHumanApproval(input.tasks);
+  if (raw === void 0) {
+    if (!required2) return { ok: true, approver: void 0 };
+    return {
+      ok: false,
+      result: blockedReview(
+        [
+          {
+            code: "approver_required",
+            message: "A task in this change derives the explicit_human_approval risk gate, so accepting its review requires --approver <id> naming a human decision owner recorded in .legion/project/project.json. No approver is inferred from the environment, from git config, or from a project having only one owner \u2014 an acceptance recorded against a defaulted identity is not a human approval.",
+            path: input.taskgraphPath
+          }
+        ],
+        nextAction(
+          scopedCommand("legion review --accept --approver <id>", input.phase),
+          "This change's risk tier requires a named human approver."
+        )
+      )
+    };
+  }
+  const project = await loadWorkflowProject(context);
+  if (!project.ok) {
+    return {
+      ok: false,
+      result: blockedReview(
+        project.diagnostics,
+        nextAction("legion start", "The project manifest records who may approve, and it could not be read.")
+      )
+    };
+  }
+  const owners = project.loaded.project.policy.decisionOwners;
+  const resolved = resolveApprover({ raw, decisionOwners: owners });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      result: blockedReview(
+        resolved.diagnostics,
+        nextAction(
+          scopedCommand("legion review --accept --approver <id>", input.phase),
+          `Name a human decision owner recorded in ${PROJECT_MANIFEST_PATH2}. Recorded owners: ${describeDecisionOwners(owners)}.`
+        )
+      )
+    };
+  }
+  return { ok: true, approver: resolved.approver };
 }
 async function submitReview(context, input) {
   if (input.taskgraph.document.tasks.length === 0) {
@@ -43232,7 +48901,8 @@ async function submitReview(context, input) {
       evidenceIndexPath: input.evidence.artifactPath,
       createdAt,
       executor: input.executor,
-      supersedes: latestSubmittedReviewIdForTask(reviews.reviews, taskId)
+      supersedes: latestSubmittedReviewIdForTask(reviews.reviews, taskId),
+      ...input.domains === void 0 || input.domains.length === 0 ? {} : { domains: input.domains }
     });
     const write = await writeReviewDecision({
       repositoryRoot: context.repositoryRoot,
@@ -43261,7 +48931,7 @@ function failedObservations(evidence) {
   }
   return diagnostics;
 }
-async function acceptLatestReview(context, evidence) {
+async function acceptLatestReview(context, evidence, approver, tasks) {
   const failed = failedObservations(evidence);
   if (failed.length > 0) {
     return blockedReview(
@@ -43286,7 +48956,18 @@ async function acceptLatestReview(context, evidence) {
         ...review.document,
         status: "accepted",
         updatedAt: acceptedAt,
-        submittedAt
+        submittedAt,
+        // The accept transition's own actor, in the same revisioned write as the
+        // transition, so the two cannot end up in different revisions of the
+        // artifact. `reviewer` is untouched: the tool did produce this review,
+        // and overwriting it with the approver would replace one true statement
+        // with another and lose the first.
+        //
+        // Both fields or neither — the schema refuses a half-written transition,
+        // because a reader of `acceptedAt` alone has to guess whether the actor
+        // was never recorded or was recorded and lost, and those guesses lead to
+        // opposite verdicts.
+        ...approver === void 0 ? {} : { acceptedBy: approver, acceptedAt }
       }
     });
     if (!accepted.ok) {
@@ -43319,26 +49000,221 @@ async function acceptLatestReview(context, evidence) {
   if (!evidenceWrite.ok) {
     return blockedReview(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence acceptance could not be written."));
   }
+  const approvals = await recordReviewAcceptApprovals(context, {
+    reviews: acceptedReviews,
+    approver,
+    decidedAt: acceptedAt
+  });
+  if (!approvals.ok) {
+    return blockedReview(
+      approvals.diagnostics,
+      nextAction(
+        "legion ship",
+        "The reviews and evidence were accepted, but no approval was recorded. Nothing was rolled back: legion ship will report explicit_human_approval unevaluable for this change until an approval exists."
+      )
+    );
+  }
+  const promotion = await promoteChangeAcceptance(context, {
+    changeId: evidence.document.changeId,
+    approver,
+    acceptedAt
+  });
+  if (!promotion.ok) {
+    return promotion.written === void 0 ? blockedReview(
+      promotion.diagnostics,
+      nextAction(
+        "legion dev change validate",
+        "The reviews, evidence and approvals were accepted, and the change's whole-change acceptance was not written \u2014 nothing about it reached disk. legion ship will report whole_change_acceptance_evidence unevaluable for this change until it is."
+      )
+    ) : blockedReview(
+      promotion.diagnostics,
+      nextAction(
+        `legion dev change repoint ${evidence.document.changeId}`,
+        `The whole-change acceptance WAS written: ${promotion.written.artifactPath} records ${promotion.written.acceptance.status} at revision ${promotion.written.revision.revision}. What did not land is the re-point of the artifact inputs that pin it, so legion ship reports change_traceability_broken and never reaches the gate. That command re-points them; it is idempotent and writes nothing if they are already current.`
+      )
+    );
+  }
   const action = nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate.");
+  const warnings = domainReviewWarnings({
+    tasks,
+    changeId: evidence.document.changeId,
+    reviews: acceptedReviews,
+    accepting: true
+  });
   return success2(
     {
       ok: true,
       status: "accepted",
       ...acceptedReviews[0] === void 0 ? {} : { review: reviewSummary(acceptedReviews[0]) },
       reviews: acceptedReviews.map(reviewSummary),
+      ...warnings.length === 0 ? {} : { warnings },
+      // Spread conditionally so a run that recorded no approver produces the
+      // payload it produced before this release, key for key.
+      ...approvals.approvals.length === 0 ? {} : { approvals: approvals.approvals.map(approvalSummary) },
       evidenceIndex: {
         artifactPath: evidenceWrite.artifactPath,
         acceptedEntries: evidenceWrite.document.entries.filter((entry) => entry.acceptance.status === "accepted").length
       },
+      acceptance: acceptanceSummary(promotion.result),
       nextAction: action,
       diagnostics: []
     },
     [
       "Review accepted.",
       `Evidence accepted: ${evidenceWrite.artifactPath}.`,
+      `Change acceptance: ${promotion.result.acceptance.status}.`,
+      // Shown, not only recorded: `writeResult` prints `human` for a terminal
+      // run, so a warning that lived solely in the payload would be invisible to
+      // exactly the operator who has to act on it.
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
       renderNextAction(action)
     ].join("\n")
   );
+}
+function acceptanceSummary(promotion) {
+  return {
+    artifactPath: promotion.artifactPath,
+    status: promotion.acceptance.status,
+    revision: promotion.revision.revision,
+    ...promotion.acceptance.acceptedBy === void 0 ? {} : { acceptedBy: promotion.acceptance.acceptedBy },
+    ...promotion.acceptance.acceptedAt === void 0 ? {} : { acceptedAt: promotion.acceptance.acceptedAt },
+    ...promotion.acceptance.reason === void 0 ? {} : { reason: promotion.acceptance.reason },
+    ...promotion.repointed.length === 0 ? {} : { repointed: promotion.repointed }
+  };
+}
+function blockedAcceptanceReason(diagnostics) {
+  const named = [...diagnostics].map((diagnostic3) => `${diagnostic3.code} (${diagnostic3.source?.path ?? "unknown"}): ${diagnostic3.message}`).sort((left, right) => left.localeCompare(right));
+  const shown = named.slice(0, 3);
+  const remainder = named.length > shown.length ? ` (+${named.length - shown.length} more)` : "";
+  const reason = `Change traceability reported ${named.length} blocking defect${named.length === 1 ? "" : "s"} at legion review --accept: ${shown.join(" | ")}${remainder}`;
+  return reason.length <= 2048 ? reason : `${reason.slice(0, 2045)}...`;
+}
+async function promoteChangeAcceptance(context, input) {
+  const repaired = await repairChangeProposalPins({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!repaired.ok) return { ok: false, diagnostics: repaired.diagnostics };
+  const bundle = await loadChangeBundle({ repositoryRoot: context.repositoryRoot, changeId: input.changeId });
+  if (!bundle.ok) return { ok: false, diagnostics: bundle.diagnostics };
+  const traceability = await validateChangeTraceability({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId
+  });
+  const blocking = traceability.ok ? [] : partitionTraceabilityDiagnostics(traceability.diagnostics, { allowLegacyEvidence: true }).blocking;
+  const acceptance = blocking.length > 0 ? { status: "blocked", reason: blockedAcceptanceReason(blocking) } : input.approver === void 0 ? { status: "ready" } : { status: "accepted", acceptedAt: input.acceptedAt, acceptedBy: input.approver.id };
+  const written = await updateChangeAcceptance({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId,
+    acceptance,
+    expectedRevision: bundle.bundle.revision,
+    updatedAt: input.acceptedAt,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!written.ok) {
+    return {
+      ok: false,
+      diagnostics: written.diagnostics,
+      ...written.written === void 0 ? {} : { written: written.written }
+    };
+  }
+  return { ok: true, result: written };
+}
+async function recordReviewAcceptApprovals(context, input) {
+  if (input.approver === void 0) return { ok: true, approvals: [] };
+  const written = [];
+  for (const review of input.reviews) {
+    const taskId = review.document.taskId;
+    const runId = review.document.runId;
+    if (taskId === void 0 || runId === void 0) {
+      return {
+        ok: false,
+        diagnostics: [
+          {
+            code: "approval_subject_missing",
+            message: `Review ${review.document.id} names no ${taskId === void 0 ? "task" : "run"}, so an approval recording its acceptance cannot say what was approved.`,
+            path: review.artifactPath
+          }
+        ]
+      };
+    }
+    const approvalId = approvalIdForSubject({
+      changeId: review.document.changeId,
+      action: REVIEW_ACCEPT_ACTION2,
+      subject: { kind: "task", id: taskId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: review.document.changeId,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      return { ok: false, diagnostics: existing.diagnostics };
+    }
+    const requestedAt = existing.ok ? existing.document.requestedAt : input.decidedAt;
+    const document = {
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt: existing.ok ? existing.document.createdAt : input.decidedAt,
+      updatedAt: input.decidedAt,
+      kind: "approval",
+      id: approvalId,
+      projectId: review.document.projectId,
+      changeId: review.document.changeId,
+      taskId,
+      runId,
+      requestedBy: REVIEW_GATE_ACTOR,
+      requestedAt,
+      scope: {
+        // S1: a local idempotent write of Legion's own acceptance artifacts.
+        // Not S4 — nothing here deploys, deletes or rotates anything, and
+        // stamping the highest class on a review acceptance would make the
+        // classification meaningless the first time something really does.
+        effectClass: "S1",
+        action: REVIEW_ACCEPT_ACTION2,
+        targets: [
+          { kind: "task", id: taskId },
+          { kind: "review", id: review.document.id },
+          { kind: "change", id: review.document.changeId }
+        ]
+      },
+      idempotencyKey: buildIdempotencyKey({
+        projectId: review.document.projectId,
+        changeId: review.document.changeId,
+        taskId,
+        runId,
+        effectKind: REVIEW_ACCEPT_ACTION2,
+        // The accepted review's own content hash, so the key names the exact
+        // bytes accepted: re-running the same accept is the same operation, and
+        // accepting a new review cycle is a different one.
+        targetHash: review.reference.sha256
+      }),
+      status: "granted",
+      decidedBy: input.approver,
+      decidedAt: input.decidedAt,
+      decisionReason: `${input.approver.id} accepted review ${review.document.id} for task ${taskId} via legion review --accept.`
+    };
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: existing.ok ? existing.revision.revision : 0,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document
+    });
+    if (!write.ok) return { ok: false, diagnostics: write.diagnostics };
+    written.push(write);
+  }
+  return { ok: true, approvals: written };
+}
+function approvalSummary(approval) {
+  return {
+    approvalId: approval.document.id,
+    artifactPath: approval.artifactPath,
+    status: approval.document.status,
+    action: approval.document.scope.action,
+    taskId: approval.document.taskId,
+    decidedBy: approval.document.decidedBy,
+    decidedAt: approval.document.decidedAt
+  };
 }
 async function rejectLatestReview(context, evidence, reason) {
   const latest = await latestSubmittedReviews(context.repositoryRoot, evidence.document.changeId);
@@ -43392,6 +49268,43 @@ async function rejectLatestReview(context, evidence, reason) {
   if (!evidenceWrite.ok) {
     return blockedReview(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence rejection could not be written."));
   }
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: evidence.document.changeId
+  });
+  if (!bundle.ok) {
+    return blockedReview(
+      bundle.diagnostics,
+      nextAction(
+        "legion dev change validate",
+        "The evidence was rejected, but the change bundle could not be read, so its whole-change acceptance still stands. legion ship would report whole_change_acceptance_evidence over rejected evidence until this is repaired."
+      )
+    );
+  }
+  const priorStatus = bundle.bundle.change.acceptance.status;
+  const demoted = priorStatus === "not_ready" ? void 0 : await updateChangeAcceptance({
+    repositoryRoot: context.repositoryRoot,
+    changeId: evidence.document.changeId,
+    expectedRevision: bundle.bundle.revision,
+    updatedAt: rejectedAt,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+    acceptance: {
+      status: "not_ready",
+      reason: `Review ${rejectedReviews[0]?.document.id ?? "(unnamed)"} was rejected at ${rejectedAt}: ${reason}`
+    }
+  });
+  if (demoted !== void 0 && !demoted.ok) {
+    return blockedReview(
+      demoted.diagnostics,
+      demoted.written === void 0 ? nextAction(
+        "legion dev change validate",
+        "The evidence was rejected, and this change's whole-change acceptance could not be demoted alongside it. Nothing about the demotion reached disk, so the earlier sign-off still stands over rejected evidence."
+      ) : nextAction(
+        `legion dev change repoint ${evidence.document.changeId}`,
+        `The demotion WAS written: ${demoted.written.artifactPath} records ${demoted.written.acceptance.status} at revision ${demoted.written.revision.revision}. What did not land is the re-point of the artifact inputs that pin it. That command re-points them; it is idempotent and writes nothing if they are already current.`
+      )
+    );
+  }
   const action = nextAction("legion build", "Rejected evidence needs a new build run.");
   return success2(
     {
@@ -43399,6 +49312,10 @@ async function rejectLatestReview(context, evidence, reason) {
       status: "rejected",
       ...rejectedReviews[0] === void 0 ? {} : { review: reviewSummary(rejectedReviews[0]) },
       reviews: rejectedReviews.map(reviewSummary),
+      // Absent when the change was already undecided and nothing was written, so
+      // the payload of a reject on a never-accepted change is key-for-key what it
+      // was before whole-change acceptance existed.
+      ...demoted === void 0 ? {} : { acceptance: acceptanceSummary(demoted) },
       nextAction: action,
       diagnostics: []
     },
@@ -43433,11 +49350,14 @@ async function runAutoReview(context, input) {
       if (!refreshedEvidence.ok) {
         return blockedReview(refreshedEvidence.diagnostics, nextAction("legion validate", "Evidence index could not be reloaded for acceptance."));
       }
-      return withCycleState(await acceptLatestReview(context, refreshedEvidence), {
-        cycle,
-        maxCycles,
-        outcome: "clean"
-      });
+      return withCycleState(
+        await acceptLatestReview(context, refreshedEvidence, input.approver, input.taskgraph.document.tasks),
+        {
+          cycle,
+          maxCycles,
+          outcome: "clean"
+        }
+      );
     }
     if (cycle < maxCycles) {
       const tasksByTaskId = taskByTaskId(input.taskgraph.document.tasks);
@@ -43519,11 +49439,24 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
     artifactPath: promptArtifactPath,
     text: prompt
   });
+  const changeOracles = await loadOracleFacts({ repositoryRoot: context.repositoryRoot, changeId });
+  const acceptancePaths = changeOracles === void 0 ? void 0 : [...new Set(changeOracles.flatMap((oracle) => oracle.document.acceptancePaths ?? []))].sort();
+  const evidence = await readEvidenceIndex({ repositoryRoot: context.repositoryRoot, changeId });
+  const acceptanceBaseline = evidence.ok ? await acceptanceBaselineFromEvidence({
+    repositoryRoot: context.repositoryRoot,
+    entries: evidence.document.entries
+  }) : {
+    status: "unestablished",
+    reason: `The evidence index of ${changeId} would not read, so what earlier runs recorded about its protected acceptance paths is unestablished.`,
+    states: /* @__PURE__ */ new Map()
+  };
   const guarded2 = await runGuardedExecution({
     repositoryRoot: context.repositoryRoot,
     task,
     baseGitSha: resolveBaseGitSha(context.repositoryRoot),
     harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
+    acceptancePaths,
+    acceptanceBaseline,
     run: () => adapterForKind(executor).run({
       repositoryRoot: context.repositoryRoot,
       changeId,
@@ -43545,6 +49478,22 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
       redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
     })
   });
+  const touched = guarded2.acceptancePaths.observations.filter((entry) => entry.verdict !== "unchanged");
+  if (guarded2.acceptancePaths.status === "unestablished" || touched.length > 0) {
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: runArtifactPath({ changeId, runId, fileName: "protected-paths.json" }),
+      text: stableProtocolJson({
+        kind: "protected_paths",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        status: guarded2.acceptancePaths.status,
+        ...guarded2.acceptancePaths.reason === void 0 ? {} : { reason: guarded2.acceptancePaths.reason },
+        observations: guarded2.acceptancePaths.observations
+      })
+    });
+  }
   if (!guarded2.inContract) {
     throw new AutoFixScopeError(
       guarded2.blockedReason ?? "The auto-fix run left the task contract."
@@ -43584,6 +49533,7 @@ function reviewDecisionForExecution(input) {
     confidence: input.executor === "fake" ? "high" : "medium",
     findings,
     supersedes: [...input.supersedes],
+    ...input.domains === void 0 || input.domains.length === 0 ? {} : { domains: [...input.domains] },
     evidenceRefs: [...evidenceRefs],
     traceRefs: [
       {
@@ -43723,6 +49673,15 @@ function reviewSummary(review) {
     // Who reviewed, so a panel can distinguish a human verdict from an
     // executor's without opening the artifact.
     reviewer: review.document.reviewer,
+    // Who accepted it, which is a different act by a different actor. Spread
+    // conditionally so a review with no recorded acceptor produces the payload
+    // it produced before this release; without that, every R0 caller's payload
+    // would gain two keys holding nothing.
+    ...review.document.acceptedBy === void 0 ? {} : { acceptedBy: review.document.acceptedBy, acceptedAt: review.document.acceptedAt },
+    // The competences this review was performed in, spread conditionally on the
+    // rule above so a review that declared none produces the payload it produced
+    // before this release, key for key.
+    ...review.document.domains === void 0 ? {} : { domains: review.document.domains },
     // The revision chain. A review that supersedes nothing is a first attempt,
     // which is what the first-pass rate in `legion retro` counts.
     supersedes: review.document.supersedes,
@@ -43866,9 +49825,3398 @@ async function resolvePhaseChange(repositoryRoot, phase) {
   return { ok: true, changeId: matched.changeId, diagnostics: [] };
 }
 
+// packages/cli/src/commands/workflow/ship.ts
+var SHIP_HELP = [
+  "legion ship [--allow-legacy-evidence] [--dry-run] [--review-accepted]",
+  "",
+  "Run the ship readiness gate. This layer does not publish or release.",
+  "",
+  "Options:",
+  "  --allow-legacy-evidence   Accept evidence written before requirement and oracle",
+  "                            linking. `legion dev change archive` applies the same",
+  "                            check, so pass it there too.",
+  "  --dry-run                 Accepted and not read: this command writes nothing",
+  "                            either way, so there is nothing to rehearse.",
+  "  --review-accepted         Accepted and not read here. Whether a review was",
+  "                            accepted is derived from the artifacts; no flag can",
+  "                            assert it.",
+  "",
+  "Release observation is planned with `legion release plan`, which writes the",
+  "release.json this command's release_observation_plan gate reads. This command",
+  "does not run canary probes or health checks; `legion dev board",
+  "release-observation` is where a post-deployment report lands."
+].join("\n");
+var REBUILDABLE = /* @__PURE__ */ new Set(["missing_evidence_index", "missing_accepted_evidence"]);
+function recoveryFor(diagnostics) {
+  if (diagnostics.every((diagnostic3) => REBUILDABLE.has(diagnostic3.code))) {
+    return nextAction(
+      "legion build",
+      "The task has no accepted evidence yet; building produces it with the requirement and oracle links this gate checks."
+    );
+  }
+  if (diagnostics.every((diagnostic3) => diagnostic3.code === "orphan_evidence")) {
+    return nextAction(
+      "legion ship --allow-legacy-evidence",
+      "This evidence carries no requirement or oracle link. Rebuilding cannot repair it \u2014 a rebuild adds a new entry and leaves the old one in the index. If it predates linking, this accepts it; if it is current evidence that lost its links, the index is corrupt and has to be corrected rather than allowed."
+    );
+  }
+  const paths = [...new Set(diagnostics.map((diagnostic3) => diagnostic3.source?.path).filter(isPath))];
+  const where = paths.length === 0 ? "the planned artifacts" : paths.join(", ");
+  return nextAction(
+    "legion ship",
+    `Requirement, oracle and task links must resolve before a change can ship. No command rewrites them: correct ${where} by hand, then rerun this to confirm the defect is gone.`
+  );
+}
+function isPath(value) {
+  return value !== void 0 && value.length > 0;
+}
+function completeTaskRuns(listing) {
+  if (listing === void 0 || !listing.ok) return void 0;
+  if (listing.skipped.length > 0) return void 0;
+  return listing.taskRuns.map((run) => run.document);
+}
+function taskRunPlaneContradictions(input) {
+  const contradictions = [];
+  const present = new Set(input.taskRuns.map((run) => run.id));
+  const named = [
+    ...new Set(
+      input.entries.map((entry) => entry.evidence.runId).filter((runId) => runId !== void 0)
+    )
+  ].sort();
+  for (const runId of named) {
+    if (present.has(runId)) continue;
+    contradictions.push(
+      `The evidence index records a bundle produced by run ${runId}, and no such run is in this change's run directory.`
+    );
+  }
+  const attemptsByTask = /* @__PURE__ */ new Map();
+  for (const run of input.taskRuns) {
+    const taskId = run.taskId;
+    const attempt = run.attempt;
+    if (taskId === void 0 || attempt === void 0) continue;
+    const attempts = attemptsByTask.get(taskId) ?? /* @__PURE__ */ new Set();
+    attempts.add(attempt);
+    attemptsByTask.set(taskId, attempts);
+  }
+  for (const taskId of [...attemptsByTask.keys()].sort()) {
+    const attempts = attemptsByTask.get(taskId);
+    const highest = Math.max(...attempts);
+    const holes = [];
+    for (let attempt = 1; attempt <= highest; attempt += 1) {
+      if (!attempts.has(attempt)) holes.push(attempt);
+    }
+    if (holes.length === 0) continue;
+    contradictions.push(
+      `${taskId} records attempt ${highest} but not attempt${holes.length === 1 ? "" : "s"} ${holes.join(", ")}, so its earlier runs are not in this change's run directory.`
+    );
+  }
+  const earliestStart = input.taskRuns.map((run) => run.startedAt).filter((startedAt) => startedAt !== void 0).sort()[0];
+  const earliestEvidence = input.entries.map((entry) => entry.evidence.createdAt).filter((createdAt) => createdAt !== void 0).sort()[0];
+  if (earliestStart !== void 0 && earliestEvidence !== void 0 && earliestEvidence < earliestStart) {
+    contradictions.push(
+      `The evidence index holds a bundle created at ${earliestEvidence}, which is earlier than the ${earliestStart} at which the earliest run this change records started, so execution began before its run directory admits.`
+    );
+  }
+  return contradictions;
+}
+function completeApprovals(listing) {
+  if (listing === void 0 || !listing.ok) return void 0;
+  if (listing.skipped.length > 0) return void 0;
+  return listing.approvals.map((approval) => approval.document);
+}
+function completeAttestations(listing) {
+  if (listing === void 0 || !listing.ok) return void 0;
+  if (listing.skipped.length > 0) return void 0;
+  return listing.attestations.map((attestation) => attestation.document);
+}
+function completeReviews(listing) {
+  if (listing === void 0 || !listing.ok) return void 0;
+  if (listing.skipped.length > 0) return void 0;
+  return listing.reviews;
+}
+function planeSkipDiagnostics(skips) {
+  return skips.map((skip) => ({
+    code: "artifact_plane_incomplete",
+    message: `${skip.entries.length} file${skip.entries.length === 1 ? "" : "s"} under ${skip.directory} could not be read as ${skip.plane} and ${skip.entries.length === 1 ? "was" : "were"} skipped: ${skip.entries.join(", ")}. Every gate that reads the ${skip.plane} plane reports unevaluable while this is true, because a listing that dropped a file may have dropped a withdrawal. Remove or correct the named file, then rerun this.`,
+    path: skip.directory
+  }));
+}
+function unreadableDocumentDiagnostics(release) {
+  if (release.kind !== "unreadable") return [];
+  return [
+    {
+      code: "artifact_document_unreadable",
+      message: `${release.path} is present and could not be read as a release plan. release_observation_plan reports unevaluable while this is true, because a plan that will not parse may be the one recording a failed release. legion release plan refuses to write over an unread record, so correct or remove the file, then rerun this.`,
+      path: release.path
+    }
+  ];
+}
+function runPlaneContradictionDiagnostics(input) {
+  if (input.contradictions.length === 0) return [];
+  return [
+    {
+      code: "task_run_plane_contradicted",
+      message: `${input.directory} does not hold every run this change's own records name: ${input.contradictions.join(" ")} A run set that is short reports a later first execution than the truth, which is the direction that makes an approval taken after the work look as though it came first, so approved_spec_and_oracle reports unevaluable rather than answering from what is left. Restore the missing run records, then rerun this.`,
+      path: input.directory
+    }
+  ];
+}
+async function loadShipGateChangeFacts(input) {
+  const bundleResult = await absentOnFailure(
+    () => loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const bundle = bundleResult !== void 0 && bundleResult.ok ? bundleResult.bundle : void 0;
+  const oracles = await loadOracleFacts(input);
+  const runsResult = await absentOnFailure(
+    () => listTaskRunsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const listedRuns = completeTaskRuns(runsResult);
+  const runPlaneContradictions = listedRuns === void 0 ? [] : taskRunPlaneContradictions({ taskRuns: listedRuns, entries: input.entries });
+  const taskRuns = runPlaneContradictions.length === 0 ? listedRuns : void 0;
+  const approvalsResult = await absentOnFailure(
+    () => listApprovalsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const approvals = completeApprovals(approvalsResult);
+  const attestationsResult = await absentOnFailure(
+    () => listAttestationsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const attestations = completeAttestations(attestationsResult);
+  const reviews = completeReviews(input.reviews);
+  const release = await loadReleaseFact({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  const pinned = await resolvePinnedReferenceReader({
+    repositoryRoot: input.repositoryRoot,
+    references: shipGatePinnedReferences({
+      deltas: bundle?.deltas,
+      oracles,
+      approvals,
+      attestations,
+      tasks: input.tasks
+    }),
+    retainContentFor: shipGateSourcePaths(attestations)
+  });
+  const changeRoot = `.legion/project/changes/${input.changeId}`;
+  const skips = [];
+  if (runsResult !== void 0 && runsResult.ok && runsResult.skipped.length > 0) {
+    skips.push({ plane: "task run", directory: `${changeRoot}/runs`, entries: runsResult.skipped });
+  }
+  if (approvalsResult !== void 0 && approvalsResult.ok && approvalsResult.skipped.length > 0) {
+    skips.push({ plane: "approval", directory: `${changeRoot}/approvals`, entries: approvalsResult.skipped });
+  }
+  if (attestationsResult !== void 0 && attestationsResult.ok && attestationsResult.skipped.length > 0) {
+    skips.push({
+      plane: "attestation",
+      directory: `${changeRoot}/attestations`,
+      entries: attestationsResult.skipped
+    });
+  }
+  if (input.reviews.ok && input.reviews.skipped.length > 0) {
+    skips.push({ plane: "review", directory: `${changeRoot}/reviews`, entries: input.reviews.skipped });
+  }
+  return {
+    facts: {
+      changeId: input.changeId,
+      acceptance: bundle?.change.acceptance,
+      approvals,
+      attestations,
+      reviews,
+      deltas: bundle?.deltas,
+      oracles,
+      taskRuns,
+      release,
+      // Read once, here, for the same reason the pins are hashed once here: a
+      // report is a snapshot of a moment. Gates that ask "is this still valid"
+      // must all ask about the same instant, or a change could be reported
+      // approved and expired in one payload.
+      evaluatedAt: currentUtcTimestamp(),
+      verifyPin: pinned.verifyPin,
+      classifySource: (reference) => classifyEvidenceSource(pinned.contentOf(reference), { repositoryRoot: input.repositoryRoot })
+    },
+    skips,
+    runPlaneContradictions
+  };
+}
+async function preBuildAction(context, changeId, fallback) {
+  const taskgraph = await readTaskGraph({ repositoryRoot: context.repositoryRoot, changeId });
+  if (!taskgraph.ok || !derivesApprovalOrderingGate(taskgraph.document.tasks)) {
+    return nextAction(fallback.command, fallback.reason);
+  }
+  return nextAction(
+    APPROVE_BEFORE_BUILD_RECOVERY.command,
+    `${fallback.reason} ${APPROVE_BEFORE_BUILD_RECOVERY.reason}`
+  );
+}
+async function handleShipWorkflow(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(SHIP_HELP);
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    const action = nextAction("legion plan 1", "Shipping requires a planned change.");
+    return blockedShip(latestChange.diagnostics, action);
+  }
+  const evidence = await readEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!evidence.ok) {
+    return blockedShip(
+      evidence.diagnostics,
+      await preBuildAction(context, latestChange.changeId, {
+        command: "legion build",
+        reason: "Shipping requires accepted build evidence."
+      })
+    );
+  }
+  const reviews = await listReviewDecisionsForChange({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!reviews.ok) {
+    return blockedShip(reviews.diagnostics, nextAction("legion review", "Shipping requires an accepted review."));
+  }
+  const acceptedReview = reviews.reviews.find((review) => review.document.status === "accepted");
+  const acceptedEvidence = evidence.document.entries.length > 0 && evidence.document.entries.every((entry) => entry.acceptance.status === "accepted");
+  if (acceptedReview === void 0 || !acceptedEvidence) {
+    return blockedShip(
+      [
+        {
+          code: "review_evidence_missing",
+          message: "No accepted review and accepted evidence pair was found. Run legion review --accept first."
+        }
+      ],
+      // Nothing has run yet on an evidence index with no entries, so this is the
+      // other pre-build refusal and it takes the same fork.
+      evidence.document.entries.length === 0 ? await preBuildAction(context, latestChange.changeId, {
+        command: "legion review --accept",
+        reason: "Shipping requires accepted review evidence."
+      }) : nextAction("legion review --accept", "Shipping requires accepted review evidence.")
+    );
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedShip(taskgraph.diagnostics, nextAction("legion plan 1", "Ship readiness requires a readable task graph."));
+  }
+  let traceabilityWarnings = [];
+  const traceability = await validateChangeTraceability({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!traceability.ok) {
+    const { blocking, allowed } = partitionTraceabilityDiagnostics(traceability.diagnostics, {
+      allowLegacyEvidence: hasFlag(context, "allow-legacy-evidence")
+    });
+    const legacyEvidence = allowed;
+    if (blocking.length > 0) {
+      return blockedShip(
+        blocking.map((diagnostic3) => ({
+          code: "change_traceability_broken",
+          message: diagnostic3.message,
+          path: diagnostic3.source?.path ?? taskgraph.artifactPath
+        })),
+        recoveryFor(blocking)
+      );
+    }
+    traceabilityWarnings = legacyEvidence.map((diagnostic3) => ({
+      code: "legacy_evidence_unlinked",
+      message: `${diagnostic3.message} This evidence predates requirement and oracle linking; rebuilding the task will add it.`
+    }));
+  }
+  const changeFacts = await loadShipGateChangeFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId,
+    tasks: taskgraph.document.tasks,
+    entries: evidence.document.entries,
+    reviews
+  });
+  const gateReport = deriveShipGates({
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id),
+    entries: evidence.document.entries,
+    reviews: reviews.reviews,
+    change: changeFacts.facts
+  });
+  const waiverWarnings = [
+    ...shipGateWaivers(gateReport.gates).map((waiver) => ({
+      code: "risk_gate_waived",
+      message: `${waiver.gate} was satisfied by an audited waiver rather than by evidence: ${waiver.attestedBy} recorded it as not applicable at ${waiver.attestedAt} (attests: ${waiver.attests}), because "${waiver.reason}". Nothing was checked for this gate. ADR-006 permits this and requires it to be visible.`
+    })),
+    // The other evidence-free `satisfied` arm, on all five of the waiver's
+    // surfaces and for the identical reason: a satisfied gate emits no diagnostic
+    // at all, so a gate passed on a person's sentence would otherwise be the
+    // quietest thing in the payload. A distinct code, because "somebody says this
+    // does not apply" and "somebody competent says it applied and passed" are
+    // different claims and one message answering both is one nobody can read.
+    // Two bases, two sentences, one code. The code answers "a person's decision
+    // stands where a report would" and both of these are that; the sentences
+    // state different facts, and one message covering both would be the
+    // collapse `risk_gate_waived` was kept separate to avoid.
+    ...shipGateHumanJudgements(gateReport.gates).map((judgement) => ({
+      code: "risk_gate_human_judgement",
+      message: judgement.basis === "attestation" ? `${judgement.gate} was satisfied by a recorded human judgement rather than by a machine-checkable report: ${judgement.attestedBy} attested ${judgement.attests} as passed at ${judgement.attestedAt}, citing ${judgement.sources.join(", ")}, because "${judgement.statement}". No report shape in this repository states a verdict for this question, so what legion ship checked is that those bytes have not moved and that none of them is a report that is red by its own rule. ADR-006 permits this and requires it to be visible.` : `${judgement.gate} was satisfied over bytes no check has run against: ${judgement.path} was edited after the ${judgement.interface} surface was declared, and ${judgement.decidedBy} re-affirmed the declaration against the current bytes at ${judgement.decidedAt} rather than re-running verification. The passing integration-surface-check in this change's evidence was recorded against the earlier bytes. What legion ship checked is that the current ones are the ones the approver looked at.`
+    }))
+  ];
+  const planeSkips = [
+    ...planeSkipDiagnostics(changeFacts.skips),
+    ...unreadableDocumentDiagnostics(changeFacts.facts.release ?? { kind: "absent" }),
+    ...runPlaneContradictionDiagnostics({
+      contradictions: changeFacts.runPlaneContradictions,
+      directory: `.legion/project/changes/${latestChange.changeId}/runs`
+    })
+  ];
+  if (!gateReport.ready) {
+    const recovery = shipGateRecovery({
+      gates: gateReport.gates,
+      fallback: {
+        command: "legion build",
+        reason: `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
+      }
+    });
+    return blockedShip(
+      [...planeSkips, ...shipGateDiagnostics({ gates: gateReport.gates, path: evidence.artifactPath })],
+      nextAction(recovery.command, recovery.reason),
+      waiverWarnings
+    );
+  }
+  const unevaluable = gateReport.gates.filter((gate) => gate.status === "unevaluable");
+  return {
+    exitCode: 0,
+    payload: {
+      ok: true,
+      status: "ready",
+      change: {
+        changeId: latestChange.changeId
+      },
+      review: {
+        reviewId: acceptedReview.document.id,
+        artifactPath: acceptedReview.artifactPath
+      },
+      evidenceIndex: {
+        artifactPath: evidence.artifactPath,
+        acceptedEntries: evidence.document.entries.length
+      },
+      ...traceabilityWarnings.length === 0 && planeSkips.length === 0 && waiverWarnings.length === 0 ? {} : {
+        warnings: [
+          ...traceabilityWarnings,
+          ...planeSkips.map((diagnostic3) => ({ code: diagnostic3.code, message: diagnostic3.message })),
+          ...waiverWarnings
+        ]
+      },
+      riskGates: {
+        satisfied: gateReport.satisfied,
+        unsatisfied: gateReport.unsatisfied,
+        unevaluable: gateReport.unevaluable,
+        unevaluableGates: [...new Set(unevaluable.map((gate) => gate.gate))],
+        // Beside `unevaluableGates` rather than folded into it: a waived gate was
+        // answered, and answered `satisfied`. What makes it different from every
+        // other satisfied gate is that nothing was checked, and a ready payload
+        // that did not say which gates those were would be a ready payload
+        // claiming more than it established.
+        waivedGates: shipGateWaivers(gateReport.gates).map((waiver) => waiver.gate),
+        // Beside `waivedGates` rather than folded into it, on that field's own
+        // rule: both were answered `satisfied` with nothing machine-checkable
+        // behind them, and they are two different claims. A ready payload that
+        // collapsed them would say a gate had been waived when a named human had
+        // in fact said it applied and passed.
+        humanJudgementGates: shipGateHumanJudgements(gateReport.gates).map((judgement) => judgement.gate)
+      },
+      diagnostics: []
+    },
+    human: [
+      "Ship ready.",
+      // Shown, not only recorded. `writeResult` prints `human` for a terminal
+      // run, so a warning that lived solely in the payload was invisible to
+      // exactly the operator who opted into the allowance.
+      ...traceabilityWarnings.map((warning) => `warning: ${warning.message}`),
+      // In the same list as the other two, and for the same reason. A plane the
+      // gates did not need can still be unreadable — an R2 change with a corrupt
+      // `release.json`, an approval entry that would not parse — and the rule
+      // directly above applies with no exception: a terminal run that printed
+      // "Ship ready." while an artifact could not be read told the operator less
+      // than the JSON did, about the one thing they would want to know.
+      ...planeSkips.map((diagnostic3) => `warning: ${diagnostic3.message}`),
+      ...waiverWarnings.map((warning) => `warning: ${warning.message}`),
+      `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
+      ...unevaluable.length === 0 ? [] : [
+        `Legion cannot yet produce evidence for: ${[...new Set(unevaluable.map((gate) => gate.gate))].join(", ")}.`,
+        "These gates are required by the change's risk tier but are not proven."
+      ],
+      "No publish or release action was performed."
+    ].join("\n")
+  };
+}
+function blockedShip(diagnostics, action, warnings = []) {
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      ...warnings.length === 0 ? {} : { warnings },
+      diagnostics,
+      nextAction: action
+    },
+    [
+      "Ship blocked.",
+      // Rendered on the blocked path too. A change can be blocked by one gate
+      // while another was waived, and an operator reading only the blockers would
+      // never learn that a gate they believe was checked was not.
+      ...warnings.map((warning) => `warning: ${warning.message}`),
+      diagnostics.map((diagnostic3) => diagnostic3 && typeof diagnostic3 === "object" && "message" in diagnostic3 ? String(diagnostic3.message) : String(diagnostic3)).join("\n"),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+
+// packages/cli/src/commands/workflow/approve.ts
+var APPROVE_HELP = `legion approve <subject>
+
+Record a human decision about part of the latest change. This writes a governance
+artifact and nothing else: it does not plan, build, review or ship.
+
+Subjects:
+  spec             Approve the change's delta specs.
+  oracle           Approve the oracles the change's work will be judged against.
+  surface          Re-affirm a verification surface whose pinned file has been edited.
+  protected-paths  Permit the work to modify an acceptance test its oracle protects.
+
+legion approve spec [--requirement <id>] --approver <id> [--dry-run]
+
+  --approver <id>     Required. A human decision owner recorded in
+                      .legion/project/project.json. No approver is inferred from
+                      the environment, from git config, or from a project having
+                      only one owner.
+  --requirement <id>  Approve only this requirement's delta spec. Omitted, every
+                      delta spec in the change is approved, which is what the
+                      approved_delta_spec ship gate asks about. Not repeatable:
+                      a second --requirement replaces the first.
+  --dry-run           Resolve the approver and the delta specs, report what would
+                      be written, and write nothing.
+
+legion approve oracle [--oracle <id>] --approver <id> [--dry-run]
+
+  An oracle states the criteria a task's work will be judged against. Approving
+  one records a named human saying those are the right criteria \u2014 before the work
+  exists, which is the whole point. The approved_spec_and_oracle risk gate at R3
+  compares the last of these decisions against the instant the first task run
+  started, so this belongs beside legion approve spec and before legion build.
+
+  Nothing re-orders a decision once it has been taken. Run this after a build and
+  the gate reports unsatisfied for good, with no command able to move it.
+
+  --approver <id>     Required, same rule as above.
+  --oracle <id>       Approve only this oracle. Omitted, every oracle the change's
+                      tasks are judged against is approved, which is what the gate
+                      asks about. Not repeatable.
+  --dry-run           Report what would be approved and write nothing.
+
+legion approve surface [--path <file>] --approver <id> [--dry-run]
+
+  A verification surface pins the files that make it real \u2014 the compose file
+  standing the service up, the schema it is checked against. legion ship
+  re-hashes them, so editing one stops the declaration being believed and
+  integration_or_real_interface_checks reports unsatisfied. That is the point,
+  and it is also why there has to be a way back: maintaining the integration
+  harness is the honest thing to do, and nothing else re-mints a pin.
+
+  This records a named human saying the declaration still describes what they
+  meant, against the bytes on disk now. It re-affirms nothing that has not
+  drifted, and nothing whose file cannot be read.
+
+  --approver <id>     Required, same rule as above.
+  --path <file>       Re-affirm only this pinned file. Omitted, every drifted pin
+                      in the change is re-affirmed. Not repeatable.
+  --dry-run           Report what would be re-affirmed and write nothing.
+
+legion approve protected-paths [--oracle <id>] --approver <id> [--dry-run]
+
+  An acceptance criterion can name the tests its work must not weaken. legion
+  build hashes them immediately before and after every run and records what
+  moved, and protected_acceptance_tests at R3 refuses a run that changed one
+  unless a named human decided it could \u2014 before the run started.
+
+  That is what "cannot be weakened by the implementer" means here: only the
+  approval plane blesses it, and only in advance. Run this after a build and the
+  gate reports unsatisfied for good; the way out then is to restore the file and
+  build again, not to approve.
+
+  --approver <id>     Required, same rule as above.
+  --oracle <id>       Decide only this oracle's protected acceptance paths.
+                      Omitted, every oracle in the change that declares any is
+                      decided, which is what the gate asks about. Not repeatable.
+  --dry-run           Report what would be decided and write nothing.
+
+Examples:
+  legion approve spec --approver dasbl
+  legion approve spec --approver dasbl --dry-run
+  legion approve spec --requirement req_editor-saves-metadata --approver dasbl
+  legion approve oracle --approver dasbl
+  legion approve oracle --oracle orc_phase-1-c1 --approver dasbl
+  legion approve surface --approver dasbl
+  legion approve surface --path ops/compose.integration.yml --approver dasbl
+  legion approve protected-paths --approver dasbl
+  legion approve protected-paths --oracle orc_phase-1-c1 --approver dasbl`;
+var DELTA_SPEC_APPROVE_ACTION2 = "spec.delta.approve";
+var ORACLE_APPROVE_ACTION2 = "oracle.approve";
+var OPTION_HINT = {
+  requirement: "It narrows a delta-spec approval to one requirement: legion approve spec --requirement <id>.",
+  oracle: "It narrows an oracle approval, or a protected-paths decision, to one oracle: legion approve oracle --oracle <id>.",
+  path: "It narrows a surface re-affirmation to one pinned file: legion approve surface --path <file>."
+};
+var SUBJECT_OPTIONS = {
+  spec: { owns: ["requirement"] },
+  oracle: { owns: ["oracle"] },
+  surface: { owns: ["path"] },
+  "protected-paths": { owns: ["oracle"] }
+};
+var APPROVAL_SUBJECTS = Object.keys(SUBJECT_OPTIONS);
+var NARROWING_OPTIONS = [
+  ...new Set(APPROVAL_SUBJECTS.flatMap((subject) => SUBJECT_OPTIONS[subject].owns))
+];
+async function handleApproveWorkflow(context) {
+  const subject = context.args.positionals[0];
+  if (hasFlag(context, "help") || subject === "help") {
+    return helpResult(APPROVE_HELP);
+  }
+  const supported = APPROVAL_SUBJECTS.join(", ");
+  if (subject === void 0) {
+    return usageError(
+      `legion approve requires a subject. Supported subjects: ${supported}. Example: legion approve spec --approver <id>.`
+    );
+  }
+  if (!APPROVAL_SUBJECTS.includes(subject)) {
+    return usageError(`Unknown approval subject: legion approve ${subject}. Supported subjects: ${supported}.`);
+  }
+  const named = subject;
+  const owned = SUBJECT_OPTIONS[named].owns;
+  for (const foreign of NARROWING_OPTIONS) {
+    if (owned.includes(foreign)) continue;
+    if (!context.args.options.has(foreign)) continue;
+    return usageError(
+      `--${foreign} is not an option of legion approve ${named}. ${OPTION_HINT[foreign] ?? ""}`.trim()
+    );
+  }
+  if (named === "surface") return approveVerificationSurfaces(context);
+  if (named === "oracle") return approveOracles(context);
+  if (named === "protected-paths") return approveProtectedPaths(context);
+  return approveDeltaSpecs(context);
+}
+async function approveDeltaSpecs(context) {
+  const requirementRaw = stringOption(context, "requirement")?.trim();
+  if (context.args.options.get("requirement") === true || requirementRaw === "") {
+    return usageError(
+      "Missing required value for --requirement. Example: legion approve spec --requirement req_editor-saves-metadata."
+    );
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedApprove(latestChange.diagnostics, recoveryForDiscovery(latestChange.diagnostics));
+  }
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedApprove(bundle.diagnostics, recoveryForDiscovery(bundle.diagnostics), {
+      change: { changeId: latestChange.changeId }
+    });
+  }
+  const selected = selectDeltas(bundle.bundle.deltas, requirementRaw);
+  if (!selected.ok) {
+    return blockedApprove(
+      selected.diagnostics,
+      nextAction("legion approve spec", "Approve a delta spec this change actually records."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const approver = await resolveSpecApprover(context);
+  if (!approver.ok) return approver.result;
+  const decidedAt = currentUtcTimestamp();
+  const selectedIds = new Set(selected.deltas.map((delta) => delta.requirementId));
+  const states = [];
+  for (const delta of bundle.bundle.deltas) {
+    const approvalId = approvalIdForSubject({
+      changeId: bundle.bundle.change.id,
+      action: DELTA_SPEC_APPROVE_ACTION2,
+      subject: { kind: "requirement", id: delta.requirementId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: bundle.bundle.change.id,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      if (selectedIds.has(delta.requirementId)) {
+        return blockedApprove(
+          existing.diagnostics,
+          nextAction(
+            "legion approve spec",
+            `An approval already exists for ${delta.requirementId} and could not be read. Correct it by hand, then run this again.`
+          ),
+          { change: { changeId: latestChange.changeId } }
+        );
+      }
+      states.push({ delta, approvalId, approved: false });
+      continue;
+    }
+    states.push({
+      delta,
+      approvalId,
+      approved: existing.ok && isLiveDeltaSpecGrant({
+        approval: existing.document,
+        changeId: bundle.bundle.change.id,
+        delta,
+        evaluatedAt: decidedAt
+      }),
+      ...existing.ok ? { existing } : {}
+    });
+  }
+  const planned = states.filter((state) => selectedIds.has(state.delta.requirementId)).map((state) => ({ ...state, ...plannedActionFor(state, approver.approver) }));
+  const unapprovedNow = states.filter((state) => !state.approved).map((state) => state.delta.requirementId);
+  const unapprovedAfter = states.filter((state) => !state.approved && !selectedIds.has(state.delta.requirementId)).map((state) => state.delta.requirementId);
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const ordered = taskgraph.ok && derivesApprovalOrderingGate(taskgraph.document.tasks);
+  const execution = await executionAlreadyStarted(context.repositoryRoot, latestChange.changeId);
+  const executionWarnings = orderingWarnings({ changeId: latestChange.changeId, execution, ordered });
+  const alreadyRan = executionWarnings.length > 0;
+  if (hasFlag(context, "dry-run")) {
+    const unapproved2 = unapprovedNow;
+    const action2 = dryRunNextActionFor(unapproved2, bundle.bundle.deltas.length, { ordered, alreadyRan });
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        approver: approver.approver,
+        ...executionWarnings.length === 0 ? {} : { warnings: executionWarnings },
+        // No `status` and no `decidedAt` on these entries: nothing was decided,
+        // and a dry-run payload that carried them would read as a record of a
+        // decision to anything parsing it.
+        approvals: planned.map((entry) => ({
+          requirementId: entry.delta.requirementId,
+          deltaSpecPath: entry.delta.path,
+          approvalId: entry.approvalId,
+          pinned: entry.delta.delta,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus }
+        })),
+        unapproved: unapproved2,
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        "Approve ready.",
+        `Dry run: ${planned.length} delta spec${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
+        ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.delta.requirementId}  ${entry.delta.path}`),
+        `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        ...executionWarnings.map((warning) => `Warning: ${warning.message}`),
+        "No approval was written.",
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
+  const written = [];
+  const superseded = [];
+  for (const entry of planned) {
+    if (entry.action === "unchanged") continue;
+    const archived = await archiveWithdrawnDecision({
+      repositoryRoot: context.repositoryRoot,
+      existing: entry.existing,
+      subject: entry.delta.requirementId,
+      action: DELTA_SPEC_APPROVE_ACTION2,
+      target: { kind: "requirement", id: entry.delta.requirementId },
+      command: "legion approve spec",
+      decidedAt
+    });
+    if (!archived.ok) {
+      return blockedApprove(archived.diagnostics, archived.action, {
+        change: { changeId: latestChange.changeId },
+        approvals: written.map(approvalSummary2)
+      });
+    }
+    if (archived.record !== void 0) superseded.push(archived.record);
+    const document = deltaSpecApproval({
+      entry,
+      projectId: bundle.bundle.change.projectId,
+      changeId: bundle.bundle.change.id,
+      approver: approver.approver,
+      decidedAt,
+      ...archived.record === void 0 ? {} : { superseding: archived.record }
+    });
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: entry.existing === void 0 ? 0 : entry.existing.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document
+    });
+    if (!write.ok) {
+      return blockedApprove(
+        write.diagnostics,
+        nextAction(
+          "legion approve spec",
+          "Some delta specs were approved and one write failed. Rerunning re-decides only what is not already approved."
+        ),
+        {
+          change: { changeId: latestChange.changeId },
+          approvals: written.map(approvalSummary2)
+        }
+      );
+    }
+    written.push(write);
+  }
+  const unapproved = unapprovedAfter;
+  const action = nextActionFor(unapproved, bundle.bundle.deltas.length, { ordered, alreadyRan });
+  const decided = planned.filter((entry) => entry.action !== "unchanged").length;
+  const warnings = [
+    ...executionWarnings,
+    ...superseded.map((record2) => ({
+      code: "withdrawn_approval_superseded",
+      message: `${record2.document.decidedBy?.id ?? "someone"} had recorded this approval as ${record2.document.status}${record2.document.decisionReason === void 0 ? "" : ` ("${record2.document.decisionReason}")`}, and this grant supersedes that decision. The withdrawal is preserved at ${record2.artifactPath} and is the standing record of it; nothing was deleted.`,
+      path: record2.artifactPath
+    }))
+  ];
+  return success2(
+    {
+      ok: true,
+      status: decided === 0 ? "unchanged" : "approved",
+      change: { changeId: latestChange.changeId },
+      approver: approver.approver,
+      ...warnings.length === 0 ? {} : { warnings },
+      ...superseded.length === 0 ? {} : { supersededDecisions: superseded.map(approvalSummary2) },
+      approvals: planned.map((entry) => {
+        const record2 = written.find((candidate) => candidate.document.id === entry.approvalId);
+        return {
+          requirementId: entry.delta.requirementId,
+          deltaSpecPath: entry.delta.path,
+          approvalId: entry.approvalId,
+          pinned: entry.delta.delta,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus },
+          artifactPath: record2?.artifactPath ?? entry.existing?.artifactPath,
+          status: "granted",
+          decidedBy: record2?.document.decidedBy ?? entry.existing?.document.decidedBy,
+          decidedAt: record2?.document.decidedAt ?? entry.existing?.document.decidedAt
+        };
+      }),
+      // The field an obvious implementation omits, and the one that stops an
+      // operator believing a partial approval finished the job: the gate is
+      // change-scoped and satisfied only by full coverage, so approving one of
+      // three requirements leaves ship blocked over two the operator never saw.
+      unapproved,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      decided === 0 ? `Already approved: ${planned.length} delta spec${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.` : `Approved ${decided} delta spec${decided === 1 ? "" : "s"} for ${latestChange.changeId}.`,
+      ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.delta.requirementId}  ${entry.delta.path}`),
+      `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+function recoveryForDiscovery(diagnostics) {
+  const codes = new Set(
+    diagnostics.map(
+      (diagnostic3) => diagnostic3 !== null && typeof diagnostic3 === "object" && "code" in diagnostic3 ? String(diagnostic3.code) : ""
+    ).filter((code) => code.length > 0)
+  );
+  if (codes.has("delta_artifact_mismatch")) {
+    return nextAction(
+      "legion approve spec",
+      "A delta spec's bytes no longer match the hash its change bundle records, so the change will not load. No command rewrites a delta spec \u2014 plan is create-only \u2014 so restore the file to the bytes the bundle records, then run this again. Re-approving edited bytes is deliberately not offered."
+    );
+  }
+  return nextAction("legion plan 1", "Approving a delta spec requires a planned change.");
+}
+function plannedActionFor(state, approver) {
+  const existing = state.existing;
+  if (existing === void 0) return { action: "grant" };
+  const document = existing.document;
+  if (state.approved && document.decidedBy?.id === approver.id) {
+    return { action: "unchanged", previousStatus: document.status };
+  }
+  return { action: "regrant", previousStatus: document.status };
+}
+async function archiveWithdrawnDecision(input) {
+  const existing = input.existing;
+  if (existing === void 0) return { ok: true };
+  const document = existing.document;
+  if (document.status !== "denied" && document.status !== "revoked") return { ok: true };
+  if (document.decidedAt >= input.decidedAt) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "withdrawal_not_superseded",
+          message: `Approval ${document.id} for ${input.subject} was ${document.status} at ${document.decidedAt}, which is not before this run's decision instant ${input.decidedAt}. A grant only supersedes a withdrawal when it is strictly later, so writing one now would leave the withdrawal standing and the change unshippable. Nothing was written.`,
+          path: existing.artifactPath
+        }
+      ],
+      action: nextAction(
+        input.command,
+        "The recorded withdrawal is dated at or after now, so no grant taken now can supersede it. Check the clock on the machine that wrote it, then run this again."
+      )
+    };
+  }
+  const archiveId = approvalIdForSubject({
+    changeId: document.changeId,
+    // The subject of the archive is "the decision that stood at revision N",
+    // which is what makes the id distinct and stable: a second withdrawal of the
+    // same subject is a different revision and lands beside this one rather
+    // than on it. Colliding ids would fail the write, which is a refusal — never
+    // an overwrite.
+    action: `${input.action}.superseded.r${existing.revision.revision}`,
+    subject: input.target
+  });
+  const write = await writeApproval({
+    repositoryRoot: input.repositoryRoot,
+    expectedRevision: 0,
+    baseGitSha: resolveBaseGitSha(input.repositoryRoot),
+    document: {
+      ...document,
+      id: archiveId,
+      updatedAt: input.decidedAt,
+      metadata: {
+        ...document.metadata ?? {},
+        attributes: {
+          ...document.metadata?.attributes ?? {},
+          superseded_approval_id: document.id,
+          superseded_at: input.decidedAt
+        }
+      }
+    }
+  });
+  if (!write.ok) {
+    return {
+      ok: false,
+      diagnostics: write.diagnostics,
+      action: nextAction(
+        input.command,
+        `The ${document.status} approval for ${input.subject} could not be copied aside, so nothing was overwritten. A grant is not written over a withdrawal that cannot first be preserved.`
+      )
+    };
+  }
+  return { ok: true, record: write };
+}
+function deltaSpecApproval(input) {
+  const existing = input.entry.existing;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    // `createdAt` and `requestedAt` are the request instant and survive every
+    // re-decision, so the approvals listing's sort order does not move when a
+    // requirement is re-approved. `decidedAt` is the instant of *this* decision.
+    createdAt: existing === void 0 ? input.decidedAt : existing.document.createdAt,
+    updatedAt: input.decidedAt,
+    kind: "approval",
+    id: input.entry.approvalId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    requestedBy: input.approver,
+    requestedAt: existing === void 0 ? input.decidedAt : existing.document.requestedAt,
+    scope: {
+      // S1: a local idempotent write of one of Legion's own governance
+      // artifacts. Nothing here deploys, deletes or rotates anything.
+      effectClass: "S1",
+      action: DELTA_SPEC_APPROVE_ACTION2,
+      targets: [
+        { kind: "requirement", id: input.entry.delta.requirementId },
+        { kind: "change", id: input.changeId }
+      ]
+    },
+    idempotencyKey: buildChangeIdempotencyKey({
+      projectId: input.projectId,
+      changeId: input.changeId,
+      effectKind: DELTA_SPEC_APPROVE_ACTION2,
+      targetHash: input.entry.delta.delta.sha256
+    }),
+    artifacts: [input.entry.delta.delta],
+    status: "granted",
+    decidedBy: input.approver,
+    decidedAt: input.decidedAt,
+    // The overruled withdrawal is named in the grant as well as preserved beside
+    // it. The copy is the record; this sentence is what a reader of *this*
+    // document sees without having to list the directory, and it is why the
+    // supersession does not depend on somebody noticing a second file.
+    decisionReason: `${input.approver.id} approved the delta spec for ${input.entry.delta.requirementId} at ${input.entry.delta.delta.sha256} via legion approve spec.` + (input.superseding === void 0 ? "" : ` This supersedes the ${input.superseding.document.status} decision recorded by ${input.superseding.document.decidedBy?.id ?? "an unnamed decider"} at ${input.superseding.document.decidedAt}, preserved at ${input.superseding.artifactPath}.`)
+  };
+}
+function selectDeltas(deltas, requirementId) {
+  if (requirementId === void 0) return { ok: true, deltas };
+  const matched = deltas.filter((delta) => delta.requirementId === requirementId);
+  if (matched.length === 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "requirement_not_in_change",
+          message: `--requirement ${requirementId} has no delta spec in this change. This change's delta specs cover: ${deltas.map((delta) => delta.requirementId).join(", ")}. A requirement with no delta spec is not part of this change, and approving one Legion cannot show you would approve nothing.`
+        }
+      ]
+    };
+  }
+  return { ok: true, deltas: matched };
+}
+function nextActionFor(unapproved, total, execution) {
+  if (unapproved.length > 0) {
+    return nextAction(
+      "legion approve spec",
+      `${unapproved.length} of ${total} delta specs in this change are still unapproved (${unapproved.join(", ")}); the approved_delta_spec gate is satisfied only when every one of them carries a granted approval.`
+    );
+  }
+  if (execution.alreadyRan) {
+    return nextAction(
+      "legion ship",
+      "Every delta spec in this change is approved, and this change has already run. approved_spec_and_oracle compares the decision instants against the start of execution; legion ship reports which gates that leaves unmet and why."
+    );
+  }
+  if (execution.ordered) {
+    return nextAction(
+      "legion approve oracle --approver <id>",
+      "Every delta spec in this change is approved. At R3 approved_spec_and_oracle reads the oracles too, and both halves have to be decided before the first task run: approve the oracles next, then build."
+    );
+  }
+  return nextAction(
+    "legion build",
+    "Every delta spec in this change is approved; the change is ready for guided build execution."
+  );
+}
+function dryRunNextActionFor(unapproved, total, execution) {
+  if (unapproved.length === 0) {
+    if (execution.alreadyRan) {
+      return nextAction(
+        "legion ship",
+        `All ${total} delta spec${total === 1 ? "" : "s"} in this change already carry a granted approval, and this change has already run; legion ship reports which gates that leaves unmet and why.`
+      );
+    }
+    if (execution.ordered) {
+      return nextAction(
+        "legion approve oracle --approver <id>",
+        `All ${total} delta spec${total === 1 ? "" : "s"} in this change already carry a granted approval. At R3 approved_spec_and_oracle reads the oracles too, and both halves have to be decided before the first task run.`
+      );
+    }
+    return nextAction(
+      "legion build",
+      `All ${total} delta spec${total === 1 ? "" : "s"} in this change already carry a granted approval, and this dry run found nothing left to decide; the change is ready for guided build execution.`
+    );
+  }
+  return nextAction(
+    "legion approve spec --approver <id>",
+    `This was a dry run and no approval was written. ${unapproved.length} of ${total} delta specs in this change are unapproved (${unapproved.join(", ")}); the approved_delta_spec gate stays unsatisfied until this command is run without --dry-run.`
+  );
+}
+async function resolveSpecApprover(context, subject = {
+  command: "legion approve spec",
+  decision: "a delta spec"
+}) {
+  const raw = stringOption(context, "approver")?.trim();
+  if (context.args.options.get("approver") === true || raw === "") {
+    return {
+      ok: false,
+      result: usageError(`Missing required value for --approver. Example: ${subject.command} --approver dasbl.`)
+    };
+  }
+  if (raw === void 0) {
+    return {
+      ok: false,
+      result: blockedApprove(
+        [
+          {
+            code: "approver_required",
+            message: `${subject.command} records a human's decision about ${subject.decision}, so it requires --approver <id> naming a human decision owner recorded in ${PROJECT_MANIFEST_PATH2}. No approver is inferred from the environment, from git config, or from a project having only one owner \u2014 an approval recorded against a defaulted identity is not a human approval.`,
+            path: PROJECT_MANIFEST_PATH2
+          }
+        ],
+        nextAction(`${subject.command} --approver <id>`, `Recording a decision about ${subject.decision} requires a named human approver.`)
+      )
+    };
+  }
+  const project = await loadWorkflowProject(context);
+  if (!project.ok) {
+    return {
+      ok: false,
+      result: blockedApprove(
+        project.diagnostics,
+        nextAction("legion start", "The project manifest records who may approve, and it could not be read.")
+      )
+    };
+  }
+  const owners = project.loaded.project.policy.decisionOwners;
+  const resolved = resolveApprover({ raw, decisionOwners: owners });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      result: blockedApprove(
+        resolved.diagnostics,
+        nextAction(
+          `${subject.command} --approver <id>`,
+          `Name a human decision owner recorded in ${PROJECT_MANIFEST_PATH2}. Recorded owners: ${describeDecisionOwners(owners)}.`
+        )
+      )
+    };
+  }
+  return { ok: true, approver: resolved.approver };
+}
+function approvalSummary2(approval) {
+  return {
+    approvalId: approval.document.id,
+    artifactPath: approval.artifactPath,
+    status: approval.document.status,
+    action: approval.document.scope.action,
+    pinned: approval.document.artifacts?.[0],
+    decidedBy: approval.document.decidedBy,
+    decidedAt: approval.document.decidedAt
+  };
+}
+function blockedApprove(diagnostics, action, extras = {}) {
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      ...extras,
+      diagnostics,
+      nextAction: action
+    },
+    ["Approve blocked.", renderDiagnostics(diagnostics), renderNextAction(action)].join("\n")
+  );
+}
+async function approveOracles(context) {
+  const oracleRaw = stringOption(context, "oracle")?.trim();
+  if (context.args.options.get("oracle") === true || oracleRaw === "") {
+    return usageError(
+      "Missing required value for --oracle. Example: legion approve oracle --oracle orc_phase-1-c1."
+    );
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedApprove(latestChange.diagnostics, recoveryForDiscovery(latestChange.diagnostics));
+  }
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedApprove(bundle.diagnostics, recoveryForDiscovery(bundle.diagnostics), {
+      change: { changeId: latestChange.changeId }
+    });
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedApprove(
+      taskgraph.diagnostics,
+      nextAction(
+        "legion plan 1",
+        "Which oracles this change's work is judged against is recorded on its task contracts, and the task graph could not be read."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const oracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (oracles === void 0) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_plane_unreadable",
+          message: `The oracles of ${latestChange.changeId} could not be read as a complete set, so which criteria this change's work is judged against is unestablished. The manifest fails on any malformed oracle in the directory; correct or remove it, then run this again.`,
+          path: `.legion/project/changes/${latestChange.changeId}/oracle`
+        }
+      ],
+      // `legion ship`, not `legion dev change validate`.
+      //
+      // The first draft named the validate verb, and adversarial review measured
+      // it: drop any unparseable `.yaml` under `oracle/` and `legion dev change
+      // validate <changeId>` exits 0 with `{"ok":true,"diagnostics":[]}` on
+      // exactly that repository, because it checks the bundle's schema rather
+      // than the oracle plane. Being sent to a command that reports success on
+      // the broken state ends the investigation at "nothing is wrong" — PR 4's
+      // named defect, reproduced in this release's new command. `legion ship` is
+      // the command that does see it: on the same repository it reports
+      // `change_traceability_broken` naming the offending file by path, which is
+      // the one fact this refusal cannot supply — the oracle manifest fails as a
+      // whole and reports the directory.
+      nextAction(
+        "legion ship",
+        "An oracle document in this change will not parse, and the manifest fails as a set, so this names the directory rather than the file. legion ship reports change_traceability_broken naming the file itself; correct or remove it, then run this again. Approving a subset of a set that cannot be established would record a decision about criteria nobody can read."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const demand = changeOracleDemand({
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id),
+    change: {
+      changeId: latestChange.changeId,
+      acceptance: void 0,
+      approvals: void 0,
+      attestations: void 0,
+      reviews: void 0,
+      deltas: void 0,
+      oracles,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: void 0,
+      // Never consulted: `changeOracleDemand` resolves ids against documents and
+      // asks nothing about disk. Supplied because the facts shape requires it,
+      // and `unverified`/`unread` are the values that cannot be mistaken for a
+      // check that passed.
+      verifyPin: () => "unverified",
+      classifySource: () => ({ kind: "unread", reason: "this command reads no attestation source" })
+    }
+  });
+  const missing = demand.unresolved[0];
+  if (missing !== void 0) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_not_in_change",
+          message: `Task ${missing.taskId} is judged against oracle ${missing.oracleId}, and no such oracle document is in ${latestChange.changeId}. Approving the oracles that are there would record a decision about a set this change cannot show you. Restore the missing oracle, or re-plan the work as a new change.`,
+          path: `.legion/project/changes/${latestChange.changeId}/oracle/${missing.oracleId}.yaml`
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "An oracle a task names is not on disk. legion ship names which gate that leaves unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (demand.referenced.length === 0) {
+    return blockedApprove(
+      [
+        {
+          code: "no_referenced_oracle",
+          message: `No task contract in ${latestChange.changeId} references an oracle, so there are no criteria to approve. legion plan writes one oracle per executable acceptance criterion and one covering the manual ones; a change built from a legacy import or a hand-written task graph may reference none.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "Nothing here can be approved. legion ship names which gate is unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (oracleRaw !== void 0 && !demand.referenced.some((entry) => entry.oracleId === oracleRaw)) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_not_in_change",
+          message: `--oracle ${oracleRaw} is not an oracle this change's tasks are judged against. They name: ${demand.referenced.map((entry) => entry.oracleId).join(", ")}. Approving an oracle Legion cannot show you would approve nothing.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction("legion approve oracle --approver <id>", "Name an oracle this change's tasks actually reference."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const approver = await resolveSpecApprover(context, {
+    command: "legion approve oracle",
+    decision: "an oracle"
+  });
+  if (!approver.ok) return approver.result;
+  const decidedAt = currentUtcTimestamp();
+  const selectedIds = new Set(
+    demand.referenced.filter((entry) => oracleRaw === void 0 || entry.oracleId === oracleRaw).map((entry) => entry.oracleId)
+  );
+  const states = [];
+  for (const entry of demand.referenced) {
+    const approvalId = approvalIdForSubject({
+      changeId: bundle.bundle.change.id,
+      action: ORACLE_APPROVE_ACTION2,
+      subject: { kind: "oracle", id: entry.oracleId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: bundle.bundle.change.id,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      if (selectedIds.has(entry.oracleId)) {
+        return blockedApprove(
+          existing.diagnostics,
+          nextAction(
+            "legion approve oracle",
+            `An approval already exists for ${entry.oracleId} and could not be read. Correct it by hand, then run this again.`
+          ),
+          { change: { changeId: latestChange.changeId } }
+        );
+      }
+      states.push({ oracleId: entry.oracleId, fact: entry.fact, taskIds: entry.taskIds, approvalId, approved: false });
+      continue;
+    }
+    states.push({
+      oracleId: entry.oracleId,
+      fact: entry.fact,
+      taskIds: entry.taskIds,
+      approvalId,
+      approved: existing.ok && isLiveOracleGrant({
+        approval: existing.document,
+        changeId: bundle.bundle.change.id,
+        oracle: entry.fact,
+        evaluatedAt: decidedAt
+      }),
+      ...existing.ok ? { existing } : {}
+    });
+  }
+  const planned = states.filter((state) => selectedIds.has(state.oracleId)).map((state) => ({ ...state, ...plannedActionFor(state, approver.approver) }));
+  const unapprovedNow = states.filter((state) => !state.approved).map((state) => state.oracleId);
+  const unapprovedAfter = states.filter((state) => !state.approved && !selectedIds.has(state.oracleId)).map((state) => state.oracleId);
+  const ordered = derivesApprovalOrderingGate(taskgraph.document.tasks);
+  const execution = await executionAlreadyStarted(context.repositoryRoot, latestChange.changeId);
+  const executionWarnings = orderingWarnings({ changeId: latestChange.changeId, execution, ordered });
+  const alreadyRan = executionWarnings.length > 0;
+  if (hasFlag(context, "dry-run")) {
+    const action2 = dryRunOracleNextAction(unapprovedNow, states.length, alreadyRan);
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        approver: approver.approver,
+        ...executionWarnings.length === 0 ? {} : { warnings: executionWarnings },
+        // No `status` and no `decidedAt`: nothing was decided, and a dry-run
+        // payload carrying them would read as a record of a decision to anything
+        // parsing it.
+        approvals: planned.map((entry) => ({
+          oracleId: entry.oracleId,
+          oraclePath: entry.fact.reference.path,
+          taskIds: entry.taskIds,
+          approvalId: entry.approvalId,
+          pinned: entry.fact.reference,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus }
+        })),
+        unapproved: unapprovedNow,
+        ...demand.unreferenced.length === 0 ? {} : { unreferencedOracles: demand.unreferenced },
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        "Approve ready.",
+        `Dry run: ${planned.length} oracle${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
+        ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.fact.reference.path}`),
+        `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        ...executionWarnings.map((warning) => `Warning: ${warning.message}`),
+        "No approval was written.",
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
+  const written = [];
+  const superseded = [];
+  for (const entry of planned) {
+    if (entry.action === "unchanged") continue;
+    const archived = await archiveWithdrawnDecision({
+      repositoryRoot: context.repositoryRoot,
+      existing: entry.existing,
+      subject: entry.oracleId,
+      action: ORACLE_APPROVE_ACTION2,
+      target: { kind: "oracle", id: entry.oracleId },
+      command: "legion approve oracle",
+      decidedAt
+    });
+    if (!archived.ok) {
+      return blockedApprove(archived.diagnostics, archived.action, {
+        change: { changeId: latestChange.changeId },
+        approvals: written.map(approvalSummary2)
+      });
+    }
+    if (archived.record !== void 0) superseded.push(archived.record);
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: entry.existing === void 0 ? 0 : entry.existing.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: oracleApproval({
+        entry,
+        projectId: bundle.bundle.change.projectId,
+        changeId: bundle.bundle.change.id,
+        approver: approver.approver,
+        decidedAt,
+        ...archived.record === void 0 ? {} : { superseding: archived.record }
+      })
+    });
+    if (!write.ok) {
+      return blockedApprove(
+        write.diagnostics,
+        nextAction(
+          "legion approve oracle",
+          "Some oracles were approved and one write failed. Rerunning re-decides only what is not already approved."
+        ),
+        {
+          change: { changeId: latestChange.changeId },
+          approvals: written.map(approvalSummary2)
+        }
+      );
+    }
+    written.push(write);
+  }
+  const action = oracleNextActionFor(unapprovedAfter, states.length, alreadyRan);
+  const decided = planned.filter((entry) => entry.action !== "unchanged").length;
+  const warnings = [
+    ...executionWarnings,
+    ...superseded.map((record2) => ({
+      code: "withdrawn_approval_superseded",
+      message: `${record2.document.decidedBy?.id ?? "someone"} had recorded this approval as ${record2.document.status}${record2.document.decisionReason === void 0 ? "" : ` ("${record2.document.decisionReason}")`}, and this grant supersedes that decision. The withdrawal is preserved at ${record2.artifactPath} and is the standing record of it; nothing was deleted.`,
+      path: record2.artifactPath
+    }))
+  ];
+  return success2(
+    {
+      ok: true,
+      status: decided === 0 ? "unchanged" : "approved",
+      change: { changeId: latestChange.changeId },
+      approver: approver.approver,
+      ...warnings.length === 0 ? {} : { warnings },
+      ...superseded.length === 0 ? {} : { supersededDecisions: superseded.map(approvalSummary2) },
+      approvals: planned.map((entry) => {
+        const record2 = written.find((candidate) => candidate.document.id === entry.approvalId);
+        return {
+          oracleId: entry.oracleId,
+          oraclePath: entry.fact.reference.path,
+          taskIds: entry.taskIds,
+          approvalId: entry.approvalId,
+          pinned: entry.fact.reference,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus },
+          artifactPath: record2?.artifactPath ?? entry.existing?.artifactPath,
+          status: "granted",
+          decidedBy: record2?.document.decidedBy ?? entry.existing?.document.decidedBy,
+          decidedAt: record2?.document.decidedAt ?? entry.existing?.document.decidedAt
+        };
+      }),
+      // The field an obvious implementation omits: the gate is change-scoped and
+      // satisfied only by full coverage, so approving one of three oracles
+      // leaves ship blocked over two the operator never saw.
+      unapproved: unapprovedAfter,
+      // Reported and never approved. An oracle no task references proves nothing
+      // about the criteria the work was judged against, and writing a governance
+      // record for a decision nobody had to make is what `legion approve surface`
+      // already refuses to do for an undrifted pin.
+      ...demand.unreferenced.length === 0 ? {} : { unreferencedOracles: demand.unreferenced },
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      decided === 0 ? `Already approved: ${planned.length} oracle${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.` : `Approved ${decided} oracle${decided === 1 ? "" : "s"} for ${latestChange.changeId}.`,
+      ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.fact.reference.path}`),
+      `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function executionAlreadyStarted(repositoryRoot, changeId) {
+  let listing;
+  let index;
+  try {
+    listing = await listTaskRunsForChange({ repositoryRoot, changeId });
+    index = await readEvidenceIndex({ repositoryRoot, changeId });
+  } catch {
+    return { kind: "none" };
+  }
+  if (!listing.ok) return { kind: "none" };
+  const taskRuns = listing.taskRuns.map((run) => run.document);
+  const earliest = earliestExecutionRun(taskRuns);
+  if (earliest !== void 0) return { kind: "started", ...earliest };
+  const entries = index !== void 0 && index.ok ? index.document.entries : [];
+  const contradictions = taskRunPlaneContradictions({ taskRuns, entries });
+  if (contradictions.length > 0) return { kind: "contradicted", detail: contradictions.join(" ") };
+  return { kind: "none" };
+}
+function orderingWarnings(input) {
+  if (!input.ordered) return [];
+  const gate = input.gate ?? "approved_spec_and_oracle";
+  const runs = `.legion/project/changes/${input.changeId}/runs`;
+  if (input.execution.kind === "started") {
+    return [
+      {
+        code: "approval_after_execution",
+        message: `Gated execution for ${input.changeId} began at ${input.execution.startedAt} (run ${input.execution.runId} of ${input.execution.taskId}). A decision recorded now is dated after it, and ${gate} compares those two instants: at R3 this change cannot satisfy that gate, and no command re-orders a decision that has already been taken. Approving is still recorded \u2014 the governance fact is real \u2014 but plan the remaining work as a new change if the gate has to pass.`,
+        path: runs
+      }
+    ];
+  }
+  if (input.execution.kind === "contradicted") {
+    return [
+      {
+        code: "execution_record_incomplete",
+        message: `${input.execution.detail} So this change's run directory cannot say when gated execution began, and ${gate} compares the last of these decisions against exactly that instant: it will report unevaluable until the run records are restored, and a decision recorded now may already be later than the work it claims to gate. Approving is still recorded \u2014 the governance fact is real.`,
+        path: runs
+      }
+    ];
+  }
+  return [];
+}
+function oracleApproval(input) {
+  const existing = input.entry.existing;
+  const reference = input.entry.fact.reference;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: existing === void 0 ? input.decidedAt : existing.document.createdAt,
+    updatedAt: input.decidedAt,
+    kind: "approval",
+    id: input.entry.approvalId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    requestedBy: input.approver,
+    requestedAt: existing === void 0 ? input.decidedAt : existing.document.requestedAt,
+    scope: {
+      // S1: a local idempotent write of one of Legion's own governance
+      // artifacts. Nothing here deploys, deletes or rotates anything.
+      effectClass: "S1",
+      action: ORACLE_APPROVE_ACTION2,
+      targets: [
+        // Re-parsed rather than cast. `changeOracleDemand` types an oracle id as
+        // a plain string, because `ship-gates.ts` deliberately keeps protocol
+        // brands out of its fact shapes — and a cast here would put an
+        // unvalidated string into `scope.targets`, where the gate's exact-target
+        // filter is the only thing that stops one approval answering for
+        // another.
+        { kind: "oracle", id: oracleIdSchema.parse(input.entry.oracleId) },
+        { kind: "change", id: input.changeId }
+      ]
+    },
+    idempotencyKey: buildChangeIdempotencyKey({
+      projectId: input.projectId,
+      changeId: input.changeId,
+      effectKind: ORACLE_APPROVE_ACTION2,
+      targetHash: reference.sha256
+    }),
+    artifacts: [reference],
+    status: "granted",
+    decidedBy: input.approver,
+    decidedAt: input.decidedAt,
+    decisionReason: `${input.approver.id} approved oracle ${input.entry.oracleId} at ${reference.sha256} via legion approve oracle. It states the criteria ${input.entry.taskIds.join(", ")} will be judged against.` + (input.superseding === void 0 ? "" : ` This supersedes the ${input.superseding.document.status} decision recorded by ${input.superseding.document.decidedBy?.id ?? "an unnamed decider"} at ${input.superseding.document.decidedAt}, preserved at ${input.superseding.artifactPath}.`)
+  };
+}
+function oracleNextActionFor(unapproved, total, executionStarted) {
+  if (unapproved.length > 0) {
+    return nextAction(
+      "legion approve oracle",
+      `${unapproved.length} of ${total} oracles this change's tasks are judged against are still unapproved (${unapproved.join(", ")}); the approved_spec_and_oracle gate is satisfied only when every one of them carries a granted approval.`
+    );
+  }
+  if (executionStarted) {
+    return nextAction(
+      "legion ship",
+      "Every oracle this change's tasks are judged against is approved, and this change has already run. approved_spec_and_oracle compares the decision instants against the start of execution; legion ship reports what that ordering leaves unmet."
+    );
+  }
+  return nextAction(
+    "legion build",
+    "Every oracle this change's tasks are judged against is approved. Approve its delta specs too if you have not \u2014 approved_spec_and_oracle reads both \u2014 and then build, which is what these decisions have to precede."
+  );
+}
+function dryRunOracleNextAction(unapproved, total, executionStarted) {
+  if (unapproved.length === 0) {
+    return nextAction(
+      executionStarted ? "legion ship" : "legion build",
+      `All ${total} oracle${total === 1 ? "" : "s"} this change's tasks are judged against already carry a granted approval, and this dry run found nothing left to decide.`
+    );
+  }
+  return nextAction(
+    "legion approve oracle --approver <id>",
+    `This was a dry run and no approval was written. ${unapproved.length} of ${total} oracles are unapproved (${unapproved.join(", ")}); the approved_spec_and_oracle gate stays unmet until this command is run without --dry-run.`
+  );
+}
+var SURFACE_REAFFIRM_ACTION2 = "verification.surface.reaffirm";
+async function approveVerificationSurfaces(context) {
+  const pathRaw = stringOption(context, "path")?.trim();
+  if (context.args.options.get("path") === true || pathRaw === "") {
+    return usageError(
+      "Missing required value for --path. Example: legion approve surface --path ops/compose.integration.yml."
+    );
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedApprove(latestChange.diagnostics, recoveryForDiscovery(latestChange.diagnostics));
+  }
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedApprove(bundle.diagnostics, recoveryForDiscovery(bundle.diagnostics), {
+      change: { changeId: latestChange.changeId }
+    });
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedApprove(
+      taskgraph.diagnostics,
+      nextAction(
+        "legion plan 1",
+        "A verification surface is declared on a task contract, and the task graph could not be read."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const oracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const { surfaces } = changeVerificationSurfaces({
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id),
+    change: {
+      changeId: latestChange.changeId,
+      acceptance: void 0,
+      approvals: void 0,
+      attestations: void 0,
+      reviews: void 0,
+      deltas: void 0,
+      oracles,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: void 0,
+      // Never consulted: nothing below asks whether a *declared* pin still
+      // matches through this verifier, because this command hashes the files
+      // itself and compares against the declaration. Supplied because the facts
+      // shape requires it, and answering `unverified`/`unread` are the values
+      // that cannot be mistaken for a check that passed.
+      verifyPin: () => "unverified",
+      classifySource: () => ({ kind: "unread", reason: "this command reads no attestation source" })
+    }
+  });
+  const nonUnit = surfaces.filter((declared) => declared.surface.kind !== "unit");
+  const declaredByPath = /* @__PURE__ */ new Map();
+  for (const entry of nonUnit) {
+    for (const pin of entry.surface.pinned) {
+      const record2 = declaredByPath.get(pin.path) ?? { declared: [], interfaces: [] };
+      if (!record2.declared.includes(pin.sha256)) record2.declared.push(pin.sha256);
+      if (!record2.interfaces.includes(entry.surface.interface)) record2.interfaces.push(entry.surface.interface);
+      declaredByPath.set(pin.path, record2);
+    }
+  }
+  if (declaredByPath.size === 0) {
+    return blockedApprove(
+      [
+        {
+          code: "no_declared_surface",
+          message: `No task contract or oracle in ${latestChange.changeId} declares a verification surface beyond unit, so there is no pin to re-affirm. A surface is authored on an executable acceptance criterion at legion start --intake and copied onto the plan; a change planned before this release, or from an interview that declined the question, declares none.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "Nothing here can be re-affirmed. legion ship names which gate is unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (pathRaw !== void 0 && !declaredByPath.has(pathRaw)) {
+    return blockedApprove(
+      [
+        {
+          code: "path_not_pinned",
+          message: `--path ${pathRaw} is not pinned by any verification surface in this change. The pinned files are: ${[...declaredByPath.keys()].join(", ")}. Re-affirming a file no declaration names would record a decision nothing reads.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction("legion approve surface --approver <id>", "Name a file one of this change's surfaces actually pins."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const approver = await resolveSpecApprover(context, {
+    command: "legion approve surface",
+    decision: "a verification surface declaration"
+  });
+  if (!approver.ok) return approver.result;
+  const decidedAt = currentUtcTimestamp();
+  const mintPin = await mintPinnedReferences({
+    repositoryRoot: context.repositoryRoot,
+    paths: [...declaredByPath.keys()]
+  });
+  const states = [];
+  for (const [pinPath, record2] of declaredByPath) {
+    const minted = mintPin(pinPath);
+    const approvalId = approvalIdForSubject({
+      changeId: bundle.bundle.change.id,
+      action: SURFACE_REAFFIRM_ACTION2,
+      subject: { kind: "surface", id: pinPath }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: bundle.bundle.change.id,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      if (pathRaw === void 0 || pathRaw === pinPath) {
+        return blockedApprove(
+          existing.diagnostics,
+          nextAction(
+            "legion approve surface",
+            `A re-affirmation already exists for ${pinPath} and could not be read. Correct it by hand, then run this again.`
+          ),
+          { change: { changeId: latestChange.changeId } }
+        );
+      }
+      states.push({
+        path: pinPath,
+        declared: record2.declared,
+        interfaces: record2.interfaces,
+        ...minted === void 0 ? {} : { current: minted.sha256 },
+        approvalId,
+        settled: false
+      });
+      continue;
+    }
+    const current = minted?.sha256;
+    const settled = current !== void 0 && (record2.declared.includes(current) || existing.ok && isLiveSurfaceReaffirmation({
+      approval: existing.document,
+      changeId: bundle.bundle.change.id,
+      path: pinPath,
+      currentSha256: current,
+      evaluatedAt: decidedAt
+    }));
+    states.push({
+      path: pinPath,
+      declared: record2.declared,
+      interfaces: record2.interfaces,
+      ...current === void 0 ? {} : { current },
+      approvalId,
+      settled,
+      ...existing.ok ? { existing } : {}
+    });
+  }
+  const selected = states.filter((state) => pathRaw === void 0 || state.path === pathRaw);
+  const unreadable = selected.filter((state) => state.current === void 0);
+  if (unreadable.length > 0) {
+    return blockedApprove(
+      unreadable.map((state) => ({
+        code: "unreadable_surface_pin",
+        message: `${state.path} is pinned by the ${state.interfaces.join(", ")} surface and no readable file is there, so there are no bytes to re-affirm. Restore the file, or re-plan the change from an interview that pins one that exists.`,
+        path: state.path
+      })),
+      nextAction(
+        "legion approve surface --approver <id>",
+        "A re-affirmation records the digest of the file on disk. A file that is not there has no digest."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const planned = selected.filter((state) => !state.settled).map((state) => ({ ...state, ...plannedReaffirmationFor(state, approver.approver) }));
+  const driftedNow = states.filter((state) => !state.settled).map((state) => state.path);
+  const driftedAfter = states.filter((state) => !state.settled && !(pathRaw === void 0 || state.path === pathRaw)).map((state) => state.path);
+  if (hasFlag(context, "dry-run")) {
+    const action2 = dryRunSurfaceNextAction(driftedNow);
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        approver: approver.approver,
+        // No `status` and no `decidedAt`: nothing was decided, and a dry-run
+        // payload carrying them would read as a record of a decision to anything
+        // parsing it.
+        reaffirmations: planned.map((entry) => ({
+          path: entry.path,
+          interfaces: entry.interfaces,
+          declaredSha256: entry.declared,
+          currentSha256: entry.current,
+          approvalId: entry.approvalId,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus }
+        })),
+        drifted: driftedNow,
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        "Approve ready.",
+        `Dry run: ${planned.length} verification surface pin${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
+        ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.path}  ${entry.interfaces.join(", ")}`),
+        `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        "No approval was written.",
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
+  const written = [];
+  const superseded = [];
+  for (const entry of planned) {
+    if (entry.action === "unchanged") continue;
+    const archived = await archiveWithdrawnDecision({
+      repositoryRoot: context.repositoryRoot,
+      existing: entry.existing,
+      subject: entry.path,
+      action: SURFACE_REAFFIRM_ACTION2,
+      target: { kind: "surface", id: entry.path },
+      command: "legion approve surface",
+      decidedAt
+    });
+    if (!archived.ok) {
+      return blockedApprove(archived.diagnostics, archived.action, {
+        change: { changeId: latestChange.changeId },
+        reaffirmations: written.map(approvalSummary2)
+      });
+    }
+    if (archived.record !== void 0) superseded.push(archived.record);
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: entry.existing === void 0 ? 0 : entry.existing.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: surfaceReaffirmation({
+        entry,
+        projectId: bundle.bundle.change.projectId,
+        changeId: bundle.bundle.change.id,
+        approver: approver.approver,
+        decidedAt,
+        ...archived.record === void 0 ? {} : { superseding: archived.record }
+      })
+    });
+    if (!write.ok) {
+      return blockedApprove(
+        write.diagnostics,
+        nextAction(
+          "legion approve surface",
+          "Some pins were re-affirmed and one write failed. Rerunning re-decides only what is still drifted."
+        ),
+        {
+          change: { changeId: latestChange.changeId },
+          reaffirmations: written.map(approvalSummary2)
+        }
+      );
+    }
+    written.push(write);
+  }
+  const action = surfaceNextAction(driftedAfter);
+  const decided = planned.filter((entry) => entry.action !== "unchanged").length;
+  const warnings = superseded.map((record2) => ({
+    code: "withdrawn_approval_superseded",
+    message: `${record2.document.decidedBy?.id ?? "someone"} had recorded this re-affirmation as ${record2.document.status}${record2.document.decisionReason === void 0 ? "" : ` ("${record2.document.decisionReason}")`}, and this grant supersedes that decision. The withdrawal is preserved at ${record2.artifactPath} and is the standing record of it; nothing was deleted.`,
+    path: record2.artifactPath
+  }));
+  return success2(
+    {
+      ok: true,
+      status: decided === 0 ? "unchanged" : "approved",
+      change: { changeId: latestChange.changeId },
+      approver: approver.approver,
+      ...warnings.length === 0 ? {} : { warnings },
+      ...superseded.length === 0 ? {} : { supersededDecisions: superseded.map(approvalSummary2) },
+      reaffirmations: planned.map((entry) => {
+        const record2 = written.find((candidate) => candidate.document.id === entry.approvalId);
+        return {
+          path: entry.path,
+          interfaces: entry.interfaces,
+          declaredSha256: entry.declared,
+          currentSha256: entry.current,
+          approvalId: entry.approvalId,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus },
+          artifactPath: record2?.artifactPath ?? entry.existing?.artifactPath,
+          status: "granted",
+          decidedBy: record2?.document.decidedBy ?? entry.existing?.document.decidedBy,
+          decidedAt: record2?.document.decidedAt ?? entry.existing?.document.decidedAt
+        };
+      }),
+      // Pins this run leaves drifted, for the same reason `unapproved` exists on
+      // the spec path: the gate reads every declaration in the change, so
+      // re-affirming one of three leaves ship blocked over two the operator
+      // never saw.
+      drifted: driftedAfter,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      decided === 0 ? `Nothing to re-affirm: every verification surface pin in ${latestChange.changeId} still matches what was declared or re-affirmed.` : `Re-affirmed ${decided} verification surface pin${decided === 1 ? "" : "s"} for ${latestChange.changeId}.`,
+      ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.path}  ${entry.interfaces.join(", ")}`),
+      `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+function plannedReaffirmationFor(state, approver) {
+  const existing = state.existing;
+  if (existing === void 0) return { action: "grant" };
+  if (state.settled && existing.document.decidedBy?.id === approver.id) {
+    return { action: "unchanged", previousStatus: existing.document.status };
+  }
+  return { action: "regrant", previousStatus: existing.document.status };
+}
+function surfaceReaffirmation(input) {
+  const existing = input.entry.existing;
+  const current = input.entry.current;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: existing === void 0 ? input.decidedAt : existing.document.createdAt,
+    updatedAt: input.decidedAt,
+    kind: "approval",
+    id: input.entry.approvalId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    requestedBy: input.approver,
+    requestedAt: existing === void 0 ? input.decidedAt : existing.document.requestedAt,
+    scope: {
+      // S1: a local idempotent write of one of Legion's own governance
+      // artifacts. Nothing here deploys, deletes or rotates anything.
+      effectClass: "S1",
+      action: SURFACE_REAFFIRM_ACTION2,
+      targets: [{ kind: "change", id: input.changeId }]
+    },
+    idempotencyKey: buildChangeIdempotencyKey({
+      projectId: input.projectId,
+      changeId: input.changeId,
+      effectKind: SURFACE_REAFFIRM_ACTION2,
+      targetHash: current
+    }),
+    artifacts: [artifactReferenceSchema.parse({ path: input.entry.path, sha256: current })],
+    status: "granted",
+    decidedBy: input.approver,
+    decidedAt: input.decidedAt,
+    decisionReason: `${input.approver.id} re-affirmed the ${input.entry.interfaces.join(", ")} verification surface against ${input.entry.path} at ${current} via legion approve surface. It was declared at ${input.entry.declared.join(", ")}.` + (input.superseding === void 0 ? "" : ` This supersedes the ${input.superseding.document.status} decision recorded by ${input.superseding.document.decidedBy?.id ?? "an unnamed decider"} at ${input.superseding.document.decidedAt}, preserved at ${input.superseding.artifactPath}.`)
+  };
+}
+function surfaceNextAction(drifted) {
+  if (drifted.length > 0) {
+    return nextAction(
+      "legion approve surface --approver <id>",
+      `${drifted.length} pinned file${drifted.length === 1 ? "" : "s"} in this change ${drifted.length === 1 ? "is" : "are"} still drifted (${drifted.join(", ")}); integration_or_real_interface_checks stays unsatisfied until every one of them either matches its declaration or carries a re-affirmation.`
+    );
+  }
+  return nextAction(
+    "legion ship",
+    "Every verification surface pin in this change now matches what a human declared or re-affirmed; rerun the readiness gate."
+  );
+}
+function dryRunSurfaceNextAction(drifted) {
+  if (drifted.length === 0) {
+    return nextAction(
+      "legion ship",
+      "Every verification surface pin in this change already matches what was declared or re-affirmed, and this dry run found nothing to decide."
+    );
+  }
+  return nextAction(
+    "legion approve surface --approver <id>",
+    `This was a dry run and no approval was written. ${drifted.length} pinned file${drifted.length === 1 ? "" : "s"} (${drifted.join(", ")}) ${drifted.length === 1 ? "is" : "are"} drifted; the gate stays unsatisfied until this command is run without --dry-run.`
+  );
+}
+var PROTECTED_PATHS_MODIFY_ACTION2 = "oracle.protected-paths.modify";
+async function approveProtectedPaths(context) {
+  const oracleRaw = stringOption(context, "oracle")?.trim();
+  if (context.args.options.get("oracle") === true || oracleRaw === "") {
+    return usageError(
+      "Missing required value for --oracle. Example: legion approve protected-paths --oracle orc_phase-1-c1."
+    );
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedApprove(latestChange.diagnostics, recoveryForDiscovery(latestChange.diagnostics));
+  }
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedApprove(bundle.diagnostics, recoveryForDiscovery(bundle.diagnostics), {
+      change: { changeId: latestChange.changeId }
+    });
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedApprove(
+      taskgraph.diagnostics,
+      nextAction("legion plan 1", "The task graph decides whether this change derives the gate this decision feeds."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const oracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const { declarations, unestablished: unestablished2 } = changeAcceptancePathDeclarations({
+    change: {
+      changeId: latestChange.changeId,
+      acceptance: void 0,
+      approvals: void 0,
+      attestations: void 0,
+      reviews: void 0,
+      deltas: void 0,
+      oracles,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: void 0,
+      // Never consulted: nothing below asks this facts object to re-hash
+      // anything, because the pin comparison happens against `fact.reference`,
+      // which `readOracleArtifact` established off disk in this same command.
+      verifyPin: () => "unverified",
+      classifySource: () => ({ kind: "unread", reason: "this command reads no attestation source" })
+    }
+  });
+  if (unestablished2) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_plane_unreadable",
+          message: `The oracles of ${latestChange.changeId} could not be read as a complete set, so which acceptance tests are protected is unestablished. Deciding against a partial list would bless one oracle while another the listing dropped stays unread \u2014 and the gate refuses a partial list for the same reason.`,
+          path: `.legion/project/changes/${latestChange.changeId}/oracle`
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "legion ship names the artifact that would not read. Correct or remove it, then run this again."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (declarations.length === 0) {
+    return blockedApprove(
+      [
+        {
+          code: "no_declared_acceptance_paths",
+          message: `No oracle in ${latestChange.changeId} declares a protected acceptance path, so there is nothing to decide about. Protected acceptance paths are authored on an executable acceptance criterion at legion start --intake and copied onto the plan; a change planned before this release, or from an interview that declined the question, declares none.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "Nothing here can be decided. legion ship names which gate is unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (oracleRaw !== void 0 && !declarations.some((entry) => entry.oracleId === oracleRaw)) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_not_declaring_acceptance_paths",
+          message: `--oracle ${oracleRaw} declares no protected acceptance path in this change. The oracles that do are: ${declarations.map((entry) => entry.oracleId).join(", ")}. Deciding about an oracle that protects nothing would record a decision nothing reads.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion approve protected-paths --approver <id>",
+        "Name an oracle that actually declares a protected acceptance path."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const approver = await resolveSpecApprover(context, {
+    command: "legion approve protected-paths",
+    decision: "modifying an acceptance test the work is judged by"
+  });
+  if (!approver.ok) return approver.result;
+  const decidedAt = currentUtcTimestamp();
+  const states = [];
+  for (const declaration of declarations) {
+    const approvalId = approvalIdForSubject({
+      changeId: bundle.bundle.change.id,
+      action: PROTECTED_PATHS_MODIFY_ACTION2,
+      subject: { kind: "oracle", id: declaration.oracleId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: bundle.bundle.change.id,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      if (oracleRaw === void 0 || oracleRaw === declaration.oracleId) {
+        return blockedApprove(
+          existing.diagnostics,
+          nextAction(
+            "legion approve protected-paths",
+            `A decision already exists for ${declaration.oracleId} and could not be read. Correct it by hand, then run this again.`
+          ),
+          { change: { changeId: latestChange.changeId } }
+        );
+      }
+      states.push({
+        oracleId: declaration.oracleId,
+        paths: declaration.paths,
+        fact: declaration.oracle,
+        approvalId,
+        settled: false
+      });
+      continue;
+    }
+    const settled = existing.ok && isLiveProtectedPathsModifyGrant({
+      approval: existing.document,
+      changeId: bundle.bundle.change.id,
+      oracle: declaration.oracle,
+      evaluatedAt: decidedAt
+    });
+    states.push({
+      oracleId: declaration.oracleId,
+      paths: declaration.paths,
+      fact: declaration.oracle,
+      approvalId,
+      settled,
+      ...existing.ok ? { existing } : {}
+    });
+  }
+  const selected = states.filter((state) => oracleRaw === void 0 || state.oracleId === oracleRaw);
+  const planned = selected.map((state) => ({
+    ...state,
+    ...plannedProtectedPathsFor(state, approver.approver)
+  }));
+  const execution = await executionAlreadyStarted(context.repositoryRoot, latestChange.changeId);
+  const ordered = derivesShipGate(taskgraph.document.tasks, "protected_acceptance_tests");
+  const executionWarnings = orderingWarnings({
+    changeId: latestChange.changeId,
+    execution,
+    ordered,
+    gate: "protected_acceptance_tests"
+  });
+  const undecidedNow = states.filter((state) => !state.settled).map((state) => state.oracleId);
+  const undecidedAfter = states.filter((state) => !state.settled && !(oracleRaw === void 0 || state.oracleId === oracleRaw)).map((state) => state.oracleId);
+  if (hasFlag(context, "dry-run")) {
+    const action2 = protectedPathsNextAction(undecidedNow, execution.kind === "started", true);
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        approver: approver.approver,
+        ...executionWarnings.length === 0 ? {} : { warnings: executionWarnings },
+        decisions: planned.map((entry) => ({
+          oracleId: entry.oracleId,
+          paths: entry.paths,
+          oraclePath: entry.fact.reference.path,
+          approvalId: entry.approvalId,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus }
+        })),
+        undecided: undecidedNow,
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        "Approve ready.",
+        `Dry run: ${planned.length} oracle${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
+        ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.paths.join(", ")}`),
+        `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        ...executionWarnings.map((warning) => `Warning: ${warning.message}`),
+        "No approval was written.",
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
+  const written = [];
+  const superseded = [];
+  for (const entry of planned) {
+    if (entry.action === "unchanged") continue;
+    const archived = await archiveWithdrawnDecision({
+      repositoryRoot: context.repositoryRoot,
+      existing: entry.existing,
+      subject: `the protected acceptance paths of ${entry.oracleId}`,
+      action: PROTECTED_PATHS_MODIFY_ACTION2,
+      target: { kind: "oracle", id: entry.oracleId },
+      command: "legion approve protected-paths",
+      decidedAt
+    });
+    if (!archived.ok) {
+      return blockedApprove(archived.diagnostics, archived.action, {
+        change: { changeId: latestChange.changeId },
+        decisions: written.map(approvalSummary2)
+      });
+    }
+    if (archived.record !== void 0) superseded.push(archived.record);
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: entry.existing === void 0 ? 0 : entry.existing.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: protectedPathsApproval({
+        entry,
+        projectId: bundle.bundle.change.projectId,
+        changeId: bundle.bundle.change.id,
+        approver: approver.approver,
+        decidedAt,
+        ...archived.record === void 0 ? {} : { superseding: archived.record }
+      })
+    });
+    if (!write.ok) {
+      return blockedApprove(
+        write.diagnostics,
+        nextAction(
+          "legion approve protected-paths",
+          "Some oracles were decided and one write failed. Rerunning re-decides only what is still undecided."
+        ),
+        {
+          change: { changeId: latestChange.changeId },
+          decisions: written.map(approvalSummary2)
+        }
+      );
+    }
+    written.push(write);
+  }
+  const action = protectedPathsNextAction(undecidedAfter, execution.kind === "started", false);
+  const decided = planned.filter((entry) => entry.action !== "unchanged").length;
+  const warnings = [
+    ...executionWarnings,
+    ...superseded.map((record2) => ({
+      code: "withdrawn_approval_superseded",
+      message: `${record2.document.decidedBy?.id ?? "someone"} had recorded this decision as ${record2.document.status}${record2.document.decisionReason === void 0 ? "" : ` ("${record2.document.decisionReason}")`}, and this grant supersedes that decision. The withdrawal is preserved at ${record2.artifactPath} and is the standing record of it; nothing was deleted.`,
+      path: record2.artifactPath
+    }))
+  ];
+  return success2(
+    {
+      ok: true,
+      status: decided === 0 ? "unchanged" : "approved",
+      change: { changeId: latestChange.changeId },
+      approver: approver.approver,
+      ...warnings.length === 0 ? {} : { warnings },
+      ...superseded.length === 0 ? {} : { supersededDecisions: superseded.map(approvalSummary2) },
+      decisions: planned.map((entry) => {
+        const record2 = written.find((candidate) => candidate.document.id === entry.approvalId);
+        return {
+          oracleId: entry.oracleId,
+          paths: entry.paths,
+          oraclePath: entry.fact.reference.path,
+          approvalId: entry.approvalId,
+          pinned: entry.fact.reference,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus },
+          artifactPath: record2?.artifactPath ?? entry.existing?.artifactPath,
+          status: "granted",
+          decidedBy: record2?.document.decidedBy ?? entry.existing?.document.decidedBy,
+          decidedAt: record2?.document.decidedAt ?? entry.existing?.document.decidedAt
+        };
+      }),
+      // Oracles this run leaves undecided, for the same reason `unapproved` exists
+      // on the spec path: the gate reads every declaring oracle in the change, so
+      // deciding one of three leaves ship blocked over two the operator never saw.
+      undecided: undecidedAfter,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      decided === 0 ? `Nothing to decide: every oracle in ${latestChange.changeId} that declares a protected acceptance path already carries a live decision.` : `Recorded ${decided} protected-paths decision${decided === 1 ? "" : "s"} for ${latestChange.changeId}.`,
+      ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.paths.join(", ")}`),
+      `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+function plannedProtectedPathsFor(state, approver) {
+  const existing = state.existing;
+  if (existing === void 0) return { action: "grant" };
+  if (state.settled && existing.document.decidedBy?.id === approver.id) {
+    return { action: "unchanged", previousStatus: existing.document.status };
+  }
+  return { action: "regrant", previousStatus: existing.document.status };
+}
+function protectedPathsApproval(input) {
+  const existing = input.entry.existing;
+  const reference = input.entry.fact.reference;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: existing === void 0 ? input.decidedAt : existing.document.createdAt,
+    updatedAt: input.decidedAt,
+    kind: "approval",
+    id: input.entry.approvalId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    requestedBy: input.approver,
+    requestedAt: existing === void 0 ? input.decidedAt : existing.document.requestedAt,
+    scope: {
+      // S1: a local idempotent write of one of Legion's own governance
+      // artifacts. Nothing here deploys, deletes or rotates anything.
+      effectClass: "S1",
+      action: PROTECTED_PATHS_MODIFY_ACTION2,
+      targets: [
+        // Re-parsed rather than cast, on `oracleApproval`'s rule: `ship-gates.ts`
+        // keeps protocol brands out of its fact shapes, and the gate's exact-target
+        // filter is the only thing that stops one decision answering for another.
+        { kind: "oracle", id: oracleIdSchema.parse(input.entry.oracleId) },
+        { kind: "change", id: input.changeId }
+      ]
+    },
+    idempotencyKey: buildChangeIdempotencyKey({
+      projectId: input.projectId,
+      changeId: input.changeId,
+      effectKind: PROTECTED_PATHS_MODIFY_ACTION2,
+      targetHash: reference.sha256
+    }),
+    artifacts: [reference],
+    status: "granted",
+    decidedBy: input.approver,
+    decidedAt: input.decidedAt,
+    decisionReason: `${input.approver.id} permitted this change's work to modify the acceptance path(s) oracle ${input.entry.oracleId} protects (${input.entry.paths.join(", ")}) via legion approve protected-paths, against the oracle at ${reference.sha256}.` + (input.superseding === void 0 ? "" : ` This supersedes the ${input.superseding.document.status} decision recorded by ${input.superseding.document.decidedBy?.id ?? "an unnamed decider"} at ${input.superseding.document.decidedAt}, preserved at ${input.superseding.artifactPath}.`)
+  };
+}
+function protectedPathsNextAction(undecided, executionStarted, dryRun) {
+  if (undecided.length > 0) {
+    return nextAction(
+      "legion approve protected-paths --approver <id>",
+      `${undecided.length} oracle${undecided.length === 1 ? "" : "s"} declaring a protected acceptance path ${undecided.length === 1 ? "is" : "are"} still undecided (${undecided.join(", ")}); protected_acceptance_tests reads every one of them when a run has changed a protected path` + (dryRun ? ", and this dry run wrote nothing." : ".")
+    );
+  }
+  if (executionStarted) {
+    return nextAction(
+      "legion ship",
+      "Every declaring oracle carries a decision, and this change has already run. protected_acceptance_tests compares each decision instant against the start of execution; legion ship reports what that ordering leaves unmet."
+    );
+  }
+  return nextAction(
+    "legion build",
+    "Every oracle declaring a protected acceptance path carries a decision permitting this change's work to modify it. Build after this: the decision has to precede the run it permits."
+  );
+}
+
+// packages/cli/src/commands/workflow/attest.ts
+var ATTEST_HELP = `legion attest <kind>
+
+Record that a named human asserts specific hash-pinned files are this change's
+evidence for one of the questions ADR-006 asks. This writes a governance artifact
+and nothing else: it does not run a check, plan, build, review or ship.
+
+Kinds:
+  independent-baseline   A baseline the change's work was measured against.
+  security-evaluation    A security evaluation of the change.
+  e2e-evaluation         An end-to-end evaluation of the change.
+  architecture-review    An architecture review of the change.
+  rollback-evidence      Evidence that this change can be rolled back.
+  forward-fix-evidence   Evidence that this change can be forward-fixed.
+  release-observation    A release observation plan or record.
+
+legion attest <kind> --attested-by <id> --verdict <verdict> --source <path>...
+                     [--covers <taskId>...] [--statement <text>]
+                     [--waiver-reason <text>] [--dry-run]
+
+  --attested-by <id>    Required. A human decision owner recorded in
+                        .legion/project/project.json. No attester is inferred
+                        from the environment, from git config, or from a project
+                        having only one owner.
+  --verdict <v>         Required. pass | fail | unknown | not_applicable.
+  --source <path>       Required, repeatable. A file in this repository whose
+                        bytes the assertion is about. Every one is pinned by
+                        content hash and legion ship re-hashes them.
+  --covers <taskId>     Repeatable. Which of this change's tasks the assertion
+                        speaks for. Omitted, every task of the change.
+  --statement <text>    What is being asserted, in the attester's own words.
+                        Required for --verdict pass on architecture-review, which
+                        no report in this repository can evidence: there, the
+                        sentence is the whole record.
+  --waiver-reason <t>   Required for --verdict not_applicable, and refused for
+                        every other verdict. At least 24 characters and more than
+                        one word: a waiver is a reason a reviewer can disagree
+                        with, which is a sentence rather than a token.
+  --dry-run             Report what would be recorded and write nothing.
+
+This is not a rubber stamp. For a source shape Legion recognises \u2014 the
+threat-model report, the rollback-policy report, the A/B comparison \u2014 the file is
+parsed and --verdict pass is refused when the report's own verdict is negative,
+and a waiver is refused over a failing report of the very check being waived. A
+shape Legion does not recognise cannot carry a pass either: a verdict it cannot
+check is a rubber stamp. A rollback-policy report additionally has to be about
+*this* repository: it records the tree it audited, and one taken in another
+checkout is refused however green it is.
+
+architecture-review is the one kind whose pass rests on a person rather than on a
+report, because an architecture review is a competent judgement and no program
+here emits one. Its pass therefore needs a human attester, hash-pinned sources
+that are still what they were, none of them a red report, and an authored
+--statement \u2014 and legion ship echoes every one of them as a
+risk_gate_human_judgement warning, because nothing machine-checkable was read.
+
+Examples:
+  legion attest security-evaluation --attested-by dasbl --verdict pass \\
+    --source docs/next/evidence/P13-T02/threat-model.json
+  legion dev release rollback-verify --backup-manifest <path> \\
+    --report docs/next/evidence/rollback-policy.json
+  legion attest rollback-evidence --attested-by dasbl --verdict pass \\
+    --source docs/next/evidence/rollback-policy.json
+  legion attest independent-baseline --attested-by dasbl --verdict not_applicable \\
+    --waiver-reason "No sealed baseline corpus covers this change's surface." \\
+    --source docs/adr/ADR-006-risk-gates.md`;
+var ATTESTATION_KINDS = attestationKindSchema.options;
+var ATTESTATION_VERDICTS = attestationVerdictSchema.options;
+async function handleAttestWorkflow(context) {
+  const kindRaw = context.args.positionals[0];
+  if (hasFlag(context, "help") || kindRaw === "help") {
+    return helpResult(ATTEST_HELP);
+  }
+  const supported = ATTESTATION_KINDS.join(", ");
+  if (kindRaw === void 0) {
+    return usageError(
+      `legion attest requires a kind. Supported kinds: ${supported}. Example: legion attest security-evaluation --attested-by <id> --verdict pass --source <path>.`
+    );
+  }
+  const parsedKind = attestationKindSchema.safeParse(kindRaw);
+  if (!parsedKind.success) {
+    return usageError(`Unknown attestation kind: legion attest ${kindRaw}. Supported kinds: ${supported}.`);
+  }
+  const attests = parsedKind.data;
+  const verdictRaw = stringOption(context, "verdict")?.trim();
+  if (context.args.options.get("verdict") === true || verdictRaw === "") {
+    return usageError(
+      `Missing required value for --verdict. Supported verdicts: ${ATTESTATION_VERDICTS.join(", ")}.`
+    );
+  }
+  if (verdictRaw === void 0) {
+    return usageError(
+      `legion attest requires --verdict. Supported verdicts: ${ATTESTATION_VERDICTS.join(", ")}. There is no default: an attestation whose verdict Legion chose is not an assertion anybody made.`
+    );
+  }
+  const parsedVerdict = attestationVerdictSchema.safeParse(verdictRaw);
+  if (!parsedVerdict.success) {
+    return usageError(
+      `Unknown verdict: --verdict ${verdictRaw}. Supported verdicts: ${ATTESTATION_VERDICTS.join(", ")}.`
+    );
+  }
+  const verdict = parsedVerdict.data;
+  const waiverReason = stringOption(context, "waiver-reason")?.trim();
+  if (context.args.options.get("waiver-reason") === true) {
+    return usageError("Missing required value for --waiver-reason.");
+  }
+  if (verdict === "not_applicable" && (waiverReason === void 0 || !isSubstantiveWaiverReason(waiverReason))) {
+    return blockedAttest(
+      [
+        {
+          code: "waiver_requires_reason",
+          message: `--verdict not_applicable requires --waiver-reason <text> of at least ${WAIVER_REASON_MIN_LENGTH} characters and more than one word. ADR-006 permits a waived gate only as an audited waiver: a named human, a recorded time, and a reason a reviewer can disagree with. A single word is not a reason, however long the word is.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ],
+      nextAction(
+        `legion attest ${attests} --verdict not_applicable --waiver-reason <text> --attested-by <id>`,
+        "Say why this check does not apply to this change, in a sentence somebody could argue with."
+      )
+    );
+  }
+  if (verdict !== "not_applicable" && waiverReason !== void 0) {
+    return usageError(
+      `--waiver-reason is only meaningful with --verdict not_applicable; this run records --verdict ${verdict}. A waiver sentence attached to any other verdict reads as a waiver of that verdict.`
+    );
+  }
+  const sourcePaths = [...new Set(repeatedStringOptions(context, "source").map((value) => value.trim()))].filter(
+    (value) => value.length > 0
+  );
+  if (context.args.options.get("source") === true || sourcePaths.length === 0) {
+    return blockedAttest(
+      [
+        {
+          code: "source_required",
+          message: "legion attest requires at least one --source <path>. An attestation's whole content is that specific bytes are this change's evidence, so a record citing nothing asserts a link to nothing \u2014 including a waiver, which cites the decision record that supports it.",
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ],
+      nextAction(
+        `legion attest ${attests} --attested-by <id> --verdict ${verdict} --source <path>`,
+        "Name the file this assertion is about."
+      )
+    );
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedAttest(
+      latestChange.diagnostics,
+      nextAction("legion plan 1", "Attesting requires a planned change.")
+    );
+  }
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedAttest(
+      bundle.diagnostics,
+      nextAction("legion ship", "The change this attestation would be about could not be read; legion ship names why."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedAttest(
+      taskgraph.diagnostics,
+      nextAction("legion plan 1", "An attestation names the tasks it covers, and the task graph could not be read."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const taskIds = taskgraph.document.tasks.map((task) => taskIdForContractId(task.id));
+  const attester = await resolveAttester(context, attests);
+  if (!attester.ok) return attester.result;
+  const coversRaw = [...new Set(repeatedStringOptions(context, "covers").map((value) => value.trim()))].filter(
+    (value) => value.length > 0
+  );
+  if (context.args.options.get("covers") === true) {
+    return usageError("Missing required value for --covers. Example: --covers tsk_phase-1-c1.");
+  }
+  const unknownTask = coversRaw.find((value) => !taskIds.includes(value));
+  if (unknownTask !== void 0) {
+    return blockedAttest(
+      [
+        {
+          code: "task_not_in_change",
+          message: `--covers ${unknownTask} is not a task of ${latestChange.changeId}. Its tasks are: ${taskIds.join(", ")}. Claiming to cover a task Legion cannot show you covers nothing.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(`legion attest ${attests} --covers <taskId>`, "Name a task this change actually carries."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const covers = coversRaw.length > 0 ? coversRaw : taskIds;
+  if (covers.length === 0) {
+    return blockedAttest(
+      [
+        {
+          code: "change_has_no_tasks",
+          message: `${latestChange.changeId} carries no task contracts, so there is nothing for an attestation to cover. Plan the change first; an attestation that covers nothing satisfies no gate.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction("legion plan 1", "An attestation names the tasks it speaks for, and this change has none."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const mint = await mintPinnedReferences({ repositoryRoot: context.repositoryRoot, paths: sourcePaths });
+  const sources = [];
+  for (const sourcePath of sourcePaths) {
+    const reference = mint(sourcePath);
+    if (reference === void 0) {
+      return blockedAttest(
+        [
+          {
+            code: "source_unpinnable",
+            message: `${sourcePath} could not be pinned, so nothing was written. A source is refused when it is absent, when it leaves the repository through a link, when it names an NTFS alternate data stream (a \`:\` in the path), when it case-folds onto a differently-cased file, or when it is not a repository-relative path. legion ship checks these pins through the same resolver, so a pin minted any other way would be reported as unchecked forever.`,
+            path: sourcePath
+          }
+        ],
+        nextAction(
+          `legion attest ${attests} --source <path>`,
+          "Name a repository-relative path to a readable file inside this repository."
+        ),
+        { change: { changeId: latestChange.changeId } }
+      );
+    }
+    sources.push(reference);
+  }
+  const pinned = await resolvePinnedReferenceReader({
+    repositoryRoot: context.repositoryRoot,
+    references: sources,
+    retainContentFor: sourcePaths
+  });
+  const moved = sources.find((source) => pinned.verifyPin(source) !== "match");
+  if (moved !== void 0) {
+    return blockedAttest(
+      [
+        {
+          code: "source_changed_while_reading",
+          message: `${moved.path} changed while this command was reading it, so the digest it would have pinned and the contents this command checked describe two different states of the file. Nothing was written.`,
+          path: moved.path
+        }
+      ],
+      nextAction(`legion attest ${attests}`, "Run this again once the file has stopped changing."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const classified = sources.map((source) => ({
+    source,
+    verdict: classifyEvidenceSource(pinned.contentOf(source), { repositoryRoot: context.repositoryRoot })
+  }));
+  const authoredStatement = stringOption(context, "statement")?.trim();
+  const refusal = sourceRefusal({ attests, verdict, classified, authoredStatement });
+  if (refusal !== void 0) {
+    return blockedAttest(refusal.diagnostics, refusal.action, { change: { changeId: latestChange.changeId } });
+  }
+  const attestedAt = currentUtcTimestamp();
+  const attestationId = attestationIdForKind({ changeId: bundle.bundle.change.id, attests });
+  const existing = await readAttestation({
+    repositoryRoot: context.repositoryRoot,
+    changeId: bundle.bundle.change.id,
+    attestationId
+  });
+  if (!existing.ok && existing.status !== "not_found") {
+    return blockedAttest(
+      existing.diagnostics,
+      nextAction(
+        `legion attest ${attests}`,
+        `An attestation already exists for ${attests} on this change and could not be read. Writing over an unread record is the one way to silently replace a fail with a pass, so nothing was written. Correct it by hand, then run this again.`
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const statement = authoredStatement || `${attester.attester.id} attests ${attests} for ${latestChange.changeId} as ${verdict} against ${sources.length} source${sources.length === 1 ? "" : "s"}: ${sources.map((source) => source.path).join(", ")}.`;
+  const document = attestationDocument({
+    attestationId,
+    attests,
+    verdict,
+    projectId: bundle.bundle.change.projectId,
+    changeId: bundle.bundle.change.id,
+    attester: attester.attester,
+    attestedAt,
+    sources,
+    covers,
+    statement,
+    ...waiverReason === void 0 ? {} : { waiverReason },
+    ...existing.ok ? { existing } : {}
+  });
+  const gate = gateReading(attests);
+  const alreadySatisfying = existing.ok && gate !== void 0 && existing.document.attestedBy.id === attester.attester.id && existing.document.verdict === verdict && isSatisfyingAttestation({
+    attestation: existing.document,
+    gate: gate.gate,
+    kinds: gate.kinds,
+    changeId: bundle.bundle.change.id,
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id),
+    verifyPin: pinned.verifyPin,
+    classifySource: (reference) => classifyEvidenceSource(pinned.contentOf(reference), { repositoryRoot: context.repositoryRoot })
+  });
+  const coverKeys = (entries) => entries.map((entry) => `${entry.kind}:${entry.id}`).sort().join(" ");
+  const sameCovers = (left, right) => left.length === right.length && coverKeys(left) === coverKeys(right);
+  const authoredUnchanged = existing.ok && existing.document.statement === document.statement && existing.document.waiverReason === document.waiverReason && sameCovers(existing.document.covers, document.covers);
+  const action = existing.ok ? alreadySatisfying && authoredUnchanged ? "unchanged" : "re-record" : "record";
+  const warnings = await attestationWarnings({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId,
+    attests,
+    verdict,
+    covers,
+    taskIds,
+    ...existing.ok ? { previous: existing } : {}
+  });
+  if (hasFlag(context, "dry-run")) {
+    const dryRunAction = nextAction(
+      action === "unchanged" ? "legion ship" : `legion attest ${attests} --attested-by <id> --verdict ${verdict}`,
+      action === "unchanged" ? `This change already carries a ${attests} attestation by ${attester.attester.id} that satisfies the gate reading it; this dry run found nothing to record.` : "This was a dry run and no attestation was written. The gate reading this kind stays unmet until this command is run without --dry-run."
+    );
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        attester: attester.attester,
+        ...warnings.length === 0 ? {} : { warnings },
+        attestation: {
+          attestationId,
+          attests,
+          verdict,
+          action,
+          covers,
+          sources,
+          sourceShapes: classified.map((entry) => describeClassification(entry.verdict))
+        },
+        nextAction: dryRunAction,
+        diagnostics: []
+      },
+      [
+        "Attest ready.",
+        `Dry run: ${action} ${attests} for ${latestChange.changeId} as ${verdict}.`,
+        ...sources.map((source) => `  source  ${source.path}  ${source.sha256}`),
+        `Attester: ${attester.attester.id} (${attester.attester.kind}).`,
+        ...warnings.map((warning) => `Warning: ${warning.message}`),
+        "No attestation was written.",
+        renderNextAction(dryRunAction)
+      ].join("\n")
+    );
+  }
+  let written;
+  if (action !== "unchanged") {
+    const write = await writeAttestation({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: existing.ok ? existing.revision.revision : 0,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document
+    });
+    if (!write.ok) {
+      return blockedAttest(
+        write.diagnostics,
+        nextAction(`legion attest ${attests}`, "The attestation could not be written. Correct the reported problem, then run this again."),
+        { change: { changeId: latestChange.changeId } }
+      );
+    }
+    written = write;
+  }
+  const record2 = written ?? (existing.ok ? existing : void 0);
+  const resultAction = nextAction(
+    "legion ship",
+    `The ${attests} attestation for ${latestChange.changeId} is recorded. legion ship re-hashes every file it cites and re-reads the report they hold, and reports which gates that leaves unmet.`
+  );
+  return success2(
+    {
+      ok: true,
+      status: action === "unchanged" ? "unchanged" : "attested",
+      change: { changeId: latestChange.changeId },
+      attester: attester.attester,
+      ...warnings.length === 0 ? {} : { warnings },
+      attestation: {
+        attestationId,
+        attests,
+        verdict,
+        action,
+        covers,
+        sources,
+        sourceShapes: classified.map((entry) => describeClassification(entry.verdict)),
+        artifactPath: record2?.artifactPath,
+        attestedBy: record2?.document.attestedBy,
+        attestedAt: record2?.document.attestedAt
+      },
+      nextAction: resultAction,
+      diagnostics: []
+    },
+    [
+      action === "unchanged" ? `Already attested: ${attests} for ${latestChange.changeId}.` : `Attested ${attests} for ${latestChange.changeId} as ${verdict}.`,
+      ...sources.map((source) => `  source  ${source.path}  ${source.sha256}`),
+      `Attester: ${attester.attester.id} (${attester.attester.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(resultAction)
+    ].join("\n")
+  );
+}
+function gateReading(attests) {
+  for (const [gate, kinds] of Object.entries(ATTESTATION_GATE_KINDS)) {
+    if ((kinds ?? []).includes(attests)) {
+      return { gate, kinds };
+    }
+  }
+  return void 0;
+}
+function describeClassification(verdict) {
+  if (verdict.kind === "clean") return `${verdict.shape} (clean)`;
+  if (verdict.kind === "blocking") return `${verdict.shape} (blocking)`;
+  if (verdict.kind === "unrecognised") return "unrecognised";
+  return "unread";
+}
+function sourceRefusal(input) {
+  if (input.verdict === "fail" || input.verdict === "unknown") return void 0;
+  const blocking = input.classified.find((entry) => entry.verdict.kind === "blocking");
+  if (blocking !== void 0 && blocking.verdict.kind === "blocking") {
+    const producer = EVIDENCE_SOURCE_PRODUCERS[blocking.verdict.shape];
+    return {
+      diagnostics: [
+        {
+          code: input.verdict === "not_applicable" ? "waiver_contradicted_by_source" : "source_contradicts_verdict",
+          message: `--verdict ${input.verdict} is refused. ${blocking.source.path} is a ${blocking.verdict.shape} report (${producer}) and it is negative by its own rule: ${blocking.verdict.reason}. ` + (input.verdict === "not_applicable" ? "A waiver states that a check does not apply to this change; this file is a report OF that check, and it is failing. Waiving a check that ran and failed is the one thing an audited waiver must not be able to do. Record --verdict fail, or waive against a document that supports the claim that the check does not apply." : "Recording a pass over it would put a governance record on top of evidence that says the opposite, and legion ship re-reads this file \u2014 the attestation would be written and then contradicted by the gate it was written for. Re-run the check until it passes, or record what this file actually says with --verdict fail."),
+          path: blocking.source.path
+        }
+      ],
+      action: nextAction(
+        producer,
+        "The cited report is red. Attesting cannot make it green; producing a green report can."
+      )
+    };
+  }
+  if (input.verdict === "not_applicable") return void 0;
+  const rule = attestationEvidenceRule(input.attests);
+  if (rule.kind === "human-judgement") {
+    if (input.authoredStatement === void 0 || !isSubstantiveWaiverReason(input.authoredStatement)) {
+      return {
+        diagnostics: [
+          {
+            code: "judgement_requires_statement",
+            message: `--verdict pass for ${input.attests} requires --statement <text> of at least ${WAIVER_REASON_MIN_LENGTH} characters and more than one word. No report shape in this repository states a verdict for this question and none is expected to \u2014 it asks for a competent person's judgement rather than a program's output \u2014 so the record's whole content is what the attester says about it. A pass carrying a statement Legion wrote for you asserts nothing anybody said. The floor is the audited waiver's, for the audited waiver's reason.`,
+            path: input.classified[0]?.source.path ?? PROJECT_MANIFEST_PATH2
+          }
+        ],
+        action: nextAction(
+          `legion attest ${input.attests} --verdict pass --attested-by <id> --statement <text> --source <path>`,
+          "Say what was reviewed and what it concluded, in a sentence somebody could disagree with."
+        )
+      };
+    }
+    return void 0;
+  }
+  if (rule.kind === "none") {
+    return {
+      diagnostics: [
+        {
+          code: "kind_has_no_evidence_shape",
+          message: `--verdict pass is refused for ${input.attests}. No report shape in this repository can evidence it, so there is nothing legion attest could check the claim against, and a verdict it cannot check is a rubber stamp. ${UNRECOGNISED_SOURCE_HINT} Record the citation without asserting it passed, with --verdict unknown, or \u2014 if the check does not apply to this change \u2014 as an audited waiver with --verdict not_applicable --waiver-reason <text>.`,
+          path: input.classified[0]?.source.path ?? PROJECT_MANIFEST_PATH2
+        }
+      ],
+      action: nextAction(
+        `legion attest ${input.attests} --verdict unknown --attested-by <id> --source <path>`,
+        "Record the citation as an unproven assertion rather than as a pass Legion cannot check."
+      )
+    };
+  }
+  const admissible = rule.shapes;
+  const admitted = new Set(admissible);
+  const evidencing = input.classified.filter(
+    (entry) => entry.verdict.kind === "clean" && admitted.has(entry.verdict.shape)
+  );
+  if (evidencing.length === 0) {
+    const shapes = input.classified.map((entry) => `${entry.source.path}: ${describeClassification(entry.verdict)}`);
+    return {
+      diagnostics: [
+        {
+          code: "source_shape_not_admissible",
+          message: `--verdict pass for ${input.attests} needs at least one source that is a ${admissible.join(" or ")} report Legion can read a verdict out of. Of the ${input.classified.length} file${input.classified.length === 1 ? "" : "s"} named, none is (${shapes.join("; ")}). A hash pin proves which bytes you meant; it does not prove what they say. ${UNRECOGNISED_SOURCE_HINT}`,
+          path: input.classified[0]?.source.path ?? PROJECT_MANIFEST_PATH2
+        }
+      ],
+      action: nextAction(
+        `legion attest ${input.attests} --verdict unknown --attested-by <id> --source <path>`,
+        "Cite a report Legion recognises, or record the citation as unknown rather than as a pass."
+      )
+    };
+  }
+  return void 0;
+}
+async function attestationWarnings(input) {
+  const warnings = [];
+  if (!GATE_READ_ATTESTATION_KINDS.has(input.attests)) {
+    warnings.push({
+      code: "attestation_kind_has_no_reader",
+      message: `No ship gate reads attests: "${input.attests}" yet, so this record does not move any gate. It is a true governance fact and is preserved; it is not yet an input to any verdict.`
+    });
+  }
+  if (input.attests === "independent-baseline") {
+    const earliest = await earliestRun(input.repositoryRoot, input.changeId);
+    if (earliest !== void 0) {
+      warnings.push({
+        code: "attestation_after_execution",
+        message: `Gated execution for ${input.changeId} began at ${earliest.startedAt} (run ${earliest.runId} of ${earliest.taskId}). A baseline recorded now is dated after it, and independent_baseline compares those two instants: this change can no longer satisfy that gate on the evidence arm, and no command re-dates an attestation \u2014 attesting again writes a later instant and makes it strictly worse. The record is still written, because the governance fact is real. Plan the remaining work as a new change and attest its baseline before building it if the gate has to pass on evidence; an audited waiver is the only route out for this one.`,
+        path: `.legion/project/changes/${input.changeId}/runs`
+      });
+    }
+  }
+  const uncovered = input.taskIds.filter((taskId) => !input.covers.includes(taskId));
+  if (uncovered.length > 0) {
+    warnings.push({
+      code: "attestation_partial_coverage",
+      message: `This attestation covers ${input.covers.length} of ${input.taskIds.length} tasks and leaves ${uncovered.join(", ")} uncovered. The gate reading this kind quantifies over every task of the change that derives it, so ship will report it unsatisfied while any of those is missing.`,
+      path: `.legion/project/changes/${input.changeId}/taskgraph.json`
+    });
+  }
+  const previous = input.previous;
+  if (previous !== void 0 && previous.document.verdict !== input.verdict) {
+    warnings.push({
+      code: "attestation_verdict_superseded",
+      message: `${previous.document.attestedBy.id} had recorded this as "${previous.document.verdict}" at ${previous.document.attestedAt} ("${previous.document.statement}"), and this run replaces it with "${input.verdict}". Legion keeps one attestation per change per kind, so the previous verdict is superseded rather than kept beside this one; its bytes remain in the artifact's revision chain.`,
+      path: previous.artifactPath
+    });
+  }
+  return warnings;
+}
+async function earliestRun(repositoryRoot, changeId) {
+  try {
+    const listing = await listTaskRunsForChange({ repositoryRoot, changeId });
+    if (!listing.ok) return void 0;
+    const earliest = earliestExecutionRun(listing.taskRuns.map((run) => run.document));
+    if (earliest !== void 0) return earliest;
+    const index = await readEvidenceIndex({ repositoryRoot, changeId });
+    if (index.ok && index.document.entries.length > 0) {
+      const created = index.document.entries.map((entry) => entry.evidence.createdAt).filter((value) => value !== void 0).sort()[0];
+      if (created !== void 0) {
+        return { startedAt: created, runId: "an unnamed run", taskId: "an unnamed task" };
+      }
+    }
+    return void 0;
+  } catch {
+    return void 0;
+  }
+}
+function attestationDocument(input) {
+  const existing = input.existing;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    // `createdAt` is the instant the record first existed and survives every
+    // re-attestation, so the listing's sort order does not move when an
+    // assertion is retaken. `attestedAt` is the instant of *this* assertion.
+    createdAt: existing === void 0 ? input.attestedAt : existing.document.createdAt,
+    updatedAt: input.attestedAt,
+    kind: "attestation",
+    id: input.attestationId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    attests: input.attests,
+    verdict: input.verdict,
+    attestedBy: input.attester,
+    attestedAt: input.attestedAt,
+    sources: [...input.sources],
+    // Re-parsed rather than cast: `taskIdForContractId` returns a branded id but
+    // `--covers` values come from argv, and a cast would put an unvalidated
+    // string where the gate's set comparison is the only thing that stops one
+    // attestation answering for a task it never named.
+    covers: input.covers.map((taskId) => ({ kind: "task", id: taskIdSchema.parse(taskId) })),
+    statement: input.statement,
+    ...input.waiverReason === void 0 ? {} : { waiverReason: input.waiverReason }
+  };
+}
+async function resolveAttester(context, attests) {
+  const raw = stringOption(context, "attested-by")?.trim();
+  if (context.args.options.get("attested-by") === true || raw === "") {
+    return {
+      ok: false,
+      result: usageError(`Missing required value for --attested-by. Example: legion attest ${attests} --attested-by dasbl.`)
+    };
+  }
+  if (raw === void 0) {
+    return {
+      ok: false,
+      result: blockedAttest(
+        [
+          {
+            code: "attester_required",
+            message: `legion attest records a named human's assertion about ${attests}, so it requires --attested-by <id> naming a human decision owner recorded in ${PROJECT_MANIFEST_PATH2}. No attester is inferred from the environment, from git config, or from a project having only one owner \u2014 an attestation recorded against a defaulted identity is exactly the inference this artifact exists to replace.`,
+            path: PROJECT_MANIFEST_PATH2
+          }
+        ],
+        nextAction(`legion attest ${attests} --attested-by <id>`, "Recording an assertion requires a named human.")
+      )
+    };
+  }
+  const project = await loadWorkflowProject(context);
+  if (!project.ok) {
+    return {
+      ok: false,
+      result: blockedAttest(
+        project.diagnostics,
+        nextAction("legion start", "The project manifest records who may decide, and it could not be read.")
+      )
+    };
+  }
+  const owners = project.loaded.project.policy.decisionOwners;
+  const resolved = resolveApprover({ raw, decisionOwners: owners });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      result: blockedAttest(
+        resolved.diagnostics,
+        nextAction(
+          `legion attest ${attests} --attested-by <id>`,
+          `Name a human decision owner recorded in ${PROJECT_MANIFEST_PATH2}. Recorded owners: ${describeDecisionOwners(owners)}.`
+        )
+      )
+    };
+  }
+  return { ok: true, attester: resolved.approver };
+}
+function blockedAttest(diagnostics, action, extras = {}) {
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      ...extras,
+      diagnostics,
+      nextAction: action
+    },
+    ["Attest blocked.", renderDiagnostics(diagnostics), renderNextAction(action)].join("\n")
+  );
+}
+
+// packages/cli/src/commands/workflow/release.ts
+var RELEASE_ENVIRONMENTS = releaseEnvironmentSchema.options;
+var ROLLBACK_STRATEGIES = releaseRollbackStrategySchema.options;
+var CRITERION_MAX_LENGTH = 1024;
+var RELEASE_HELP2 = `legion release <subject>
+
+Record how this change's release will be observed and taken back. This writes a
+governance artifact and nothing else: it does not deploy, publish, run a canary
+probe, or observe anything.
+
+Subjects:
+  plan   Record the release observation plan for the latest change.
+
+legion release plan --environment <env> --rollback-strategy <strategy>
+                    --health-criterion <text>... --rollback-criterion <text>...
+                    [--covers <taskId>...] [--dry-run]
+
+  --environment <env>        Required. ${RELEASE_ENVIRONMENTS.join(" | ")}. There is no
+                             default: a plan for local and a plan for production
+                             are different plans, and the gate reads the choice.
+                             Only staging and production satisfy
+                             release_observation_plan; nothing is released into
+                             local or test, so a plan naming one is recorded and
+                             warned about. A change that deploys nothing at all is
+                             waived instead, through legion attest
+                             release-observation --verdict not_applicable.
+  --rollback-strategy <s>    Required. ${ROLLBACK_STRATEGIES.join(" | ")}.
+  --health-criterion <text>  Required, repeatable. What the release is watched
+                             against. Authored, never derived: a criterion Legion
+                             wrote for you observes nothing anybody chose.
+  --rollback-criterion <t>   Required, repeatable. What would trigger the rollback.
+  --covers <taskId>          Repeatable. Which of this change's tasks the plan
+                             observes. Omitted, every task of the change.
+  --dry-run                  Report what would be recorded and write nothing.
+
+A plan is checkable *before* the release, which is what makes
+release_observation_plan answerable at ship time. It carries no ordering rule \u2014
+a plan authored after the build is still a plan, because it constrains the
+release rather than the run.
+
+Re-running rewrites the same release.json at the next revision, except over a
+release that failed or was taken back: those are refused rather than replaced,
+because a fresh plan written over one would report the gate satisfied about a
+release nobody repaired. That follow-up work belongs in a new change.
+
+This is not the post-deployment record. \`legion dev board release-observation\`
+aggregates a ReleaseObservationReport produced by an out-of-band monitor into the
+board's event log; that plane lives outside .legion/project and no ship gate
+reads it, which is exactly why this gate reads a plan instead.
+
+Example:
+  legion release plan --environment staging --rollback-strategy revert \\
+    --health-criterion "p99 quote latency stays under 400ms for 30 minutes" \\
+    --rollback-criterion "quote error rate exceeds 1% over any 5 minute window"`;
+async function handleReleaseWorkflow(context) {
+  const subject = context.args.positionals[0];
+  if (hasFlag(context, "help") || subject === "help") {
+    return helpResult(RELEASE_HELP2);
+  }
+  const supported = RELEASE_SUBJECTS.join(", ");
+  if (subject === void 0) {
+    return usageError(
+      `legion release requires a subject. Supported subjects: ${supported}. Example: legion release plan --environment staging --rollback-strategy revert --health-criterion <text> --rollback-criterion <text>.`
+    );
+  }
+  if (!RELEASE_SUBJECTS.includes(subject)) {
+    return usageError(`Unknown release subject: legion release ${subject}. Supported subjects: ${supported}.`);
+  }
+  return planRelease(context);
+}
+var RELEASE_SUBJECTS = ["plan"];
+function authoredList(context, option) {
+  if (context.args.options.get(option) === true) return "missing_value";
+  return [...new Set(repeatedStringOptions(context, option).map((value) => value.trim()))].filter(
+    (value) => value.length > 0
+  );
+}
+async function planRelease(context) {
+  const environmentRaw = stringOption(context, "environment")?.trim();
+  if (context.args.options.get("environment") === true || environmentRaw === "") {
+    return usageError(
+      `Missing required value for --environment. Supported environments: ${RELEASE_ENVIRONMENTS.join(", ")}.`
+    );
+  }
+  if (environmentRaw === void 0) {
+    return blockedRelease(
+      [
+        {
+          code: "environment_required",
+          message: `legion release plan requires --environment. Supported environments: ${RELEASE_ENVIRONMENTS.join(", ")}. There is no default: a plan for local and a plan for production observe different things and are different plans, so one Legion chose would be a plan nobody wrote.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ],
+      nextAction("legion release plan --environment <env>", "Name the environment this release will be observed in.")
+    );
+  }
+  const parsedEnvironment = releaseEnvironmentSchema.safeParse(environmentRaw);
+  if (!parsedEnvironment.success) {
+    return usageError(
+      `Unknown release environment: --environment ${environmentRaw}. Supported environments: ${RELEASE_ENVIRONMENTS.join(", ")}.`
+    );
+  }
+  const environment = parsedEnvironment.data;
+  const strategyRaw = stringOption(context, "rollback-strategy")?.trim();
+  if (context.args.options.get("rollback-strategy") === true || strategyRaw === "") {
+    return usageError(
+      `Missing required value for --rollback-strategy. Supported strategies: ${ROLLBACK_STRATEGIES.join(", ")}.`
+    );
+  }
+  if (strategyRaw === void 0) {
+    return blockedRelease(
+      [
+        {
+          code: "rollback_strategy_required",
+          message: `legion release plan requires --rollback-strategy. Supported strategies: ${ROLLBACK_STRATEGIES.join(", ")}. ADR-006 asks for a canary or observation plan, and a plan that says how a release is watched without saying how it is taken back is half of one.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ],
+      nextAction(
+        `legion release plan --rollback-strategy <${ROLLBACK_STRATEGIES.join("|")}>`,
+        "Say how this release would be taken back."
+      )
+    );
+  }
+  const parsedStrategy = releaseRollbackStrategySchema.safeParse(strategyRaw);
+  if (!parsedStrategy.success) {
+    return usageError(
+      `Unknown rollback strategy: --rollback-strategy ${strategyRaw}. Supported strategies: ${ROLLBACK_STRATEGIES.join(", ")}.`
+    );
+  }
+  const rollbackStrategy = parsedStrategy.data;
+  const healthCriteria = authoredList(context, "health-criterion");
+  if (healthCriteria === "missing_value") {
+    return usageError('Missing required value for --health-criterion. Example: --health-criterion "error rate < 1%".');
+  }
+  const rollbackCriteria = authoredList(context, "rollback-criterion");
+  if (rollbackCriteria === "missing_value") {
+    return usageError(
+      'Missing required value for --rollback-criterion. Example: --rollback-criterion "error rate > 1% for 5 minutes".'
+    );
+  }
+  if (healthCriteria.length === 0) {
+    return blockedRelease(
+      [
+        {
+          code: "health_criteria_required",
+          message: "legion release plan requires at least one --health-criterion <text>. A plan with no health criterion plans a release nothing would be observed against, and release_observation_plan reads that as unsatisfied rather than as absent \u2014 so writing one would exit 0 and leave ship blocked. The criteria are authored, never derived from the task graph: a criterion Legion wrote for you is not something anybody chose to watch.",
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ],
+      nextAction(
+        'legion release plan --health-criterion "<text>"',
+        "Say what this release will be watched against, in terms somebody could check."
+      )
+    );
+  }
+  if (rollbackCriteria.length === 0) {
+    return blockedRelease(
+      [
+        {
+          code: "rollback_criteria_required",
+          message: "legion release plan requires at least one --rollback-criterion <text>. releaseRollbackPlanSchema requires a non-empty criteria list, so a plan without one cannot even be written \u2014 and a rollback strategy with no trigger says how the release would be taken back without saying when.",
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ],
+      nextAction(
+        'legion release plan --rollback-criterion "<text>"',
+        "Say what would make this release be taken back."
+      )
+    );
+  }
+  const overlong = [...healthCriteria, ...rollbackCriteria].find((value) => value.length > CRITERION_MAX_LENGTH);
+  if (overlong !== void 0) {
+    return usageError(
+      `A release criterion may be at most ${CRITERION_MAX_LENGTH} characters, and one of the criteria given is ${overlong.length}. releaseSchema bounds them, so a longer one would be refused at the write with a message naming a field rather than the text you typed.`
+    );
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedRelease(latestChange.diagnostics, nextAction("legion plan 1", "Planning a release requires a planned change."));
+  }
+  const bundle = await loadChangeBundle({ repositoryRoot: context.repositoryRoot, changeId: latestChange.changeId });
+  if (!bundle.ok) {
+    return blockedRelease(
+      bundle.diagnostics,
+      nextAction("legion ship", "The change this plan would be about could not be read; legion ship names why."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const taskgraph = await readTaskGraph({ repositoryRoot: context.repositoryRoot, changeId: latestChange.changeId });
+  if (!taskgraph.ok) {
+    return blockedRelease(
+      taskgraph.diagnostics,
+      nextAction("legion plan 1", "A release plan names the tasks it observes, and the task graph could not be read."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const taskIds = taskgraph.document.tasks.map((task) => taskIdForContractId(task.id));
+  const coversRaw = [...new Set(repeatedStringOptions(context, "covers").map((value) => value.trim()))].filter(
+    (value) => value.length > 0
+  );
+  if (context.args.options.get("covers") === true) {
+    return usageError("Missing required value for --covers. Example: --covers tsk_phase-1-c1.");
+  }
+  const unknownTask = coversRaw.find((value) => !taskIds.includes(value));
+  if (unknownTask !== void 0) {
+    return blockedRelease(
+      [
+        {
+          // The same code `legion attest` raises for the same fact, deliberately
+          // rather than a synonym: one vocabulary across the verbs that name a
+          // change's tasks means one thing for a host to route on.
+          code: "task_not_in_change",
+          message: `--covers ${unknownTask} is not a task of ${latestChange.changeId}. Its tasks are: ${taskIds.join(", ")}. Claiming to observe a task Legion cannot show you observes nothing.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction("legion release plan --covers <taskId>", "Name a task this change actually carries."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const covers = coversRaw.length > 0 ? coversRaw : taskIds;
+  if (covers.length === 0) {
+    return blockedRelease(
+      [
+        {
+          code: "change_has_no_tasks",
+          message: `${latestChange.changeId} carries no task contracts, so there is nothing for a release plan to observe. Plan the change first; a plan that covers nothing satisfies no gate.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction("legion plan 1", "A release plan names the tasks it observes, and this change has none."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const taskgraphPath2 = artifactPathForRole({ role: "taskgraph", changeId: bundle.bundle.change.id });
+  const mint = await mintPinnedReferences({ repositoryRoot: context.repositoryRoot, paths: [taskgraphPath2] });
+  const releaseIntent = mint(taskgraphPath2);
+  if (releaseIntent === void 0) {
+    return blockedRelease(
+      [
+        {
+          code: "release_intent_unpinnable",
+          message: `${taskgraphPath2} could not be pinned, so nothing was written. A release plan records which document its task coverage was drawn from, and this change's task graph is that document.`,
+          path: taskgraphPath2
+        }
+      ],
+      nextAction("legion plan 1", "The change's task graph could not be pinned."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const releaseId = releaseIdForChange({ changeId: bundle.bundle.change.id });
+  const existing = await readRelease({ repositoryRoot: context.repositoryRoot, changeId: bundle.bundle.change.id });
+  if (!existing.ok && existing.status !== "not_found") {
+    return blockedRelease(
+      existing.diagnostics,
+      nextAction(
+        "legion release plan",
+        "A release plan already exists for this change and could not be read. Writing over an unread record is the one way to silently replace a failed release with a fresh plan, so nothing was written. Correct it by hand, then run this again."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (existing.ok && releaseRecordsNegative(existing.document)) {
+    return blockedRelease(
+      [
+        {
+          code: "release_records_negative",
+          message: `${existing.artifactPath} records status "${existing.document.status}": a release of ${latestChange.changeId} that failed or was taken back. Re-planning would replace that record with a fresh plan at status "requested" and report release_observation_plan satisfied, which is how a recorded negative gets laundered \u2014 so nothing was written. The follow-up work belongs in a new change. If the record itself is wrong, correct or remove the file by hand and run this again.`,
+          path: existing.artifactPath
+        }
+      ],
+      nextAction(
+        "legion start --intake",
+        `${latestChange.changeId} records a release that failed or was taken back. Record the follow-up work as a new change; this one is not re-planned green.`
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const plannedAt = currentUtcTimestamp();
+  const document = releaseDocument({
+    releaseId,
+    projectId: bundle.bundle.change.projectId,
+    changeId: bundle.bundle.change.id,
+    environment,
+    releaseIntent,
+    plannedAt,
+    covers,
+    healthCriteria,
+    rollbackStrategy,
+    rollbackCriteria,
+    ...existing.ok ? { existing } : {}
+  });
+  const alreadySatisfying = existing.ok && sameAuthoredPlan(existing.document, document) && isSatisfyingReleasePlan({
+    release: existing.document,
+    changeId: bundle.bundle.change.id,
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id)
+  });
+  const action = existing.ok ? alreadySatisfying ? "unchanged" : "re-record" : "record";
+  const warnings = releaseWarnings({
+    changeId: latestChange.changeId,
+    tasks: taskgraph.document.tasks,
+    covers,
+    taskIds,
+    taskgraphPath: taskgraph.artifactPath,
+    document,
+    action,
+    ...existing.ok ? { previous: existing } : {}
+  });
+  if (hasFlag(context, "dry-run")) {
+    const dryRunAction = nextAction(
+      action === "unchanged" ? "legion ship" : "legion release plan --environment <env>",
+      action === "unchanged" ? "This change already carries a release plan with these criteria that satisfies the gate reading it; this dry run found nothing to record." : "This was a dry run and no release plan was written. release_observation_plan stays unmet until this command is run without --dry-run."
+    );
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        ...warnings.length === 0 ? {} : { warnings },
+        release: {
+          releaseId,
+          environment,
+          action,
+          covers,
+          healthCriteria,
+          rollbackPlan: { strategy: rollbackStrategy, criteria: rollbackCriteria },
+          releaseIntent
+        },
+        nextAction: dryRunAction,
+        diagnostics: []
+      },
+      [
+        "Release plan ready.",
+        `Dry run: ${action} a ${environment} release plan for ${latestChange.changeId}.`,
+        ...healthCriteria.map((value) => `  health    ${value}`),
+        `  rollback  ${rollbackStrategy}`,
+        ...rollbackCriteria.map((value) => `  trigger   ${value}`),
+        ...warnings.map((warning) => `Warning: ${warning.message}`),
+        "No release plan was written.",
+        renderNextAction(dryRunAction)
+      ].join("\n")
+    );
+  }
+  let written;
+  if (action !== "unchanged") {
+    const write = await writeRelease({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: existing.ok ? existing.revision.revision : 0,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document
+    });
+    if (!write.ok) {
+      return blockedRelease(
+        write.diagnostics,
+        nextAction("legion release plan", "The release plan could not be written. Correct the reported problem, then run this again."),
+        { change: { changeId: latestChange.changeId } }
+      );
+    }
+    written = write;
+  }
+  const record2 = written ?? (existing.ok ? existing : void 0);
+  const resultAction = nextAction(
+    "legion ship",
+    `The release plan for ${latestChange.changeId} is recorded. legion ship reads it back and reports whether release_observation_plan is satisfied.`
+  );
+  return success2(
+    {
+      ok: true,
+      status: action === "unchanged" ? "unchanged" : "planned",
+      change: { changeId: latestChange.changeId },
+      ...warnings.length === 0 ? {} : { warnings },
+      release: {
+        releaseId,
+        environment,
+        action,
+        covers,
+        healthCriteria,
+        rollbackPlan: { strategy: rollbackStrategy, criteria: rollbackCriteria },
+        releaseIntent,
+        artifactPath: record2?.artifactPath,
+        status: record2?.document.status
+      },
+      nextAction: resultAction,
+      diagnostics: []
+    },
+    [
+      action === "unchanged" ? `Already planned: a ${environment} release for ${latestChange.changeId}.` : `Planned a ${environment} release for ${latestChange.changeId}.`,
+      ...healthCriteria.map((value) => `  health    ${value}`),
+      `  rollback  ${rollbackStrategy}`,
+      ...rollbackCriteria.map((value) => `  trigger   ${value}`),
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(resultAction)
+    ].join("\n")
+  );
+}
+function sameAuthoredPlan(existing, next) {
+  const sameList = (left, right) => left.length === right.length && left.every((value, index) => value === right[index]);
+  return existing.environment === next.environment && existing.releaseIntent.path === next.releaseIntent.path && existing.rollbackPlan.strategy === next.rollbackPlan.strategy && sameList(existing.healthCriteria, next.healthCriteria) && sameList(existing.rollbackPlan.criteria, next.rollbackPlan.criteria) && sameList(
+    existing.taskRefs.map((taskId) => taskId),
+    next.taskRefs.map((taskId) => taskId)
+  );
+}
+function releaseWarnings(input) {
+  const warnings = [];
+  const derives = derivesShipGate(input.tasks, "release_observation_plan");
+  if (derives) {
+    const shortfall = releasePlanShortfall({
+      release: input.document,
+      changeId: input.changeId,
+      tasks: input.tasks,
+      taskIdFor: (task) => taskIdForContractId(task.id)
+    });
+    if (shortfall !== void 0) {
+      warnings.push({
+        code: "release_plan_gate_unmet",
+        message: `This plan is recorded and release_observation_plan will not be satisfied by it. legion ship reports: ${shortfall}`,
+        path: input.taskgraphPath
+      });
+    }
+  } else {
+    warnings.push({
+      code: "release_plan_gate_not_derived",
+      message: `No task of ${input.changeId} derives release_observation_plan, so this plan does not move any ship gate. It is a true governance fact and is preserved; the gate is derived by R3 work, and this change carries none.`,
+      path: input.taskgraphPath
+    });
+  }
+  const uncovered = input.taskIds.filter((taskId) => !input.covers.includes(taskId));
+  if (uncovered.length > 0) {
+    warnings.push({
+      code: "release_plan_partial_coverage",
+      message: `This plan observes ${input.covers.length} of ${input.taskIds.length} tasks and leaves ${uncovered.join(", ")} uncovered. release_observation_plan quantifies over the tasks of this change that derive it, which may be fewer than these; whether that leaves the gate unsatisfied is reported by release_plan_gate_unmet beside this, which is the gate's own answer about this exact plan rather than a prediction made here.`,
+      path: input.taskgraphPath
+    });
+  }
+  const previous = input.previous;
+  if (previous !== void 0 && previous.document.status !== "requested" && input.action !== "unchanged") {
+    warnings.push({
+      code: "release_plan_status_replaced",
+      message: `The release plan already on disk records status "${previous.document.status}". Recording this one replaces it with a fresh plan at status "requested": Legion keeps one release plan per change, so what that document recorded about the release already under way is superseded rather than kept beside it; its bytes remain in the artifact's revision chain. A release that failed or was taken back is refused here rather than warned about.`,
+      path: previous.artifactPath
+    });
+  }
+  return warnings;
+}
+function releaseDocument(input) {
+  const existing = input.existing;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    // `createdAt` is the instant the plan first existed and survives every
+    // re-plan, so nothing downstream reorders when a plan is rewritten.
+    createdAt: existing === void 0 ? input.plannedAt : existing.document.createdAt,
+    updatedAt: input.plannedAt,
+    kind: "release",
+    id: input.releaseId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    // `requested`, always. This verb plans; it does not deploy, and a status
+    // saying otherwise would be a claim about a release nobody performed. The
+    // deferred `legion release observe` is what moves it.
+    status: "requested",
+    environment: input.environment,
+    releaseIntent: input.releaseIntent,
+    // Re-parsed rather than cast: `taskIdForContractId` returns a branded id but
+    // `--covers` values come from argv, and a cast would put an unvalidated
+    // string where the gate's set comparison is the only thing that stops one
+    // plan answering for a task it never named.
+    taskRefs: input.covers.map((taskId) => taskIdSchema.parse(taskId)),
+    // Empty, deliberately, and read by nothing. These are the fields a
+    // post-deployment record populates: `approvalRefs` and `evidenceRefs` name
+    // what was decided and produced *during* the release, and
+    // `rollbackPlan.evidenceRefs` names what a rollback actually produced. A plan
+    // has none of that yet, and inventing values would put a claim in a
+    // governance artifact that nothing performed.
+    approvalRefs: [],
+    evidenceRefs: [],
+    healthCriteria: [...input.healthCriteria],
+    rollbackPlan: {
+      strategy: input.rollbackStrategy,
+      criteria: [...input.rollbackCriteria],
+      evidenceRefs: []
+    }
+  };
+}
+function blockedRelease(diagnostics, action, extras = {}) {
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      ...extras,
+      diagnostics,
+      nextAction: action
+    },
+    ["Release plan blocked.", renderDiagnostics(diagnostics), renderNextAction(action)].join("\n")
+  );
+}
+
 // packages/cli/src/commands/workflow/ad-hoc.ts
-import { readFile as readFile22 } from "node:fs/promises";
-import path42 from "node:path";
+import { readFile as readFile23 } from "node:fs/promises";
+import path46 from "node:path";
 
 // packages/cli/src/workflow/ad-hoc-taskgraph.ts
 function narrowedToPolicy(derived, policy) {
@@ -44155,7 +53503,7 @@ function commandParts(parts) {
 
 // packages/cli/src/commands/workflow/record.ts
 import { mkdir as mkdir13, writeFile as writeFile9 } from "node:fs/promises";
-import path41 from "node:path";
+import path45 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -44473,9 +53821,9 @@ async function runLearnWorkflow(context) {
   );
 }
 async function readLessonIndex(repositoryRoot) {
-  const indexPath = path42.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path46.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
-    const parsed = JSON.parse(await readFile22(indexPath, "utf8"));
+    const parsed = JSON.parse(await readFile23(indexPath, "utf8"));
     if (parsed.kind === "lesson_index" && Array.isArray(parsed.lessons)) return parsed;
   } catch {
   }
@@ -44603,8 +53951,8 @@ function renderLessonLine(record2) {
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
-import { readFile as readFile23, rm as rm7 } from "node:fs/promises";
-import path43 from "node:path";
+import { readFile as readFile24, rm as rm7 } from "node:fs/promises";
+import path47 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
 var CONFIDENCE_VALUES = /* @__PURE__ */ new Set(["researched", "inferred", "assumed"]);
@@ -45300,7 +54648,7 @@ async function runRetroWorkflow(context) {
   });
   if ("exitCode" in executed) return executed;
   if (dryRun) {
-    await rm7(path43.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
+    await rm7(path47.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
       recursive: true,
       force: true,
       maxRetries: 10,
@@ -45588,9 +54936,9 @@ function optionalStringInput(context, key) {
   return value.trim();
 }
 async function readMilestoneIndex(repositoryRoot) {
-  const indexPath = path43.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const indexPath = path47.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
   try {
-    const parsed = JSON.parse(await readFile23(indexPath, "utf8"));
+    const parsed = JSON.parse(await readFile24(indexPath, "utf8"));
     if (parsed.kind === "milestone_index" && Array.isArray(parsed.milestones)) return parsed;
   } catch {
   }
@@ -45798,10 +55146,10 @@ function milestoneProgressPayload(state) {
 }
 async function saveStagedRetro(context, runId) {
   const runArtifactPath2 = artifactPathSchema.parse(`.legion/project/workflow/retro/${runId}/workflow-run.json`);
-  const runPath = path43.join(context.repositoryRoot, ...runArtifactPath2.split("/"));
+  const runPath = path47.join(context.repositoryRoot, ...runArtifactPath2.split("/"));
   let run;
   try {
-    run = JSON.parse(await readFile23(runPath, "utf8"));
+    run = JSON.parse(await readFile24(runPath, "utf8"));
   } catch {
     return usageError(
       `legion retro --save ${runId} found no such run. Run legion retro first; it reports the id to save.`
@@ -45821,7 +55169,7 @@ async function saveStagedRetro(context, runId) {
   }
   let entry;
   try {
-    entry = JSON.parse(await readFile23(path43.join(context.repositoryRoot, ...entryPath.split("/")), "utf8"));
+    entry = JSON.parse(await readFile24(path47.join(context.repositoryRoot, ...entryPath.split("/")), "utf8"));
   } catch (error51) {
     return usageError(
       `legion retro --save ${runId} could not read ${entryPath}: ${error51 instanceof Error ? error51.message : String(error51)}`
@@ -45919,268 +55267,18 @@ function renderDerivedMetrics(metrics) {
   ];
 }
 
-// packages/cli/src/workflow/ship-gates.ts
-function evidenceItemVerdict(entries, taskId, itemId) {
-  const entry = latestEvidencePerTask(entries).get(taskId);
-  if (entry === void 0) return void 0;
-  for (const item of entry.evidence.items) {
-    if (item.id !== itemId) continue;
-    if (item.verdict === "pass") return "pass";
-    if (item.verdict === "fail") return "fail";
-  }
-  return void 0;
-}
-function hasEvidence(entries, taskId) {
-  const entry = latestEvidencePerTask(entries).get(taskId);
-  return entry !== void 0 && entry.evidence.items.length > 0;
-}
-function hasAcceptedReview2(reviews, taskId) {
-  return reviews.some(
-    (review) => review.document.status === "accepted" && review.document.taskId === taskId
-  );
-}
-function fromVerdict(verdict, itemId) {
-  if (verdict === "pass") return { status: "satisfied", reason: `Evidence records a passing ${itemId}.` };
-  if (verdict === "fail") return { status: "unsatisfied", reason: `Evidence records a failed ${itemId}.` };
-  return { status: "unevaluable", reason: `No ${itemId} evidence was recorded for this task.` };
-}
-function evaluateGate(input) {
-  const { gate, taskId, entries, reviews } = input;
-  switch (gate.id) {
-    case "task_contract":
-    case "current_task_contract_or_small_change_record":
-      return { status: "satisfied", reason: "A typed task contract defines this work." };
-    case "deterministic_verification":
-      return fromVerdict(evidenceItemVerdict(entries, taskId, "declared-verification"), "declared-verification");
-    case "scoped_implementer_run":
-      return fromVerdict(evidenceItemVerdict(entries, taskId, "diff-reconciliation"), "diff-reconciliation");
-    case "evidence_note":
-    case "evidence_bundle_or_log":
-      return hasEvidence(entries, taskId) ? { status: "satisfied", reason: "A reviewable evidence bundle was recorded." } : { status: "unsatisfied", reason: "No evidence bundle exists for this task." };
-    case "lightweight_independent_review":
-    case "task_level_independent_review":
-    case "explicit_human_approval":
-      return hasAcceptedReview2(reviews, taskId) ? { status: "satisfied", reason: "An accepted review decision exists for this task." } : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
-    case "protected_oracle":
-      return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
-    default:
-      return {
-        status: "unevaluable",
-        reason: "Legion does not yet produce evidence for this gate."
-      };
-  }
-}
-function deriveShipGates(input) {
-  const gates = [];
-  for (const task of input.tasks) {
-    const taskId = input.taskIdFor(task);
-    const derived = deriveGateSet({
-      tier: task.risk.tier,
-      gatesByTier: DEFAULT_RISK_POLICY.gatesByTier
-    });
-    for (const gate of derived) {
-      const outcome = evaluateGate({ gate, task, taskId, entries: input.entries, reviews: input.reviews });
-      gates.push({ gate: gate.id, label: gate.label, taskId, ...outcome });
-    }
-  }
-  const satisfied = gates.filter((entry) => entry.status === "satisfied").length;
-  const unsatisfied = gates.filter((entry) => entry.status === "unsatisfied").length;
-  const unevaluable = gates.filter((entry) => entry.status === "unevaluable").length;
-  return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 && unevaluable === 0 };
-}
-
-// packages/cli/src/commands/workflow/ship.ts
-var SHIP_HELP = [
-  "legion ship [--canary] [--allow-legacy-evidence]",
-  "",
-  "Run the ship readiness gate. This layer does not publish or release.",
-  "",
-  "Options:",
-  "  --canary                  Report canary readiness alongside the gate.",
-  "  --allow-legacy-evidence   Accept evidence written before requirement and oracle",
-  "                            linking. `legion dev change archive` applies the same",
-  "                            check, so pass it there too."
-].join("\n");
-var REBUILDABLE = /* @__PURE__ */ new Set(["missing_evidence_index", "missing_accepted_evidence"]);
-function recoveryFor(diagnostics) {
-  if (diagnostics.every((diagnostic3) => REBUILDABLE.has(diagnostic3.code))) {
-    return nextAction(
-      "legion build",
-      "The task has no accepted evidence yet; building produces it with the requirement and oracle links this gate checks."
-    );
-  }
-  if (diagnostics.every((diagnostic3) => diagnostic3.code === "orphan_evidence")) {
-    return nextAction(
-      "legion ship --allow-legacy-evidence",
-      "This evidence carries no requirement or oracle link. Rebuilding cannot repair it \u2014 a rebuild adds a new entry and leaves the old one in the index. If it predates linking, this accepts it; if it is current evidence that lost its links, the index is corrupt and has to be corrected rather than allowed."
-    );
-  }
-  const paths = [...new Set(diagnostics.map((diagnostic3) => diagnostic3.source?.path).filter(isPath))];
-  const where = paths.length === 0 ? "the planned artifacts" : paths.join(", ");
-  return nextAction(
-    "legion ship",
-    `Requirement, oracle and task links must resolve before a change can ship. No command rewrites them: correct ${where} by hand, then rerun this to confirm the defect is gone.`
-  );
-}
-function isPath(value) {
-  return value !== void 0 && value.length > 0;
-}
-async function handleShipWorkflow(context) {
-  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
-    return helpResult(SHIP_HELP);
-  }
-  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
-  if (!latestChange.ok) {
-    const action = nextAction("legion plan 1", "Shipping requires a planned change.");
-    return blockedShip(latestChange.diagnostics, action);
-  }
-  const evidence = await readEvidenceIndex({
-    repositoryRoot: context.repositoryRoot,
-    changeId: latestChange.changeId
-  });
-  if (!evidence.ok) {
-    return blockedShip(evidence.diagnostics, nextAction("legion build", "Shipping requires accepted build evidence."));
-  }
-  const reviews = await listReviewDecisionsForChange({
-    repositoryRoot: context.repositoryRoot,
-    changeId: latestChange.changeId
-  });
-  if (!reviews.ok) {
-    return blockedShip(reviews.diagnostics, nextAction("legion review", "Shipping requires an accepted review."));
-  }
-  const acceptedReview = reviews.reviews.find((review) => review.document.status === "accepted");
-  const acceptedEvidence = evidence.document.entries.length > 0 && evidence.document.entries.every((entry) => entry.acceptance.status === "accepted");
-  if (acceptedReview === void 0 || !acceptedEvidence) {
-    return blockedShip(
-      [
-        {
-          code: "review_evidence_missing",
-          message: "No accepted review and accepted evidence pair was found. Run legion review --accept first."
-        }
-      ],
-      nextAction("legion review --accept", "Shipping requires accepted review evidence.")
-    );
-  }
-  const taskgraph = await readTaskGraph({
-    repositoryRoot: context.repositoryRoot,
-    changeId: latestChange.changeId
-  });
-  if (!taskgraph.ok) {
-    return blockedShip(taskgraph.diagnostics, nextAction("legion plan 1", "Ship readiness requires a readable task graph."));
-  }
-  let traceabilityWarnings = [];
-  const traceability = await validateChangeTraceability({
-    repositoryRoot: context.repositoryRoot,
-    changeId: latestChange.changeId
-  });
-  if (!traceability.ok) {
-    const { blocking, allowed } = partitionTraceabilityDiagnostics(traceability.diagnostics, {
-      allowLegacyEvidence: hasFlag(context, "allow-legacy-evidence")
-    });
-    const legacyEvidence = allowed;
-    if (blocking.length > 0) {
-      return blockedShip(
-        blocking.map((diagnostic3) => ({
-          code: "change_traceability_broken",
-          message: diagnostic3.message,
-          path: diagnostic3.source?.path ?? taskgraph.artifactPath
-        })),
-        recoveryFor(blocking)
-      );
-    }
-    traceabilityWarnings = legacyEvidence.map((diagnostic3) => ({
-      code: "legacy_evidence_unlinked",
-      message: `${diagnostic3.message} This evidence predates requirement and oracle linking; rebuilding the task will add it.`
-    }));
-  }
-  const gateReport = deriveShipGates({
-    tasks: taskgraph.document.tasks,
-    taskIdFor: (task) => taskIdForContractId(task.id),
-    entries: evidence.document.entries,
-    reviews: reviews.reviews
-  });
-  if (!gateReport.ready) {
-    return blockedShip(
-      gateReport.gates.filter((gate) => gate.status !== "satisfied").map((gate) => ({
-        code: gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
-        message: `${gate.label} is not satisfied for ${gate.taskId}: ${gate.reason}`,
-        path: evidence.artifactPath
-      })),
-      nextAction(
-        "legion build",
-        `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
-      )
-    );
-  }
-  const unevaluable = gateReport.gates.filter((gate) => gate.status === "unevaluable");
-  return {
-    exitCode: 0,
-    payload: {
-      ok: true,
-      status: "ready",
-      change: {
-        changeId: latestChange.changeId
-      },
-      review: {
-        reviewId: acceptedReview.document.id,
-        artifactPath: acceptedReview.artifactPath
-      },
-      evidenceIndex: {
-        artifactPath: evidence.artifactPath,
-        acceptedEntries: evidence.document.entries.length
-      },
-      ...traceabilityWarnings.length === 0 ? {} : { warnings: traceabilityWarnings },
-      riskGates: {
-        satisfied: gateReport.satisfied,
-        unsatisfied: gateReport.unsatisfied,
-        unevaluable: gateReport.unevaluable,
-        unevaluableGates: [...new Set(unevaluable.map((gate) => gate.gate))]
-      },
-      diagnostics: []
-    },
-    human: [
-      "Ship ready.",
-      // Shown, not only recorded. `writeResult` prints `human` for a terminal
-      // run, so a warning that lived solely in the payload was invisible to
-      // exactly the operator who opted into the allowance.
-      ...traceabilityWarnings.map((warning) => `warning: ${warning.message}`),
-      `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
-      ...unevaluable.length === 0 ? [] : [
-        `Legion cannot yet produce evidence for: ${[...new Set(unevaluable.map((gate) => gate.gate))].join(", ")}.`,
-        "These gates are required by the change's risk tier but are not proven."
-      ],
-      "No publish or release action was performed."
-    ].join("\n")
-  };
-}
-function blockedShip(diagnostics, action) {
-  return failure(
-    {
-      ok: false,
-      status: "blocked",
-      diagnostics,
-      nextAction: action
-    },
-    [
-      "Ship blocked.",
-      diagnostics.map((diagnostic3) => diagnostic3 && typeof diagnostic3 === "object" && "message" in diagnostic3 ? String(diagnostic3.message) : String(diagnostic3)).join("\n"),
-      renderNextAction(action)
-    ].join("\n")
-  );
-}
-
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat9 } from "node:fs/promises";
-import path45 from "node:path";
+import path49 from "node:path";
 
 // packages/cli/src/workflow/settings-check.ts
-import { readFile as readFile24 } from "node:fs/promises";
-import path44 from "node:path";
+import { readFile as readFile25 } from "node:fs/promises";
+import path48 from "node:path";
 var SETTINGS_FILE = "settings.json";
 async function checkSettings(repositoryRoot) {
   let text;
   try {
-    text = await readFile24(path44.join(repositoryRoot, SETTINGS_FILE), "utf8");
+    text = await readFile25(path48.join(repositoryRoot, SETTINGS_FILE), "utf8");
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
       return { status: "absent", path: SETTINGS_FILE, diagnostics: [], warnings: [] };
@@ -46345,7 +55443,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat9(path45.join(root, relativePath));
+    await stat9(path49.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -46411,7 +55509,66 @@ var DECLARED = Object.freeze({
   status: [],
   plan: ["auto-refine", "dry-run", "from-roadmap"],
   build: ["allow-dirty", "dry-run", "executor"],
-  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
+  // `approver` takes a value, so it must NOT also go in VALUELESS_OPTIONS: a
+  // valueless declaration would make `--approver dasbl` bind nothing and read as
+  // absent, which for this flag means an R3 accept refusing an approver the
+  // operator did name.
+  //
+  // `--domain` takes a value too, and is additionally *repeatable* — `--domain
+  // architecture --domain security` — which `parseCliArgs` records in `repeated`.
+  // See the comment there for why comma-splitting was refused. It must not go in
+  // VALUELESS_OPTIONS for the same reason `--approver` must not, and nothing may
+  // read it with `hasFlag`.
+  review: ["accept", "approver", "auto", "domain", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
+  // One list for every `legion approve <subject>`, because
+  // `undeclaredOptionError` runs on the stripped context before the handler and
+  // cannot see which subject was named. The boundary between subjects is
+  // therefore the handler's, and `handleApproveWorkflow` enforces it: each
+  // subject owns exactly one narrowing flag — `spec` owns `--requirement`,
+  // `oracle` owns `--oracle`, `surface` owns `--path` — and every subject
+  // refuses the other two by name. Accepted here and refused there — the
+  // alternative is a flag the operator typed being ignored in silence, which is
+  // how a command reports success for a thing it did not do.
+  //
+  // `--oracle` takes a value, so like `--approver` it must NOT also go in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--oracle orc_x` bind
+  // nothing and read as absent, which here means approving the change's whole
+  // oracle set when the operator named one.
+  approve: ["approver", "dry-run", "oracle", "path", "requirement"],
+  // One list for one flat verb: `legion attest <kind>` takes a positional rather
+  // than a subject tree, and every kind reads the identical flag set, so there
+  // is no per-subject boundary for the handler to enforce.
+  //
+  // `--source`, `--covers`, `--verdict`, `--attested-by`, `--statement` and
+  // `--waiver-reason` all take values, so none of them may also appear in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--attested-by dasbl`
+  // bind nothing and read as absent, which here means an attestation recorded
+  // against no resolvable identity. `--source` and `--covers` are additionally
+  // repeatable, which `parseCliArgs` records in `repeated` — see the comment
+  // there for why comma-splitting was refused.
+  //
+  // This release adds no VALUELESS_OPTIONS entry at all: `--dry-run` and
+  // `--json` are already there, and the verb has no other boolean.
+  attest: ["attested-by", "covers", "dry-run", "source", "statement", "verdict", "waiver-reason"],
+  // One list for every `legion release <subject>`, on `approve`'s rule:
+  // `undeclaredOptionError` runs on the stripped context before the handler and
+  // cannot see which subject was named. With one subject there is no per-subject
+  // boundary to enforce yet — the second subject (`observe`, deferred) is where
+  // `legion approve`'s `SUBJECT_OPTIONS` cross-refusal arrives, and shipping that
+  // machinery now would ship it with nothing to own.
+  //
+  // Every flag but `--dry-run` takes a value, so none of them may also appear in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--environment staging`
+  // bind nothing and read as absent, which here means a plan refused for an
+  // environment the operator did name. `--health-criterion`, `--rollback-criterion`
+  // and `--covers` are additionally repeatable, which `parseCliArgs` records in
+  // `repeated`.
+  //
+  // **This release adds no VALUELESS_OPTIONS entry at all**: `--dry-run` and
+  // `--json` are already there and this verb has no other boolean. Saying so is
+  // required rather than optional, because a boolean missing from that set binds
+  // the next argv token as its value.
+  release: ["covers", "dry-run", "environment", "health-criterion", "rollback-criterion", "rollback-strategy"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],
@@ -46452,6 +55609,9 @@ var COMMAND_SPECIFIC_HELP = /* @__PURE__ */ new Set([
   "plan",
   "build",
   "review",
+  "approve",
+  "attest",
+  "release",
   "validate",
   "doctor",
   "quick",
@@ -46487,6 +55647,12 @@ async function handleWorkflowCommand(context) {
       return handleBuildWorkflow(commandContext);
     case "review":
       return handleReviewWorkflow(commandContext);
+    case "approve":
+      return handleApproveWorkflow(commandContext);
+    case "attest":
+      return handleAttestWorkflow(commandContext);
+    case "release":
+      return handleReleaseWorkflow(commandContext);
     case "ship":
       return handleShipWorkflow(commandContext);
     case "validate":
@@ -46529,7 +55695,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path46.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path50.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -46581,8 +55747,8 @@ function stringMapValue(map2, key) {
   const value = map2.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path46.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path46.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path50.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path50.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

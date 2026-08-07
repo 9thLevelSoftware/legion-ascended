@@ -230,6 +230,50 @@ test("an invalid answer is rejected without advancing the cursor", async (t) => 
   assert.equal(after.session.answered, before.session.answered);
 });
 
+test("an optional single-choice node can be declined through --skip, not only through --intake", async (t) => {
+  // The two entrances disagreed about what "optional" means. `handleBatchIntake`
+  // records `SKIPPED_VALUE` for an unanswered optional node without consulting
+  // `validateAnswer` at all, while `handleSkip` routes through it — and the
+  // per-kind branches there judge `""` as a *value*, so it was not one of a
+  // `single` node's options and not a boolean. `legion start --skip` therefore
+  // exited 1 on a question the graph itself marked declinable.
+  //
+  // It was unreachable until this release: `pref-notes` was the only optional
+  // node and it is free-text, which already returned `SKIPPED_VALUE` for the
+  // empty string. The verification-surface question is the first optional
+  // `single`, so the latent defect and the node that reaches it arrive together.
+  //
+  // The pure-graph driver in tests/intake-question-graph would not have caught
+  // this: `driveTo` records `""` directly and never calls `validateAnswer`, which
+  // is the same bypass the batch entrance takes.
+  const { run } = await scratchRepo(t);
+
+  for (let guard = 0; guard < 200; guard += 1) {
+    const next = parseJsonOutput(await run("start", "--next", "--json", "--created-at", CREATED_AT));
+    if (next.status === "complete") throw new Error("the surface question was never asked");
+
+    const nodeId = next.question.nodeId;
+    if (nodeId === "req-1-ac-1-surface-kind") {
+      assert.equal(next.question.kind, "single");
+      assert.equal(next.question.required, false);
+
+      const skipped = await run("start", "--skip", "--json");
+      assert.equal(skipped.exitCode, 0, skipped.stderr);
+
+      // A skip is an answer, so the cursor moves past it and the three follow-ups
+      // it gates never become applicable.
+      const after = parseJsonOutput(await run("start", "--next", "--json"));
+      assert.notEqual(after.question?.nodeId, "req-1-ac-1-surface-kind");
+      assert.notEqual(after.question?.nodeId, "req-1-ac-1-surface-interface");
+      return;
+    }
+
+    const recorded = await run("start", "--answer", `${nodeId}=${ANSWERS[nodeId]}`);
+    assert.equal(recorded.exitCode, 0, `${nodeId}: ${recorded.stderr}`);
+  }
+  throw new Error("the interview did not terminate");
+});
+
 test("--back undoes the most recent answer", async (t) => {
   const { run } = await scratchRepo(t);
   await run("start", "--next", "--json", "--created-at", CREATED_AT);

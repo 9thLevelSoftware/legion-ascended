@@ -12,6 +12,23 @@ export interface ParsedCliArgs {
    * and the handler runs the branch the caller did not ask for.
    */
   readonly invalidOptions: readonly string[];
+  /**
+   * Every string-valued occurrence of a repeatable option, in argv order.
+   *
+   * `options` is a `Map`, so a second `--source b` replaces the first and the
+   * command records an attestation citing one file when the operator named two.
+   * Comma-splitting was refused for the reason `legion approve spec` already
+   * records for `--requirement` — a second parser to keep honest — and it is
+   * strictly worse for paths, because a comma is a legal filename character on
+   * every platform Legion runs on, so the split would be *wrong* rather than
+   * merely redundant.
+   *
+   * Additive: `options` keeps last-wins and no existing handler moves by one
+   * byte. Optional on the type so the several `.mjs` suites that hand-build a
+   * `{positionals, options}` literal keep working — `repeatedStringOptions`
+   * falls back to the single value, which is what a hand-built context means.
+   */
+  readonly repeated?: ReadonlyMap<string, readonly string[]>;
 }
 
 export interface CliContext {
@@ -86,7 +103,14 @@ const VALUELESS_OPTIONS = new Set([
 export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
   const positionals: string[] = [];
   const options = new Map<string, string | true>();
+  const repeated = new Map<string, string[]>();
   const invalidOptions: string[] = [];
+
+  const record = (key: string, value: string): void => {
+    const existing = repeated.get(key);
+    if (existing === undefined) repeated.set(key, [value]);
+    else existing.push(value);
+  };
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -110,6 +134,7 @@ export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
         continue;
       }
       options.set(key, value);
+      record(key, value);
       continue;
     }
 
@@ -121,6 +146,7 @@ export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
     const next = argv[index + 1];
     if (next !== undefined && !next.startsWith("--")) {
       options.set(withoutPrefix, next);
+      record(withoutPrefix, next);
       index += 1;
       continue;
     }
@@ -128,7 +154,7 @@ export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
     options.set(withoutPrefix, true);
   }
 
-  return { positionals, options, invalidOptions };
+  return { positionals, options, invalidOptions, repeated };
 }
 
 /** The usage error for `--flag=value` on a flag that takes no value, if any. */
@@ -147,6 +173,20 @@ export function hasFlag(context: CliContext, key: string): boolean {
 export function stringOption(context: CliContext, key: string): string | undefined {
   const value = context.args.options.get(key);
   return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * Every value the operator gave one option, in argv order.
+ *
+ * The `?.` is load-bearing rather than defensive: several `.mjs` suites build a
+ * `CliContext` by hand with `{positionals, options}` and no `repeated`, and a
+ * bare `.get` there would throw out of a command those tests are not about.
+ */
+export function repeatedStringOptions(context: CliContext, key: string): readonly string[] {
+  const recorded = context.args.repeated?.get(key);
+  if (recorded !== undefined) return recorded;
+  const single = stringOption(context, key);
+  return single === undefined ? [] : [single];
 }
 
 export function requiredStringOption(context: CliContext, key: string): string | CliResult {

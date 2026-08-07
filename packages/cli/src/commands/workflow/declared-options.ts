@@ -42,7 +42,66 @@ const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   status: [],
   plan: ["auto-refine", "dry-run", "from-roadmap"],
   build: ["allow-dirty", "dry-run", "executor"],
-  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
+  // `approver` takes a value, so it must NOT also go in VALUELESS_OPTIONS: a
+  // valueless declaration would make `--approver dasbl` bind nothing and read as
+  // absent, which for this flag means an R3 accept refusing an approver the
+  // operator did name.
+  //
+  // `--domain` takes a value too, and is additionally *repeatable* — `--domain
+  // architecture --domain security` — which `parseCliArgs` records in `repeated`.
+  // See the comment there for why comma-splitting was refused. It must not go in
+  // VALUELESS_OPTIONS for the same reason `--approver` must not, and nothing may
+  // read it with `hasFlag`.
+  review: ["accept", "approver", "auto", "domain", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
+  // One list for every `legion approve <subject>`, because
+  // `undeclaredOptionError` runs on the stripped context before the handler and
+  // cannot see which subject was named. The boundary between subjects is
+  // therefore the handler's, and `handleApproveWorkflow` enforces it: each
+  // subject owns exactly one narrowing flag — `spec` owns `--requirement`,
+  // `oracle` owns `--oracle`, `surface` owns `--path` — and every subject
+  // refuses the other two by name. Accepted here and refused there — the
+  // alternative is a flag the operator typed being ignored in silence, which is
+  // how a command reports success for a thing it did not do.
+  //
+  // `--oracle` takes a value, so like `--approver` it must NOT also go in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--oracle orc_x` bind
+  // nothing and read as absent, which here means approving the change's whole
+  // oracle set when the operator named one.
+  approve: ["approver", "dry-run", "oracle", "path", "requirement"],
+  // One list for one flat verb: `legion attest <kind>` takes a positional rather
+  // than a subject tree, and every kind reads the identical flag set, so there
+  // is no per-subject boundary for the handler to enforce.
+  //
+  // `--source`, `--covers`, `--verdict`, `--attested-by`, `--statement` and
+  // `--waiver-reason` all take values, so none of them may also appear in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--attested-by dasbl`
+  // bind nothing and read as absent, which here means an attestation recorded
+  // against no resolvable identity. `--source` and `--covers` are additionally
+  // repeatable, which `parseCliArgs` records in `repeated` — see the comment
+  // there for why comma-splitting was refused.
+  //
+  // This release adds no VALUELESS_OPTIONS entry at all: `--dry-run` and
+  // `--json` are already there, and the verb has no other boolean.
+  attest: ["attested-by", "covers", "dry-run", "source", "statement", "verdict", "waiver-reason"],
+  // One list for every `legion release <subject>`, on `approve`'s rule:
+  // `undeclaredOptionError` runs on the stripped context before the handler and
+  // cannot see which subject was named. With one subject there is no per-subject
+  // boundary to enforce yet — the second subject (`observe`, deferred) is where
+  // `legion approve`'s `SUBJECT_OPTIONS` cross-refusal arrives, and shipping that
+  // machinery now would ship it with nothing to own.
+  //
+  // Every flag but `--dry-run` takes a value, so none of them may also appear in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--environment staging`
+  // bind nothing and read as absent, which here means a plan refused for an
+  // environment the operator did name. `--health-criterion`, `--rollback-criterion`
+  // and `--covers` are additionally repeatable, which `parseCliArgs` records in
+  // `repeated`.
+  //
+  // **This release adds no VALUELESS_OPTIONS entry at all**: `--dry-run` and
+  // `--json` are already there and this verb has no other boolean. Saying so is
+  // required rather than optional, because a boolean missing from that set binds
+  // the next argv token as its value.
+  release: ["covers", "dry-run", "environment", "health-criterion", "rollback-criterion", "rollback-strategy"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],

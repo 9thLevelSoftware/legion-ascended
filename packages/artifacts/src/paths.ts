@@ -2,13 +2,17 @@ import { lstat, mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  approvalIdSchema,
   artifactPathSchema,
+  attestationIdSchema,
   changeIdSchema,
   oracleIdSchema,
   requirementIdSchema,
   reviewIdSchema,
   runIdSchema,
+  type ApprovalId,
   type ArtifactPath,
+  type AttestationId,
   type ArtifactRole,
   type ChangeId,
   type OracleId,
@@ -86,6 +90,8 @@ export interface ArtifactPathForRoleInput {
   readonly oracleId?: OracleId | string;
   readonly runId?: RunId | string;
   readonly reviewId?: ReviewId | string;
+  readonly approvalId?: ApprovalId | string;
+  readonly attestationId?: AttestationId | string;
 }
 
 export class ArtifactPathError extends Error {
@@ -209,6 +215,14 @@ function parseReviewId(input: ReviewId | string | undefined): ReviewId {
   return reviewIdSchema.parse(input);
 }
 
+function parseApprovalId(input: ApprovalId | string | undefined): ApprovalId {
+  return approvalIdSchema.parse(input);
+}
+
+function parseAttestationId(input: AttestationId | string | undefined): AttestationId {
+  return attestationIdSchema.parse(input);
+}
+
 export function artifactPathForRole(input: ArtifactPathForRoleInput): ArtifactPath {
   switch (input.role) {
     case "project-manifest":
@@ -258,6 +272,24 @@ export function artifactPathForRole(input: ArtifactPathForRoleInput): ArtifactPa
       const changeId = parseChangeId(input.changeId);
       const reviewId = parseReviewId(input.reviewId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/reviews/${reviewId}.json`);
+    }
+    case "approval": {
+      const changeId = parseChangeId(input.changeId);
+      const approvalId = parseApprovalId(input.approvalId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/approvals/${approvalId}.json`);
+    }
+    case "attestation": {
+      const changeId = parseChangeId(input.changeId);
+      const attestationId = parseAttestationId(input.attestationId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/attestations/${attestationId}.json`);
+    }
+    case "release": {
+      // Singular per change, like `taskgraph`, `evidence-index` and `archive`,
+      // so the path takes only a `changeId` and `ArtifactPathForRoleInput` gains
+      // no `releaseId` field. The document still carries a `rel_` id — the path
+      // is the identity, and the id is what a payload can name.
+      const changeId = parseChangeId(input.changeId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/release.json`);
     }
     case "archive": {
       const changeId = parseChangeId(input.changeId);

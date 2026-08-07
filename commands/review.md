@@ -32,6 +32,62 @@ The CLI owns the verification report, the gate set, and human acceptance.
 `legion review --json` reports what it verified; `legion review --accept` records
 acceptance, and a passing review still requires it.
 
+When a task in the change derives the `explicit_human_approval` risk gate — R3
+under the shipped policy — `--accept` and `--auto` also require
+`--approver <id>`, naming a human recorded in `project.policy.decisionOwners`.
+The CLI refuses any other value and infers no approver from the environment, from
+git config, or from a project having a single owner. Do not supply a value the
+operator did not give you: an acceptance recorded against a defaulted identity is
+not a human approval, and the ship gate reads it as one.
+
+`--dry-run` resolves `--approver` as well, so probing a command line before
+running it reports the same refusal rather than a green answer the accept will
+later reject.
+
+`--domain <d>` records which competence the review was performed in:
+`implementation`, `architecture`, `security`, `performance` or `operability`.
+Repeat the flag for more than one — `--domain architecture --domain security` —
+rather than passing a comma-separated value, which the CLI does not split. This
+is the CLI's own flag and it is unrelated to the domain vocabulary the host-side
+review panel uses further down this file.
+
+`legion ship`'s `architecture_or_security_review` gate reads `architecture` and
+`security`, and reports `unevaluable` for a change whose reviews record no domain
+at all — an accepted review says something other than the implementer looked at
+the work, and this gate asks whether an architecture or security competence did.
+When a task derives that gate, a submit or an accept that records no such domain
+carries a `review_domain_not_recorded` warning naming the flag; the accept is
+warned rather than refused, because the approval and the acceptance it records are
+real governance facts either way.
+
+`--domain` is read **only on a run that performs a review**. `legion review
+--accept --domain architecture` and `--reject-reason ... --domain ...` are usage
+errors, not silently ignored: a domain stamped at accept time would record a
+signature rather than a competence. Declare it when the review runs, then accept.
+Do not supply a domain the operator did not give you.
+
+`--accept` also records the change's **whole-change acceptance** — the field
+`legion ship` reads for the `whole_change_acceptance_evidence` gate — and the
+value depends on what the run could establish. With `--approver` and clean
+change traceability it records `accepted`; without an approver it records
+`ready`, which means every task's evidence was accepted and nobody signed off on
+the change as a whole; with a blocking traceability defect it records `blocked`
+and the defect's own message. All three are in the `acceptance` object of the
+JSON payload. Report what it says; do not restate `ready` as accepted.
+
+An accept that recorded `ready` cannot be corrected by rerunning the accept: the
+accept flipped every covering review from `submitted` to `accepted`, and an
+accept refuses evidence no clean *submitted* review covers. Run `legion review`
+first, then the accept with `--approver`. The same is true of every state a
+previous accept put the change in, and `legion ship` names `legion review` as the
+route out of each of them.
+
+If the accept exits non-zero with `change_inputs_not_repointed`, the acceptance
+itself reached disk and the artifact inputs that pin the change proposal did not.
+Run the `legion dev change repoint <changeId>` the payload's `nextAction` names.
+It is idempotent and writes nothing when the pins are already current. Do not
+route this to `legion validate`, which reports the repository as valid.
+
 What stays here is the panel: intent detection over natural-language invocation,
 review agent selection, the review cycle with its glob-routed fix agents, and the
 security-only output mode. Never record an acceptance the operator did not give,

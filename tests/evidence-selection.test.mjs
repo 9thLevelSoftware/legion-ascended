@@ -54,6 +54,14 @@ test("one entry per task is returned", () => {
 
 // --- the behaviour that was permanently broken -----------------------------
 
+// No `change` facts are passed, though `deriveShipGates` now requires them in
+// TypeScript. This file imports compiled JavaScript, where that requirement is
+// unenforced, and the omission is the point: it is a second caller standing in
+// for the runtime case where `legion ship` degraded to absent facts because a
+// change artifact would not read. These three tests do not, however, hold the
+// guard that makes that safe — no gate reads a change fact yet, so they pass
+// with the guard removed. `normalizeChangeFacts` is tested directly in
+// tests/ship-risk-gates.test.mjs; do not read this omission as coverage of it.
 function gatesFor(entries) {
   return deriveShipGates({
     tasks: [{ id: "ctr_phase-1", risk: { tier: "R2", reasons: ["test"] } }],

@@ -9,7 +9,10 @@ export const WORKFLOW_COMMANDS: readonly CommandHelpEntry[] = Object.freeze([
   { name: "map", summary: "Generate, refresh, check, or query codebase context." },
   { name: "plan", summary: "Plan a phase or change into typed task contracts." },
   { name: "build", summary: "Execute approved task contracts through a runtime driver." },
+  { name: "approve", summary: "Record a human decision about the change's delta specs." },
+  { name: "attest", summary: "Record a human assertion that pinned files are this change's evidence." },
   { name: "review", summary: "Review task outputs with verification and independent gates." },
+  { name: "release", summary: "Plan how this change's release is observed and taken back." },
   { name: "ship", summary: "Run release readiness, promotion, and observation gates." },
   { name: "retro", summary: "Record retrospective evidence for future planning." },
   { name: "status", summary: "Show workflow state and the next recommended action." },
@@ -29,7 +32,10 @@ export const DEV_COMMANDS: readonly CommandHelpEntry[] = Object.freeze([
   { name: "board", summary: "Direct operational Kanban, event, claim, and approval operations." },
   { name: "migrate", summary: "Direct legacy import, apply, and rollback operations." },
   { name: "evals", summary: "Release-grade sealed workflow eval operations." },
-  { name: "release", summary: "GA checklist and rollback-policy verifier operations." },
+  // Sharpened so the two `release` names are legible side by side: this one runs
+  // GA scripts against the packaged CLI's own source root and knows nothing about
+  // a change, and the workflow `legion release` writes a change's observation plan.
+  { name: "release", summary: "GA checklist and rollback-policy verifier operations for this repository." },
   { name: "worker", summary: "Validate and inspect worker bundles for extension authors." }
 ]);
 

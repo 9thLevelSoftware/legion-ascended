@@ -1,30 +1,69 @@
 import {
   LEGION_PROJECT_ROOT,
+  loadChangeBundle,
+  partitionTraceabilityDiagnostics,
+  readApproval,
   readEvidenceIndex,
   readTaskGraph,
+  repairChangeProposalPins,
+  stableProtocolJson,
+  updateChangeAcceptance,
+  validateChangeTraceability,
+  writeApproval,
   writeEvidenceIndex,
   writeReviewDecision,
   listReviewDecisionsForChange,
+  type ApprovalSuccess,
   type EvidenceIndexEntry,
-  type ReviewDecisionSuccess
+  type ReviewDecisionSuccess,
+  type UpdateChangeAcceptanceFailure,
+  type UpdateChangeAcceptanceSuccess
 } from "@legion/artifacts";
 import {
   LEGION_PROTOCOL_VERSION,
+  buildIdempotencyKey,
+  reviewDomainSchema,
+  type AcceptanceState,
+  type Actor,
+  type Approval,
   type ArtifactPath,
   type EvidenceId,
   type ReviewDecision,
+  type ReviewDomain,
   type ReviewFinding,
   type ReviewId,
-  type TaskContract
+  type TaskContract,
+  type UtcTimestamp
 } from "@legion/protocol";
 
-import { failure, hasFlag, helpResult, stringOption, success, usageError, type CliContext, type CliResult } from "../../runtime.js";
+import {
+  failure,
+  hasFlag,
+  helpResult,
+  repeatedStringOptions,
+  stringOption,
+  success,
+  usageError,
+  type CliContext,
+  type CliResult,
+  type CliWarning
+} from "../../runtime.js";
+import {
+  describeDecisionOwners,
+  requiresDomainReview,
+  requiresHumanApproval,
+  resolveApprover,
+  PROJECT_MANIFEST_PATH
+} from "../../workflow/approver.js";
+import { DOMAIN_REVIEW_GATE_DOMAINS, isDomainReviewSatisfying } from "../../workflow/ship-gates.js";
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
+import { loadWorkflowProject } from "../../workflow/context.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionFinding, type ExecutionResult, type ExecutionReviewVerdicts } from "../../workflow/executor/index.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import {
   absoluteArtifactPath,
+  approvalIdForSubject,
   reviewIdForChange,
   reviewRunArtifactPath,
   runArtifactPath,
@@ -32,19 +71,63 @@ import {
   taskIdForContractId
 } from "../../workflow/run-artifacts.js";
 import { latestEvidenceEntries } from "../../workflow/evidence-selection.js";
+import { acceptanceBaselineFromEvidence } from "../../workflow/acceptance-baseline.js";
+import { loadOracleFacts } from "../../workflow/change-planes.js";
 import { runGuardedExecution } from "../../workflow/guarded-execution.js";
 import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
 import { findLatestWorkflowChangeId, listWorkflowChanges } from "../../workflow/state.js";
 import { handleBuildWorkflow } from "./build.js";
 
-const REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--reject-reason <text>] [--auto] [--max-cycles <n>]
+const REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--domain <d>]... [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
 
 Review collected build evidence. A submitted passing review still requires explicit human acceptance.
 
+--approver names a human decision owner recorded in .legion/project/project.json. It is
+required when a task in the change derives the explicit_human_approval risk gate.
+
+--domain names the competence this review was performed in: implementation,
+architecture, security, performance or operability. Repeat it for more than one. It is
+read only on a run that performs a review — legion review --accept refuses it, because a
+domain is declared when the review happens rather than when it is signed. legion ship's
+architecture_or_security_review gate reads architecture and security, and reports
+unevaluable for a review that records no domain at all.
+
+--accept also records the change's whole-change acceptance, which legion ship reads:
+"accepted" with an approver and clean traceability, "ready" without an approver, and
+"blocked" with the defect named when traceability reports one.
+
 Examples:
   legion review --executor fake
+  legion review --domain architecture --domain security --executor fake
   legion review --accept
+  legion review --accept --approver dasbl
   legion review --auto --max-cycles 3 --executor codex`;
+
+/**
+ * The action an approval carries when it records a review acceptance.
+ *
+ * The same literal `ship-gates.ts` matches on. Written out in both places rather
+ * than shared through a constant because the gate and the writer are two sides
+ * of a contract: a shared symbol would let a rename move both at once and leave
+ * every approval already on disk unreadable by the gate that reads them.
+ */
+const REVIEW_ACCEPT_ACTION = "workflow.review.accept";
+
+/**
+ * Who asks for the approval, as distinct from who grants it.
+ *
+ * `requestedBy` records what created the record; `decidedBy` records whose
+ * authority the decision carries. Collapsing them onto the human would make
+ * `requestedBy.kind === "human"` true of every approval Legion writes, which is
+ * a second humanity signal a later gate could read by mistake — and it would be
+ * false: the review gate produced the review and is asking a person to accept
+ * it.
+ */
+const REVIEW_GATE_ACTOR = {
+  kind: "tool",
+  id: "legion-review",
+  displayName: "Legion Review Gate"
+} as const;
 
 export async function handleReviewWorkflow(context: CliContext): Promise<CliResult> {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
@@ -88,6 +171,36 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   if (!taskgraph.ok) {
     return blockedReview(taskgraph.diagnostics, planAction);
   }
+
+  // Resolved before the dry run returns, and before the evidence index is read.
+  // `--auto` reaches `acceptLatestReview` on a clean cycle with no operator step
+  // at all, so a check that lived only on the explicit accept would leave the
+  // whole fail-open intact behind a different flag — and nothing in the tree
+  // runs `--auto` against an R3 change, so it would have shipped green.
+  //
+  // Ahead of the dry run because a dry run exists to answer "will this command
+  // line work", and one that resolved nothing answered yes to
+  // `--approver dasbi`, leaving the typo to surface on the accept — after a
+  // build and a review had already run. The rule the accept path applies is
+  // that an approver on a run that accepts nothing is refused rather than
+  // ignored; a dry run is such a run, and it was the one place the rule was not
+  // applied.
+  const approver = await resolveReviewApprover(context, {
+    tasks: taskgraph.document.tasks,
+    accepting: hasFlag(context, "accept") || hasFlag(context, "auto"),
+    taskgraphPath: taskgraph.artifactPath,
+    phase: phaseOption
+  });
+  if (!approver.ok) return approver.result;
+
+  // Resolved here for `resolveReviewApprover`'s reasons, both of which transfer
+  // exactly: ahead of the dry run, so a dry run answers "will this command line
+  // work" rather than yes to `--domain architecure`; and ahead of the evidence
+  // read, so nothing is written before a malformed flag is refused.
+  const domains = resolveReviewDomains(context, {
+    submitting: !hasFlag(context, "accept") && stringOption(context, "reject-reason") === undefined
+  });
+  if (!domains.ok) return domains.result;
 
   const taskCount = taskgraph.document.tasks.length;
   if (hasFlag(context, "dry-run")) {
@@ -133,7 +246,7 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   }
 
   if (hasFlag(context, "accept")) {
-    return acceptLatestReview(context, evidence);
+    return acceptLatestReview(context, evidence, approver.approver, taskgraph.document.tasks);
   }
 
   const rejectReason = stringOption(context, "reject-reason");
@@ -151,6 +264,8 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
       executor: selectedExecutor,
       taskgraph,
       evidence,
+      ...(approver.approver === undefined ? {} : { approver: approver.approver }),
+      ...(domains.domains.length === 0 ? {} : { domains: domains.domains }),
       ...(phaseOption === undefined ? {} : { phase: phaseOption })
     });
   }
@@ -158,7 +273,8 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   const submitted = await submitReview(context, {
     executor: selectedExecutor,
     taskgraph,
-    evidence
+    evidence,
+    ...(domains.domains.length === 0 ? {} : { domains: domains.domains })
   });
   if (!submitted.ok) {
     return blockedReview(submitted.diagnostics, nextAction("legion build", "Review could not be submitted until build evidence is usable."));
@@ -173,6 +289,15 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
         "A passing review was submitted and needs human acceptance."
       )
     : nextAction("legion build", "Address review findings and collect new evidence.");
+  // Warned at submit as well as at accept, because this is the last moment the
+  // flag is cheap: a domain is recorded when the review is performed, so an
+  // operator told at the accept has to review again.
+  const warnings = domainReviewWarnings({
+    tasks: taskgraph.document.tasks,
+    changeId: taskgraph.document.changeId,
+    reviews: submitted.reviews,
+    accepting: false
+  });
   return success(
     {
       ok: true,
@@ -183,6 +308,7 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
             review: reviewSummary(firstReview)
           }),
       reviews: submitted.reviews.map(reviewSummary),
+      ...(warnings.length === 0 ? {} : { warnings }),
       evidenceIndex: evidence.artifactPath,
       nextAction: action,
       diagnostics: []
@@ -191,6 +317,7 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
       "Review submitted.",
       `Reviews: ${submitted.reviews.length}.`,
       clean ? "Verdict: pass." : `Findings: ${findingCount}.`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
       renderNextAction(action)
     ].join("\n")
   );
@@ -217,8 +344,266 @@ interface SubmitReviewInput {
   readonly executor: ExecutionAdapterKind;
   readonly taskgraph: Awaited<ReturnType<typeof readTaskGraph>> & { readonly ok: true };
   readonly evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true };
+  /** Resolved once by the caller, because `--auto` also accepts. */
+  readonly approver?: Actor;
+  /** The competences `--domain` declared, stamped on every review this run writes. */
+  readonly domains?: readonly ReviewDomain[];
   /** The `--phase N` the caller gave, so follow-up actions keep the scope. */
   readonly phase?: string;
+}
+
+type ReviewDomainDecision =
+  | { readonly ok: true; readonly domains: readonly ReviewDomain[] }
+  | { readonly ok: false; readonly result: CliResult };
+
+/**
+ * Turn `--domain <d>...` into validated domains, and refuse it on a run that
+ * performs no review.
+ *
+ * Repeated rather than comma-separated, and that needed no parser change:
+ * `parseCliArgs` already records every string occurrence of every option in
+ * `repeated`, and its comment records why a comma list was refused — a second
+ * parser to keep honest. `repeatedStringOptions` is the same reader `legion
+ * attest --source` uses.
+ *
+ * Three refusals, and the first two are `resolveReviewApprover`'s mirrored:
+ *
+ *  - A bare `--domain` at the end of argv is **not** recorded in `repeated` at
+ *    all — it sets `options.get("domain") === true` — so without this check the
+ *    operator's flag reads as absent and the command records nothing while
+ *    exiting 0. This is `legion attest --verdict`'s guard, for the same shape.
+ *  - A value the protocol's own enum does not admit is refused by name rather
+ *    than dropped. Validated against `reviewDomainSchema` instead of a
+ *    hand-written list, on the argument `legion attest` makes for
+ *    `attestationKindSchema`: a second list is a second thing to keep in step.
+ *  - **`--domain` on a run that submits nothing is refused, not ignored.**
+ *    `legion review --accept --domain architecture` is the command an operator
+ *    will type, and the accept path spreads `...review.document`, so it *could*
+ *    stamp a domain onto a review that was performed with no domain knowledge at
+ *    all. A label applied after the looking records a signature rather than a
+ *    competence, which empties the field of meaning on the day it is introduced.
+ *    Accepted-and-ignored is the silent class `declared-options.ts` exists to
+ *    close, so it is refused by name with the two-command repair in the message.
+ *    `--auto` accepts it, because `--auto` submits before it accepts.
+ */
+function resolveReviewDomains(
+  context: CliContext,
+  input: { readonly submitting: boolean }
+): ReviewDomainDecision {
+  const supported = reviewDomainSchema.options.join(", ");
+  if (context.args.options.get("domain") === true) {
+    return {
+      ok: false,
+      result: usageError(
+        `Missing required value for --domain. Supported domains: ${supported}. Example: legion review --domain architecture.`
+      )
+    };
+  }
+
+  const raw = [...new Set(repeatedStringOptions(context, "domain").map((value) => value.trim()))].filter(
+    (value) => value.length > 0
+  );
+  if (raw.length === 0) return { ok: true, domains: [] };
+
+  if (!input.submitting) {
+    return {
+      ok: false,
+      result: usageError(
+        "legion review reads --domain only on a run that performs a review. --accept records who accepted a review " +
+          "that already exists and --reject-reason records a rejection; a domain stamped on either would say a " +
+          "competence looked at the work when what happened was a signature. Run legion review --domain architecture " +
+          "first, then legion review --accept --approver <id>."
+      )
+    };
+  }
+
+  const domains: ReviewDomain[] = [];
+  for (const value of raw) {
+    const parsed = reviewDomainSchema.safeParse(value);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        result: usageError(`Unknown review domain: --domain ${value}. Supported domains: ${supported}.`)
+      };
+    }
+    domains.push(parsed.data);
+  }
+  return { ok: true, domains };
+}
+
+/**
+ * The warning a run owes when this change derives the domain gate and nothing
+ * this run wrote will satisfy it.
+ *
+ * **Lesson 3, and the two paths ask two different questions on purpose.**
+ *
+ * The accept path calls `isDomainReviewSatisfying`, which is the reader's own
+ * gate function against a one-plane fact set rather than a paraphrase of it. A
+ * hand-written "did somebody pass --domain architecture" would be a second
+ * definition of satisfied, and the first time the two drifted `legion review
+ * --accept` would exit 0 on an R3 change and ship would block forever with no
+ * flag anywhere that would fix it.
+ *
+ * The submit path cannot use that predicate and must not pretend to: the gate
+ * reads *accepted* reviews, so a freshly submitted one never satisfies it and a
+ * warning built on it would fire on every R3 submit — including the one that did
+ * everything right, which is how a warning teaches operators to ignore it. What
+ * it asks instead is the one part of the gate that is decided at submit time and
+ * nowhere else: does any review this run wrote name a domain the gate reads.
+ * `DOMAIN_REVIEW_GATE_DOMAINS` is exported from the gate module for exactly this,
+ * so the narrower question is still asked against the reader's own list.
+ *
+ * A warning rather than a refusal — see `requiresDomainReview` for why — and both
+ * name the audited waiver as the other route, because ADR-006 permits it.
+ */
+function domainReviewWarnings(input: {
+  readonly tasks: readonly TaskContract[];
+  readonly changeId: string;
+  readonly reviews: readonly ReviewDecisionSuccess[];
+  readonly accepting: boolean;
+}): readonly CliWarning[] {
+  if (!requiresDomainReview(input.tasks)) return [];
+  const satisfied = input.accepting
+    ? isDomainReviewSatisfying({
+        reviews: input.reviews,
+        changeId: input.changeId,
+        tasks: input.tasks,
+        taskIdFor: (task) => taskIdForContractId(task.id)
+      })
+    : input.reviews.some((review) =>
+        (review.document.domains ?? []).some((domain) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain))
+      );
+  if (satisfied) return [];
+  return [
+    {
+      code: "review_domain_not_recorded",
+      message: input.accepting
+        ? "A task in this change derives the architecture_or_security_review risk gate, and no review this accept " +
+          "recorded was performed in the architecture or security domain — so legion ship still reports that gate " +
+          "unevaluable and the change cannot ship. Nothing here is wrong and nothing was rolled back: the approval " +
+          "and the acceptance are real. Run legion review --domain architecture (or --domain security, or both) and " +
+          "accept again, or record an audited waiver with legion attest architecture-review --verdict " +
+          "not_applicable --waiver-reason <text> --attested-by <id> --source <path>."
+        : "A task in this change derives the architecture_or_security_review risk gate, and this review records no " +
+          "domain — so legion ship reports that gate unevaluable and the change cannot ship. Re-run as legion review " +
+          "--domain architecture (or --domain security, or both) before accepting. A domain is declared when the " +
+          "review is performed: legion review --accept does not take --domain and cannot add one afterwards."
+    }
+  ];
+}
+
+type ReviewApproverDecision =
+  | { readonly ok: true; readonly approver: Actor | undefined }
+  | { readonly ok: false; readonly result: CliResult };
+
+/**
+ * Turn `--approver <id>` into an actor, and refuse when one is required and
+ * absent.
+ *
+ * Three refusals, deliberately of two different kinds:
+ *
+ *  - `--approver` with no value, or `--approver` on a run that accepts nothing,
+ *    is a `usageError`. The argv is malformed or asks a question this invocation
+ *    does not answer, and automation has to be able to tell that from a policy
+ *    refusal.
+ *  - `--approver` naming somebody the project does not record, or recording as
+ *    something other than a human, is `blockedReview`. The argv is well formed;
+ *    what failed is the project's own register.
+ *  - An R3 change accepted with no `--approver` at all is `blockedReview` too,
+ *    for the same reason: the same command line is correct for an R0 change, so
+ *    the refusal comes from the risk tier and not from the shape of the input.
+ *
+ * It refuses *before* anything is written, and that ordering is the whole point
+ * rather than tidiness. `acceptLatestReview` writes an accepted revision of
+ * every covering review and then rewrites the evidence index, and there is no
+ * way back: `cleanSubmittedReviewCoverage` selects only reviews still in
+ * `submitted`, so a retry with the right approver fails with `review_not_clean`,
+ * and nothing in this release can attach an approval to an already-accepted
+ * change. Accepting first and refusing later would strand the change.
+ *
+ * The manifest is read only when it is going to be used. An R0 accept that
+ * names no approver must not acquire a new failure mode from a manifest it never
+ * consulted.
+ */
+async function resolveReviewApprover(
+  context: CliContext,
+  input: {
+    readonly tasks: readonly TaskContract[];
+    readonly accepting: boolean;
+    readonly taskgraphPath: ArtifactPath;
+    readonly phase: string | undefined;
+  }
+): Promise<ReviewApproverDecision> {
+  const raw = stringOption(context, "approver")?.trim();
+  if (context.args.options.get("approver") === true || raw === "") {
+    return {
+      ok: false,
+      result: usageError("Missing required value for --approver. Example: legion review --accept --approver dasbl.")
+    };
+  }
+
+  if (raw !== undefined && !input.accepting) {
+    return {
+      ok: false,
+      result: usageError(
+        "legion review reads --approver only with --accept or --auto. An approver on a run that accepts nothing records nobody, so it is refused rather than ignored."
+      )
+    };
+  }
+
+  const required = input.accepting && requiresHumanApproval(input.tasks);
+
+  if (raw === undefined) {
+    if (!required) return { ok: true, approver: undefined };
+    return {
+      ok: false,
+      result: blockedReview(
+        [
+          {
+            code: "approver_required",
+            message:
+              "A task in this change derives the explicit_human_approval risk gate, so accepting its review requires " +
+              "--approver <id> naming a human decision owner recorded in .legion/project/project.json. " +
+              "No approver is inferred from the environment, from git config, or from a project having only one owner — " +
+              "an acceptance recorded against a defaulted identity is not a human approval.",
+            path: input.taskgraphPath
+          }
+        ],
+        nextAction(
+          scopedCommand("legion review --accept --approver <id>", input.phase),
+          "This change's risk tier requires a named human approver."
+        )
+      )
+    };
+  }
+
+  const project = await loadWorkflowProject(context);
+  if (!project.ok) {
+    return {
+      ok: false,
+      result: blockedReview(
+        project.diagnostics,
+        nextAction("legion start", "The project manifest records who may approve, and it could not be read.")
+      )
+    };
+  }
+
+  const owners = project.loaded.project.policy.decisionOwners;
+  const resolved = resolveApprover({ raw, decisionOwners: owners });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      result: blockedReview(
+        resolved.diagnostics,
+        nextAction(
+          scopedCommand("legion review --accept --approver <id>", input.phase),
+          `Name a human decision owner recorded in ${PROJECT_MANIFEST_PATH}. Recorded owners: ${describeDecisionOwners(owners)}.`
+        )
+      )
+    };
+  }
+
+  return { ok: true, approver: resolved.approver };
 }
 
 async function submitReview(context: CliContext, input: SubmitReviewInput): Promise<{
@@ -339,7 +724,8 @@ async function submitReview(context: CliContext, input: SubmitReviewInput): Prom
       evidenceIndexPath: input.evidence.artifactPath,
       createdAt,
       executor: input.executor,
-      supersedes: latestSubmittedReviewIdForTask(reviews.reviews, taskId)
+      supersedes: latestSubmittedReviewIdForTask(reviews.reviews, taskId),
+      ...(input.domains === undefined || input.domains.length === 0 ? {} : { domains: input.domains })
     });
     const write = await writeReviewDecision({
       repositoryRoot: context.repositoryRoot,
@@ -395,7 +781,16 @@ function failedObservations(
 
 async function acceptLatestReview(
   context: CliContext,
-  evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true }
+  evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true },
+  approver: Actor | undefined,
+  /**
+   * The change's task contracts, for the domain-review warning alone.
+   *
+   * Threaded rather than re-read: this command has already loaded the task graph
+   * to resolve the approver, and the warning has to be about the same tiers that
+   * decision was taken against.
+   */
+  tasks: readonly TaskContract[]
 ): Promise<CliResult> {
   const failed = failedObservations(evidence);
   if (failed.length > 0) {
@@ -423,7 +818,18 @@ async function acceptLatestReview(
         ...review.document,
         status: "accepted",
         updatedAt: acceptedAt,
-        submittedAt
+        submittedAt,
+        // The accept transition's own actor, in the same revisioned write as the
+        // transition, so the two cannot end up in different revisions of the
+        // artifact. `reviewer` is untouched: the tool did produce this review,
+        // and overwriting it with the approver would replace one true statement
+        // with another and lose the first.
+        //
+        // Both fields or neither — the schema refuses a half-written transition,
+        // because a reader of `acceptedAt` alone has to guess whether the actor
+        // was never recorded or was recorded and lost, and those guesses lead to
+        // opposite verdicts.
+        ...(approver === undefined ? {} : { acceptedBy: approver, acceptedAt })
       }
     });
     if (!accepted.ok) {
@@ -458,26 +864,424 @@ async function acceptLatestReview(
     return blockedReview(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence acceptance could not be written."));
   }
 
+  // Written last, after the reviews and the evidence index. A crash before this
+  // point leaves reviews accepted with no approval, which the human-approval
+  // gate reads as `unevaluable` and ship blocks on — the partial state is always
+  // less approved, never more. The reverse order would leave a granted approval
+  // standing for an acceptance that never happened.
+  const approvals = await recordReviewAcceptApprovals(context, {
+    reviews: acceptedReviews,
+    approver,
+    decidedAt: acceptedAt
+  });
+  if (!approvals.ok) {
+    return blockedReview(
+      approvals.diagnostics,
+      nextAction(
+        "legion ship",
+        "The reviews and evidence were accepted, but no approval was recorded. Nothing was rolled back: legion ship " +
+          "will report explicit_human_approval unevaluable for this change until an approval exists."
+      )
+    );
+  }
+
+  // Last of all, after the approvals, and that placement is the same argument
+  // the comment above makes. Whole-change acceptance is the strongest claim this
+  // command records — stronger than a per-task approval — so a crash before it
+  // leaves the change *less* accepted, never more. It also has to come after the
+  // evidence-index write for a mechanical reason: `validateChangeTraceability`
+  // reads disk, and `missing_accepted_evidence` fires on every R2 requirement
+  // until the acceptance flip has landed. Run before it, the promotion would
+  // write `blocked` on every single accept — a defect that would look exactly
+  // like the gate working.
+  const promotion = await promoteChangeAcceptance(context, {
+    changeId: evidence.document.changeId,
+    approver,
+    acceptedAt
+  });
+  if (!promotion.ok) {
+    // **Two failures, two true sentences, two different commands.** One message
+    // used to cover both, and in the branch that can actually produce it — the
+    // re-point failing *after* the proposal write landed — every clause of it
+    // was false. It said the acceptance could not be written when the bundle on
+    // disk already recorded it; it said `legion ship` would report
+    // `whole_change_acceptance_evidence` unevaluable when ship never reaches gate
+    // evaluation at all, because it flattens the two stale pins to
+    // `change_traceability_broken` first; and it sent the operator to `legion
+    // validate`, which on that exact repository exits 0 with
+    // `{"status":"valid","diagnostics":[]}`. Being told the wrong fact and sent
+    // to a command that confirms nothing is wrong is worse than a bare stack
+    // trace, because it ends the investigation.
+    return promotion.written === undefined
+      ? blockedReview(
+          promotion.diagnostics,
+          nextAction(
+            "legion dev change validate",
+            "The reviews, evidence and approvals were accepted, and the change's whole-change acceptance was not " +
+              "written — nothing about it reached disk. legion ship will report whole_change_acceptance_evidence " +
+              "unevaluable for this change until it is."
+          )
+        )
+      : blockedReview(
+          promotion.diagnostics,
+          nextAction(
+            `legion dev change repoint ${evidence.document.changeId}`,
+            `The whole-change acceptance WAS written: ${promotion.written.artifactPath} records ` +
+              `${promotion.written.acceptance.status} at revision ${promotion.written.revision.revision}. What did not ` +
+              "land is the re-point of the artifact inputs that pin it, so legion ship reports " +
+              "change_traceability_broken and never reaches the gate. That command re-points them; it is idempotent " +
+              "and writes nothing if they are already current."
+          )
+        );
+  }
+
   const action = nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate.");
+  const warnings = domainReviewWarnings({
+    tasks,
+    changeId: evidence.document.changeId,
+    reviews: acceptedReviews,
+    accepting: true
+  });
   return success(
     {
       ok: true,
       status: "accepted",
       ...(acceptedReviews[0] === undefined ? {} : { review: reviewSummary(acceptedReviews[0]) }),
       reviews: acceptedReviews.map(reviewSummary),
+      ...(warnings.length === 0 ? {} : { warnings }),
+      // Spread conditionally so a run that recorded no approver produces the
+      // payload it produced before this release, key for key.
+      ...(approvals.approvals.length === 0 ? {} : { approvals: approvals.approvals.map(approvalSummary) }),
       evidenceIndex: {
         artifactPath: evidenceWrite.artifactPath,
         acceptedEntries: evidenceWrite.document.entries.filter((entry) => entry.acceptance.status === "accepted").length
       },
+      acceptance: acceptanceSummary(promotion.result),
       nextAction: action,
       diagnostics: []
     },
     [
       "Review accepted.",
       `Evidence accepted: ${evidenceWrite.artifactPath}.`,
+      `Change acceptance: ${promotion.result.acceptance.status}.`,
+      // Shown, not only recorded: `writeResult` prints `human` for a terminal
+      // run, so a warning that lived solely in the payload would be invisible to
+      // exactly the operator who has to act on it.
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
       renderNextAction(action)
     ].join("\n")
   );
+}
+
+/** What a host needs to see which whole-change decision this run recorded. */
+function acceptanceSummary(promotion: UpdateChangeAcceptanceSuccess): Record<string, unknown> {
+  return {
+    artifactPath: promotion.artifactPath,
+    status: promotion.acceptance.status,
+    revision: promotion.revision.revision,
+    ...(promotion.acceptance.acceptedBy === undefined ? {} : { acceptedBy: promotion.acceptance.acceptedBy }),
+    ...(promotion.acceptance.acceptedAt === undefined ? {} : { acceptedAt: promotion.acceptance.acceptedAt }),
+    ...(promotion.acceptance.reason === undefined ? {} : { reason: promotion.acceptance.reason }),
+    ...(promotion.repointed.length === 0 ? {} : { repointed: promotion.repointed })
+  };
+}
+
+/** The subset of a traceability diagnostic a recorded reason can carry. */
+interface TraceabilityDefect {
+  readonly code: string;
+  readonly message: string;
+  readonly source?: { readonly path?: string };
+}
+
+/**
+ * What a `blocked` acceptance records about why.
+ *
+ * `acceptanceReasonSchema` is 1..2048 characters and required for `blocked`, so
+ * the reason has to be built rather than borrowed. Three properties matter:
+ *
+ *  - **Deterministic.** Sorted, capped at three, hard-truncated. Identical runs
+ *    must produce identical bytes, or re-running the same command would rewrite
+ *    `change.yaml` and re-point two artifact-input lists for no reason at all.
+ *  - **Named.** The code and the path, not just the message: an operator reading
+ *    this in a blocked ship's gate diagnostic has no other route to which
+ *    artifact is wrong.
+ *  - **Bounded.** `validateChangeTraceability` also returns loader failures with
+ *    no report at all, so an unbounded splice of everything it returned would
+ *    put unrelated codes into a field that reads as a verdict.
+ */
+function blockedAcceptanceReason(diagnostics: readonly TraceabilityDefect[]): string {
+  const named = [...diagnostics]
+    .map((diagnostic) => `${diagnostic.code} (${diagnostic.source?.path ?? "unknown"}): ${diagnostic.message}`)
+    .sort((left, right) => left.localeCompare(right));
+  const shown = named.slice(0, 3);
+  const remainder = named.length > shown.length ? ` (+${named.length - shown.length} more)` : "";
+  const reason =
+    `Change traceability reported ${named.length} blocking defect${named.length === 1 ? "" : "s"} at legion review ` +
+    `--accept: ${shown.join(" | ")}${remainder}`;
+  return reason.length <= 2_048 ? reason : `${reason.slice(0, 2_045)}...`;
+}
+
+/**
+ * Promote `change.acceptance` from the `not_ready` that `createChangeBundle`
+ * writes and nothing ever moved.
+ *
+ * Three outcomes, and the middle one is the point of the whole gate:
+ *
+ *  - Traceability reports a blocking defect ⇒ `{status: "blocked", reason}`.
+ *    Written rather than skipped. By the time this runs the reviews, the
+ *    evidence index and the approvals are already on disk, so "refuse the
+ *    accept" is not available — only "refuse the promotion" — and refusing it
+ *    silently leaves `not_ready`, which `legion ship` reports as "nobody
+ *    decided" with no mention of the defect. `blocked` puts the reason where
+ *    ship can print it, and the verdict is re-derived from scratch on the next
+ *    accept, so repairing the defect and re-accepting replaces the record.
+ *  - Clean and `--approver` resolved ⇒ `{status: "accepted", acceptedAt,
+ *    acceptedBy: approver.id}`. `acceptedBy` is `approver.id`, a **string**:
+ *    `acceptanceActorSchema` is `z.string().min(1).max(128)` while
+ *    `reviewDecision.acceptedBy` and `approval.decidedBy` are both `Actor`
+ *    objects — three same-named fields, two types, one code path.
+ *  - Clean and no approver ⇒ `{status: "ready"}` and nothing else. Every task's
+ *    evidence is accepted and no human signed off on the change as a whole,
+ *    which is honestly short of accepted. All-or-nothing on `acceptedAt` and
+ *    `acceptedBy`, on the rule the review write states: the `ready` arm *permits*
+ *    both and requires neither, so a half-filled one parses cleanly and reads as
+ *    an abandoned sign-off.
+ *
+ * `acceptedAt` is the instant computed once at the top of the accept, not a
+ * fresh clock reading. It is already stamped on the reviews, on every promoted
+ * evidence entry and on the approvals, so the whole-change sign-off is *equal*
+ * to `max(evidence acceptedAt)` — which is why the gate compares with `>=`. A
+ * second clock reading inside one logical transaction would differ by
+ * milliseconds in a direction nothing controls, and could produce an `accepted`
+ * the gate immediately calls stale.
+ *
+ * **The traceability verdict is partitioned with the legacy allowance on,
+ * unconditionally.** `legion review` has no `--allow-legacy-evidence` flag, so a
+ * raw `traceability.ok` would write a sticky `{status: "blocked"}` into the
+ * bundle on a repository whose evidence predates requirement and oracle linking
+ * — and `legion ship --allow-legacy-evidence`, the allowance the operator
+ * explicitly opted into, would then read a hard `unsatisfied` no flag can undo.
+ * `orphan_evidence` is the one diagnostic whose interpretation is an operator
+ * judgement, and this command cannot hear it; recording a verdict on a judgement
+ * nobody made is worse than leaving the decision with ship, which already owns
+ * the flag.
+ */
+async function promoteChangeAcceptance(
+  context: CliContext,
+  input: {
+    readonly changeId: string;
+    readonly approver: Actor | undefined;
+    readonly acceptedAt: UtcTimestamp;
+  }
+): Promise<
+  | { readonly ok: true; readonly result: UpdateChangeAcceptanceSuccess }
+  | {
+      readonly ok: false;
+      readonly diagnostics: readonly unknown[];
+      readonly written?: UpdateChangeAcceptanceFailure["written"];
+    }
+> {
+  // **Repair before judging.** A previous accept that tore between the proposal
+  // rename and the re-point leaves the pins naming a superseded proposal, and
+  // `validateChangeTraceability` reports that as `stale_revision_reference` — so
+  // running the verdict first would record a `blocked` about a defect this call
+  // is about to fix, and every retry would record a fresh false block while the
+  // change stayed unshippable. The repair is idempotent and writes nothing on a
+  // healthy change, so the common path pays two reads for it.
+  const repaired = await repairChangeProposalPins({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!repaired.ok) return { ok: false, diagnostics: repaired.diagnostics };
+
+  const bundle = await loadChangeBundle({ repositoryRoot: context.repositoryRoot, changeId: input.changeId });
+  if (!bundle.ok) return { ok: false, diagnostics: bundle.diagnostics };
+
+  const traceability = await validateChangeTraceability({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId
+  });
+  const blocking = traceability.ok
+    ? []
+    : partitionTraceabilityDiagnostics(traceability.diagnostics, { allowLegacyEvidence: true }).blocking;
+
+  const acceptance: AcceptanceState =
+    blocking.length > 0
+      ? { status: "blocked", reason: blockedAcceptanceReason(blocking) }
+      : input.approver === undefined
+        ? { status: "ready" }
+        : { status: "accepted", acceptedAt: input.acceptedAt, acceptedBy: input.approver.id };
+
+  const written = await updateChangeAcceptance({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId,
+    acceptance,
+    expectedRevision: bundle.bundle.revision,
+    updatedAt: input.acceptedAt,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!written.ok) {
+    return {
+      ok: false,
+      diagnostics: written.diagnostics,
+      ...(written.written === undefined ? {} : { written: written.written })
+    };
+  }
+  return { ok: true, result: written };
+}
+
+/**
+ * Record one granted approval per task whose review was just accepted.
+ *
+ * **One approval per task, not per review and not per change.** The three
+ * cardinalities are not interchangeable and each rules out a specific defect:
+ *
+ *  - Per *review* mints a new document every cycle, so a grant from cycle 1
+ *    outlives cycle 2 and a gate asking "is a review-acceptance approval granted
+ *    here" answers yes from a record about work that has since been replaced.
+ *  - Per *change* would need an idempotency key naming a task and a run —
+ *    `idempotencyKeySchema` requires both, structurally — and a change-wide
+ *    decision has neither, so the key would have to borrow one task's ids and
+ *    assert a pairing that is not a fact.
+ *  - Per *task* has an honest key (the task and run the accepted review already
+ *    names), matches the granularity of the gate that reads it, which is derived
+ *    per task, and rewrites the same document on every later accept of the same
+ *    task. Re-deciding is a new revision of one artifact rather than a second
+ *    artifact, so a revocation cannot be lost while its grant survives.
+ *
+ * The existing document is read before writing so the write is an update at the
+ * revision found rather than a create at revision 0. That is not an
+ * optimisation: creating over an unread existing approval is the one way to
+ * silently replace a revocation with a fresh grant, so an approval that is
+ * present and unreadable blocks instead.
+ *
+ * `artifacts` is deliberately left unset. The field exists for pinning the bytes
+ * a decision was made against, and the honest candidate here — the accepted
+ * review file — is rewritten by a later `--reject`, so pinning it would turn
+ * legitimate supersession into pin drift. The accepted review's content hash is
+ * still recorded, as the idempotency key's target hash, where it identifies the
+ * operation rather than claiming an invariant.
+ */
+async function recordReviewAcceptApprovals(
+  context: CliContext,
+  input: {
+    readonly reviews: readonly ReviewDecisionSuccess[];
+    readonly approver: Actor | undefined;
+    readonly decidedAt: ReturnType<typeof currentUtcTimestamp>;
+  }
+): Promise<
+  | { readonly ok: true; readonly approvals: readonly ApprovalSuccess[] }
+  | { readonly ok: false; readonly diagnostics: readonly unknown[] }
+> {
+  if (input.approver === undefined) return { ok: true, approvals: [] };
+
+  const written: ApprovalSuccess[] = [];
+  for (const review of input.reviews) {
+    const taskId = review.document.taskId;
+    const runId = review.document.runId;
+    if (taskId === undefined || runId === undefined) {
+      // Refused rather than skipped. A skip would leave the change one approval
+      // short and report success, and the gate would read the shortfall as "no
+      // approval names this task" — absence, when what actually happened is
+      // that Legion could not name what it was approving.
+      return {
+        ok: false,
+        diagnostics: [
+          {
+            code: "approval_subject_missing",
+            message: `Review ${review.document.id} names no ${taskId === undefined ? "task" : "run"}, so an approval recording its acceptance cannot say what was approved.`,
+            path: review.artifactPath
+          }
+        ]
+      };
+    }
+
+    const approvalId = approvalIdForSubject({
+      changeId: review.document.changeId,
+      action: REVIEW_ACCEPT_ACTION,
+      subject: { kind: "task", id: taskId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: review.document.changeId,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      return { ok: false, diagnostics: existing.diagnostics };
+    }
+
+    // `createdAt` and `requestedAt` are the request instant and survive every
+    // re-decision, so the listing's sort order does not move when an approval is
+    // re-granted. `decidedAt` is the instant of *this* decision, which is what
+    // an ordering gate compares against a run's start.
+    const requestedAt = existing.ok ? existing.document.requestedAt : input.decidedAt;
+    const document: Approval = {
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt: existing.ok ? existing.document.createdAt : input.decidedAt,
+      updatedAt: input.decidedAt,
+      kind: "approval",
+      id: approvalId,
+      projectId: review.document.projectId,
+      changeId: review.document.changeId,
+      taskId,
+      runId,
+      requestedBy: REVIEW_GATE_ACTOR,
+      requestedAt,
+      scope: {
+        // S1: a local idempotent write of Legion's own acceptance artifacts.
+        // Not S4 — nothing here deploys, deletes or rotates anything, and
+        // stamping the highest class on a review acceptance would make the
+        // classification meaningless the first time something really does.
+        effectClass: "S1",
+        action: REVIEW_ACCEPT_ACTION,
+        targets: [
+          { kind: "task", id: taskId },
+          { kind: "review", id: review.document.id },
+          { kind: "change", id: review.document.changeId }
+        ]
+      },
+      idempotencyKey: buildIdempotencyKey({
+        projectId: review.document.projectId,
+        changeId: review.document.changeId,
+        taskId,
+        runId,
+        effectKind: REVIEW_ACCEPT_ACTION,
+        // The accepted review's own content hash, so the key names the exact
+        // bytes accepted: re-running the same accept is the same operation, and
+        // accepting a new review cycle is a different one.
+        targetHash: review.reference.sha256
+      }),
+      status: "granted",
+      decidedBy: input.approver,
+      decidedAt: input.decidedAt,
+      decisionReason: `${input.approver.id} accepted review ${review.document.id} for task ${taskId} via legion review --accept.`
+    };
+
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: existing.ok ? existing.revision.revision : 0,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document
+    });
+    if (!write.ok) return { ok: false, diagnostics: write.diagnostics };
+    written.push(write);
+  }
+
+  return { ok: true, approvals: written };
+}
+
+/** What a host needs to show that an acceptance was approved, and by whom. */
+function approvalSummary(approval: ApprovalSuccess): Record<string, unknown> {
+  return {
+    approvalId: approval.document.id,
+    artifactPath: approval.artifactPath,
+    status: approval.document.status,
+    action: approval.document.scope.action,
+    taskId: approval.document.taskId,
+    decidedBy: approval.document.decidedBy,
+    decidedAt: approval.document.decidedAt
+  };
 }
 
 async function rejectLatestReview(
@@ -540,6 +1344,89 @@ async function rejectLatestReview(
     return blockedReview(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence rejection could not be written."));
   }
 
+  // A fail-open this release would otherwise open. Before whole-change
+  // acceptance existed, rejecting a review rewrote every evidence entry to
+  // `rejected` and touched nothing else. After it, the sequence accept → reject
+  // would leave `change.acceptance.status === "accepted"` standing on disk with
+  // an `acceptedAt` later than any *accepted* evidence — because a reject leaves
+  // none — so the sign-off would outlive the evidence it claimed to cover. The
+  // gate closes that from its own side by reading each task's latest evidence
+  // acceptance, and this closes it from the artifact's side, because a gate that
+  // is right about a document that lies is one refactor away from being wrong.
+  //
+  // `not_ready`, not `rejected`: the *review* was rejected, not the change.
+  // `not_ready` with the reason recorded is the true statement, and it is what
+  // the gate reports as "nobody has decided", which is also true. It blocks ship
+  // exactly as an `unsatisfied` would.
+  //
+  // A bundle that will not load is a `blockedReview` rather than a silent skip:
+  // a skip is precisely the state described above, standing on disk with the
+  // command reporting success.
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: evidence.document.changeId
+  });
+  if (!bundle.ok) {
+    return blockedReview(
+      bundle.diagnostics,
+      nextAction(
+        "legion dev change validate",
+        "The evidence was rejected, but the change bundle could not be read, so its whole-change acceptance still " +
+          "stands. legion ship would report whole_change_acceptance_evidence over rejected evidence until this is repaired."
+      )
+    );
+  }
+
+  // **The demotion is skipped when there is nothing to demote, and that guard is
+  // the whole reason a reject is not a second copy of the accept's tear.**
+  // `updateChangeAcceptance` compares the whole acceptance object, deliberately —
+  // see its docblock — so `{status:"not_ready"}` and
+  // `{status:"not_ready", reason}` are different objects and the write always
+  // fired. That made `legion review --reject-reason` rewrite the bundle and
+  // re-point both pinned artifacts on **every** invocation, including on a change
+  // nobody had ever accepted, which is every reject before this release. It
+  // inherited the accept's tear window for no gain: rejecting a `not_ready`
+  // change to `not_ready` records nothing a reader can act on, and a failed
+  // re-point in the middle of it left a never-accepted change unshippable.
+  //
+  // Status, not the whole object, and only here. What the demotion exists to
+  // prevent is an `accepted` or `ready` sign-off outliving the evidence it
+  // covered; a change already recorded as undecided cannot be that. The accept's
+  // idempotence check stays object-wide, because there a stale `acceptedAt` under
+  // an unchanged `status` is exactly the fail-open being closed.
+  const priorStatus = bundle.bundle.change.acceptance.status;
+  const demoted =
+    priorStatus === "not_ready"
+      ? undefined
+      : await updateChangeAcceptance({
+          repositoryRoot: context.repositoryRoot,
+          changeId: evidence.document.changeId,
+          expectedRevision: bundle.bundle.revision,
+          updatedAt: rejectedAt,
+          baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+          acceptance: {
+            status: "not_ready",
+            reason: `Review ${rejectedReviews[0]?.document.id ?? "(unnamed)"} was rejected at ${rejectedAt}: ${reason}`
+          }
+        });
+  if (demoted !== undefined && !demoted.ok) {
+    return blockedReview(
+      demoted.diagnostics,
+      demoted.written === undefined
+        ? nextAction(
+            "legion dev change validate",
+            "The evidence was rejected, and this change's whole-change acceptance could not be demoted alongside it. " +
+              "Nothing about the demotion reached disk, so the earlier sign-off still stands over rejected evidence."
+          )
+        : nextAction(
+            `legion dev change repoint ${evidence.document.changeId}`,
+            `The demotion WAS written: ${demoted.written.artifactPath} records ${demoted.written.acceptance.status} at ` +
+              `revision ${demoted.written.revision.revision}. What did not land is the re-point of the artifact inputs ` +
+              "that pin it. That command re-points them; it is idempotent and writes nothing if they are already current."
+          )
+    );
+  }
+
   const action = nextAction("legion build", "Rejected evidence needs a new build run.");
   return success(
     {
@@ -547,6 +1434,10 @@ async function rejectLatestReview(
       status: "rejected",
       ...(rejectedReviews[0] === undefined ? {} : { review: reviewSummary(rejectedReviews[0]) }),
       reviews: rejectedReviews.map(reviewSummary),
+      // Absent when the change was already undecided and nothing was written, so
+      // the payload of a reject on a never-accepted change is key-for-key what it
+      // was before whole-change acceptance existed.
+      ...(demoted === undefined ? {} : { acceptance: acceptanceSummary(demoted) }),
       nextAction: action,
       diagnostics: []
     },
@@ -590,11 +1481,14 @@ async function runAutoReview(
       // "accepted" without this cannot distinguish a first-pass review from one
       // that needed two fix rounds, and the difference is the whole point of
       // running with --auto.
-      return withCycleState(await acceptLatestReview(context, refreshedEvidence), {
-        cycle,
-        maxCycles,
-        outcome: "clean"
-      });
+      return withCycleState(
+        await acceptLatestReview(context, refreshedEvidence, input.approver, input.taskgraph.document.tasks),
+        {
+          cycle,
+          maxCycles,
+          outcome: "clean"
+        }
+      );
     }
 
     if (cycle < maxCycles) {
@@ -712,11 +1606,47 @@ async function runAutoFixCycle(
   // follows snapshots the tree *before* its own dispatch — so the tampering is
   // already present, gets attributed to no one, and review and ship then load
   // the altered contract.
+  // The same declaration set the build path snapshots, loaded the same way.
+  //
+  // Passing `[]` here was available and is refused: the refresh build that
+  // follows a fix takes its own pre-dispatch snapshot *after* the fix has run, so
+  // an acceptance test this cycle gutted is already in that snapshot's `before`
+  // state and reads as unchanged. That is precisely the unguarded-door shape this
+  // file's docblock was written about, one population over.
+  //
+  // The observation is warned about here and does **not** join the
+  // `AutoFixScopeError` arm below: an auto-fix that touches an acceptance test is
+  // reported by the harness and decided by the ship gate, never blocked here.
+  const changeOracles = await loadOracleFacts({ repositoryRoot: context.repositoryRoot, changeId });
+  const acceptancePaths =
+    changeOracles === undefined
+      ? undefined
+      : [...new Set(changeOracles.flatMap((oracle) => oracle.document.acceptancePaths ?? []))].sort();
+
+  // Guarantee 7's input on this path too, and read from disk because the build
+  // that produced these entries has already written the index. A fix cycle that
+  // hashed the tree as it stands would report `unchanged` about a test the build
+  // it is fixing already weakened — the same re-baselining the build path was
+  // just corrected for, reached through a different verb.
+  const evidence = await readEvidenceIndex({ repositoryRoot: context.repositoryRoot, changeId });
+  const acceptanceBaseline = evidence.ok
+    ? await acceptanceBaselineFromEvidence({
+        repositoryRoot: context.repositoryRoot,
+        entries: evidence.document.entries
+      })
+    : {
+        status: "unestablished" as const,
+        reason: `The evidence index of ${changeId} would not read, so what earlier runs recorded about its protected acceptance paths is unestablished.`,
+        states: new Map()
+      };
+
   const guarded = await runGuardedExecution({
     repositoryRoot: context.repositoryRoot,
     task,
     baseGitSha: resolveBaseGitSha(context.repositoryRoot),
     harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
+    acceptancePaths,
+    acceptanceBaseline,
     run: () =>
       adapterForKind(executor).run({
         repositoryRoot: context.repositoryRoot,
@@ -739,6 +1669,28 @@ async function runAutoFixCycle(
         redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
       })
   });
+
+  // Persisted so the observation is not lost with the process. The gate reads the
+  // *build* path's item, so this file is for the operator and for an auditor
+  // reconstructing what happened between two builds; the residual — that a fix
+  // cycle's observation does not itself reach `legion ship` — is stated in this
+  // release's commit body rather than left to be discovered.
+  const touched = guarded.acceptancePaths.observations.filter((entry) => entry.verdict !== "unchanged");
+  if (guarded.acceptancePaths.status === "unestablished" || touched.length > 0) {
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: runArtifactPath({ changeId, runId, fileName: "protected-paths.json" }),
+      text: stableProtocolJson({
+        kind: "protected_paths",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        status: guarded.acceptancePaths.status,
+        ...(guarded.acceptancePaths.reason === undefined ? {} : { reason: guarded.acceptancePaths.reason }),
+        observations: guarded.acceptancePaths.observations
+      })
+    });
+  }
 
   if (!guarded.inContract) {
     throw new AutoFixScopeError(
@@ -766,6 +1718,14 @@ export function reviewDecisionForExecution(input: {
   readonly createdAt: ReturnType<typeof currentUtcTimestamp>;
   readonly executor: ExecutionAdapterKind;
   readonly supersedes: readonly ReviewId[];
+  /**
+   * The competences this review was performed in, when the operator declared any.
+   *
+   * Spread conditionally below, exactly as `acceptedBy` is on the accept path, so
+   * a review with no declared domain produces the byte-identical document it
+   * produced before this release.
+   */
+  readonly domains?: readonly ReviewDomain[];
 }): ReviewDecision {
   const evidenceRefs = input.evidenceEntries.map((entry) => entry.evidence.id);
   const findings = input.result.findings.map((finding, index) => reviewFindingForExecution(finding, evidenceRefs, index));
@@ -793,6 +1753,7 @@ export function reviewDecisionForExecution(input: {
     confidence: input.executor === "fake" ? "high" : "medium",
     findings,
     supersedes: [...input.supersedes],
+    ...(input.domains === undefined || input.domains.length === 0 ? {} : { domains: [...input.domains] }),
     evidenceRefs: [...evidenceRefs],
     traceRefs: [
       {
@@ -973,6 +1934,17 @@ export function reviewSummary(review: ReviewDecisionSuccess): Record<string, unk
     // Who reviewed, so a panel can distinguish a human verdict from an
     // executor's without opening the artifact.
     reviewer: review.document.reviewer,
+    // Who accepted it, which is a different act by a different actor. Spread
+    // conditionally so a review with no recorded acceptor produces the payload
+    // it produced before this release; without that, every R0 caller's payload
+    // would gain two keys holding nothing.
+    ...(review.document.acceptedBy === undefined
+      ? {}
+      : { acceptedBy: review.document.acceptedBy, acceptedAt: review.document.acceptedAt }),
+    // The competences this review was performed in, spread conditionally on the
+    // rule above so a review that declared none produces the payload it produced
+    // before this release, key for key.
+    ...(review.document.domains === undefined ? {} : { domains: review.document.domains }),
     // The revision chain. A review that supersedes nothing is a first attempt,
     // which is what the first-pass rate in `legion retro` counts.
     supersedes: review.document.supersedes,

@@ -513,6 +513,107 @@
       ]
     },
     {
+      "command": "approve",
+      "verb": "approve",
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/approve.ts",
+        "symbol": "handleApproveWorkflow"
+      },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The verb records one governance decision and pins the bytes it was made against. It resolves the approver from the project manifest and refuses anything it cannot resolve, so the host cannot supply an identity; what stays in the host is showing the person deciding what their decision is about - the delta spec text for a spec approval, the oracle's criteria for an oracle approval, the diff of the pinned file for a surface re-affirmation, and what the work will actually do to a protected acceptance test - and asking who they are.",
+      "hostOnly": [
+        {
+          "capability": "Refusing to supply an approver the user did not name, including the project's only decision owner",
+          "anchor": "If the user has not named an approver, ask."
+        },
+        {
+          "capability": "Offering to show the approver the delta spec text their decision is about",
+          "anchor": "Offer to display the delta spec itself."
+        },
+        {
+          "capability": "Saying plainly that an approval records a person's yes to specific bytes and does not establish that they read them",
+          "anchor": "It does not establish that they read them."
+        },
+        {
+          "capability": "Showing what actually changed in a pinned file before a verification surface is re-affirmed, and refusing the re-affirmation when the edit replaced a real dependency with a stub",
+          "anchor": "Show the user what actually changed in that file."
+        },
+        {
+          "capability": "Reading the oracle's criteria to the approver before an oracle approval, rather than a hash and an id",
+          "anchor": "Read the oracle to the approver."
+        },
+        {
+          "capability": "Asking what a change will do to a protected acceptance test before permitting it, and refusing when the proposal is to weaken the assertion rather than extend it",
+          "anchor": "Ask what the work is going to do to those files, and why the change cannot be made without it."
+        }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "attest",
+      "verb": "attest",
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/attest.ts",
+        "symbol": "handleAttestWorkflow"
+      },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The verb records one governance assertion, pins the bytes it is about, and parses those bytes to refuse a pass over a report that is red or a shape it cannot read. It resolves the attester from the project manifest and refuses anything it cannot resolve, so the host cannot supply an identity. What stays in the host is reading the cited report to the person asserting it, and being honest that an attestation links a phase-keyed artifact to a change by a human act rather than by having run anything against the change.",
+      "hostOnly": [
+        {
+          "capability": "Refusing to supply an attester the user did not name, including the project's only decision owner",
+          "anchor": "Never invent an attester id"
+        },
+        {
+          "capability": "Reading the cited report to the attester before the assertion is recorded, rather than a path and a hash",
+          "anchor": "Ask which file the assertion rests on and read it with the user."
+        },
+        {
+          "capability": "Saying plainly that an attestation links a phase-keyed artifact to a change by a human act and does not make the underlying check change-scoped",
+          "anchor": "What it cannot do is turn a phase-keyed artifact into a change-keyed one."
+        },
+        {
+          "capability": "Refusing to help an operator waive a check whose own report says it failed",
+          "anchor": "Refuse to help work around it."
+        }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "release",
+      "verb": "release",
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/release.ts",
+        "symbol": "handleReleaseWorkflow"
+      },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The verb records one governance artifact - the change's release observation plan - and refuses the two states that would make it worthless: no health criterion, and no rollback criterion. It computes 'already planned' by calling the ship gate's own predicate rather than by checking that a file exists, so the CLI holds the whole of the mechanical floor. What stays in the host is the part no program can do: asking the person what would tell them this release had gone wrong and what they would do about it, in words somebody could check afterwards. Criteria the host composed would satisfy the gate by the act of running the command.",
+      "hostOnly": [
+        {
+          "capability": "Eliciting health and rollback criteria from the person rather than deriving them from the task graph or the diff",
+          "anchor": "The health criteria and the rollback criteria are authored, never derived."
+        },
+        {
+          "capability": "Refusing a criterion nobody could check afterwards, and asking for one they could disagree with now",
+          "anchor": "Ask for criteria somebody could check afterwards and disagree with now."
+        },
+        {
+          "capability": "Distinguishing the pre-release plan from the audited waiver and from the post-deployment board report, which share the words 'release observation'",
+          "anchor": "Three things in this repository carry the words \"release observation\""
+        },
+        {
+          "capability": "Saying plainly that a plan is not an observation, so a recorded plan does not establish that the release happened or that the criteria held",
+          "anchor": "it does not deploy, publish, run a canary probe, or observe anything"
+        }
+      ],
+      "cliGaps": []
+    },
+    {
       "command": "ship",
       "verb": "ship",
       "handler": {
@@ -522,7 +623,7 @@
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
-      "rationale": "The verb runs release readiness gates. It does not publish or release, so PR creation, pushing, and post-ship observation cannot move into it.",
+      "rationale": "The verb derives the ADR-006 gate set for each task's risk tier and reports every gate's verdict, satisfied ones included. It does not publish or release, so PR creation, pushing, and post-ship observation cannot move into it. What also stays in the host is telling the person the difference between a gate that was proven and a gate that was waived: the CLI names both in the payload and cannot make anyone read them out.",
       "hostOnly": [
         {
           "capability": "PR creation and pushing",
@@ -531,6 +632,10 @@
         {
           "capability": "Post-ship verification and canary monitoring",
           "anchor": "7. POST-SHIP"
+        },
+        {
+          "capability": "Reading out the waived and human-judgement gates before calling a change ready, rather than reporting the satisfied count",
+          "anchor": "Do not report the satisfied count as the number of gates that"
         }
       ],
       "cliGaps": []

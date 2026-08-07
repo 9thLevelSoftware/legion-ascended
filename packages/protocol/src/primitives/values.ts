@@ -75,6 +75,44 @@ export const idempotencyKeySchema = z
 
 export type IdempotencyKey = z.infer<typeof idempotencyKeySchema>;
 
+/**
+ * The same logical operation key for a decision that has no task and no run.
+ *
+ * `idempotencyKeySchema` above demands both segments *structurally*, which is
+ * right for everything that has ever written one: a task run definitionally has
+ * a task and a run, and so does a review acceptance. It is wrong for a decision
+ * taken about the change itself before any execution exists — approving a delta
+ * spec happens between `legion plan` and `legion build`, when no run has been
+ * created and no attempt has been made.
+ *
+ * The two available alternatives were both refused. Widening the shared schema
+ * would let a task run claim it had neither a task nor a run, and would rewrite
+ * the pattern in three generated schemas for a reason that applies to none of
+ * them. Minting a placeholder `run_` segment writes a run id naming no run into
+ * an audit artifact — the same fabrication `review.ts` already refuses by name
+ * when it explains why review-acceptance approvals are stored per task.
+ *
+ * The task and run segments drop *together*, never separately. A key naming a
+ * task but no run would assert a task-scoped operation that never executed,
+ * which is the fabrication one level down.
+ *
+ * The two forms are mutually exclusive rather than merely different: the effect
+ * segment forbids `:`, so a task-scoped key can never match this pattern and
+ * this pattern can never match a task-scoped key. That is what makes admitting
+ * both on one field a widening rather than an ambiguity — every key already on
+ * disk still parses, and still parses as what it was.
+ */
+export const changeScopedIdempotencyKeySchema = z
+  .string()
+  .regex(
+    /^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$/,
+    "Invalid change-scoped idempotency key"
+  )
+  .brand<"ChangeScopedIdempotencyKey">()
+  .describe("Stable logical operation key for a change-scoped decision: project:change:effect-kind:target-hash.");
+
+export type ChangeScopedIdempotencyKey = z.infer<typeof changeScopedIdempotencyKeySchema>;
+
 export const correlationIdSchema = z
   .string()
   .regex(/^cor_[0-9a-hjkmnp-tv-z]{26}$/, "Invalid correlation ID")
@@ -165,4 +203,27 @@ export function buildIdempotencyKey(input: {
   const targetHash = contentHashSchema.parse(input.targetHash);
 
   return idempotencyKeySchema.parse(`${projectId}:${changeId}:${taskId}:${runId}:${effectKind}:${targetHash}`);
+}
+
+/**
+ * The operation key for a decision about the change, taken before any run.
+ *
+ * Deliberately a second function rather than optional `taskId`/`runId` on
+ * `buildIdempotencyKey`. Optional arguments there would let a caller omit one of
+ * the pair by mistake and silently get a change-scoped key for a task-scoped
+ * operation; two functions make the choice of shape a choice the caller writes
+ * down.
+ */
+export function buildChangeIdempotencyKey(input: {
+  readonly projectId: z.infer<typeof projectIdSchema>;
+  readonly changeId: z.infer<typeof changeIdSchema>;
+  readonly effectKind: string;
+  readonly targetHash: z.infer<typeof contentHashSchema>;
+}): ChangeScopedIdempotencyKey {
+  const projectId = projectIdSchema.parse(input.projectId);
+  const changeId = changeIdSchema.parse(input.changeId);
+  const effectKind = effectKindSchema.parse(input.effectKind);
+  const targetHash = contentHashSchema.parse(input.targetHash);
+
+  return changeScopedIdempotencyKeySchema.parse(`${projectId}:${changeId}:${effectKind}:${targetHash}`);
 }

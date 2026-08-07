@@ -16,7 +16,12 @@ import {
   runIdSchema,
   taskIdSchema
 } from "../primitives/ids.js";
-import { idempotencyKeySchema, utcTimestampSchema } from "../primitives/values.js";
+import {
+  artifactReferenceSchema,
+  changeScopedIdempotencyKeySchema,
+  idempotencyKeySchema,
+  utcTimestampSchema
+} from "../primitives/values.js";
 import { schemaMetadataSchema } from "./common.js";
 
 export const approvalStatusSchema = z.enum(["requested", "granted", "denied", "expired", "revoked"]);
@@ -59,7 +64,36 @@ const approvalBaseSchema = schemaMetadataSchema.extend({
   requestedBy: actorSchema,
   requestedAt: utcTimestampSchema,
   scope: approvalScopeSchema,
-  idempotencyKey: idempotencyKeySchema,
+  /**
+   * Which logical operation this decision is.
+   *
+   * Two shapes, admitted here and nowhere else. `idempotencyKeySchema` names a
+   * task and a run, which every approval written before this release does and
+   * which `legion review --accept` still does. A delta-spec approval is taken
+   * between `legion plan` and `legion build`, when no run exists — so it carries
+   * the change-scoped form instead of borrowing ids that would assert an
+   * execution that never happened.
+   *
+   * The union is ordered with the task-scoped form first, so every key already
+   * on disk parses through the branch it was minted by. The two patterns are
+   * disjoint (the effect segment forbids `:`), so which branch a key takes is a
+   * property of the key rather than of the order.
+   */
+  idempotencyKey: z.union([idempotencyKeySchema, changeScopedIdempotencyKeySchema]),
+  /**
+   * The exact bytes the decision was made against.
+   *
+   * `scope.targets` names *what* was approved by id; this names the content that
+   * was in front of the approver when they said yes. A gate can then ask whether
+   * the thing approved has since been edited, which is the only way "approved"
+   * survives contact with a mutable working tree.
+   *
+   * Optional because no approval on disk has it, and `.min(1)` when present
+   * because an empty array is not "pinned nothing" to a reader — it is a list
+   * every pin check passes vacuously, which is a fail-open produced by a shape
+   * rather than by a mistake. Present therefore means at least one pin.
+   */
+  artifacts: z.array(artifactReferenceSchema).min(1).optional(),
   expiresAt: utcTimestampSchema.optional()
 });
 
