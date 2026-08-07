@@ -106,6 +106,29 @@ async function makeUnwritable(filePath) {
 }
 
 /**
+ * The two tests below need one file inside the change directory to refuse a
+ * write while its siblings still accept one. That is constructible on Windows
+ * and not on POSIX.
+ *
+ * Artifact writes here are atomic: write a temp file, then `rename` it over the
+ * target. POSIX `rename` consults the *directory's* permissions, not the
+ * target file's, so `chmod 0o444` on `taskgraph.json` does not stop it — the
+ * accept simply succeeded and these tests failed asserting exit 1. Making the
+ * directory read-only would work, but it would also block the `change.yaml`
+ * write that both tests require to land, since that is the half they exist to
+ * prove is not lost. Windows refuses to replace a read-only file even by
+ * rename, which is why `attrib +R` gives exactly the one-file granularity
+ * needed and nothing on POSIX does.
+ *
+ * So these run on Windows, where the failure they describe is reachable. What
+ * is not covered elsewhere is named rather than left implied: on Linux and
+ * macOS the `change_inputs_not_repointed` recovery path is exercised by no test
+ * in this suite. Inducing it portably needs a fault-injection seam in the
+ * artifact writer, which is a larger change than this fix.
+ */
+const testWhereOneFileCanRefuseAWrite = process.platform === "win32" ? test : test.skip;
+
+/**
  * Undo {@link makeUnwritable}, so the write under test can be retried.
  *
  * A missing file is not an error here. This runs both inside a test — where the
@@ -492,7 +515,7 @@ test("a retried accept repairs a torn write rather than tearing further", async 
   assert.equal((await run("ship", "--json")).exitCode, 0);
 });
 
-test("a re-point that cannot write says so by name, and says the sign-off landed", async (t) => {
+testWhereOneFileCanRefuseAWrite("a re-point that cannot write says so by name, and says the sign-off landed", async (t) => {
   // `writeTaskGraph` and `writeEvidenceIndex` catch only
   // `ArtifactRevisionConflictError` and rethrow everything else, and the re-point
   // caught nothing — so the designed `change_inputs_not_repointed` diagnostic
@@ -678,7 +701,7 @@ test("rejecting a change nobody accepted writes nothing at all", async (t) => {
   assert.deepEqual(pinsOf(await readArtifact("evidence-index.json")), indexPinsBefore);
 });
 
-test("a reject whose demotion cannot land routes to the repair, not to a dead end", async (t) => {
+testWhereOneFileCanRefuseAWrite("a reject whose demotion cannot land routes to the repair, not to a dead end", async (t) => {
   // The reject side of the tear, which nothing covered. The demotion runs only
   // after an accept, so this drives accept → build → review → reject with the
   // taskgraph unwritable. Before the fix the reject exited with a raw
