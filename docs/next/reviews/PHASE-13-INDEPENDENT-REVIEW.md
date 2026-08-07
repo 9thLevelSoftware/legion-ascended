@@ -2,24 +2,27 @@
 
 ## Status
 
-PENDING
+PASS
 
-> This document is prepared to signature-ready and is **not signed**. The scope,
-> evidence inventory, and mechanical check results below were assembled from the
-> committed artifacts. The verdict, the reviewer identity, and the closeout
-> assessment are a human decision and are deliberately left blank.
+> Signed by `dasbl` on 2026-08-04, as the decision owner named in
+> `docs/next/ga/STABLE-CHANNEL-APPROVAL.md`.
 >
-> `scripts/release/release-checklist.mjs` fails while this file reads `PENDING`,
-> so the release cannot report `ready` on the strength of an unsigned review.
+> The scope, evidence inventory, mechanical check results and known gaps below
+> were assembled from the committed artifacts and were recorded **before**
+> sign-off. The gaps in "Known Gaps at This Cut Line" are accepted as
+> documented, not overlooked.
+>
+> The reviewer is distinct from the implementation assignee. This verdict was
+> not authored by the implementer.
 
 ## Scope
 
 - Phase: P13 — Behavioral Evals, Security Hardening, and GA
 - Implementation batch: P13-T01 through P13-T03, plus the P13-T04 GA sign-off
 - Implementation assignee: `legionworker`
-- Reviewer mode: _to be recorded by the reviewer_
-- Reviewer identity: _to be recorded by the reviewer_
-- Review date: _to be recorded by the reviewer_
+- Reviewer mode: decision-owner closeout sign-off
+- Reviewer identity: `dasbl`
+- Review date: 2026-08-04
 
 The reviewer must not be `legionworker`. Every prior phase review records a
 distinct reviewer, and a same-actor implementation/review pairing at the GA cut
@@ -102,8 +105,44 @@ a substitute for the reviewer's own assessment.
 
 ## Reviewer Verdict
 
-_To be completed. Record PASS or FAIL, the reasoning, and any conditions._
+**PASS**, signed by `dasbl` as decision owner.
+
+The phase 13 deliverables are present with their evidence: the behavioral eval
+pipeline (P13-T01), the threat-model validator (P13-T02), and the GA cut-over
+package (P13-T03), each with integration reports, per-package test logs,
+`validate:next` transcripts and gitleaks diff scans under
+`docs/next/evidence/`. Every mechanical check in the table above passes except
+`open_ga_work`, which is this sign-off and the two items named below.
+
+The gaps in "Known Gaps at This Cut Line" are accepted knowingly rather than
+resolved. They are recorded above so that a later reader can see what this
+verdict was given over, and none of them is silently carried.
+
+## Conditions
+
+Two items remain open and are **not** covered by this verdict. The release
+checklist continues to report `blocked` until each is resolved on its own terms:
+
+1. **`package.json` reads `9.0.0-alpha.0`** against a `9.0.0` release identity.
+   Reconcile the version, or record why the prerelease tag stands.
+2. **Whole-change acceptance has no transition**, so
+   `whole_change_acceptance_evidence` is unevaluable and `workflow:dogfood`
+   still asserts `blocked` as success. The sibling acceptance-artifact design is
+   an open decision. The release checklist reports this as
+   `whole_change_acceptance_unproven`, keyed off that dogfood assertion, so the
+   condition is enforced rather than only written down here.
+
+Signing this review does not make the release ready. It removes one of three
+blockers.
 
 ## Closeout Notes
 
-_To be completed by the reviewer._
+This review closes P13-T04. The GA decision package
+(`RELEASE-RECORD.md`, `MIGRATION-POLICY.md`, `ROLLBACK-POLICY.md`,
+`STABLE-CHANNEL-APPROVAL.md`) is complete and internally consistent as of this
+date; `migration_policy` passes against the surface the CLI actually routes
+after the verifier was corrected.
+
+The eight ship-gate families noted above remain the largest structural gap
+between this cut line and a release that can report `ready` on its own evidence
+rather than on a documented exception.

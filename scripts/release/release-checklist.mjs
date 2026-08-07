@@ -258,6 +258,25 @@ function auditOpenGaWork({ repositoryRoot, releaseVersion }) {
     }
   }
 
+  // Whole-change acceptance has no transition, so `whole_change_acceptance_evidence`
+  // is unevaluable and any R2+ change is structurally unshippable. The signed
+  // phase-13 review names this as a condition it does not cover, and a checklist
+  // that never evaluated it would let a reader take "one finding left" for "one
+  // thing left to do".
+  //
+  // The dogfood asserting `blocked` as the success state is the committed,
+  // checkable trace of that gap: when acceptance lands and the assertion flips
+  // to `ready`, this stops firing on its own.
+  const dogfoodPath = path.join(repositoryRoot, "scripts", "dogfood-workflow.mjs");
+  if (existsSync(dogfoodPath) && /assertEqual\(\s*ship\.status,\s*"blocked"/.test(readFileSync(dogfoodPath, "utf8"))) {
+    findings.push({
+      code: "whole_change_acceptance_unproven",
+      message:
+        "workflow:dogfood still asserts `blocked` as ship success, so whole-change acceptance has no producer and " +
+        "an R2+ change cannot be shipped on its own evidence. Resolve the acceptance transition, or record the exception."
+    });
+  }
+
   const reviewPath = path.join(repositoryRoot, "docs", "next", "reviews", "PHASE-13-INDEPENDENT-REVIEW.md");
   if (!existsSync(reviewPath)) {
     findings.push({
