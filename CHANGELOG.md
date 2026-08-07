@@ -57,6 +57,21 @@ where a check answered a narrower question than its name claimed.
   JSON payload but omitted from the terminal string. A terminal run printed
   "Ship ready." while telling a JSON consumer that a file could not be read.
 
+And two tests that could only ever have passed on Windows, both caught by the
+first CI run this branch got:
+
+- Two acceptance tests called `attrib`, a Windows binary, unconditionally, to
+  make a file read-only. On Linux and macOS that is `spawnSync attrib ENOENT`,
+  so both failed for a reason having nothing to do with what they assert. The
+  platform question is now asked once, in a helper that owns both the `chmod`
+  and the `attrib`, and each platform gets the mechanism that actually refuses
+  a write on it.
+- The new drive-letter fold test is Windows-only, because a POSIX runtime cannot
+  express its input: `path.isAbsolute("d:/repo")` is `false` off Windows, so the
+  pair under test stops being the pair under test. The half of that behaviour
+  which can go wrong on Linux — a segment case fold — is covered by a test that
+  runs everywhere.
+
 ### Changed
 - `explicit_human_approval` no longer answers from "an accepted review decision
   exists". It reads the approval plane for a live `workflow.review.accept` grant

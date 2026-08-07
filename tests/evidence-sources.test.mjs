@@ -132,7 +132,19 @@ test("two trees differing only by letter case are two trees, not one", async () 
   assert.match(verdict.reason, /manifest_repository_root_match/);
 });
 
-test("a Windows drive letter still folds, because that pair really is one tree", async () => {
+// Windows-only, and not because the assertion is unimportant elsewhere: a POSIX
+// runtime cannot express the input. `path.isAbsolute("d:/repo")` is `false` off
+// Windows, so `shippedRoot` resolves the string against the working directory
+// and the pair under test stops being the pair under test. Running it anyway
+// asserts something other than what it is named for, which is worse than not
+// running it.
+//
+// Nothing is lost on Linux by that: the half of this behaviour that can go
+// wrong there is a *segment* case fold, and "two trees differing only by letter
+// case are two trees" above runs on every platform and covers exactly that.
+const testOnWindows = process.platform === "win32" ? test : test.skip;
+
+testOnWindows("a Windows drive letter still folds, because that pair really is one tree", async () => {
   // The one case fold that survives, and the reason it is safe: a POSIX path
   // cannot match `^[A-Za-z]:`, so folding the drive letter cannot make two Linux
   // trees collide. It is kept because `--repository-root d:\repo` against a

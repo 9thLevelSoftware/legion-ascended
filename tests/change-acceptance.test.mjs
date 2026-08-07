@@ -86,6 +86,44 @@ function git(root, args) {
   execFileSync("git", ["-C", root, ...args], { stdio: ["ignore", "pipe", "ignore"] });
 }
 
+/**
+ * Make a file genuinely unwritable, on this platform.
+ *
+ * `chmod 0o444` is not enough on Windows: NTFS ignores the mode bits Node maps
+ * onto it for this purpose, and the write succeeds. `attrib +R` is what actually
+ * refuses there — and `attrib` is a Windows binary, so calling it unconditionally
+ * threw `spawnSync attrib ENOENT` on Linux and macOS and failed the two tests
+ * that use it for a reason having nothing to do with what they assert.
+ *
+ * Both are applied where both exist, and only the applicable one elsewhere. The
+ * POSIX side is `chmod` alone, which is sufficient for any non-root user; CI
+ * runners are not root. Both operations live here rather than half here and half
+ * at the call site, so the platform question is asked once.
+ */
+async function makeUnwritable(filePath) {
+  await chmod(filePath, 0o444);
+  if (process.platform === "win32") execFileSync("attrib", ["+R", filePath], { stdio: "ignore" });
+}
+
+/**
+ * Undo {@link makeUnwritable}, so the write under test can be retried.
+ *
+ * A missing file is not an error here. This runs both inside a test — where the
+ * file certainly exists and restoring it is the point — and from a `t.after`
+ * hook that is only a safety net so a read-only file cannot block the temp
+ * tree's removal on Windows. By the time that hook runs the tree may already be
+ * gone, and "restore writability on a file that no longer exists" is a no-op
+ * rather than a failure.
+ */
+async function makeWritable(filePath) {
+  if (process.platform === "win32") execFileSync("attrib", ["-R", filePath], { stdio: "ignore" });
+  try {
+    await chmod(filePath, 0o666);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
+
 /** An R2 change driven to a submitted review, one command short of acceptance. */
 async function reviewedR2(t) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-acceptance-"));
@@ -467,9 +505,8 @@ test("a re-point that cannot write says so by name, and says the sign-off landed
   const { run, changeDir, changeId } = await reviewedR2(t);
 
   const graphPath = path.join(changeDir, "taskgraph.json");
-  await chmod(graphPath, 0o444);
-  execFileSync("attrib", ["+R", graphPath], { stdio: "ignore" });
-  t.after(() => execFileSync("attrib", ["-R", graphPath], { stdio: "ignore" }));
+  await makeUnwritable(graphPath);
+  t.after(() => makeWritable(graphPath));
 
   const accepted = await run("review", "--accept", "--approver", "dasbl", "--json");
   assert.equal(accepted.exitCode, 1);
@@ -493,8 +530,7 @@ test("a re-point that cannot write says so by name, and says the sign-off landed
   assert.equal(payload.nextAction.command, `legion dev change repoint ${changeId}`);
   assert.match(payload.nextAction.reason, /whole-change acceptance WAS written/);
 
-  execFileSync("attrib", ["-R", graphPath], { stdio: "ignore" });
-  await chmod(graphPath, 0o666);
+  await makeWritable(graphPath);
   const repaired = await run("dev", "change", "repoint", changeId, "--json");
   assert.equal(repaired.exitCode, 0, repaired.stdout + repaired.stderr);
   assert.equal((await run("ship", "--json")).exitCode, 0, "the advertised repair actually repairs it");
@@ -654,9 +690,8 @@ test("a reject whose demotion cannot land routes to the repair, not to a dead en
   assert.equal((await run("review", "--executor", "fake", "--json")).exitCode, 0);
 
   const graphPath = path.join(changeDir, "taskgraph.json");
-  await chmod(graphPath, 0o444);
-  execFileSync("attrib", ["+R", graphPath], { stdio: "ignore" });
-  t.after(() => execFileSync("attrib", ["-R", graphPath], { stdio: "ignore" }));
+  await makeUnwritable(graphPath);
+  t.after(() => makeWritable(graphPath));
 
   const rejected = await run("review", "--reject-reason", "the pricing contract moved", "--json");
   assert.equal(rejected.exitCode, 1);
@@ -668,8 +703,7 @@ test("a reject whose demotion cannot land routes to the repair, not to a dead en
   assert.equal(payload.nextAction.command, `legion dev change repoint ${changeId}`);
   assert.match(payload.nextAction.reason, /demotion WAS written/);
 
-  execFileSync("attrib", ["-R", graphPath], { stdio: "ignore" });
-  await chmod(graphPath, 0o666);
+  await makeWritable(graphPath);
   assert.equal((await run("dev", "change", "repoint", changeId, "--json")).exitCode, 0);
 
   const shipped = await run("ship", "--json");
