@@ -124,8 +124,8 @@ authoritative lists live in `DEFAULT_RISK_POLICY` (`packages/core/src/risk/`).
 
 | Tier | Gates | What it asks for |
 | --- | --- | --- |
-| `R0` | 3 | A task contract or small-change record, deterministic verification, an evidence note. |
-| `R1` | 5 | Adds a scoped implementer run, an evidence bundle, and a lightweight independent review. |
+| `R0` | 3 | A task contract *or* a small-change record, deterministic verification, and an evidence note. |
+| `R1` | 5 | Tightens both of R0's loose arms — a real task contract, and an evidence bundle or log rather than a note — keeps deterministic verification, and adds a scoped implementer run and a lightweight independent review. |
 | `R2` | 7 | Approved delta specs, a protected oracle, a task contract, deterministic verification, task-level independent review, a real-interface or integration check, and whole-change acceptance. |
 | `R3` | 10 | An independent baseline, spec **and** oracle approved before execution, a protected oracle, deterministic verification, an architecture or security review, protected acceptance tests, a security or E2E evaluator, explicit human approval, a release observation plan, and rollback or forward-fix evidence. |
 
