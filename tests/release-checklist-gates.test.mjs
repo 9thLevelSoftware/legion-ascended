@@ -44,22 +44,25 @@ test("the checklist still blocks on the one thing that is genuinely open", () =>
   const report = runChecklist();
   const codes = report.findings.map((finding) => finding.code);
 
-  // This asserted `ga_task_open` and `phase_13_review_unsigned` while both were
-  // the true state of this repository, with a note saying to update it when
-  // either was resolved rather than delete it. Both are now resolved: P13-T04
+  // This list shrinks as the repository resolves the conditions it names, and
+  // each entry is removed when that happens rather than the assertion being
+  // loosened. `ga_task_open` and `phase_13_review_unsigned` went first: P13-T04
   // is DONE and the phase-13 review is signed.
   //
-  // The two that remain are exactly the two conditions the signed review names
-  // as outside its verdict. That correspondence is the point: a checklist that
-  // knew about only one of them would let "one finding left" be read as "one
-  // thing left to do".
+  // `whole_change_acceptance_unproven` goes now, and it went the way its own
+  // producer said it would — "when acceptance lands and the assertion flips to
+  // `ready`, this stops firing on its own". The ship-gate series gave
+  // whole-change acceptance a producer, and `scripts/dogfood-workflow.mjs` now
+  // asserts `ready` rather than treating `blocked` as success, so the condition
+  // the check greps for is genuinely gone. The check is kept as the tripwire it
+  // was written to be: it fires again if the dogfood ever goes back.
   //
   // The mechanism these used to cover is exercised on fixtures in
   // tests/release-checklist.test.mjs, where it can fail on demand. Asserting
   // the mechanism against the live repository only worked while the repository
   // happened to be in the failing state.
   assert.equal(report.ok, false);
-  assert.deepEqual([...codes].sort(), ["package_version_mismatch", "whole_change_acceptance_unproven"]);
+  assert.deepEqual([...codes].sort(), ["package_version_mismatch"]);
 });
 
 test("the phase-13 review is signed, and its verdict is read from its own section", () => {

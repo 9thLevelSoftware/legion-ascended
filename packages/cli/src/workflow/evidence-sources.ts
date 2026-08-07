@@ -252,15 +252,39 @@ function subchecksClean(
  * it audited. A relative host root is resolved, because that is a value this
  * process owns and can normalise honestly.
  *
- * The comparison itself is separator and case folding, which is what the two
- * case-insensitive platforms this repository is developed on actually do.
+ * The comparison normalises separators and trailing slashes, and folds case in
+ * the Windows drive letter **only**.
+ *
+ * It used to lowercase the whole path, on the reasoning that the two platforms
+ * this repository is developed on are case-insensitive. Linux is not, and CI and
+ * every deployment run there: `/workspace/Repo` and `/workspace/repo` are two
+ * different trees that compared equal, so a rollback-policy report audited
+ * against one was credited as evidence for a change shipped from the other —
+ * defeating the repository-root binding this check exists to enforce.
+ *
+ * The fix is not `process.platform === "win32"`. `isWindowsStreamPath` in
+ * `pinned-references.ts` already settled that question for this codebase: a
+ * check that holds on Linux and fails open on Windows is worse than one that
+ * never held, and evidence written on one machine is read on whatever machine
+ * ships the change. So the rule is unconditional.
+ *
+ * The drive letter is the one exception, and it is safe precisely because it is
+ * unreachable on the platform that would be harmed: a POSIX path cannot match
+ * `^[A-Za-z]:`, so folding it cannot make two Linux trees collide. It is kept
+ * because `--repository-root d:\repo` against a process reporting `D:\repo` is
+ * ordinary Windows operator input, and refusing it would fail closed on a pair
+ * of paths that genuinely are one tree.
  */
 function shippedRoot(repositoryRoot: string): string {
   return path.isAbsolute(repositoryRoot) ? repositoryRoot : path.resolve(repositoryRoot);
 }
 
 function sameTree(declared: string, repositoryRoot: string): boolean {
-  const fold = (value: string): string => value.replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
+  const fold = (value: string): string =>
+    value
+      .replace(/[\\/]+/g, "/")
+      .replace(/\/+$/, "")
+      .replace(/^([A-Za-z]):/, (_match, drive: string) => `${drive.toLowerCase()}:`);
   return fold(declared) === fold(shippedRoot(repositoryRoot));
 }
 

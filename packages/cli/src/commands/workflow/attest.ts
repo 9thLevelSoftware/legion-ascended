@@ -446,8 +446,20 @@ export async function handleAttestWorkflow(context: CliContext): Promise<CliResu
       classifySource: (reference) =>
         classifyEvidenceSource(pinned.contentOf(reference), { repositoryRoot: context.repositoryRoot })
     });
+  // Satisfying the gate is not the same question as carrying the text the
+  // operator just authored. `--statement` and `--waiver-reason` do not
+  // participate in any gate predicate — that is the point of them, they are the
+  // human's words — so an attestation can satisfy the gate perfectly while
+  // holding a statement the operator has since rewritten. Asking only the gate's
+  // question meant `legion attest ... --statement "corrected reason"` exited 0,
+  // reported `unchanged`, and discarded the correction. Both questions are asked
+  // now, and `unchanged` requires both to be yes.
+  const authoredUnchanged =
+    existing.ok &&
+    existing.document.statement === document.statement &&
+    existing.document.waiverReason === document.waiverReason;
   const action: "record" | "re-record" | "unchanged" = existing.ok
-    ? alreadySatisfying
+    ? alreadySatisfying && authoredUnchanged
       ? "unchanged"
       : "re-record"
     : "record";

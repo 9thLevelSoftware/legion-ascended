@@ -42170,7 +42170,7 @@ function shippedRoot(repositoryRoot) {
   return path35.isAbsolute(repositoryRoot) ? repositoryRoot : path35.resolve(repositoryRoot);
 }
 function sameTree(declared, repositoryRoot) {
-  const fold = (value) => value.replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
+  const fold = (value) => value.replace(/[\\/]+/g, "/").replace(/\/+$/, "").replace(/^([A-Za-z]):/, (_match, drive) => `${drive.toLowerCase()}:`);
   return fold(declared) === fold(shippedRoot(repositoryRoot));
 }
 function threatModelVerdict(document) {
@@ -50230,6 +50230,13 @@ async function handleShipWorkflow(context) {
       // run, so a warning that lived solely in the payload was invisible to
       // exactly the operator who opted into the allowance.
       ...traceabilityWarnings.map((warning) => `warning: ${warning.message}`),
+      // In the same list as the other two, and for the same reason. A plane the
+      // gates did not need can still be unreadable — an R2 change with a corrupt
+      // `release.json`, an approval entry that would not parse — and the rule
+      // directly above applies with no exception: a terminal run that printed
+      // "Ship ready." while an artifact could not be read told the operator less
+      // than the JSON did, about the one thing they would want to know.
+      ...planeSkips.map((diagnostic3) => `warning: ${diagnostic3.message}`),
       ...waiverWarnings.map((warning) => `warning: ${warning.message}`),
       `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
       ...unevaluable.length === 0 ? [] : [
@@ -52372,7 +52379,8 @@ async function handleAttestWorkflow(context) {
     verifyPin: pinned.verifyPin,
     classifySource: (reference) => classifyEvidenceSource(pinned.contentOf(reference), { repositoryRoot: context.repositoryRoot })
   });
-  const action = existing.ok ? alreadySatisfying ? "unchanged" : "re-record" : "record";
+  const authoredUnchanged = existing.ok && existing.document.statement === document.statement && existing.document.waiverReason === document.waiverReason;
+  const action = existing.ok ? alreadySatisfying && authoredUnchanged ? "unchanged" : "re-record" : "record";
   const warnings = await attestationWarnings({
     repositoryRoot: context.repositoryRoot,
     changeId: latestChange.changeId,

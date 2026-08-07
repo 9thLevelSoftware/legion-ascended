@@ -216,6 +216,42 @@ test("an R2 change ships ready, end to end, for the first time", async (t) => {
   );
 });
 
+test("a ready ship says out loud that a plane it did not need was unreadable", async (t) => {
+  // An R2 change does not derive `release_observation_plan`, so a corrupt
+  // `release.json` cannot block it — and should not. But "this gate did not
+  // apply" and "an artifact in this change could not be read" are different
+  // facts, and only the first one was reaching the operator.
+  //
+  // The warning was assembled into `planeSkips`, put in the JSON payload, and
+  // then omitted from the `human` string that a terminal run actually prints.
+  // So `legion ship` told someone piping JSON that a file was unreadable and
+  // told the person at the keyboard "Ship ready." — the rule two lines above it
+  // in that same array exists precisely to forbid that.
+  const { run, changeDir } = await reviewedR2(t);
+
+  const accepted = await run("review", "--accept", "--approver", "dasbl", "--json");
+  assert.equal(accepted.exitCode, 0, accepted.stdout + accepted.stderr);
+
+  await writeFile(path.join(changeDir, "release.json"), "{ this is not json\n", "utf8");
+
+  const shipped = await run("ship", "--json");
+  assert.equal(shipped.exitCode, 0, "an R2 change does not derive the release gate, so this must not block");
+  const payload = parseJsonOutput(shipped);
+  assert.equal(payload.status, "ready");
+  const planeWarning = (payload.warnings ?? []).find((entry) => /release/i.test(entry.message));
+  assert.ok(planeWarning, `the unreadable plane must be reported, got ${JSON.stringify(payload.warnings)}`);
+
+  // The assertion this test exists for: the same sentence reaches the terminal.
+  const human = await run("ship");
+  assert.equal(human.exitCode, 0, human.stdout + human.stderr);
+  assert.match(human.stdout, /Ship ready\./);
+  assert.match(
+    human.stdout,
+    /warning: .*release/i,
+    `a terminal run must not print "Ship ready." while hiding the unreadable plane, got:\n${human.stdout}`
+  );
+});
+
 test("the accept re-points the artifact inputs its own write invalidated", async (t) => {
   // Without this the milestone above is unreachable: the taskgraph and the
   // evidence index both pin `change.yaml`'s `{sha256, revision}`, so the
