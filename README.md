@@ -63,14 +63,16 @@ Recommended first-class targets:
 | `opencode` | OpenCode | `/legion` |
 | `kilocode` | Kilo Code Plugin | Legion mode or `/legion` |
 
-Compatibility, legacy, and manual-only targets install too, but they are not the default happy path.
-Run `legion install --list-targets --all-targets` for the current list with tiers:
+Compatibility, legacy, and manual-only targets are documented too, but they are not the default happy
+path and the tiers mean genuinely different things. Run `legion install --list-targets --all-targets`
+for the current list:
 
 - **Compatible** — Kiro CLI (formerly Amazon Q Developer CLI), Cursor, Windsurf, Kilo CLI. Cursor and
   Windsurf are local-scope only and have no slash-command entry; you invoke Legion by asking for it
   in plain language.
 - **Legacy** — Google Gemini CLI. Installs and works; not where new capability lands first.
-- **Manual-only** — Aider. No installer support; wire it yourself.
+- **Manual-only** — Aider. There is no installer for it; the tier name means exactly that. Wire it up
+  yourself against the same `legion <command>` surface.
 
 Claude Desktop is documented in the install matrix but is **not an installable target** —
 `legion install --target claude-desktop` reports an unknown target. It needs MCP or desktop-extension
@@ -137,6 +139,7 @@ ask stricter versions of the same questions.
 R3 needs the governance commands, which R2 does not use:
 
 ```powershell
+legion approve oracle --approver <your-id>       # R3 needs spec AND oracle, both before build
 legion attest independent-baseline --attested-by <id> --verdict pass --source <path>
 legion attest security-evaluation  --attested-by <id> --verdict pass --source <path>
 legion attest rollback-evidence    --attested-by <id> --verdict pass --source <path>
@@ -147,8 +150,19 @@ legion release plan --environment staging --rollback-strategy revert `
 
 Each of those writes a governance artifact and nothing else — it does not run the check it records.
 `legion ship` re-verifies every content hash at read time, so a gate cannot be satisfied by a file
-that has since changed. A change that genuinely deploys nothing waives the release gate through
-`legion attest release-observation --verdict not_applicable`, which is audited rather than silent.
+that has since changed. A change that genuinely deploys nothing waives the release gate
+instead, and the waiver is audited rather than silent:
+
+```powershell
+legion attest release-observation --attested-by <id> --verdict not_applicable `
+  --source docs/decisions/no-deployment.md `
+  --waiver-reason "This change ships no artifact and touches no deployed surface."
+```
+
+`--source` is required for every verdict including a waiver — a waiver still names the bytes it is
+about — and `--waiver-reason` is required for `not_applicable`, refused for anything else, and must
+be at least 24 characters and more than one word. A waiver is a reason a reviewer can disagree with,
+which is a sentence rather than a token.
 
 When a gate is satisfied by human judgement rather than a machine check, the ready payload says so in
 `riskGates.waivedGates` and `riskGates.humanJudgementGates`. Ready never means "nothing was checked"
