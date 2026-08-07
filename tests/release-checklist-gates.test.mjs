@@ -40,23 +40,60 @@ test("the migration policy check accepts the surface the CLI actually routes", (
   assert.ok(!codes.includes("migration_policy_cli_surface_drift"), "the help text still names it too");
 });
 
-test("the checklist cannot report ready while GA-critical work is open", () => {
+test("the checklist reports ready, and every condition it names is genuinely closed", () => {
   const report = runChecklist();
   const codes = report.findings.map((finding) => finding.code);
 
-  // P13-T04 is the GA sign-off, and the independent review is unsigned. Both
-  // are the true state of this repository; if either is ever resolved, this
-  // assertion should be updated rather than deleted.
-  assert.equal(report.ok, false);
-  assert.ok(codes.includes("ga_task_open"), "an open GA task must block");
-  assert.ok(codes.includes("phase_13_review_unsigned"), "an unsigned review must block");
+  // This assertion has inverted, and the inversion is the point of the test
+  // rather than a loosening of it.
+  //
+  // It began as a list of what was open, with each entry deleted when the
+  // repository actually resolved it rather than the assertion being relaxed:
+  // `ga_task_open` and `phase_13_review_unsigned` went when P13-T04 was marked
+  // DONE and the phase-13 review was signed; `whole_change_acceptance_unproven`
+  // went the way its own producer said it would — "when acceptance lands and
+  // the assertion flips to `ready`, this stops firing on its own" — because the
+  // ship-gate series gave whole-change acceptance a producer and
+  // `scripts/dogfood-workflow.mjs` now asserts `ready`; and
+  // `package_version_mismatch` went when `package.json` was reconciled to the
+  // 9.0.0 release identity.
+  //
+  // The list is empty, so what is left to assert is the whole verdict. It is
+  // asserted as a whole deliberately: `deepEqual([], [])` would also pass
+  // against a checklist that had stopped running, and the distance between
+  // "nothing is open" and "nothing was checked" is the entire value of a
+  // fail-closed gate.
+  //
+  // If this reddens, the repository has regressed out of a releasable state.
+  // The finding it names says which condition, and the fix is to close that
+  // condition — not to add it back to an expected-findings list.
+  assert.deepEqual(codes, [], `the release checklist must stay clean, got ${JSON.stringify(report.findings)}`);
+  assert.equal(report.ok, true);
+  assert.equal(report.status, "ready");
+
+  // Every check ran and passed, rather than the findings array merely being
+  // empty. The mechanism itself is exercised on fixtures in
+  // tests/release-checklist.test.mjs, where it can be made to fail on demand.
+  const checks = Object.values(report.checks ?? {});
+  assert.ok(checks.length > 0, "the verdict must carry its per-check breakdown");
+  assert.deepEqual(
+    checks.filter((check) => check.ok !== true).map((check) => check.name),
+    [],
+    "a ready verdict requires every named check to have passed, not merely to have produced no finding"
+  );
 });
 
-test("a prepared-but-unsigned review is distinguished from a missing one", () => {
+test("the phase-13 review is signed, and its verdict is read from its own section", () => {
   const report = runChecklist();
   const codes = report.findings.map((finding) => finding.code);
-  // Writing the document must not be mistakable for signing it. Preparing the
-  // artifact is mechanical; the verdict is a human's.
+
+  // Neither missing nor unsigned. Writing the document must not be mistakable
+  // for signing it, and the verdict is read from the `## Status` heading rather
+  // than grepped for a keyword anywhere in the file — a FAIL verdict elsewhere
+  // in the prose must not read as a pass, and explanatory text mentioning
+  // PENDING must not read as unsigned.
   assert.ok(!codes.includes("phase_13_review_missing"));
-  assert.ok(codes.includes("phase_13_review_unsigned"));
+  assert.ok(!codes.includes("phase_13_review_unsigned"));
+  assert.ok(!codes.includes("phase_13_review_failed"));
+  assert.ok(!codes.includes("phase_13_review_verdict_unreadable"));
 });

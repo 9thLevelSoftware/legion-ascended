@@ -100,6 +100,32 @@ All notable Legion Next governance changes are documented here.
   is still a containment failure and the run still blocks.
 
 ### Fixed
+Three findings from the automated review of the ship-gate series, each a case
+where a check answered a narrower question than its name claimed.
+
+- A rollback-policy report is no longer credited to a tree it did not audit.
+  `sameTree` lowercased the whole path, which is correct on the two
+  case-insensitive platforms this repository is developed on and wrong on the
+  one CI and every deployment run on: `/workspace/Repo` and `/workspace/repo`
+  are two directories on Linux and compared equal, defeating the repository-root
+  binding the check exists to enforce. Case folding is now confined to the
+  Windows drive letter, which a POSIX path cannot match — so it closes the hole
+  on Linux without a `process.platform` branch, following the rule
+  `isWindowsStreamPath` already set for this codebase.
+- `legion attest` no longer discards an authored correction. Its "already
+  recorded" test asked the gate's predicate — attester, verdict, still
+  satisfying — and `--statement` and `--waiver-reason` participate in no gate
+  predicate, that being the point of them. Re-running with corrected wording
+  therefore exited 0, reported `unchanged`, and wrote nothing. Satisfying the
+  gate and carrying the authored text are now both required for `unchanged`.
+- `legion ship` prints its artifact-plane warnings. A change whose risk tier does
+  not derive a gate can still hold an unreadable artifact for that plane — an R2
+  change with a corrupt `release.json` — and the warning was assembled into the
+  JSON payload but omitted from the terminal string. A terminal run printed
+  "Ship ready." while telling a JSON consumer that a file could not be read.
+
+And two in the guarded-execution path, both Windows-shaped:
+
 - Restoring a snapshotted symlink passed no `type` to `symlinkSync`, so on
   Windows every directory-symlink restore failed even in a privileged process,
   and every symlink restore failed without `SeCreateSymbolicLinkPrivilege`. The

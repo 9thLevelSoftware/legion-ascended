@@ -962,6 +962,13 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
       // run, so a warning that lived solely in the payload was invisible to
       // exactly the operator who opted into the allowance.
       ...traceabilityWarnings.map((warning) => `warning: ${warning.message}`),
+      // In the same list as the other two, and for the same reason. A plane the
+      // gates did not need can still be unreadable — an R2 change with a corrupt
+      // `release.json`, an approval entry that would not parse — and the rule
+      // directly above applies with no exception: a terminal run that printed
+      // "Ship ready." while an artifact could not be read told the operator less
+      // than the JSON did, about the one thing they would want to know.
+      ...planeSkips.map((diagnostic) => `warning: ${diagnostic.message}`),
       ...waiverWarnings.map((warning) => `warning: ${warning.message}`),
       `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
       ...(unevaluable.length === 0

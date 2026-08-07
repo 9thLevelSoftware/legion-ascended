@@ -323,6 +323,68 @@ test("a clean threat model is attested, satisfies its gate, and re-running write
   assert.equal(rerun.attestation.attestedAt, payload.attestation.attestedAt, "a rerun must not re-date the assertion");
 });
 
+test("a rerun that authors a different statement records it, rather than reporting unchanged", async (t) => {
+  // `unchanged` used to be decided by the gate's predicate alone — attester,
+  // verdict, and "would this still satisfy the gate". `--statement` participates
+  // in no gate predicate, which is the entire point of it: it is the human's
+  // words, not a machine-checkable fact. So an operator correcting a statement
+  // hit every branch of the idempotence check, got exit 0 and `unchanged`, and
+  // watched the correction be discarded silently.
+  //
+  // Satisfying the gate and carrying the authored text are two questions, and
+  // `unchanged` is only honest when both answer yes.
+  const { root, run, changeId } = await acceptedR3(t);
+
+  const first = await run(
+    "attest", "security-evaluation",
+    "--attested-by", "dasbl",
+    "--verdict", "pass",
+    "--source", THREAT_MODEL_PATH,
+    "--statement", "First reading of the threat model.",
+    "--json"
+  );
+  assert.equal(first.exitCode, 0, first.stdout + first.stderr);
+  const firstPayload = parseJsonOutput(first);
+  assert.equal(firstPayload.attestation.action, "record");
+
+  const corrected = await run(
+    "attest", "security-evaluation",
+    "--attested-by", "dasbl",
+    "--verdict", "pass",
+    "--source", THREAT_MODEL_PATH,
+    "--statement", "Corrected: the canary check was read against the redacted transcript.",
+    "--json"
+  );
+  assert.equal(corrected.exitCode, 0, corrected.stdout + corrected.stderr);
+  const correctedPayload = parseJsonOutput(corrected);
+  assert.equal(
+    correctedPayload.attestation.action,
+    "re-record",
+    "a changed statement is a changed attestation, however satisfied the gate remains"
+  );
+
+  // The assertion that matters: the new words are on disk, not merely reported.
+  const written = JSON.parse(
+    await readFile(
+      path.join(root, ".legion/project/changes", changeId, "attestations", `${correctedPayload.attestation.attestationId}.json`),
+      "utf8"
+    )
+  );
+  assert.match(written.statement, /^Corrected: /);
+
+  // And an identical rerun is still `unchanged`, so this does not turn every
+  // rerun into a write.
+  const again = await run(
+    "attest", "security-evaluation",
+    "--attested-by", "dasbl",
+    "--verdict", "pass",
+    "--source", THREAT_MODEL_PATH,
+    "--statement", "Corrected: the canary check was read against the redacted transcript.",
+    "--json"
+  );
+  assert.equal(parseJsonOutput(again).attestation.action, "unchanged");
+});
+
 test("editing a cited report after the attestation blocks the gate, and the cure is the bytes", async (t) => {
   // The tampering arm, end to end. Without the re-hash, the record would certify
   // whatever the report said on the day it was written and would keep certifying

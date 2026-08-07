@@ -113,6 +113,64 @@ test("the severity filter survives the root check: the same verdict read in its 
   assert.equal(verdict.shape, "rollback-policy");
 });
 
+test("two trees differing only by letter case are two trees, not one", async () => {
+  // The root comparison used to lowercase the whole path, which is right on the
+  // two case-insensitive platforms this repository is developed on and wrong on
+  // the one CI and every deployment runs on. `/var/.../Tmpamcjw11f` and
+  // `/var/.../tmpamcjw11f` are two different directories on Linux, and folding
+  // them together credited a report audited against one as evidence for a change
+  // shipped from the other — which is exactly the laundering the test above
+  // exists to stop, reachable again through nothing but a capital letter.
+  const raw = JSON.parse(await readFile(path.join(ROOT, "docs/next/evidence/P13-T03/rollback-policy.json"), "utf8"));
+  const audited = raw.repository_root;
+  const segments = audited.split("/");
+  const recased = [...segments.slice(0, -1), segments.at(-1).toUpperCase()].join("/");
+  assert.notEqual(recased, audited, "the fixture root must contain a letter to re-case");
+
+  const verdict = await classifyFile("docs/next/evidence/P13-T03/rollback-policy.json", recased);
+  assert.equal(verdict.kind, "blocking");
+  assert.match(verdict.reason, /manifest_repository_root_match/);
+});
+
+// Windows-only, and not because the assertion is unimportant elsewhere: a POSIX
+// runtime cannot express the input. `path.isAbsolute("d:/repo")` is `false` off
+// Windows, so `shippedRoot` resolves the string against the working directory
+// and the pair under test stops being the pair under test. Running it anyway
+// asserts something other than what it is named for, which is worse than not
+// running it.
+//
+// Nothing is lost on Linux by that: the half of this behaviour that can go
+// wrong there is a *segment* case fold, and "two trees differing only by letter
+// case are two trees" above runs on every platform and covers exactly that.
+const testOnWindows = process.platform === "win32" ? test : test.skip;
+
+testOnWindows("a Windows drive letter still folds, because that pair really is one tree", async () => {
+  // The one case fold that survives, and the reason it is safe: a POSIX path
+  // cannot match `^[A-Za-z]:`, so folding the drive letter cannot make two Linux
+  // trees collide. It is kept because `--repository-root d:\repo` against a
+  // process reporting `D:\repo` is ordinary Windows operator input, and refusing
+  // it would fail closed on two spellings of one directory.
+  //
+  // Asserted alongside the test above so a future author who deletes the fold
+  // has to decide about this case explicitly rather than discover it in a bug
+  // report from the only platform that needs it.
+  // Built by re-rooting the committed report rather than hand-writing a
+  // rollback-policy literal, on this file's own rule: a literal transcribed from
+  // the producer agrees with the producer by construction, and keeps agreeing
+  // after the producer changes.
+  const audited = "D:\\legion-ascended";
+  const raw = JSON.parse(await readFile(path.join(ROOT, "docs/next/evidence/P13-T03/rollback-policy.json"), "utf8"));
+  const document = {
+    ...raw,
+    repository_root: audited,
+    manifest: { ...raw.manifest, repositoryRoot: audited }
+  };
+
+  assert.equal(classify(document, "d:/legion-ascended").kind, "clean");
+  // And the segment after it is still compared exactly.
+  assert.equal(classify(document, "d:/Legion-Ascended").kind, "blocking");
+});
+
 test("a rollback verdict that does not say which tree it audited is blocking", () => {
   // Positive check, never negative: a report that omits `repository_root` or the
   // manifest's `repositoryRoot` has not been shown to be about this repository,

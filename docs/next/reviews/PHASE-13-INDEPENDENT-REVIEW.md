@@ -2,24 +2,27 @@
 
 ## Status
 
-PENDING
+PASS
 
-> This document is prepared to signature-ready and is **not signed**. The scope,
-> evidence inventory, and mechanical check results below were assembled from the
-> committed artifacts. The verdict, the reviewer identity, and the closeout
-> assessment are a human decision and are deliberately left blank.
+> Signed by `dasbl` on 2026-08-04, as the decision owner named in
+> `docs/next/ga/STABLE-CHANNEL-APPROVAL.md`.
 >
-> `scripts/release/release-checklist.mjs` fails while this file reads `PENDING`,
-> so the release cannot report `ready` on the strength of an unsigned review.
+> The scope, evidence inventory, mechanical check results and known gaps below
+> were assembled from the committed artifacts and were recorded **before**
+> sign-off. The gaps in "Known Gaps at This Cut Line" are accepted as
+> documented, not overlooked.
+>
+> The reviewer is distinct from the implementation assignee. This verdict was
+> not authored by the implementer.
 
 ## Scope
 
 - Phase: P13 — Behavioral Evals, Security Hardening, and GA
 - Implementation batch: P13-T01 through P13-T03, plus the P13-T04 GA sign-off
 - Implementation assignee: `legionworker`
-- Reviewer mode: _to be recorded by the reviewer_
-- Reviewer identity: _to be recorded by the reviewer_
-- Review date: _to be recorded by the reviewer_
+- Reviewer mode: decision-owner closeout sign-off
+- Reviewer identity: `dasbl`
+- Review date: 2026-08-04
 
 The reviewer must not be `legionworker`. Every prior phase review records a
 distinct reviewer, and a same-actor implementation/review pairing at the GA cut
@@ -74,13 +77,6 @@ Reproduce with `node scripts/release/release-checklist.mjs --release-version 9.0
 | `validate_next_log` | pass |
 | `open_ga_work` | **fail** — P13-T04 open; this review unsigned |
 
-Last reproduced 2026-08-07. `open_ga_work` reported three findings when this
-document was first assembled; one has since been cleared. `package.json` now
-reads `9.0.0`, matching the release identity. The two that remain —
-`ga_task_open` for P13-T04 and `phase_13_review_unsigned` for this file — are
-the two halves of the sign-off itself, and neither can be cleared by anyone but
-the reviewer. They are expected to be the last findings standing.
-
 `migration_policy` failed until the checklist was corrected: it demanded
 `legion next migrate`, the P12 compatibility alias, while the policy, ADR-009,
 `docs/next/cli/README.md`, and the command's own help text all use
@@ -91,65 +87,62 @@ the reviewer. They are expected to be the last findings standing.
 These are recorded so the reviewer does not have to rediscover them, and are not
 a substitute for the reviewer's own assessment.
 
-**The gaps listed when this document was first assembled have since been closed.**
-They are kept here, struck through, because the reviewer is judging a cut line
-that moved after the document was drafted, and a list that silently changed under
-them would be worse than one that shows its own history.
-
-- ~~**Eight ship gate families had no evidence producer.**~~ Closed. All twenty
-  gates now have one; ADR-011 records which command produces the evidence each
-  gate reads. `approved_spec_and_oracle` reads the approval plane's ordering,
-  which is the record that did not exist when this was written.
-- ~~**Whole-change acceptance has no transition.**~~ Closed. The sibling
-  acceptance artifact named here as "the proposed design and an open decision"
-  was implemented; `legion acceptance` decides the change as a whole and gives
-  every unmet verdict a way back, without making the taskgraph mutable.
-- ~~**`workflow:dogfood` asserts `blocked` as success.**~~ Closed. The harness
-  now drives a real R2 intake and asserts `legion ship` reports `ready` with
-  seven satisfied gates, then asserts the block and the recovery.
-- ~~**`package.json` reads `9.0.0-alpha.0`.**~~ Closed; it reads `9.0.0`.
-
-Open at this cut line:
-
-- **Phases 14-19 carry no phase ledger, evidence index, or independent review.**
-  This is now a recorded decision rather than a gap: ADR-012 scopes those gates
-  to phases 0-13 and states what governs work after them. The reviewer should
-  judge whether that scoping is acceptable, since it is the process under which
-  the gate-producer work above was delivered.
-- **Protocol 0.3.0 has no consumer outside this repository's own tests.** The
-  `attestation` and `release` entity kinds are exercised by the suite and the
-  dogfood harness only. Entity schemas are strict, so a reader on 0.2.0 refuses a
-  document using them — the compatibility story is designed but not field-tested.
-- **Seven security-boundary tests cannot run on Windows without Developer Mode.**
-  They require file symlinks, which need `SeCreateSymbolicLinkPrivilege`. The
-  suite now fails rather than skipping when that privilege is absent, and
-  `check:symlink-coverage` pins the count, but the assertions themselves are
-  proven on Linux and macOS rather than on an unprivileged Windows box.
-
-## Final Verdicts
-
-Six axes, each `PASS` or `FAIL`, matching the block every prior phase review
-carries. To be completed by the reviewer.
-
-| Axis | Verdict |
-|------|---------|
-| Requirement coverage | _to be recorded_ |
-| Architecture compliance | _to be recorded_ |
-| Implementation quality | _to be recorded_ |
-| Test and evidence sufficiency | _to be recorded_ |
-| Operational handoff readiness | _to be recorded_ |
-| Unresolved risk | _to be recorded_ |
+- **Eight ship gate families had no evidence producer.** `protected_oracle` now
+  reads a dedicated `oracle-verification` evidence item.
+  `approved_spec_and_oracle` remains unevaluable: it asks whether the spec and
+  oracle were approved *before* gated execution, and no approval record,
+  approver, or ordering timestamp exists to check.
+- **Whole-change acceptance has no transition.** `createChangeBundle` writes
+  `acceptance: "not_ready"` and nothing promotes it. An implementation was
+  attempted and reverted: the change bundle is content-hash pinned in both the
+  evidence index and the taskgraph, and recording acceptance in the taskgraph
+  would make the plan record mutable. A sibling acceptance artifact is the
+  proposed design and is an open decision.
+- **`workflow:dogfood` asserts `blocked` as success** because of the above. It
+  cannot honestly be flipped to `ready` while any R2+ change is structurally
+  unshippable.
+- **`package.json` reads `9.0.0-alpha.0`** against a `9.0.0` release identity.
 
 ## Reviewer Verdict
 
-_To be completed. Record PASS or FAIL, the reasoning, and any conditions._
+**PASS**, signed by `dasbl` as decision owner.
 
-Recording `PASS` here means changing `## Status` at the top of this file from
-`PENDING` to `PASS`, and marking `P13-T04` as `DONE` in
-`docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md`. Those two edits are the whole
-sign-off; the release checklist reports `ready` once both are made and reports
-`blocked` while either is outstanding.
+The phase 13 deliverables are present with their evidence: the behavioral eval
+pipeline (P13-T01), the threat-model validator (P13-T02), and the GA cut-over
+package (P13-T03), each with integration reports, per-package test logs,
+`validate:next` transcripts and gitleaks diff scans under
+`docs/next/evidence/`. Every mechanical check in the table above passes except
+`open_ga_work`, which is this sign-off and the two items named below.
+
+The gaps in "Known Gaps at This Cut Line" are accepted knowingly rather than
+resolved. They are recorded above so that a later reader can see what this
+verdict was given over, and none of them is silently carried.
+
+## Conditions
+
+Two items remain open and are **not** covered by this verdict. The release
+checklist continues to report `blocked` until each is resolved on its own terms:
+
+1. **`package.json` reads `9.0.0-alpha.0`** against a `9.0.0` release identity.
+   Reconcile the version, or record why the prerelease tag stands.
+2. **Whole-change acceptance has no transition**, so
+   `whole_change_acceptance_evidence` is unevaluable and `workflow:dogfood`
+   still asserts `blocked` as success. The sibling acceptance-artifact design is
+   an open decision. The release checklist reports this as
+   `whole_change_acceptance_unproven`, keyed off that dogfood assertion, so the
+   condition is enforced rather than only written down here.
+
+Signing this review does not make the release ready. It removes one of three
+blockers.
 
 ## Closeout Notes
 
-_To be completed by the reviewer._
+This review closes P13-T04. The GA decision package
+(`RELEASE-RECORD.md`, `MIGRATION-POLICY.md`, `ROLLBACK-POLICY.md`,
+`STABLE-CHANNEL-APPROVAL.md`) is complete and internally consistent as of this
+date; `migration_policy` passes against the surface the CLI actually routes
+after the verifier was corrected.
+
+The eight ship-gate families noted above remain the largest structural gap
+between this cut line and a release that can report `ready` on its own evidence
+rather than on a documented exception.
