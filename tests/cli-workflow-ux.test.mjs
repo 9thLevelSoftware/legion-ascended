@@ -1517,6 +1517,12 @@ test("legion review submits, accepts, advances status, and unlocks ship readines
     // later change that satisfied `approved_delta_spec` and broke a different
     // gate would leave this test green for the wrong reason, and so would one
     // that stopped deriving R2's gates entirely.
+    //
+    // This fixture is now also the counterweight to the dogfood, which certifies
+    // `ready` for an R2 change from this release onward. Nothing here may be
+    // relaxed to match it: the difference between the two is the whole claim —
+    // an interviewed R2 change with an approved spec, a declared surface and a
+    // named approver ships, and this one, which has none of those, does not.
     const ship = await runCliCapture(["--repository-root", root, "ship", "--json"]);
     assert.equal(ship.exitCode, 1);
     const shipPayload = parseJsonOutput(ship);

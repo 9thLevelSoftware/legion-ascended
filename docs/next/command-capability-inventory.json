@@ -623,7 +623,7 @@
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
-      "rationale": "The verb runs release readiness gates. It does not publish or release, so PR creation, pushing, and post-ship observation cannot move into it.",
+      "rationale": "The verb derives the ADR-006 gate set for each task's risk tier and reports every gate's verdict, satisfied ones included. It does not publish or release, so PR creation, pushing, and post-ship observation cannot move into it. What also stays in the host is telling the person the difference between a gate that was proven and a gate that was waived: the CLI names both in the payload and cannot make anyone read them out.",
       "hostOnly": [
         {
           "capability": "PR creation and pushing",
@@ -632,6 +632,10 @@
         {
           "capability": "Post-ship verification and canary monitoring",
           "anchor": "7. POST-SHIP"
+        },
+        {
+          "capability": "Reading out the waived and human-judgement gates before calling a change ready, rather than reporting the satisfied count",
+          "anchor": "Do not report the satisfied count as the number of gates that"
         }
       ],
       "cliGaps": []

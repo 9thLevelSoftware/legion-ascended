@@ -9,7 +9,7 @@ Source inputs:
 
 # Legion Protocol Schema Catalog
 
-Protocol version: `0.2.0`
+Protocol version: `0.3.0`
 
 | Group | Schema | Title | Canonical ID | Committed artifact |
 | --- | --- | --- | --- | --- |

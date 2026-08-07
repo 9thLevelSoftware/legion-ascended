@@ -1106,7 +1106,29 @@ const SCENARIOS = [
  * behaviour change, stated in one place, and reviewing it is reviewing the
  * central claim of the change that makes it.
  *
- * **One gate id changed behaviour in this release, and exactly one:
+ * **No gate id moved in this release, and that is the whole report.** The
+ * release that closes this series gives no gate a producer: it flips the
+ * dogfood harness from asserting a blocked ship as its success condition to
+ * asserting `ready`, records the decision in ADR-011, and moves the protocol to
+ * 0.3.0. Nothing it touches reaches `evaluateGate`, `GATE_SCOPE`,
+ * `GATE_RECOVERY`, a gate's reason string or `DEFAULT_RISK_POLICY.gatesByTier`,
+ * so `BASELINE_GATE_STATUSES`, `BASELINE_READY` and `CHANGE_SCOPED_GATES` below
+ * are byte-identical to the release before it. A reader who comes here looking
+ * for the movement the paragraphs after this one always name should find none,
+ * and should not go hunting: a diff in the table is a defect, not an edit. The
+ * protocol bump is invisible here for a reason worth stating rather than
+ * assuming — every fixture in this file is a plain object with no
+ * `schemaVersion` on it, so nothing below is read through the upcasting reader.
+ *
+ * The running record below is written from each author's own vantage point, and
+ * one entry is missing from it: `release_observation_plan` gained its producer
+ * in the release immediately before this one and added no paragraph, so the
+ * chain that follows skips it and its "this release" means the release that
+ * moved `protected_acceptance_tests`. The verdicts in the table are correct
+ * either way — that gate's cells were transcribed with the rest — but a reader
+ * counting releases against paragraphs will come up one short.
+ *
+ * **One gate id changed behaviour in that release, and exactly one:
  * `protected_acceptance_tests`.** ADR-006 asks whether the acceptance tests can
  * be weakened by the implementer, and until now nothing anywhere recorded which
  * tests those were: `oracle.protectedPaths` named the change artifact and was
@@ -2464,9 +2486,14 @@ const BASELINE_READY = {
   "a baseline attested before execution began": { R0: true, R1: true, R2: false, R3: false },
   "a baseline attested in the instant execution began": { R0: true, R1: true, R2: false, R3: false },
   "a rollback gate waived by a named human": { R0: true, R1: true, R2: false, R3: false },
-  // R3 stays blocked in the four review-domain rows too, and for the same reason:
-  // two of R3's ten gates still have no producer, and these fixtures move exactly
-  // one gate each.
+  // R3 stays blocked in the four review-domain rows too, and for the same reason
+  // as the block above: these fixtures move exactly one gate each and R3 derives
+  // ten. This comment used to say "two of R3's ten gates still have no producer",
+  // which was true when it was written and is not now — every one of the twenty
+  // gates is cased in `evaluateGate` and the assertion at the head of this file
+  // pins that the `default:` reason string answers for nothing. A stale sentence
+  // inside the running record is worse than no sentence, because the record is
+  // what the rest of this file tells a reader to trust.
   "an accepted architecture review": { R0: true, R1: true, R2: false, R3: false },
   "a rejected architecture review": { R0: true, R1: true, R2: false, R3: false },
   "an accepted implementation-only review": { R0: true, R1: true, R2: false, R3: false },

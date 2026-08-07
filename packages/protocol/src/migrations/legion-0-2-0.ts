@@ -140,5 +140,3 @@ export const legionProtocol010To020: ProtocolMigration = {
     return { ...migrated, schemaVersion: TARGET_VERSION };
   }
 };
-
-export const LEGION_PROTOCOL_MIGRATIONS: readonly ProtocolMigration[] = [legionProtocol010To020];

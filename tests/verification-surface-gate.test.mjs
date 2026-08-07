@@ -679,6 +679,100 @@ test("a drifted pin a named human re-affirmed against the current bytes is satis
   assert.equal(driftedGate({ approvals: [reaffirmation()] }).status, "satisfied");
 });
 
+test("a gate satisfied over a re-affirmed pin says so, and carries the judgement that makes it visible", () => {
+  // The defect: this arm emitted the sentence "was exercised, and every pinned
+  // reference still matches" after a re-affirmation, which is false about the
+  // declaration's pin *by construction* — a re-affirmation is reachable only
+  // from `drift`. It also set neither `waived` nor `judgement`, so
+  // `legion ship` reported `waivedGates: []`, `humanJudgementGates: []` and no
+  // warning at all over a gate whose current bytes nothing had run against.
+  // Measured through the real CLI on the dogfood workspace: overwrite the
+  // pinned compose file with prose stating the integration environment no
+  // longer exists, `legion approve surface --approver dogfood`, then ship —
+  // `{"status":"ready","riskGates":{"satisfied":7,...,"waivedGates":[],
+  // "humanJudgementGates":[]},"diagnostics":[]}`. ADR-011 claimed those two
+  // lists name every gate satisfied with nothing machine-checkable behind it;
+  // this was the counterexample, and the payload was what was wrong.
+  const gate = driftedGate({ approvals: [reaffirmation()] });
+
+  assert.equal(gate.status, "satisfied");
+  assert.doesNotMatch(gate.reason, /every pinned reference still matches/);
+  assert.match(gate.reason, /no longer matches the bytes that check ran against/);
+  assert.match(gate.reason, /dasbl re-affirmed the declaration/);
+  assert.match(gate.reason, /no verification has run against them/);
+
+  assert.deepEqual(gate.judgement, {
+    basis: "pin-reaffirmation",
+    gate: "integration_or_real_interface_checks",
+    decidedBy: "dasbl",
+    decidedAt: "2026-08-05T12:00:00.000Z",
+    path: COMPOSE_PIN.path,
+    interface: REAL_INTERFACE_TASK.verification[0].surface.interface
+  });
+});
+
+test("a change with one clean surface and one re-affirmed one is satisfied by the clean one", () => {
+  // The ordering rule, asserted rather than assumed. Aggregation across surfaces
+  // is `some`, so the gate must report the *strongest* route it has: a change
+  // that also reaches a real interface through pins nothing has touched is
+  // machine-checked end to end, and attaching a human-judgement echo to it would
+  // over-report exactly as badly as the missing echo under-reported. Without
+  // this test, `outcomes.find(satisfied)` picking whichever came first would be
+  // green half the time by fixture order.
+  const other = {
+    command: "pnpm",
+    args: ["test:e2e"],
+    expectedExitCode: 0,
+    surface: surface("end-to-end", {
+      interface: "GET /v1/orders/{id}",
+      pinned: [{ path: "ops/compose.e2e.yml", sha256: `sha256:${"e".repeat(64)}` }]
+    })
+  };
+  const gate = gateFor({
+    contracts: [
+      { id: "ctr_phase-1", risk: { tier: "R2", reasons: ["test"] }, ...REAL_INTERFACE_TASK },
+      secondTask({ verification: [other] })
+    ],
+    entries: [
+      entryFor(TASK_ID, [...PASSING_ITEMS, item("integration-surface-check", "pass")]),
+      entryFor("tsk_phase-2", [...PASSING_ITEMS, item("integration-surface-check", "pass")])
+    ],
+    change: {
+      changeId: CHANGE_ID,
+      approvals: [reaffirmation()],
+      // The declared compose pin drifted and was re-affirmed; the e2e one is
+      // untouched.
+      verifyPin: (reference) =>
+        reference.path === COMPOSE_PIN.path
+          ? reference.sha256 === CURRENT_COMPOSE
+            ? "match"
+            : "drift"
+          : "match"
+    }
+  });
+
+  assert.equal(gate.status, "satisfied");
+  assert.equal(gate.judgement, undefined);
+  assert.match(gate.reason, /GET \/v1\/orders\/\{id\}/);
+});
+
+test("a clean pin keeps the unqualified sentence and raises no judgement", () => {
+  // The other half of the pair, and the reason the assertion above is not a
+  // tautology: without this, replacing the whole arm with an unconditional
+  // judgement would still pass. A surface whose pins match is machine-checked
+  // end to end and must not be echoed as somebody's decision — over-reporting a
+  // human judgement is the same unreadable payload as under-reporting one.
+  const gate = gateFor({
+    contract: REAL_INTERFACE_TASK,
+    items: [...PASSING_ITEMS, item("integration-surface-check", "pass")],
+    change: { changeId: CHANGE_ID, approvals: [reaffirmation()], verifyPin: () => "match" }
+  });
+
+  assert.equal(gate.status, "satisfied");
+  assert.match(gate.reason, /every pinned reference still matches/);
+  assert.equal(gate.judgement, undefined);
+});
+
 test("a drifted pin with no re-affirmation is unsatisfied and names the cure", () => {
   const gate = driftedGate({ approvals: [] });
 

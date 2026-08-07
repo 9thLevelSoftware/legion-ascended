@@ -7,7 +7,7 @@ Source inputs:
 
 # Legion Next Protocol Documentation
 
-Protocol version: `0.2.0`
+Protocol version: `0.3.0`
 
 This directory is generated from the typed protocol and core transition sources. Run `pnpm docs:protocol` to refresh it, or `pnpm validate:next` to refresh and fail on drift.
 

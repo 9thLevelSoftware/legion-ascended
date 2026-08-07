@@ -108,7 +108,28 @@ legion ship
 legion retro
 ```
 
-`legion ship` is a readiness gate in this layer. It verifies accepted build evidence and accepted review decisions; it does not publish, deploy, or release.
+`legion ship` is a readiness gate in this layer. It requires accepted build evidence and an accepted review decision before it evaluates anything, then derives the ADR-006 gate set for each task's risk tier and reports every gate's verdict. It does not publish, deploy, or release.
+
+### The R2 path, end to end
+
+Every R2 gate has a producer, so an R2 change reaches `ready`. The commands, in the order they have to run:
+
+```powershell
+legion start --intake intake.json      # risk-tier R2, one executable criterion, a declared surface
+legion start --finalize
+legion plan 1
+legion approve spec --approver dasbl   # approved_delta_spec
+legion build --executor codex          # protected_oracle, deterministic_verification, the surface check
+legion review --executor codex
+legion review --accept --approver dasbl # whole_change_acceptance_evidence
+legion ship
+```
+
+Two of those are easy to leave out and each costs a gate. Without `--approver` on the accept the command still exits 0, but the acceptance records no human and `whole_change_acceptance_evidence` reports `unevaluable`. Without an executable criterion declaring a non-unit surface, `protected_oracle` and `integration_or_real_interface_checks` have nothing to read. R3 additionally needs `legion approve oracle`, `legion attest`, `legion review --domain` and `legion release plan`.
+
+`riskGates.satisfied` is not by itself the claim: a gate satisfied by an audited `not_applicable` waiver, by a human-judgement attestation, or by a re-affirmed verification-surface pin is counted there too. `riskGates.waivedGates` and `riskGates.humanJudgementGates` name every gate whose `satisfied` rests on a named person's decision standing in for a check, and the same gates are echoed as `risk_gate_waived` and `risk_gate_human_judgement` warnings.
+
+The pin case is the one to know about, because it is reachable at R2 and it looks like nothing. `legion approve surface --approver <id>` is the recovery for a declared surface whose pinned file was edited after the check ran; it re-affirms the declaration against the bytes now on disk and does not re-run anything. The ship comes back `ready`, and `humanJudgementGates` is where it says at what cost.
 
 ## Disposable Dogfood
 

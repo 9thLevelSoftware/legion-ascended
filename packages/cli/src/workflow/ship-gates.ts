@@ -1493,6 +1493,20 @@ export interface DeclaredSurface {
 }
 
 /**
+ * One pinned path whose bytes drifted and were re-affirmed rather than re-checked.
+ *
+ * Carried out of `surfacePinStatus` so the gate's satisfied sentence can say
+ * which bytes nothing ran against, and so `legion ship` can echo it. Before this
+ * existed a re-affirmation and a clean match were the same value — `undefined` —
+ * and the gate said "every pinned reference still matches" about both.
+ */
+interface PinReaffirmation {
+  readonly path: string;
+  readonly decidedBy: string;
+  readonly decidedAt: string;
+}
+
+/**
  * Two readings of the same authored declaration, or two different declarations?
  *
  * Identity is `kind`, `interface` and the pinned `{path, sha256}` set, sorted —
@@ -1744,27 +1758,43 @@ export function isLiveSurfaceReaffirmation(input: {
  * deliberately not: `legion approve surface` mints its pin by hashing the file,
  * so there is no document it could ever produce for a path that is not there.
  * Offering the cure for a state it cannot reach would be advice that fails.
+ *
+ * **The re-affirmations are returned, not swallowed.** This function used to
+ * answer `GateOutcome | undefined`, where `undefined` meant "nothing to report"
+ * — and it meant that identically for a surface whose every pin still matched
+ * and for one whose pins had all drifted and been re-affirmed. The caller then
+ * wrote the same satisfied sentence for both, claiming "every pinned reference
+ * still matches" about bytes that demonstrably did not. Absence is the wrong
+ * shape for two different facts, which is the lesson `evidenceItemVerdict`
+ * already carries in this file.
  */
 function surfacePinStatus(input: {
   readonly declared: DeclaredSurface;
   readonly change: ShipGateChangeFacts | undefined;
-}): GateOutcome | undefined {
+}): { readonly unmet?: GateOutcome; readonly reaffirmed: readonly PinReaffirmation[] } {
   const { origins, surface } = input.declared;
   const describe = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
+  const reaffirmed: PinReaffirmation[] = [];
 
   if (surface.pinned.length === 0) {
     // Unreachable from a parsed document — `verificationSurfaceSchema` marks
     // `pinned` `.min(1)` — but this function's parameter type admits it, and an
     // empty list passes every pin check vacuously.
-    return { status: "unevaluable", reason: `${describe} pins no reference, so there is nothing to check it against.` };
+    return {
+      unmet: { status: "unevaluable", reason: `${describe} pins no reference, so there is nothing to check it against.` },
+      reaffirmed
+    };
   }
 
   const change = input.change;
   const verifyPin = change?.verifyPin;
   if (change === undefined || verifyPin === undefined) {
     return {
-      status: "unevaluable",
-      reason: `${describe} pins ${surface.pinned[0]?.path}, and this report carries no way to re-hash it, so what was declared cannot be compared against what is on disk.`
+      unmet: {
+        status: "unevaluable",
+        reason: `${describe} pins ${surface.pinned[0]?.path}, and this report carries no way to re-hash it, so what was declared cannot be compared against what is on disk.`
+      },
+      reaffirmed
     };
   }
 
@@ -1772,26 +1802,38 @@ function surfacePinStatus(input: {
     const verdict = verifyPin(pin);
     if (verdict === "match") continue;
     if (verdict === "drift") {
-      const reaffirmed = surfacePinReaffirmation({ path: pin.path, change });
-      if (reaffirmed !== undefined) continue;
+      const grant = surfacePinReaffirmation({ path: pin.path, change });
+      if (grant !== undefined) {
+        reaffirmed.push({ path: pin.path, decidedBy: grant.by, decidedAt: grant.at });
+        continue;
+      }
       return {
-        status: "unsatisfied",
-        reason:
-          `${describe} pins ${pin.path}, whose bytes have changed since the declaration was made. ` +
-          "If that edit was intended, re-affirm the declaration against the current bytes with legion approve surface --approver <id>.",
-        recovery: SURFACE_REAFFIRM_RECOVERY
+        unmet: {
+          status: "unsatisfied",
+          reason:
+            `${describe} pins ${pin.path}, whose bytes have changed since the declaration was made. ` +
+            "If that edit was intended, re-affirm the declaration against the current bytes with legion approve surface --approver <id>.",
+          recovery: SURFACE_REAFFIRM_RECOVERY
+        },
+        reaffirmed
       };
     }
     if (verdict === "missing") {
-      return { status: "unsatisfied", reason: `${describe} pins ${pin.path}, which is no longer present.` };
+      return {
+        unmet: { status: "unsatisfied", reason: `${describe} pins ${pin.path}, which is no longer present.` },
+        reaffirmed
+      };
     }
     return {
-      status: "unevaluable",
-      reason: `${describe} pins ${pin.path}, which this report did not hash, so what was declared cannot be compared against what is on disk.`
+      unmet: {
+        status: "unevaluable",
+        reason: `${describe} pins ${pin.path}, which this report did not hash, so what was declared cannot be compared against what is on disk.`
+      },
+      reaffirmed
     };
   }
 
-  return undefined;
+  return { reaffirmed };
 }
 
 /**
@@ -1835,11 +1877,51 @@ function nonUnitSurfaceOutcome(input: {
   // `pass` forever, so a verdict read that ran first would let an edit made
   // after the build be masked by the build's own answer.
   const pin = surfacePinStatus({ declared: input.declared, change: input.change });
-  if (pin !== undefined) return pin;
+  if (pin.unmet !== undefined) return pin.unmet;
 
   const verdict = surfaceCheckVerdict(input.entries, input.declared.taskId);
   if (verdict === "pass") {
-    return { status: "satisfied", reason: `${describe} was exercised, and every pinned reference still matches.` };
+    if (pin.reaffirmed.length === 0) {
+      return { status: "satisfied", reason: `${describe} was exercised, and every pinned reference still matches.` };
+    }
+    // A pass over re-affirmed bytes is a different claim and now says so.
+    //
+    // The old sentence here was "was exercised, and every pinned reference still
+    // matches", emitted unchanged after a re-affirmation — which is false about
+    // the declaration's pin by construction, because a re-affirmation is only
+    // ever reached from `drift`. The `integration-surface-check` was written when
+    // the pins were clean and stays `pass` forever, so what this arm establishes
+    // after a re-affirmation is that a check ran against *some earlier* bytes and
+    // a named human said the current ones still describe what they meant. That is
+    // a real governance record and it is not a verification result.
+    //
+    // The newest decision is the one reported. `surfacePinReaffirmation` already
+    // resolves each path to its newest live grant, so per path there is exactly
+    // one; across paths the latest is the instant after which nothing re-ran.
+    const newest = [...pin.reaffirmed]
+      .sort((left, right) => (left.decidedAt < right.decidedAt ? -1 : left.decidedAt > right.decidedAt ? 1 : 0))
+      .at(-1) as PinReaffirmation;
+    const paths = pin.reaffirmed.map((entry) => entry.path).join(", ");
+    return {
+      status: "satisfied",
+      reason:
+        `${describe} was exercised, and ${pin.reaffirmed.length} of its pinned reference${
+          pin.reaffirmed.length === 1 ? " no longer matches" : "s no longer match"
+        } the bytes that check ran against (${paths}). ${newest.decidedBy} re-affirmed the declaration against the ` +
+        `current bytes at ${newest.decidedAt}; no verification has run against them.`,
+      judgement: {
+        basis: "pin-reaffirmation",
+        // The literal is this function's own gate: `nonUnitSurfaceOutcome` is
+        // reached only from `integrationSurfaceGateStatus`, which answers only
+        // `integration_or_real_interface_checks`. Threading a gate id through two
+        // frames to arrive at a constant would be ceremony, not a check.
+        gate: "integration_or_real_interface_checks",
+        decidedBy: newest.decidedBy,
+        decidedAt: newest.decidedAt,
+        path: paths,
+        interface: surface.interface
+      }
+    };
   }
   if (verdict === "fail") {
     return {
@@ -1944,7 +2026,17 @@ function integrationSurfaceGateStatus(input: {
   );
   if (unreadableOracle !== undefined) outcomes.push({ status: "unevaluable", reason: unreadableOracle });
 
-  const met = outcomes.find((outcome) => outcome.status === "satisfied");
+  // The strongest satisfied route wins, and the ordering is the substance rather
+  // than a tidiness. `some` is the aggregation, so a change with one surface
+  // whose pins are clean and one whose pins were re-affirmed is satisfied by the
+  // clean one — and reporting the re-affirmed one would attach a human-judgement
+  // echo to a gate that has a fully machine-checked route through it, which
+  // over-reports exactly as badly as the old code under-reported. `judgement`
+  // absent is the positive condition; a satisfied outcome carrying anything this
+  // function does not recognise is not treated as the clean one.
+  const met =
+    outcomes.find((outcome) => outcome.status === "satisfied" && outcome.judgement === undefined) ??
+    outcomes.find((outcome) => outcome.status === "satisfied");
   if (met !== undefined) {
     // The unmet ones are *named*, not summarised away and not credited to another
     // gate. A failing declared command is indeed `declared-verification: fail`
@@ -1958,7 +2050,9 @@ function integrationSurfaceGateStatus(input: {
         : ` ${unmet.length} other declared surface${unmet.length === 1 ? " is" : "s are"} unmet, and this gate is satisfied by the one above rather than by them: ${unmet
             .map((outcome) => outcome.reason)
             .join(" ")}`;
-    return { status: "satisfied", reason: `${met.reason}${remainder}` };
+    // Spread rather than rebuilt: rebuilding dropped `judgement`, which is the
+    // field that makes a re-affirmed pin visible at all.
+    return { ...met, reason: `${met.reason}${remainder}` };
   }
 
   // Nothing reached a boundary cleanly. Any `unsatisfied` wins over any
@@ -3665,14 +3759,59 @@ export interface ShipGateWaiver {
  * than by evidence", and a recorded judgement is a different and stronger claim:
  * a named human says the check applied and passed. One sentence answering two
  * different facts is how a payload stops being readable.
+ *
+ * **A union, and the second member is the correction of a false claim this
+ * release shipped in review.** ADR-011 asserted that `waivedGates` and
+ * `humanJudgementGates` name *every* gate that reached `satisfied` with nothing
+ * machine-checkable behind it. That was false the moment it was written, and the
+ * dogfood was its own counterexample: `integration_or_real_interface_checks`
+ * reaches `satisfied` through `legion approve surface`, which is a named human
+ * re-affirming that a *drifted* pin still describes what they meant, with no
+ * verification re-run against the current bytes. Measured: overwrite the pinned
+ * compose file with prose saying the environment no longer exists, re-affirm,
+ * and ship reports seven satisfied, `waivedGates: []`, `humanJudgementGates:
+ * []`, `diagnostics: []`. An operator reading that payload out loud says "none
+ * human-judged" over an integration gate whose current bytes no check ever
+ * touched.
+ *
+ * The narrowest fix would have been to weaken the ADR's sentence. The sentence
+ * is the right claim and the payload was the thing that was wrong, so the
+ * payload moved. `basis` discriminates because the two sentences state different
+ * facts — one says nothing machine-checkable exists for this question at all,
+ * the other says a real check ran and then the bytes it ran against changed —
+ * and collapsing them would reproduce exactly the unreadability that kept
+ * `ShipGateWaiver` and `ShipGateHumanJudgement` apart.
  */
-export interface ShipGateHumanJudgement {
+export type ShipGateHumanJudgement = ShipGateAttestedJudgement | ShipGateReaffirmedPinJudgement;
+
+/** A `pass` attestation for a kind whose evidence rule is `human-judgement`. */
+export interface ShipGateAttestedJudgement {
+  readonly basis: "attestation";
   readonly gate: RiskGateId;
   readonly attests: AttestationKind;
   readonly attestedBy: string;
   readonly attestedAt: string;
   readonly statement: string;
   readonly sources: readonly string[];
+}
+
+/**
+ * A declared verification surface whose pinned bytes drifted and were
+ * re-affirmed by a named human rather than re-verified.
+ *
+ * `decidedBy`/`decidedAt` rather than `attestedBy`/`attestedAt`: the record
+ * behind this is an `Approval`, not an `Attestation`, and naming an approval's
+ * decider an attester is the kind of small lie that makes a payload
+ * unauditable. The path and the interface are carried because the operator's
+ * question is "which bytes went unchecked", and a gate id does not answer it.
+ */
+export interface ShipGateReaffirmedPinJudgement {
+  readonly basis: "pin-reaffirmation";
+  readonly gate: RiskGateId;
+  readonly decidedBy: string;
+  readonly decidedAt: string;
+  readonly path: string;
+  readonly interface: string;
 }
 
 /**
@@ -4125,6 +4264,7 @@ function attestationRecordStatus(input: {
         "machine-checkable was read. What was checked is that the cited bytes are still the bytes the attester " +
         "looked at, and that none of them is a report that is red by its own rule.",
       judgement: {
+        basis: "attestation",
         gate: input.gate,
         attests: record.attests,
         attestedBy: record.attestedBy.id,
@@ -4940,6 +5080,13 @@ function refuseSelfJudgedDomainAttestation(
 ): GateOutcome {
   const judgement = outcome.judgement;
   if (outcome.status !== "satisfied" || judgement === undefined || change === undefined) return outcome;
+  // Positive on the basis. This function is only ever handed an
+  // `attestationGateStatus` outcome today, so the guard is unreachable — and it
+  // is written anyway, because `ShipGateHumanJudgement` is a union and a later
+  // caller handing it a pin re-affirmation must fall *out* of a refusal arm
+  // shaped for attestations rather than be silently exempted by a field that
+  // happens to be absent.
+  if (judgement.basis !== "attestation") return outcome;
   const collision = humanExecutorMatching(change.taskRuns, judgement.attestedBy);
   if (collision === undefined) return outcome;
   return {

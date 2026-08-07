@@ -44,7 +44,10 @@ function legacyTaskContract(id = "ctr_legacy") {
 test("a legacy task contract gains the fields 0.2.0 requires", () => {
   const upcast = upcastProtocolRecords(legacyTaskContract());
 
-  assert.equal(upcast.schemaVersion, "0.2.0");
+  // 0.3.0, not 0.2.0: the walk chains every registered hop up to the current
+  // version, and the 0.2.0 -> 0.3.0 identity is what keeps this record readable
+  // at all now that the current version has moved past the hop that repairs it.
+  assert.equal(upcast.schemaVersion, "0.3.0");
   // Two declared write paths -> the tightest budget that still permits them.
   assert.deepEqual(upcast.scope.budget, { maxFilesChanged: 2, maxLinesChanged: 400, maxNewFiles: 2 });
   assert.equal(upcast.completion.diffReconciliation.required, true);
@@ -75,7 +78,7 @@ test("task contracts nested inside a taskgraph are upcast, not just the envelope
 
   assert.equal(upcast.tasks.length, 2);
   for (const task of upcast.tasks) {
-    assert.equal(task.schemaVersion, "0.2.0");
+    assert.equal(task.schemaVersion, "0.3.0");
     assert.ok(task.scope.budget !== undefined, `${task.id} did not gain a budget`);
     assert.ok(task.completion.diffReconciliation !== undefined);
   }
@@ -133,8 +136,18 @@ test("legacy prose acceptance criteria become criterion objects", () => {
 });
 
 test("current documents pass through untouched", () => {
-  const current = { schemaVersion: "0.2.0", kind: "requirement", id: "req_x", nested: { a: 1 } };
+  const current = { schemaVersion: "0.3.0", kind: "requirement", id: "req_x", nested: { a: 1 } };
   assert.deepEqual(upcastProtocolRecords(current), current);
+});
+
+test("a document written under the previous version is renumbered, not passed through", () => {
+  // The positive claim the 0.3.0 bump makes, and the reason the fixture above
+  // had to be retargeted rather than left alone: a 0.2.0 requirement is no
+  // longer current, so "passes through untouched" and "is upcast" are now two
+  // different documents. Asserting only the first would have retired the second
+  // in silence.
+  const previous = { schemaVersion: "0.2.0", kind: "requirement", id: "req_x", nested: { a: 1 } };
+  assert.deepEqual(upcastProtocolRecords(previous), { ...previous, schemaVersion: "0.3.0" });
 });
 
 test("non-protocol values are returned as-is", () => {

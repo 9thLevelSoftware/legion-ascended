@@ -15001,9 +15001,11 @@ function buildChangeIdempotencyKey(input) {
 }
 
 // packages/protocol/dist/versioning/index.js
-var PREVIOUS_PROTOCOL_VERSION = schemaVersionSchema.parse("0.1.0");
-var CURRENT_PROTOCOL_VERSION = schemaVersionSchema.parse("0.2.0");
+var LEGACY_PROTOCOL_VERSION = schemaVersionSchema.parse("0.1.0");
+var PREVIOUS_PROTOCOL_VERSION = schemaVersionSchema.parse("0.2.0");
+var CURRENT_PROTOCOL_VERSION = schemaVersionSchema.parse("0.3.0");
 var SUPPORTED_PROTOCOL_VERSIONS = [
+  LEGACY_PROTOCOL_VERSION,
   PREVIOUS_PROTOCOL_VERSION,
   CURRENT_PROTOCOL_VERSION
 ];
@@ -17956,7 +17958,30 @@ var legionProtocol010To020 = {
     return { ...migrated, schemaVersion: TARGET_VERSION };
   }
 };
-var LEGION_PROTOCOL_MIGRATIONS = [legionProtocol010To020];
+
+// packages/protocol/dist/migrations/legion-0-3-0.js
+var TARGET_VERSION2 = "0.3.0";
+var legionProtocol020To030 = {
+  id: "legion.protocol.0-2-0.to.0-3-0",
+  fromVersion: "0.2.0",
+  toVersion: TARGET_VERSION2,
+  kind: "upcast",
+  description: "Renumber 0.2.0 records to 0.3.0. 0.3.0 adds only optional fields and new entity kinds, so no value is added, removed or rewritten.",
+  preserves: [
+    "every field of every 0.2.0 record: this migration writes schemaVersion and nothing else"
+  ],
+  informationPreserving: true,
+  appliesToKinds: ["requirement", "task-contract"],
+  migrate(record2) {
+    return { ...record2, schemaVersion: TARGET_VERSION2 };
+  }
+};
+
+// packages/protocol/dist/migrations/registry.js
+var LEGION_PROTOCOL_MIGRATIONS = [
+  legionProtocol010To020,
+  legionProtocol020To030
+];
 
 // packages/protocol/dist/migrations/upcast.js
 var cachedRegistry;
@@ -42827,38 +42852,57 @@ function isLiveSurfaceReaffirmation(input) {
 function surfacePinStatus(input) {
   const { origins, surface } = input.declared;
   const describe3 = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
+  const reaffirmed = [];
   if (surface.pinned.length === 0) {
-    return { status: "unevaluable", reason: `${describe3} pins no reference, so there is nothing to check it against.` };
+    return {
+      unmet: { status: "unevaluable", reason: `${describe3} pins no reference, so there is nothing to check it against.` },
+      reaffirmed
+    };
   }
   const change = input.change;
   const verifyPin = change?.verifyPin;
   if (change === void 0 || verifyPin === void 0) {
     return {
-      status: "unevaluable",
-      reason: `${describe3} pins ${surface.pinned[0]?.path}, and this report carries no way to re-hash it, so what was declared cannot be compared against what is on disk.`
+      unmet: {
+        status: "unevaluable",
+        reason: `${describe3} pins ${surface.pinned[0]?.path}, and this report carries no way to re-hash it, so what was declared cannot be compared against what is on disk.`
+      },
+      reaffirmed
     };
   }
   for (const pin of surface.pinned) {
     const verdict = verifyPin(pin);
     if (verdict === "match") continue;
     if (verdict === "drift") {
-      const reaffirmed = surfacePinReaffirmation({ path: pin.path, change });
-      if (reaffirmed !== void 0) continue;
+      const grant = surfacePinReaffirmation({ path: pin.path, change });
+      if (grant !== void 0) {
+        reaffirmed.push({ path: pin.path, decidedBy: grant.by, decidedAt: grant.at });
+        continue;
+      }
       return {
-        status: "unsatisfied",
-        reason: `${describe3} pins ${pin.path}, whose bytes have changed since the declaration was made. If that edit was intended, re-affirm the declaration against the current bytes with legion approve surface --approver <id>.`,
-        recovery: SURFACE_REAFFIRM_RECOVERY
+        unmet: {
+          status: "unsatisfied",
+          reason: `${describe3} pins ${pin.path}, whose bytes have changed since the declaration was made. If that edit was intended, re-affirm the declaration against the current bytes with legion approve surface --approver <id>.`,
+          recovery: SURFACE_REAFFIRM_RECOVERY
+        },
+        reaffirmed
       };
     }
     if (verdict === "missing") {
-      return { status: "unsatisfied", reason: `${describe3} pins ${pin.path}, which is no longer present.` };
+      return {
+        unmet: { status: "unsatisfied", reason: `${describe3} pins ${pin.path}, which is no longer present.` },
+        reaffirmed
+      };
     }
     return {
-      status: "unevaluable",
-      reason: `${describe3} pins ${pin.path}, which this report did not hash, so what was declared cannot be compared against what is on disk.`
+      unmet: {
+        status: "unevaluable",
+        reason: `${describe3} pins ${pin.path}, which this report did not hash, so what was declared cannot be compared against what is on disk.`
+      },
+      reaffirmed
     };
   }
-  return void 0;
+  return { reaffirmed };
 }
 function changeVerificationSurfaces(input) {
   const surfaces = [];
@@ -42875,10 +42919,30 @@ function nonUnitSurfaceOutcome(input) {
   const { origins, surface } = input.declared;
   const describe3 = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
   const pin = surfacePinStatus({ declared: input.declared, change: input.change });
-  if (pin !== void 0) return pin;
+  if (pin.unmet !== void 0) return pin.unmet;
   const verdict = surfaceCheckVerdict(input.entries, input.declared.taskId);
   if (verdict === "pass") {
-    return { status: "satisfied", reason: `${describe3} was exercised, and every pinned reference still matches.` };
+    if (pin.reaffirmed.length === 0) {
+      return { status: "satisfied", reason: `${describe3} was exercised, and every pinned reference still matches.` };
+    }
+    const newest = [...pin.reaffirmed].sort((left, right) => left.decidedAt < right.decidedAt ? -1 : left.decidedAt > right.decidedAt ? 1 : 0).at(-1);
+    const paths = pin.reaffirmed.map((entry) => entry.path).join(", ");
+    return {
+      status: "satisfied",
+      reason: `${describe3} was exercised, and ${pin.reaffirmed.length} of its pinned reference${pin.reaffirmed.length === 1 ? " no longer matches" : "s no longer match"} the bytes that check ran against (${paths}). ${newest.decidedBy} re-affirmed the declaration against the current bytes at ${newest.decidedAt}; no verification has run against them.`,
+      judgement: {
+        basis: "pin-reaffirmation",
+        // The literal is this function's own gate: `nonUnitSurfaceOutcome` is
+        // reached only from `integrationSurfaceGateStatus`, which answers only
+        // `integration_or_real_interface_checks`. Threading a gate id through two
+        // frames to arrive at a constant would be ceremony, not a check.
+        gate: "integration_or_real_interface_checks",
+        decidedBy: newest.decidedBy,
+        decidedAt: newest.decidedAt,
+        path: paths,
+        interface: surface.interface
+      }
+    };
   }
   if (verdict === "fail") {
     return {
@@ -42921,11 +42985,11 @@ function integrationSurfaceGateStatus(input) {
     (declared) => nonUnitSurfaceOutcome({ declared, entries: input.entries, change: input.change })
   );
   if (unreadableOracle !== void 0) outcomes.push({ status: "unevaluable", reason: unreadableOracle });
-  const met = outcomes.find((outcome) => outcome.status === "satisfied");
+  const met = outcomes.find((outcome) => outcome.status === "satisfied" && outcome.judgement === void 0) ?? outcomes.find((outcome) => outcome.status === "satisfied");
   if (met !== void 0) {
     const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
     const remainder2 = unmet.length === 0 ? "" : ` ${unmet.length} other declared surface${unmet.length === 1 ? " is" : "s are"} unmet, and this gate is satisfied by the one above rather than by them: ${unmet.map((outcome) => outcome.reason).join(" ")}`;
-    return { status: "satisfied", reason: `${met.reason}${remainder2}` };
+    return { ...met, reason: `${met.reason}${remainder2}` };
   }
   const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
   const chosen = negative ?? outcomes[0];
@@ -43776,6 +43840,7 @@ function attestationRecordStatus(input) {
       status: "satisfied",
       reason: `${describe3} as passed at ${record2.attestedAt}, against ${record2.sources.length} hash-clean source${record2.sources.length === 1 ? "" : "s"} (${record2.sources.map((source) => source.path).join(", ")}): "${record2.statement}". No report shape in this repository states a ${record2.attests} verdict, so nothing machine-checkable was read. What was checked is that the cited bytes are still the bytes the attester looked at, and that none of them is a report that is red by its own rule.`,
       judgement: {
+        basis: "attestation",
         gate: input.gate,
         attests: record2.attests,
         attestedBy: record2.attestedBy.id,
@@ -44134,6 +44199,7 @@ function combineDomainReviewOutcomes(review, attested) {
 function refuseSelfJudgedDomainAttestation(outcome, change) {
   const judgement = outcome.judgement;
   if (outcome.status !== "satisfied" || judgement === void 0 || change === void 0) return outcome;
+  if (judgement.basis !== "attestation") return outcome;
   const collision = humanExecutorMatching(change.taskRuns, judgement.attestedBy);
   if (collision === void 0) return outcome;
   return {
@@ -50083,9 +50149,13 @@ async function handleShipWorkflow(context) {
     // quietest thing in the payload. A distinct code, because "somebody says this
     // does not apply" and "somebody competent says it applied and passed" are
     // different claims and one message answering both is one nobody can read.
+    // Two bases, two sentences, one code. The code answers "a person's decision
+    // stands where a report would" and both of these are that; the sentences
+    // state different facts, and one message covering both would be the
+    // collapse `risk_gate_waived` was kept separate to avoid.
     ...shipGateHumanJudgements(gateReport.gates).map((judgement) => ({
       code: "risk_gate_human_judgement",
-      message: `${judgement.gate} was satisfied by a recorded human judgement rather than by a machine-checkable report: ${judgement.attestedBy} attested ${judgement.attests} as passed at ${judgement.attestedAt}, citing ${judgement.sources.join(", ")}, because "${judgement.statement}". No report shape in this repository states a verdict for this question, so what legion ship checked is that those bytes have not moved and that none of them is a report that is red by its own rule. ADR-006 permits this and requires it to be visible.`
+      message: judgement.basis === "attestation" ? `${judgement.gate} was satisfied by a recorded human judgement rather than by a machine-checkable report: ${judgement.attestedBy} attested ${judgement.attests} as passed at ${judgement.attestedAt}, citing ${judgement.sources.join(", ")}, because "${judgement.statement}". No report shape in this repository states a verdict for this question, so what legion ship checked is that those bytes have not moved and that none of them is a report that is red by its own rule. ADR-006 permits this and requires it to be visible.` : `${judgement.gate} was satisfied over bytes no check has run against: ${judgement.path} was edited after the ${judgement.interface} surface was declared, and ${judgement.decidedBy} re-affirmed the declaration against the current bytes at ${judgement.decidedAt} rather than re-running verification. The passing integration-surface-check in this change's evidence was recorded against the earlier bytes. What legion ship checked is that the current ones are the ones the approver looked at.`
     }))
   ];
   const planeSkips = [

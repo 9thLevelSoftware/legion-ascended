@@ -820,9 +820,14 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
   // machine-readable `waived` field on the result, a `risk_gate_waived` warning
   // code distinct from every other, the `human` render on both the ready and the
   // blocked path, and `riskGates.waivedGates` on the ready payload. The
-  // human-judgement arm this release adds — an `architecture-review` attestation
-  // whose kind has no report shape and never will — rides all five, under its own
-  // code, for exactly the same argument.
+  // human-judgement arm this release adds rides all five, under its own code,
+  // for exactly the same argument — and it covers two bases, not one: an
+  // `architecture-review` attestation whose kind has no report shape and never
+  // will, *and* a verification surface whose pinned bytes drifted and were
+  // re-affirmed by `legion approve surface` instead of re-verified. The second
+  // was missing when this release was first reviewed, which made the ready
+  // payload assert "none human-judged" over an integration gate whose current
+  // bytes nothing had exercised. See `ShipGateHumanJudgement`.
   const gateReport = deriveShipGates({
     tasks: taskgraph.document.tasks,
     taskIdFor: (task) => taskIdForContractId(task.id),
@@ -844,14 +849,25 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     // quietest thing in the payload. A distinct code, because "somebody says this
     // does not apply" and "somebody competent says it applied and passed" are
     // different claims and one message answering both is one nobody can read.
+    // Two bases, two sentences, one code. The code answers "a person's decision
+    // stands where a report would" and both of these are that; the sentences
+    // state different facts, and one message covering both would be the
+    // collapse `risk_gate_waived` was kept separate to avoid.
     ...shipGateHumanJudgements(gateReport.gates).map((judgement) => ({
       code: "risk_gate_human_judgement",
       message:
-        `${judgement.gate} was satisfied by a recorded human judgement rather than by a machine-checkable report: ` +
-        `${judgement.attestedBy} attested ${judgement.attests} as passed at ${judgement.attestedAt}, citing ` +
-        `${judgement.sources.join(", ")}, because "${judgement.statement}". No report shape in this repository ` +
-        "states a verdict for this question, so what legion ship checked is that those bytes have not moved and that " +
-        "none of them is a report that is red by its own rule. ADR-006 permits this and requires it to be visible."
+        judgement.basis === "attestation"
+          ? `${judgement.gate} was satisfied by a recorded human judgement rather than by a machine-checkable report: ` +
+            `${judgement.attestedBy} attested ${judgement.attests} as passed at ${judgement.attestedAt}, citing ` +
+            `${judgement.sources.join(", ")}, because "${judgement.statement}". No report shape in this repository ` +
+            "states a verdict for this question, so what legion ship checked is that those bytes have not moved and " +
+            "that none of them is a report that is red by its own rule. ADR-006 permits this and requires it to be " +
+            "visible."
+          : `${judgement.gate} was satisfied over bytes no check has run against: ${judgement.path} was edited after ` +
+            `the ${judgement.interface} surface was declared, and ${judgement.decidedBy} re-affirmed the declaration ` +
+            `against the current bytes at ${judgement.decidedAt} rather than re-running verification. The passing ` +
+            "integration-surface-check in this change's evidence was recorded against the earlier bytes. What legion " +
+            "ship checked is that the current ones are the ones the approver looked at."
     }))
   ];
   const planeSkips = [

@@ -70,6 +70,39 @@ Project state comes from the CLI, not from files read directly.
 
    Display: "Ship scope: Phase {N} — {phase_name}"
 
+2.5. READ THE GATE COUNTS HONESTLY
+   `legion ship --json` reports `riskGates.satisfied`, `unsatisfied` and
+   `unevaluable`. Do not report the satisfied count as the number of gates that
+   were proven.
+
+   A satisfied count includes every gate whose `satisfied` rests on a named
+   person's decision rather than on a result a program produced. The payload
+   names those separately and they must be read out:
+
+   - `riskGates.waivedGates` — a named human recorded that this check does not
+     apply to this change, with a stated reason. A waiver is a decision, not a
+     result.
+   - `riskGates.humanJudgementGates` — a person's decision stands where a check
+     would. Two things reach this list: an attestation of something no report
+     shape states, and a declared verification surface whose pinned bytes were
+     edited after the check ran and were re-affirmed by `legion approve surface`
+     instead of re-verified. The second one means a real check passed against
+     bytes that are no longer the bytes on disk.
+
+   The same gates arrive as `risk_gate_waived` and `risk_gate_human_judgement`
+   warnings, whose messages name the decider, the instant and — for a
+   re-affirmed pin — the file. If either list is non-empty, say so before saying
+   the change is ready, and name who decided and why. Reporting "all gates
+   satisfied" over them hides exactly the decision they exist to make visible.
+
+   These two lists are the payload's own account of where a human stood in for a
+   check; they are not a proof that no other route exists. Gates that *ask*
+   whether a human approved something — `explicit_human_approval`,
+   `approved_delta_spec`, `approved_spec_and_oracle`,
+   `whole_change_acceptance_evidence`, `protected_acceptance_tests` — are
+   satisfied by the approval plane and are deliberately not listed here, because
+   for them the recorded decision is the result.
+
 3. PRE-SHIP GATE
    Run ship-pipeline Section 1 quality gate checks. Each check must pass before proceeding:
 
