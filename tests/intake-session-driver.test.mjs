@@ -7,6 +7,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
+import { directoryLinkType, requireDirSymlink, requireFileSymlink } from "./helpers/symlink-capability.mjs";
 
 /**
  * The interview driven through the actual command surface.
@@ -676,12 +677,12 @@ test("a symlinked requirements directory is refused, not written through", async
   await writeFile(bystander, "{}\n", "utf8");
 
   await mkdir(path.join(root, ".legion/project"), { recursive: true });
-  try {
-    await symlink(outside, path.join(root, ".legion/project/requirements"), "dir");
-  } catch (error) {
-    if (error?.code === "EPERM") return t.skip("symlink creation is not permitted here");
-    throw error;
-  }
+  // A directory link, so this runs unprivileged on Windows too: `directoryLinkType`
+  // resolves to a junction there, which needs no symlink privilege. The guard is
+  // `realpath`-based ancestor containment, and a junction resolves through
+  // `realpath` exactly as a symlink does, so the case being exercised is the same.
+  if (!requireDirSymlink(t)) return;
+  await symlink(outside, path.join(root, ".legion/project/requirements"), directoryLinkType());
 
   await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
   await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
@@ -724,13 +725,11 @@ test("a symlinked ROADMAP.md is refused, not written through", async (t) => {
   // A dangling link is the sharper case: `access` reports the path absent, so
   // the write would create the target outside the repository rather than
   // refusing.
+  // Needs a true file symlink: a junction cannot dangle (its target must exist)
+  // and cannot point at a file, and the dangling-ness is the whole case.
+  if (!requireFileSymlink(t)) return;
   const target = path.join(outside, "someone-elses-notes.md");
-  try {
-    await symlink(target, path.join(root, "ROADMAP.md"));
-  } catch (error) {
-    if (error?.code === "EPERM") return t.skip("symlink creation is not permitted here");
-    throw error;
-  }
+  await symlink(target, path.join(root, "ROADMAP.md"), "file");
 
   await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
   await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);

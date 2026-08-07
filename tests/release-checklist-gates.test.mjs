@@ -40,29 +40,47 @@ test("the migration policy check accepts the surface the CLI actually routes", (
   assert.ok(!codes.includes("migration_policy_cli_surface_drift"), "the help text still names it too");
 });
 
-test("the checklist still blocks on the one thing that is genuinely open", () => {
+test("the checklist reports ready, and every condition it names is genuinely closed", () => {
   const report = runChecklist();
   const codes = report.findings.map((finding) => finding.code);
 
-  // This list shrinks as the repository resolves the conditions it names, and
-  // each entry is removed when that happens rather than the assertion being
-  // loosened. `ga_task_open` and `phase_13_review_unsigned` went first: P13-T04
-  // is DONE and the phase-13 review is signed.
+  // This assertion has inverted, and the inversion is the point of the test
+  // rather than a loosening of it.
   //
-  // `whole_change_acceptance_unproven` goes now, and it went the way its own
-  // producer said it would — "when acceptance lands and the assertion flips to
-  // `ready`, this stops firing on its own". The ship-gate series gave
-  // whole-change acceptance a producer, and `scripts/dogfood-workflow.mjs` now
-  // asserts `ready` rather than treating `blocked` as success, so the condition
-  // the check greps for is genuinely gone. The check is kept as the tripwire it
-  // was written to be: it fires again if the dogfood ever goes back.
+  // It began as a list of what was open, with each entry deleted when the
+  // repository actually resolved it rather than the assertion being relaxed:
+  // `ga_task_open` and `phase_13_review_unsigned` went when P13-T04 was marked
+  // DONE and the phase-13 review was signed; `whole_change_acceptance_unproven`
+  // went the way its own producer said it would — "when acceptance lands and
+  // the assertion flips to `ready`, this stops firing on its own" — because the
+  // ship-gate series gave whole-change acceptance a producer and
+  // `scripts/dogfood-workflow.mjs` now asserts `ready`; and
+  // `package_version_mismatch` went when `package.json` was reconciled to the
+  // 9.0.0 release identity.
   //
-  // The mechanism these used to cover is exercised on fixtures in
-  // tests/release-checklist.test.mjs, where it can fail on demand. Asserting
-  // the mechanism against the live repository only worked while the repository
-  // happened to be in the failing state.
-  assert.equal(report.ok, false);
-  assert.deepEqual([...codes].sort(), ["package_version_mismatch"]);
+  // The list is empty, so what is left to assert is the whole verdict. It is
+  // asserted as a whole deliberately: `deepEqual([], [])` would also pass
+  // against a checklist that had stopped running, and the distance between
+  // "nothing is open" and "nothing was checked" is the entire value of a
+  // fail-closed gate.
+  //
+  // If this reddens, the repository has regressed out of a releasable state.
+  // The finding it names says which condition, and the fix is to close that
+  // condition — not to add it back to an expected-findings list.
+  assert.deepEqual(codes, [], `the release checklist must stay clean, got ${JSON.stringify(report.findings)}`);
+  assert.equal(report.ok, true);
+  assert.equal(report.status, "ready");
+
+  // Every check ran and passed, rather than the findings array merely being
+  // empty. The mechanism itself is exercised on fixtures in
+  // tests/release-checklist.test.mjs, where it can be made to fail on demand.
+  const checks = Object.values(report.checks ?? {});
+  assert.ok(checks.length > 0, "the verdict must carry its per-check breakdown");
+  assert.deepEqual(
+    checks.filter((check) => check.ok !== true).map((check) => check.name),
+    [],
+    "a ready verdict requires every named check to have passed, not merely to have produced no finding"
+  );
 });
 
 test("the phase-13 review is signed, and its verdict is read from its own section", () => {

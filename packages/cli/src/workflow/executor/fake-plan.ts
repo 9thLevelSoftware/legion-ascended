@@ -117,16 +117,19 @@ export function applyFakeExecutorPlan(input: ApplyFakeExecutorPlanInput): readon
   for (const entry of input.plan.symlinks ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === undefined) continue;
-    try {
-      mkdirSync(path.dirname(absolute), { recursive: true });
-      rmSync(absolute, { force: true });
-      symlinkSync(entry.target, absolute);
-      written.push(entry.path);
-      staged.push(entry.path);
-    } catch {
-      // Platforms that refuse symlink creation without elevation simply do not
-      // exercise this case; the test that needs it skips.
-    }
+    // Deliberately uncaught, like the write and delete loops above. An earlier
+    // version swallowed every error here on the reasoning that a platform
+    // refusing symlink creation "simply does not exercise this case". That made
+    // the failure invisible in both directions: the tests that depend on a
+    // planted link had to *infer* unavailability from a missing outcome, which
+    // is the same shape a real regression in the guard produces. A plan that
+    // asks for a symlink and cannot get one is a failed plan, and saying so is
+    // what lets the caller tell the two apart.
+    mkdirSync(path.dirname(absolute), { recursive: true });
+    rmSync(absolute, { force: true });
+    symlinkSync(entry.target, absolute);
+    written.push(entry.path);
+    staged.push(entry.path);
   }
 
   if (input.plan.commit === true && staged.length > 0) {

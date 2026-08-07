@@ -24,6 +24,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { directoryLinkType, requireDirSymlink, requireFileSymlink } from "./helpers/symlink-capability.mjs";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPTS = path.join(ROOT, "scripts", "baseline");
 
@@ -161,15 +163,8 @@ test("P13-T02 sandbox-guard fails closed when run_dir symlink escapes output_roo
     mkdirSync(path.dirname(linkedRunDir), { recursive: true });
     mkdirSync(externalRunDir, { recursive: true });
     await buildSealedRun(externalRunDir);
-    try {
-      await symlink(externalRunDir, linkedRunDir, process.platform === "win32" ? "junction" : "dir");
-    } catch (error) {
-      if (["EACCES", "ENOSYS", "EPERM"].includes(error?.code)) {
-        t.skip(`symlink creation unavailable: ${error instanceof Error ? error.message : String(error)}`);
-        return;
-      }
-      throw error;
-    }
+    if (!requireDirSymlink(t)) return;
+    await symlink(externalRunDir, linkedRunDir, directoryLinkType());
 
     const result = runHelper("sandbox-guard.mjs", [
       "--run-dir", linkedRunDir,
@@ -191,15 +186,8 @@ test("P13-T02 sandbox-guard fails closed when manifest artifact symlink escapes 
     await buildSealedRun(runDir);
     writeFile(externalTranscript, "external transcript\n");
     await rm(path.join(runDir, "transcript.redacted.log"), { force: true });
-    try {
-      await symlink(externalTranscript, path.join(runDir, "transcript.redacted.log"), "file");
-    } catch (error) {
-      if (["EACCES", "ENOSYS", "EPERM"].includes(error?.code)) {
-        t.skip(`symlink creation unavailable: ${error instanceof Error ? error.message : String(error)}`);
-        return;
-      }
-      throw error;
-    }
+    if (!requireFileSymlink(t)) return;
+    await symlink(externalTranscript, path.join(runDir, "transcript.redacted.log"), "file");
 
     const result = runHelper("sandbox-guard.mjs", [
       "--run-dir", runDir,

@@ -132,6 +132,35 @@ Prerequisites:
 
 - Node.js `>=24 <26`
 - pnpm `>=11.4 <12`
+- On Windows, **symlink creation privilege** — see below
+
+### Running the tests on Windows
+
+Seven tests in the suite guard symlink-shaped attacks: an executor planting a
+link inside the protected control tree, a pinned reference whose path leaves the
+repository through one, a protected acceptance test swapped for a link whose
+bytes still match. Each needs to create a real file symlink first.
+
+Windows refuses `symlink(2)` with `EPERM` unless the process holds
+`SeCreateSymbolicLinkPrivilege`. Grant it once:
+
+- **Settings > System > For developers > Developer Mode: On**, or
+- run the test suite from an elevated shell.
+
+Without it the suite **fails** rather than skipping, and prints these steps. That
+is deliberate: a security boundary that quietly stops being tested is worse than
+a red build, because the red build gets fixed.
+
+If you cannot enable Developer Mode:
+
+```powershell
+$env:LEGION_ALLOW_SYMLINK_SKIP=1; pnpm test
+```
+
+Those seven tests then skip, each naming the errno and printing a `COVERAGE GAP`
+diagnostic. The other symlink test — a directory link — runs either way, because
+Windows junctions need no privilege. Use the opt-out to get unblocked locally,
+not to land a change: CI runs the full set on Linux and macOS.
 
 Useful verification commands:
 

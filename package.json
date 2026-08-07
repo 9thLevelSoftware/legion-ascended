@@ -1,6 +1,6 @@
 {
   "name": "legion-ascended",
-  "version": "9.0.0-alpha.0",
+  "version": "9.0.0",
   "description": "Guided execution layer for AI-assisted software work.",
   "packageManager": "pnpm@11.4.0",
   "publishConfig": {
@@ -24,6 +24,7 @@
     "check:worker-bundles": "node scripts/validate-worker-bundles.mjs",
     "check:default-runtime": "node scripts/scan-default-runtime.mjs",
     "check:command-surface": "node scripts/scan-command-surface.mjs",
+    "check:symlink-coverage": "node scripts/check-symlink-coverage.mjs",
     "test": "pnpm run build && node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\" && pnpm -r --if-present test",
     "docs:protocol": "pnpm run typecheck && node scripts/validate-next.mjs --generate-protocol-docs",
     "validate": "pnpm run validate:next",

@@ -7,6 +7,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
+import { requireFileSymlink } from "./helpers/symlink-capability.mjs";
 
 /**
  * End-to-end enforcement, driven by an executor that actually misbehaves.
@@ -183,13 +184,8 @@ test("a pre-existing symlink in the control tree is left alone", async (t) => {
 
   // Skipping symlinks made a planted link invisible to both the snapshot and
   // the post-run scan, so it survived containment for a later command to follow.
-  try {
-    await symlink(path.join(root, "ROADMAP.md"), path.join(root, ...planted.split("/")));
-  } catch (error) {
-    // Windows refuses symlink creation without elevation or developer mode.
-    if (error?.code === "EPERM") return t.skip("symlink creation is not permitted here");
-    throw error;
-  }
+  if (!requireFileSymlink(t)) return;
+  await symlink(path.join(root, "ROADMAP.md"), path.join(root, ...planted.split("/")), "file");
   git(root, ["add", "-A"]);
   git(root, ["commit", "-m", "planted link"]);
 
@@ -253,14 +249,19 @@ test("a symlink created by the run is detected and removed", async (t) => {
   // The case the previous test's name claimed but did not cover: the link is
   // created *during* dispatch, so it is absent from the snapshot and has to be
   // caught by the post-run scan and cleared without following it.
+  //
+  // Capability is established up front, before the run. This test used to infer
+  // "symlinks are not permitted here" from the link being absent afterwards with
+  // a zero exit — but a regression in the post-run scan produces precisely that
+  // same observation, so the inference turned a broken guard into a green skip
+  // on every platform. The only honest source for that answer is a probe that
+  // sees the errno, and once it says yes, every assertion below is unconditional.
+  if (!requireFileSymlink(t)) return;
+
   const build = await withPlan(
     { symlinks: [{ path: planted, target: path.join(root, "ROADMAP.md") }] },
     () => run("build", "--executor", "fake", "--json")
   );
-
-  if (!existsSync(path.join(root, ...planted.split("/"))) && build.exitCode === 0) {
-    return t.skip("symlink creation is not permitted here");
-  }
 
   assert.equal(build.exitCode, 1);
   assert.match(parseJsonOutput(build).diagnostics[0].message, /protected control artifact/i);
@@ -610,6 +611,13 @@ test("a protected acceptance test swapped for a symlink is changed, even when th
   // when the bytes behind it happen to match" — and this is a second walker with
   // its own comparison, so the hole is closed again rather than inherited.
   const { root, run } = await plannedProject(t);
+  // Established before the run, not inferred from it. Reading `after.kind !==
+  // "symlink"` as "this platform cannot make links" was the exact failure this
+  // test exists to catch: if `classifyAcceptancePath` regressed to reporting a
+  // link as a plain file, the observation would look identical and the test
+  // would skip itself green — on Linux as readily as on Windows.
+  if (!requireFileSymlink(t)) return;
+
   const acceptance = "acceptance.test.mjs";
   await writeFile(path.join(root, acceptance), "assert(price === 10);\n", "utf8");
   await writeFile(path.join(root, "decoy.test.mjs"), "assert(price === 10);\n", "utf8");
@@ -622,10 +630,7 @@ test("a protected acceptance test swapped for a symlink is changed, even when th
 
   const report = await protectedPathsReport(root);
   const observation = report.observations.find((entry) => entry.path === acceptance);
-  if (observation.after.kind !== "symlink") {
-    // Windows refuses symlink creation without elevation or developer mode.
-    return t.skip("symlink creation is not permitted here");
-  }
+  assert.equal(observation.after.kind, "symlink");
   assert.equal(build.exitCode, 0, build.stderr);
   assert.equal(observation.verdict, "changed");
   assert.equal(observation.note, "kind-changed");
