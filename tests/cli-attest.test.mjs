@@ -123,7 +123,7 @@ function git(root, args) {
 }
 
 /** An R3 change planned, approved, built, reviewed and accepted — ship's own input. */
-async function acceptedR3(t, { ok = true } = {}) {
+async function acceptedR3(t, { ok = true, answers = ANSWERS } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-attest-"));
   t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
   git(root, ["init", "--initial-branch=main"]);
@@ -143,7 +143,7 @@ async function acceptedR3(t, { ok = true } = {}) {
   );
 
   const run = (...args) => runCliCapture(["--repository-root", root, ...args]);
-  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(answers), "utf8");
   assert.equal((await run("start", "--intake", "intake.json", "--created-at", CREATED_AT)).exitCode, 0);
   assert.equal((await run("start", "--finalize", "--json", "--created-at", CREATED_AT)).exitCode, 0);
   git(root, ["add", "-A"]);
@@ -160,7 +160,8 @@ async function acceptedR3(t, { ok = true } = {}) {
   assert.equal((await run("review", "--accept", "--approver", "dasbl", "--json")).exitCode, 0);
 
   const changeId = (await readdir(path.join(root, ".legion/project/changes")))[0];
-  return { root, run, changeId };
+  const changeDir = path.join(root, ".legion/project/changes", changeId);
+  return { root, run, changeId, changeDir };
 }
 
 test("a pass over a report whose own ok is false is refused, and nothing is written", async (t) => {
@@ -383,6 +384,127 @@ test("a rerun that authors a different statement records it, rather than reporti
     "--json"
   );
   assert.equal(parseJsonOutput(again).attestation.action, "unchanged");
+});
+
+/**
+ * The same change with a second acceptance criterion, so `legion plan` derives
+ * two tasks.
+ *
+ * `--covers` cannot be varied on a one-task change: the default is every task,
+ * which is the only task, so no explicit value can differ from it. That is why
+ * the first draft of the authored-fields fix shipped without covering `covers` —
+ * the fixture made the defect unreachable rather than absent.
+ */
+const TWO_TASK_ANSWERS = {
+  ...ANSWERS,
+  "req-1-ac-1-more": "true",
+  "req-1-ac-2-statement": "A rejected quote is retried against the fallback route",
+  "req-1-ac-2-proof": "executable",
+  "req-1-ac-2-detail": "node --version",
+  "req-1-ac-2-surface-kind": "real-interface",
+  "req-1-ac-2-surface-interface": "POST /v1/quote/retry",
+  "req-1-ac-2-surface-rationale":
+    "The check drives the retry path against the running service rather than a stubbed transport.",
+  "req-1-ac-2-surface-pins": COMPOSE_PATH,
+  "req-1-ac-2-more": "false"
+};
+
+test("a rerun that narrows --covers records the new list, rather than reporting unchanged", async (t) => {
+  // `covers` looks like a gate input rather than authored text, which is why it
+  // was missed when statement and waiverReason were added to this comparison.
+  // But the gate predicate reads covers from the *existing* document, so
+  // `alreadySatisfying` stays true no matter what the new invocation asks for —
+  // and a corrected task list with unchanged prose took the `unchanged` branch
+  // and was dropped on the floor, exactly as a corrected statement had been.
+  const { run, changeDir } = await acceptedR3(t, { answers: TWO_TASK_ANSWERS });
+
+  const taskgraph = JSON.parse(await readFile(path.join(changeDir, "taskgraph.json"), "utf8"));
+  assert.equal(taskgraph.tasks.length, 2, "the covers defect is only reachable on a change with two tasks");
+
+  const first = await run(
+    "attest", "security-evaluation",
+    "--attested-by", "dasbl",
+    "--verdict", "pass",
+    "--source", THREAT_MODEL_PATH,
+    "--json"
+  );
+  assert.equal(first.exitCode, 0, first.stdout + first.stderr);
+  const firstPayload = parseJsonOutput(first);
+  assert.equal(firstPayload.attestation.action, "record");
+  assert.equal(firstPayload.attestation.covers.length, 2, "the default covers every task of the change");
+
+  // Taken from what the attestation actually recorded, not from the taskgraph:
+  // `taskgraph.tasks[].id` is a *contract* id (`ctr_`), and `--covers` names the
+  // task id (`tsk_`) that `taskIdForContractId` derives from it.
+  const [firstTask] = firstPayload.attestation.covers;
+  assert.equal(typeof firstTask, "string", "the payload reports covers as task ids");
+
+  // Same attester, same verdict, same source, same prose. Only the task list
+  // narrows — and the gate still evaluates the old document, so nothing about
+  // `alreadySatisfying` changes.
+  const narrowed = await run(
+    "attest", "security-evaluation",
+    "--attested-by", "dasbl",
+    "--verdict", "pass",
+    "--source", THREAT_MODEL_PATH,
+    "--covers", firstTask,
+    "--json"
+  );
+  assert.equal(narrowed.exitCode, 0, narrowed.stdout + narrowed.stderr);
+  const narrowedPayload = parseJsonOutput(narrowed);
+  assert.equal(
+    narrowedPayload.attestation.action,
+    "re-record",
+    "a changed task list is a changed attestation, however satisfied the gate remains"
+  );
+  assert.equal(narrowedPayload.attestation.covers.length, 1);
+
+  // Repeating the narrowed call is *not* `unchanged`, and that is the writer
+  // discipline working rather than a leak: covering one of two tasks no longer
+  // satisfies a gate that quantifies over both, so `alreadySatisfying` is false
+  // and the writer keeps writing. A writer whose idea of done outran the
+  // reader's idea of satisfied is the defect this whole series was paid for.
+  const narrowedAgain = await run(
+    "attest", "security-evaluation",
+    "--attested-by", "dasbl",
+    "--verdict", "pass",
+    "--source", THREAT_MODEL_PATH,
+    "--covers", firstTask,
+    "--json"
+  );
+  assert.equal(parseJsonOutput(narrowedAgain).attestation.action, "re-record");
+
+  // Widened back to both tasks, named in the reverse of the default order. The
+  // set differs from what is stored, so this records.
+  const reversed = [...firstPayload.attestation.covers].reverse();
+  const widened = await run(
+    "attest", "security-evaluation",
+    "--attested-by", "dasbl",
+    "--verdict", "pass",
+    "--source", THREAT_MODEL_PATH,
+    "--covers", reversed[0],
+    "--covers", reversed[1],
+    "--json"
+  );
+  assert.equal(parseJsonOutput(widened).attestation.action, "re-record");
+
+  // And now the same set in the same reversed order is `unchanged` — which is
+  // the half of the comparison that would break if covers were compared
+  // positionally, since the stored document holds them in default order.
+  const reorderedAgain = await run(
+    "attest", "security-evaluation",
+    "--attested-by", "dasbl",
+    "--verdict", "pass",
+    "--source", THREAT_MODEL_PATH,
+    "--covers", reversed[0],
+    "--covers", reversed[1],
+    "--json"
+  );
+  assert.equal(
+    parseJsonOutput(reorderedAgain).attestation.action,
+    "unchanged",
+    "covers is a set, so a reordered but identical list must not force a rewrite"
+  );
 });
 
 test("editing a cited report after the attestation blocks the gate, and the cure is the bytes", async (t) => {

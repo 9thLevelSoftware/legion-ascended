@@ -52379,7 +52379,9 @@ async function handleAttestWorkflow(context) {
     verifyPin: pinned.verifyPin,
     classifySource: (reference) => classifyEvidenceSource(pinned.contentOf(reference), { repositoryRoot: context.repositoryRoot })
   });
-  const authoredUnchanged = existing.ok && existing.document.statement === document.statement && existing.document.waiverReason === document.waiverReason;
+  const coverKeys = (entries) => entries.map((entry) => `${entry.kind}:${entry.id}`).sort().join(" ");
+  const sameCovers = (left, right) => left.length === right.length && coverKeys(left) === coverKeys(right);
+  const authoredUnchanged = existing.ok && existing.document.statement === document.statement && existing.document.waiverReason === document.waiverReason && sameCovers(existing.document.covers, document.covers);
   const action = existing.ok ? alreadySatisfying && authoredUnchanged ? "unchanged" : "re-record" : "record";
   const warnings = await attestationWarnings({
     repositoryRoot: context.repositoryRoot,
