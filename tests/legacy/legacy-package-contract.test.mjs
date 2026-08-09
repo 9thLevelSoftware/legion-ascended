@@ -109,7 +109,8 @@ test("P01-T10 legacy installer supports local Codex install, verify, and uninsta
   mkdirSync(project, { recursive: true });
 
   try {
-    const install = spawnSync(process.execPath, [INSTALLER, "--codex", "--local", "--verify"], {
+    // Asserts the v8 command bundle lands on disk, which is opt-in now.
+    const install = spawnSync(process.execPath, [INSTALLER, "--codex", "--local", "--verify", "--legacy-prompts"], {
       cwd: project,
       encoding: "utf8",
       env: {

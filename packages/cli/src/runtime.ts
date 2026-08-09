@@ -97,7 +97,8 @@ const VALUELESS_OPTIONS = new Set([
   "session-status",
   "skip",
   "status",
-  "verify"
+  "verify",
+  "without-exploration"
 ]);
 
 export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {

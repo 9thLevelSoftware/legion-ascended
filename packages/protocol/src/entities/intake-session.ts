@@ -1,6 +1,6 @@
 import * as z from "zod";
 
-import { intakeSessionIdSchema, projectIdSchema, runIdSchema } from "../primitives/ids.js";
+import { intakeDraftIdSchema, intakeSessionIdSchema, projectIdSchema, runIdSchema } from "../primitives/ids.js";
 import { artifactReferenceSchema } from "../primitives/values.js";
 import { schemaMetadataSchema } from "./common.js";
 
@@ -30,7 +30,7 @@ export const intakeSlotIdSchema = z
  * distinct is the audit trail for where an unexamined assumption entered a
  * project — the question a retrospective actually needs to answer.
  */
-export const intakeAnswerSourceSchema = z.enum(["human", "proposed-accepted"]);
+export const intakeAnswerSourceSchema = z.enum(["human", "proposed-accepted", "draft-accepted"]);
 
 export type IntakeAnswerSource = z.infer<typeof intakeAnswerSourceSchema>;
 
@@ -41,6 +41,14 @@ export const intakeProposalRefSchema = z.strictObject({
 
 export type IntakeProposalRef = z.infer<typeof intakeProposalRefSchema>;
 
+/** The immutable accepted draft and anchored answer that supplied a session value. */
+export const intakeDraftAcceptanceRefSchema = z.strictObject({
+  draftId: intakeDraftIdSchema,
+  answerAnchor: z.string().min(1).max(128)
+});
+
+export type IntakeDraftAcceptanceRef = z.infer<typeof intakeDraftAcceptanceRefSchema>;
+
 export const intakeAnswerSchema = z
   .strictObject({
     nodeId: intakeNodeIdSchema,
@@ -48,7 +56,8 @@ export const intakeAnswerSchema = z
     value: z.union([z.string().max(8_192), z.array(z.string().max(1_024)).max(64), z.boolean()]),
     answeredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
     source: intakeAnswerSourceSchema,
-    proposedFrom: intakeProposalRefSchema.optional()
+    proposedFrom: intakeProposalRefSchema.optional(),
+    draftAcceptedFrom: intakeDraftAcceptanceRefSchema.optional()
   })
   .superRefine((answer, context) => {
     // An accepted proposal must say what it came from, or the distinction
@@ -58,6 +67,13 @@ export const intakeAnswerSchema = z
         code: "custom",
         message: "An accepted proposal must record the exploration it came from.",
         path: ["proposedFrom"]
+      });
+    }
+    if (answer.source === "draft-accepted" && answer.draftAcceptedFrom === undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "A draft-accepted answer must record the immutable accepted draft it came from.",
+        path: ["draftAcceptedFrom"]
       });
     }
   });

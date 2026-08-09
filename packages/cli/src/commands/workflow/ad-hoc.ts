@@ -33,7 +33,7 @@ import { positionalText } from "./record.js";
 
 const HELP = {
   quick: "legion quick <task>\n\nCreate a typed ad-hoc taskgraph and route it through legion build.",
-  advise: "legion advise <topic> [--executor codex|manual|fake]\n\nRun read-only advisory analysis and write guidance artifacts.",
+  advise: "legion advise <topic> [--executor claude|codex|manual|fake]\n\nRun read-only advisory analysis and write guidance artifacts.",
   polish: "legion polish [target]\n\nCreate a typed polish taskgraph scoped to the target or current worktree.",
   learn: "legion learn <lesson>\n\nRecord project-specific operational learning and update the knowledge index."
 } as const;

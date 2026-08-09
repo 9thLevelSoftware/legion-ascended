@@ -13,6 +13,7 @@ export * from "./entities/common.js";
 export * from "./entities/decision.js";
 export * from "./entities/evidence.js";
 export * from "./entities/exploration.js";
+export * from "./entities/intake-draft.js";
 export * from "./entities/intake-session.js";
 export * from "./entities/observation.js";
 export * from "./entities/oracle.js";

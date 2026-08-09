@@ -119,35 +119,25 @@ export function createSession(input: CreateSessionInput): SeededSession {
   const injectedNodes: IntakeInjectedNode[] = [];
 
   if (input.exploration !== undefined) {
-    for (const proposal of input.exploration.proposals) {
+    const exploration = input.exploration;
+    for (const proposal of exploration.proposals) {
       proposals.set(proposal.slot, {
         value: proposal.value,
         rationale: proposal.rationale,
         anchor: proposal.anchor,
         confidence: proposal.confidence,
-        runId: input.exploration.runId
+        runId: exploration.runId
       });
     }
     // Injected IDs are namespaced rather than checked for collisions: the graph
     // never uses the `open-` prefix, so a slugified open question can never
     // shadow a built-in node no matter what the exploration called it.
-    const takenNodeIds = new Set<string>();
-    for (const question of input.exploration.openQuestions) {
-      let nodeId = namespaceInjectedNodeId(question.nodeId);
-      let collision = 0;
-      while (takenNodeIds.has(nodeId)) {
-        collision += 1;
-        const suffix = `-${collision}`;
-        nodeId = `${namespaceInjectedNodeId(question.nodeId).slice(0, MAX_NODE_ID_LENGTH - suffix.length)}${suffix}`;
-      }
-      takenNodeIds.add(nodeId);
-      injectedNodes.push({
-        nodeId,
+    injectedNodes.push(...normalizeInjectedNodes(exploration.openQuestions.map((question) => ({
+        nodeId: question.nodeId,
         slot: question.slot,
         prompt: question.question,
-        origin: { runId: input.exploration.runId, anchor: question.slot }
-      });
-    }
+        origin: { runId: exploration.runId, anchor: question.slot }
+      }))));
   }
 
   const explorationRef =
@@ -199,6 +189,7 @@ export interface RecordAnswerInput {
   readonly answeredAt: UtcTimestamp;
   readonly source?: IntakeAnswer["source"];
   readonly proposedFrom?: IntakeAnswer["proposedFrom"];
+  readonly draftAcceptedFrom?: IntakeAnswer["draftAcceptedFrom"];
 }
 
 export type RecordAnswerResult =
@@ -245,7 +236,8 @@ export function recordAnswer(input: RecordAnswerInput): RecordAnswerResult {
     value: input.value,
     answeredAt: input.answeredAt,
     source: input.source ?? "human",
-    ...(input.proposedFrom === undefined ? {} : { proposedFrom: input.proposedFrom })
+    ...(input.proposedFrom === undefined ? {} : { proposedFrom: input.proposedFrom }),
+    ...(input.draftAcceptedFrom === undefined ? {} : { draftAcceptedFrom: input.draftAcceptedFrom })
   };
 
   const answers = [...input.session.answers.filter((entry) => entry.nodeId !== node.id), answer];
@@ -330,6 +322,11 @@ export type LoadSessionResult =
   | { readonly ok: true; readonly session: IntakeSession }
   | { readonly ok: false; readonly reason: string };
 
+/** The one canonical byte representation used for session publication and transaction hashes. */
+export function intakeSessionBytes(session: IntakeSession): string {
+  return `${JSON.stringify(intakeSessionSchema.parse(session), undefined, 2)}\n`;
+}
+
 /**
  * Whether an active session may still be advanced by this CLI.
  *
@@ -394,11 +391,22 @@ export async function loadSession(
   return { ok: true, session: parsed.data };
 }
 
-export async function saveSession(repositoryRoot: string, session: IntakeSession): Promise<void> {
+export async function saveSession(
+  repositoryRoot: string,
+  session: IntakeSession,
+  hooksOrBeforeMutation?: (() => Promise<void>) | {
+    readonly beforeMutation?: () => Promise<void>;
+    readonly afterTemporaryWrite?: () => Promise<void> | void;
+    readonly afterPublish?: () => Promise<void> | void;
+  }
+): Promise<void> {
   // Revalidate on the way out. Every mutation above already parses, but this is
   // the last point before the bytes become the record of what was asked, and
   // the cost of being sure is one schema call.
   const validated = intakeSessionSchema.parse(session);
+  const hooks = typeof hooksOrBeforeMutation === "function"
+    ? { beforeMutation: hooksOrBeforeMutation }
+    : hooksOrBeforeMutation ?? {};
 
   // Resolved through the repository's artifact-path guards rather than joined by
   // hand. A symlinked `.legion/project/intake`, session directory, or planted
@@ -406,6 +414,7 @@ export async function saveSession(repositoryRoot: string, session: IntakeSession
   // `legion start` in an untrusted checkout could create or replace files
   // outside the repository. The requirements writer was fixed for exactly this
   // and this path was left behind — the same gap, one directory over.
+  await hooks.beforeMutation?.();
   const resolved = await ensureProjectArtifactParent({
     repositoryRoot,
     artifactPath: intakeSessionArtifactPath(validated.id)
@@ -414,9 +423,14 @@ export async function saveSession(repositoryRoot: string, session: IntakeSession
   const temporary = `${resolved.absolutePath}.tmp`;
   // `rm` first so a planted `.tmp` symlink is removed rather than written
   // through; `writeFile` on a symlink follows it to the target.
+  await hooks.beforeMutation?.();
   await rm(temporary, { force: true });
-  await writeFile(temporary, `${JSON.stringify(validated, undefined, 2)}\n`, "utf8");
+  await hooks.beforeMutation?.();
+  await writeFile(temporary, intakeSessionBytes(validated), "utf8");
+  await hooks.afterTemporaryWrite?.();
+  await hooks.beforeMutation?.();
   await rename(temporary, resolved.absolutePath);
+  await hooks.afterPublish?.();
 }
 
 /**
@@ -430,7 +444,8 @@ export async function saveSession(repositoryRoot: string, session: IntakeSession
  */
 async function claimSessionDirectory(
   repositoryRoot: string,
-  sessionId: string
+  sessionId: string,
+  beforeMutation?: () => Promise<void>
 ): Promise<boolean> {
   // Resolved, not created: `ensureProjectArtifactParent` would make the session
   // directory itself, and the `mkdir` below would then always report EEXIST and
@@ -445,8 +460,10 @@ async function claimSessionDirectory(
 
   // Ancestors are created recursively; the session directory itself is not, so
   // its creation is the reservation.
+  await beforeMutation?.();
   await mkdir(path.dirname(sessionDirectory), { recursive: true });
   try {
+    await beforeMutation?.();
     await mkdir(sessionDirectory, { recursive: false });
     return true;
   } catch (error) {
@@ -469,11 +486,50 @@ async function claimSessionDirectory(
  * and refuses anything that has content, so a real session can never be deleted
  * by a caller unwinding.
  */
-export async function releaseSessionId(repositoryRoot: string, sessionId: string): Promise<void> {
+export async function releaseSessionId(
+  repositoryRoot: string,
+  sessionId: string,
+  beforeMutation?: () => Promise<void>
+): Promise<void> {
   try {
+    await beforeMutation?.();
     await rmdir(intakeSessionDirectory(repositoryRoot, sessionId));
   } catch {
     // Already gone, or no longer empty. Either way it is not ours to remove.
+  }
+}
+
+/** Apply the graph namespace and deterministic collision suffixes to external questions. */
+export function normalizeInjectedNodes(nodes: readonly IntakeInjectedNode[]): readonly IntakeInjectedNode[] {
+  const taken = new Set<string>();
+  return nodes.map((question) => {
+    const base = namespaceInjectedNodeId(question.nodeId);
+    let nodeId = base;
+    let collision = 0;
+    while (taken.has(nodeId)) {
+      const suffix = `-${++collision}`;
+      nodeId = `${base.slice(0, MAX_NODE_ID_LENGTH - suffix.length)}${suffix}`;
+    }
+    taken.add(nodeId);
+    return { ...question, nodeId };
+  });
+}
+
+/**
+ * Roll back a session written by a transaction that failed after the atomic
+ * session rename. Only the known session file and then-empty reservation are
+ * removed; unexpected concurrent content is never recursively deleted.
+ */
+export async function rollbackSessionCreation(
+  repositoryRoot: string,
+  sessionId: string,
+  beforeMutation?: () => Promise<void>
+): Promise<void> {
+  try {
+    await beforeMutation?.();
+    await rm(sessionFilePath(repositoryRoot, sessionId), { force: true });
+  } finally {
+    await releaseSessionId(repositoryRoot, sessionId, beforeMutation);
   }
 }
 
@@ -563,9 +619,10 @@ export async function findActiveSession(
  */
 export async function allocateSessionId(
   repositoryRoot: string,
-  createdAt: UtcTimestamp
+  createdAt: UtcTimestamp,
+  beforeMutation?: () => Promise<void>
 ): Promise<string> {
-  if (await claimSessionDirectory(repositoryRoot, intakeSessionIdFor(createdAt))) {
+  if (await claimSessionDirectory(repositoryRoot, intakeSessionIdFor(createdAt), beforeMutation)) {
     return intakeSessionIdFor(createdAt);
   }
   for (let attempt = 1; attempt <= 999; attempt += 1) {
@@ -573,7 +630,7 @@ export async function allocateSessionId(
     // Unpadded, `-10` sorts before `-2` and "the most recent session" is the
     // wrong one whenever two starts share a millisecond.
     const candidate = intakeSessionIdFor(createdAt, `-${String(attempt).padStart(3, "0")}`);
-    if (await claimSessionDirectory(repositoryRoot, candidate)) return candidate;
+    if (await claimSessionDirectory(repositoryRoot, candidate, beforeMutation)) return candidate;
   }
   throw new Error(`Could not allocate an intake session ID for ${createdAt}.`);
 }

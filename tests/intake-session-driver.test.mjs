@@ -542,28 +542,24 @@ async function seedExplorationRun(root) {
   return { runId, artifactDir, exploration };
 }
 
-test("--from-exploration is honoured when the printed advice is followed", async (t) => {
+test("automatic exploration handoff occurs before session creation", async (t) => {
   const { root, run } = await scratchRepo(t);
   await seedExplorationRun(root);
 
-  // The no-argument start creates an unseeded session and prints
-  // "--from-exploration <runId>". Resuming that session before reading the
-  // option meant following the printed advice silently discarded the
-  // exploration — every proposal and every open question with it.
+  // Selection is part of preflight, before an ID is allocated, so there is no
+  // throwaway unseeded session to abort and replace.
   const first = await run("start", "--next", "--json", "--created-at", CREATED_AT);
   const firstPayload = parseJsonOutput(first);
-  assert.equal(firstPayload.session.injectedNodes, 0);
-  assert.ok(
-    firstPayload.availableExplorations.some((entry) => entry.runId === "explore-1"),
-    "the exploration should be offered"
-  );
+  assert.equal(firstPayload.session.explorationRunId, "run_explore-1");
+  assert.equal(firstPayload.session.injectedNodes, 1);
+  assert.equal(firstPayload.question.proposal?.value, "Asset Mapper");
 
   const seeded = await run(
     "start", "--from-exploration", "explore-1", "--json", "--created-at", "2026-07-30T13:00:00.000Z"
   );
   assert.equal(seeded.exitCode, 0, seeded.stderr);
   const seededPayload = parseJsonOutput(seeded);
-  assert.notEqual(seededPayload.session.id, firstPayload.session.id);
+  assert.equal(seededPayload.session.id, firstPayload.session.id);
   assert.equal(seededPayload.session.explorationRunId, "run_explore-1");
   assert.equal(seededPayload.session.injectedNodes, 1);
   assert.equal(seededPayload.question.proposal?.value, "Asset Mapper");
@@ -575,10 +571,11 @@ test("--from-exploration refuses to discard an interview in progress", async (t)
 
   await run("start", "--next", "--json", "--created-at", CREATED_AT);
   await run("start", "--answer", "project-name=Asset Mapper");
+  await seedNamedExplorationRun(root, "explore-02");
 
   // Silently replacing a session with answers would lose work; silently
   // resuming would ignore the option. Refusing says which is happening.
-  const seeded = await run("start", "--from-exploration", "explore-1", "--json");
+  const seeded = await run("start", "--from-exploration", "explore-02", "--json");
   assert.equal(seeded.exitCode, 1);
   assert.match(parseJsonOutput(seeded).diagnostics[0].message, /--abort/);
 });
@@ -854,11 +851,11 @@ test("a failed --from-exploration leaves no session directory behind", async (t)
   const failed = await run("start", "--from-exploration", "does-not-exist", "--json");
   assert.equal(failed.exitCode, 1);
 
-  assert.equal(
-    existsSync(path.join(root, ".legion/project/intake")),
-    false,
-    "a rejected exploration must not leave a reserved session directory"
-  );
+  const intakeEntries = existsSync(path.join(root, ".legion/project/intake"))
+    ? await import("node:fs/promises").then(({ readdir }) => readdir(path.join(root, ".legion/project/intake")))
+    : [];
+  assert.equal(intakeEntries.some((entry) => entry.startsWith("itk_")), false,
+    "a rejected exploration must not leave a reserved session directory");
 
   const recovered = await run("start", "--next", "--json", "--created-at", CREATED_AT);
   assert.equal(recovered.exitCode, 0, recovered.stderr);
@@ -940,25 +937,23 @@ test("a rejected answer reports real progress, not zero", async (t) => {
   assert.ok(payload.session.total > 2);
 });
 
-test("a resumed unanswered session still offers its explorations", async (t) => {
+test("a resumed unanswered session retains its automatically selected exploration", async (t) => {
   const { root, run } = await scratchRepo(t);
   await seedExplorationRun(root);
 
   const first = parseJsonOutput(await run("start", "--next", "--json", "--created-at", CREATED_AT));
-  assert.ok(first.availableExplorations?.some((entry) => entry.runId === "explore-1"));
+  assert.equal(first.session.explorationRunId, "run_explore-1");
+  assert.equal(first.question.proposal?.value, "Asset Mapper");
 
-  // commands/start.md tells the host to act on this field. An operator who
-  // closed the terminal before answering previously had no way to learn the
-  // exploration existed, even though seeding was still free.
+  // The chosen source is pinned on the session, so interruption cannot silently
+  // switch it to a newer candidate.
   const resumed = parseJsonOutput(await run("start", "--next", "--json"));
   assert.equal(resumed.session.id, first.session.id);
-  assert.ok(
-    resumed.availableExplorations?.some((entry) => entry.runId === "explore-1"),
-    "a session with no answers can still be seeded, so the offer must persist"
-  );
+  assert.equal(resumed.session.explorationRunId, "run_explore-1");
+  assert.equal(resumed.question.proposal?.value, "Asset Mapper");
 
-  // Once an answer exists, seeding is no longer possible and the offer stops —
-  // advice that cannot be followed is the failure being avoided here.
+  // Once an answer exists, the exploration remains provenance rather than an
+  // offer to replace the session.
   await run("start", "--answer", "project-name=Asset Mapper");
   const answered = parseJsonOutput(await run("start", "--next", "--json"));
   assert.equal(answered.availableExplorations, undefined);

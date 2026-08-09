@@ -19,14 +19,24 @@ First-class targets expose one primary Legion entry point: `legion <command>` in
 ```powershell
 legion status
 legion explore "clarify the first release slice" --executor fake
-legion map --refresh
-legion map --check
-legion start --name "Asset Mapper" --summary "Metadata authoring and deterministic asset resolution" --owner dasbl
+legion start --goal "Metadata authoring and deterministic asset resolution"
+legion map --refresh --scope .                 # only when start returns map_refresh_required
+legion start --stage-draft .legion/var/intake-drafts/intake-draft.json # ignored host input from the review contract
+legion start --accept-draft                    # only after the complete grouped review is displayed and accepted
+legion start                                   # remaining question or complete
+legion start --answer "<node>=<value>"         # repeat only for unresolved graph nodes
+legion start --finalize
 legion plan 1 --from-roadmap ROADMAP.md
 legion status
 ```
 
-Use `legion explore` or `legion map` before `legion plan` when the project needs discovery or codebase context. `legion map --query <text>` searches the latest generated map. Normal users should not edit worker bundle manifests or compute prompt hashes; those are `legion dev worker` extension workflows.
+Bare `legion start --json` owns preflight, map freshness, draft/session state, and the next exact action. The staged response groups requirements, executable proofs, constraints/non-goals, risk/budget/verification defaults, deduplicated evidence paths/kinds/hashes/anchors, diagnostics, and unresolved items. Its `nextAction.type` is `human_decision`: pause for the operator rather than executing it. Revise by staging and displaying a new draft ID; discard with `legion start --discard-draft`; neither staging nor silence is acceptance. Active and supplied-ID decisions are bound to the exact displayed digest, so stale or undisplayed bytes are rejected.
+
+Compose draft input under `.legion/var/intake-drafts/`. That runtime-input directory is excluded from authored-source mapping, so writing the requested JSON after `legion map --refresh --scope .` does not immediately stale the map evidence it cites.
+
+Preparation selectors and edits are valid only during bare preparation or alongside `--stage-draft`; persist them first, then enter the interview with a later `--next`. `--accept-draft` and `--discard-draft` are terminal decisions and reject combinations with preparation selectors, `--next`, `--session`, or another action before changing lifecycle state.
+
+Use `legion explore` before start when discovery is useful; start can automatically select a compatible completed exploration, select one explicitly with `--from-exploration`, or opt out with `--without-exploration`. `legion map --query <text>` searches the latest generated map. Direct `legion start --name ...` initialization remains available for callers that intentionally want no intake requirements. Normal users should not edit worker bundle manifests or compute prompt hashes; those are `legion dev worker` extension workflows.
 
 ## Guidance Commands
 
@@ -38,6 +48,22 @@ legion milestone --status
 ```
 
 Guidance runs write `workflow-run.json` plus command-specific markdown under `.legion/project/workflow/<workflow>/<runId>/`. `manual` prepares prompts and artifacts without executing; `fake` is deterministic for tests.
+
+## Executors
+
+`--executor` selects the driver that does the work. With the flag omitted, the first installed one wins: `claude`, then `codex`, then `manual`.
+
+| Executor | What runs the task |
+| --- | --- |
+| `claude` | Claude Code, headless (`claude --print --output-format json`). `LEGION_CLAUDE_EXEC_TIMEOUT_MS` overrides the 15-minute cap. |
+| `codex` | Codex CLI (`codex exec`). `LEGION_CODEX_EXEC_TIMEOUT_MS` overrides the 5-minute cap. |
+| `manual` | Nothing. It writes the instruction prompt, records `blocked`, and leaves the work to you. |
+| `fake` | A scripted in-memory adapter, for tests. |
+
+Two things worth knowing before relying on the default:
+
+- **Inside a Claude Code session, auto-selection skips `claude`.** The installed `/legion` entry point runs `legion build` from within such a session, and auto-selecting there would spawn a second agent with permissions bypassed to do work the agent that asked for it could do itself. You get `manual` instead, whose prompt artifact hands the task to the session you are already in. `--executor claude` is still honored when you ask for it by name.
+- **`--executor claude` runs with `--permission-mode bypassPermissions`,** matching the codex adapter's `approval_policy="never"` — there is no human attached to answer a prompt. A read-only run additionally denies `Edit`, `Write`, and `NotebookEdit`. Claude Code has no OS-level sandbox flag, so unlike codex's `--sandbox read-only` a `Bash` command that writes is not refused; the guarded-execution harness is what keeps such a write out of the evidence.
 
 Ad-hoc work still goes through the normal evidence gate:
 

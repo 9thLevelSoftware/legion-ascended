@@ -32,14 +32,19 @@ legion install --target codex --local
 
 Use `--global` for a user-wide install and `--dry-run` to preview writes.
 
+The install surfaces below are the runtime's own entry points. They dispatch to the `legion` CLI,
+which holds the workflow engine. The v8 prompt bundle — agent personas, command markdown, skills,
+and dispatch adapters — is not installed unless you pass `--legacy-prompts`, which also repoints
+these entry points at those files.
+
 | Target | Runtime | Canonical Entry | Local | Global | Install Surface |
 | --- | --- | --- | --- | --- | --- |
-| `claude` | Claude Code | `/legion` | Yes | Yes | Native Legion skill plus command aliases, agents, and supporting skills |
+| `claude` | Claude Code | `/legion` | Yes | Yes | Native Legion skill |
 | `codex` | OpenAI Codex CLI | `/project:legion` or `/prompts:legion` | Yes | Yes | Native Legion skill plus one prompt wrapper; per-command prompts are aliases |
 | `copilot` | GitHub Copilot CLI | `/legion` | Yes | Yes | Legion skill plus custom agent profile |
-| `antigravity` | Antigravity CLI | `/legion` | Yes | Yes | Native plugin with skills, agents, and command aliases |
+| `antigravity` | Antigravity CLI | `/legion` | Yes | Yes | Native plugin with command aliases |
 | `opencode` | OpenCode | `/legion` | Yes | Yes | Single Legion command plus compatibility command aliases and a subagent |
-| `kilocode` | Kilo Code Plugin | Legion mode or `/legion` | Yes | Yes | Legion mode, workflow, compatibility workflows, and Agent Skills |
+| `kilocode` | Kilo Code Plugin | Legion mode or `/legion` | Yes | Yes | Legion mode, workflow, compatibility workflows, and the Legion skill |
 
 ## Compatibility And Legacy Targets
 

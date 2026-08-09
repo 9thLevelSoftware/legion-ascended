@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { stableProtocolJson } from "@legion/artifacts";
-import type { ArtifactPath, UtcTimestamp } from "@legion/protocol";
+import { resolveProjectArtifactPath, stableProtocolJson } from "@legion/artifacts";
+import { utcTimestampSchema, type ArtifactPath, type ArtifactReference, type UtcTimestamp } from "@legion/protocol";
 
 import { writeProjectTextFile } from "./executor/result.js";
 import { guidanceArtifactPath, latestGuidanceRuns, type GuidanceRunPaths } from "./guidance-run.js";
+import { isFullMapAuthoredFile, shouldTraverseAuthoredDirectory } from "./authored-source.js";
 
 export interface CodebaseMapFile {
   readonly path: string;
@@ -43,51 +45,6 @@ export interface CodebaseMapQueryMatch {
   readonly symbols: readonly string[];
   readonly summary: string;
 }
-
-const EXCLUDED_DIRECTORIES = new Set([
-  ".git",
-  ".hg",
-  ".svn",
-  ".legion",
-  ".worktrees",
-  "node_modules",
-  "dist",
-  "coverage",
-  ".turbo",
-  ".cache",
-  "target",
-  "build",
-  ".next"
-]);
-
-const TEXT_EXTENSIONS = new Set([
-  ".c",
-  ".cc",
-  ".cpp",
-  ".cs",
-  ".css",
-  ".go",
-  ".h",
-  ".hpp",
-  ".html",
-  ".java",
-  ".js",
-  ".json",
-  ".jsx",
-  ".kt",
-  ".kts",
-  ".md",
-  ".mjs",
-  ".py",
-  ".rs",
-  ".sql",
-  ".toml",
-  ".ts",
-  ".tsx",
-  ".txt",
-  ".yaml",
-  ".yml"
-]);
 
 /**
  * Refresh, or report that there was nothing to refresh.
@@ -179,18 +136,215 @@ export async function refreshCodebaseMap(input: {
   };
 }
 
-export async function getLatestCodebaseMap(repositoryRoot: string): Promise<CodebaseMapDocument | undefined> {
+export interface MapCandidateDiagnostic {
+  readonly runId: string;
+  readonly code:
+    | "map_artifact_path_invalid"
+    | "map_artifact_unreadable"
+    | "map_artifact_json_invalid"
+    | "map_artifact_schema_invalid"
+    | "map_artifact_duplicate_path"
+    | "map_artifact_unsafe_path"
+    | "map_artifact_count_mismatch"
+    | "map_artifact_fingerprint_mismatch";
+  readonly message: string;
+}
+
+export interface LatestCodebaseMap {
+  readonly map: CodebaseMapDocument;
+  readonly artifact: ArtifactReference;
+}
+
+export interface LatestCodebaseMapDiscovery {
+  readonly record?: LatestCodebaseMap;
+  readonly diagnostics: readonly MapCandidateDiagnostic[];
+}
+
+class MapCandidateValidationError extends Error {
+  readonly code: MapCandidateDiagnostic["code"];
+
+  constructor(code: MapCandidateDiagnostic["code"], message: string) {
+    super(message);
+    this.name = "MapCandidateValidationError";
+    this.code = code;
+  }
+}
+
+const MAP_DOCUMENT_KEYS = ["files", "generatedAt", "kind", "schemaVersion", "scope", "sourceFileCount", "sourceFingerprint"] as const;
+const MAP_FILE_KEYS = ["headings", "lineCount", "path", "sha256", "sizeBytes", "summary", "symbols"] as const;
+
+function exactObject(value: unknown, keys: readonly string[], label: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", `${label} must be an object`);
+  }
+  const record = value as Record<string, unknown>;
+  const actual = Object.keys(record).sort();
+  if (actual.length !== keys.length || !keys.every((key, index) => actual[index] === key)) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", `${label} has an invalid field set`);
+  }
+  return record;
+}
+
+function safeMapRelativePath(value: unknown, options: { readonly allowDot?: boolean } = {}): string {
+  if (typeof value !== "string" || value.length === 0 || value.includes("\\") || value.includes("\0") ||
+      value.startsWith("/") || path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
+    throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${String(value)}`);
+  }
+  if (options.allowDot === true && value === ".") return value;
+  const segments = value.split("/");
+  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..") || path.posix.normalize(value) !== value) {
+    throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${value}`);
+  }
+  return value;
+}
+
+function stringArray(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", `${label} must be an array of strings`);
+  }
+  return value;
+}
+
+function nonnegativeInteger(value: unknown, label: string): number {
+  if (!Number.isSafeInteger(value) || Number(value) < 0) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", `${label} must be a nonnegative safe integer`);
+  }
+  return Number(value);
+}
+
+function parseCodebaseMapDocument(value: unknown): CodebaseMapDocument {
+  const record = exactObject(value, MAP_DOCUMENT_KEYS, "codebase map");
+  if (record["schemaVersion"] !== 1 || record["kind"] !== "codebase_map") {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", "codebase map identity is invalid");
+  }
+  const generatedAt = utcTimestampSchema.safeParse(record["generatedAt"]);
+  if (!generatedAt.success) throw new MapCandidateValidationError("map_artifact_schema_invalid", "codebase map generatedAt is invalid");
+  const scope = safeMapRelativePath(record["scope"], { allowDot: true });
+  if (typeof record["sourceFingerprint"] !== "string" || !/^[0-9a-f]{64}$/u.test(record["sourceFingerprint"])) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", "codebase map sourceFingerprint is invalid");
+  }
+  const sourceFileCount = nonnegativeInteger(record["sourceFileCount"], "codebase map sourceFileCount");
+  if (!Array.isArray(record["files"])) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", "codebase map files must be an array");
+  }
+  const seen = new Set<string>();
+  const files: CodebaseMapFile[] = record["files"].map((entry, index) => {
+    const file = exactObject(entry, MAP_FILE_KEYS, `codebase map file ${index}`);
+    const filePath = safeMapRelativePath(file["path"]);
+    if (seen.has(filePath)) {
+      throw new MapCandidateValidationError("map_artifact_duplicate_path", `codebase map repeats file path ${filePath}`);
+    }
+    seen.add(filePath);
+    if (scope !== "." && filePath !== scope && !filePath.startsWith(`${scope}/`)) {
+      throw new MapCandidateValidationError("map_artifact_unsafe_path", `map file ${filePath} is outside declared scope ${scope}`);
+    }
+    if (typeof file["sha256"] !== "string" || !/^[0-9a-f]{64}$/u.test(file["sha256"])) {
+      throw new MapCandidateValidationError("map_artifact_schema_invalid", `codebase map file ${filePath} has an invalid sha256`);
+    }
+    if (typeof file["summary"] !== "string") {
+      throw new MapCandidateValidationError("map_artifact_schema_invalid", `codebase map file ${filePath} has an invalid summary`);
+    }
+    return {
+      path: filePath,
+      sha256: file["sha256"],
+      sizeBytes: nonnegativeInteger(file["sizeBytes"], `codebase map file ${filePath} sizeBytes`),
+      lineCount: nonnegativeInteger(file["lineCount"], `codebase map file ${filePath} lineCount`),
+      symbols: stringArray(file["symbols"], `codebase map file ${filePath} symbols`),
+      headings: stringArray(file["headings"], `codebase map file ${filePath} headings`),
+      summary: file["summary"]
+    };
+  });
+  if (sourceFileCount !== files.length) {
+    throw new MapCandidateValidationError("map_artifact_count_mismatch", `declared sourceFileCount ${sourceFileCount} does not match ${files.length} files`);
+  }
+  const sourceFingerprint = record["sourceFingerprint"];
+  const computedFingerprint = fingerprintFiles(files);
+  if (sourceFingerprint !== computedFingerprint) {
+    throw new MapCandidateValidationError("map_artifact_fingerprint_mismatch", "declared sourceFingerprint does not match the map file entries");
+  }
+  return {
+    schemaVersion: 1,
+    kind: "codebase_map",
+    generatedAt: generatedAt.data,
+    scope,
+    sourceFingerprint,
+    sourceFileCount,
+    files
+  };
+}
+
+function mapCandidateDiagnostic(runId: string, error: MapCandidateValidationError): MapCandidateDiagnostic {
+  return { runId, code: error.code, message: `Ignored map run ${runId}: ${error.message}.` };
+}
+
+export async function discoverLatestCodebaseMap(repositoryRoot: string): Promise<LatestCodebaseMapDiscovery> {
   const runs = await latestGuidanceRuns({ repositoryRoot, workflows: ["map"], limitPerWorkflow: 20 });
+  const diagnostics: MapCandidateDiagnostic[] = [];
   for (const run of runs) {
     const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : undefined;
     if (artifactPath === undefined) continue;
+    const expectedArtifactPath = `.legion/project/workflow/map/${run.runId}/map.json`;
+    let resolved;
     try {
-      return JSON.parse(await readFile(path.join(repositoryRoot, ...artifactPath.split("/")), "utf8")) as CodebaseMapDocument;
+      resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath });
+      if (resolved.repositoryPath !== expectedArtifactPath) {
+        throw new Error("map output does not belong to its declaring run");
+      }
     } catch {
+      diagnostics.push(mapCandidateDiagnostic(run.runId, new MapCandidateValidationError(
+        "map_artifact_path_invalid",
+        "map artifact path is unsafe or does not belong to its declaring run"
+      )));
       continue;
     }
+    let bytes: Buffer;
+    try {
+      bytes = await readFile(resolved.absolutePath);
+    } catch {
+      diagnostics.push(mapCandidateDiagnostic(run.runId, new MapCandidateValidationError(
+        "map_artifact_unreadable",
+        "map artifact cannot be read"
+      )));
+      continue;
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(bytes.toString("utf8"));
+    } catch {
+      diagnostics.push(mapCandidateDiagnostic(run.runId, new MapCandidateValidationError(
+        "map_artifact_json_invalid",
+        "map artifact is not valid JSON"
+      )));
+      continue;
+    }
+    try {
+      const map = parseCodebaseMapDocument(value);
+      return {
+        record: {
+          map,
+          artifact: {
+            path: resolved.repositoryPath,
+            sha256: `sha256:${sha256(bytes)}` as ArtifactReference["sha256"]
+          }
+        },
+        diagnostics
+      };
+    } catch (error) {
+      const validation = error instanceof MapCandidateValidationError
+        ? error
+        : new MapCandidateValidationError("map_artifact_schema_invalid", "map artifact schema is invalid");
+      diagnostics.push(mapCandidateDiagnostic(run.runId, validation));
+    }
   }
-  return undefined;
+  return { diagnostics };
+}
+
+async function getLatestCodebaseMapRecord(repositoryRoot: string): Promise<LatestCodebaseMap | undefined> {
+  return (await discoverLatestCodebaseMap(repositoryRoot)).record;
+}
+
+export async function getLatestCodebaseMap(repositoryRoot: string): Promise<CodebaseMapDocument | undefined> {
+  return (await getLatestCodebaseMapRecord(repositoryRoot))?.map;
 }
 
 export async function currentCodebaseFingerprint(input: {
@@ -249,24 +403,25 @@ async function collectSourceFiles(repositoryRoot: string, scope: string): Promis
   const files: CodebaseMapFile[] = [];
   for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
     const relative = path.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
-    const extension = path.extname(relative).toLowerCase();
-    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path.basename(relative))) continue;
+    if (!isFullMapAuthoredFile(relative)) continue;
     const fileStat = await stat(absolutePath);
-    if (!fileStat.isFile() || fileStat.size > 512 * 1024) continue;
-    const bytes = await readFile(absolutePath);
-    if (bytes.includes(0)) continue;
-    const text = bytes.toString("utf8");
-    const lines = text.split(/\r?\n/u);
-    const symbols = extractSymbols(text);
-    const headings = extractHeadings(text);
+    if (!fileStat.isFile()) continue;
+    const bytes = fileStat.size <= 512 * 1024 ? await readFile(absolutePath) : undefined;
+    const analyzable = bytes !== undefined && !bytes.includes(0);
+    const text = analyzable ? bytes.toString("utf8") : "";
+    const lines = analyzable ? text.split(/\r?\n/u) : [];
+    const symbols = analyzable ? extractSymbols(text) : [];
+    const headings = analyzable ? extractHeadings(text) : [];
     files.push({
       path: relative,
-      sha256: sha256(bytes),
+      sha256: bytes === undefined ? await sha256File(absolutePath) : sha256(bytes),
       sizeBytes: fileStat.size,
       lineCount: lines.length,
       symbols,
       headings,
-      summary: summarizeFile(relative, lines, symbols, headings)
+      summary: analyzable
+        ? summarizeFile(relative, lines, symbols, headings)
+        : `${relative} is fingerprinted but omitted from textual analysis (${fileStat.size > 512 * 1024 ? "size limit" : "opaque content"})`
     });
   }
   return files;
@@ -276,10 +431,9 @@ async function walk(root: string): Promise<readonly string[]> {
   const files: string[] = [];
   const entries = await readdir(root, { withFileTypes: true });
   for (const entry of entries) {
-    if (entry.name.startsWith(".") && ![".github", ".codex-plugin", ".npmrc", ".nvmrc", ".node-version"].includes(entry.name)) continue;
     const absolute = path.join(root, entry.name);
     if (entry.isDirectory()) {
-      if (EXCLUDED_DIRECTORIES.has(entry.name)) continue;
+      if (!shouldTraverseAuthoredDirectory(entry.name)) continue;
       files.push(...await walk(absolute));
       continue;
     }
@@ -396,17 +550,14 @@ function occurrences(value: string, term: string): number {
   return count;
 }
 
-function isTextLikeName(name: string): boolean {
-  return [
-    "README",
-    "LICENSE",
-    "CHANGELOG",
-    "Dockerfile"
-  ].includes(name);
-}
-
 function sha256(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function sha256File(absolutePath: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(absolutePath)) hash.update(chunk);
+  return hash.digest("hex");
 }
 
 /** How long a map stays trustworthy before it should be regenerated. */
@@ -423,6 +574,8 @@ export interface MapState {
   readonly latestSourceFingerprint: string | null;
   readonly generatedAt: string | null;
   readonly ageDays: number | null;
+  readonly mapArtifact: ArtifactReference | null;
+  readonly diagnostics: readonly MapCandidateDiagnostic[];
 }
 
 /**
@@ -439,7 +592,9 @@ export async function resolveMapState(
   scope: string | undefined,
   now: string
 ): Promise<MapState | { readonly error: string }> {
-  const latest = await getLatestCodebaseMap(repositoryRoot);
+  const discovery = await discoverLatestCodebaseMap(repositoryRoot);
+  const latestRecord = discovery.record;
+  const latest = latestRecord?.map;
   let current: Awaited<ReturnType<typeof currentCodebaseFingerprint>>;
   try {
     current = await currentCodebaseFingerprint({ repositoryRoot, ...(scope === undefined ? {} : { scope }) });
@@ -453,7 +608,9 @@ export async function resolveMapState(
     sourceFingerprint: current.sourceFingerprint,
     sourceFileCount: current.sourceFileCount,
     latestSourceFingerprint: latest?.sourceFingerprint ?? null,
-    generatedAt: latest?.generatedAt ?? null
+    generatedAt: latest?.generatedAt ?? null,
+    mapArtifact: latestRecord?.artifact ?? null,
+    diagnostics: discovery.diagnostics
   };
 
   if (latest === undefined) {

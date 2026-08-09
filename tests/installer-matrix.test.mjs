@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -10,6 +10,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const {
+  LEGION_CLI_COMMANDS,
   RUNTIME_METADATA,
   SUPPORT_TIERS,
   recommendedRuntimeKeys
@@ -19,6 +20,17 @@ const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
 const LEGION_BIN = path.join(ROOT, "bin", "legion.js");
 const PACKAGE_VERSION = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
+const START_GUIDANCE_SURFACES = {
+  claude: [".claude/skills/legion/SKILL.md"],
+  codex: [".codex/prompts/legion.md", ".codex/prompts/legion-start.md", ".agents/skills/legion/SKILL.md"],
+  copilot: [".github/skills/legion/SKILL.md", ".github/skills/legion-start/SKILL.md", ".github/agents/legion.agent.md"],
+  antigravity: [".agents/plugins/legion/commands/legion.md", ".agents/plugins/legion/commands/start.md"],
+  opencode: [".opencode/commands/legion.md", ".opencode/commands/legion-start.md", ".opencode/agent/legion.md"],
+  kilocode: [
+    ".kilocode/workflows/legion.md", ".kilocode/workflows/legion-start.md", ".kilocode/skills/legion/SKILL.md",
+    ".kilo/commands/legion.md", ".kilo/commands/legion-start.md", ".kilo/skills/legion/SKILL.md", ".kilocodemodes"
+  ]
+};
 
 const EXEC_OPTIONS = {
   encoding: "utf8",
@@ -174,6 +186,196 @@ test("installer dry-run writes no project artifacts and warns for compatibility 
     assert.equal(existsSync(path.join(project, ".legion", "manifest.json")), false);
     assert.equal(existsSync(path.join(project, ".cursor", "rules", "legion.mdc")), false);
   });
+});
+
+test("generated first-class runtime surfaces carry the same CLI-owned start preparation loop", async (t) => {
+  for (const runtimeKey of recommendedRuntimeKeys()) {
+    await t.test(runtimeKey, async () => {
+      await withTempProject(async ({ env, project }) => {
+        await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", runtimeKey, "--local"], {
+          ...EXEC_OPTIONS,
+          cwd: project,
+          env
+        });
+
+        for (const relativePath of START_GUIDANCE_SURFACES[runtimeKey]) {
+          assert.equal(artifactExists(project, relativePath), true, `${runtimeKey}: missing ${relativePath}`);
+          const body = readFileSync(path.join(project, ...relativePath.split("/")), "utf8");
+          assert.match(body, /CLI-owned preflight/i, `${runtimeKey}: CLI must own preparation transitions`);
+          assert.match(body, /legion map --refresh --scope \./u, `${runtimeKey}: brownfield mapping must be full-project`);
+          assert.match(body, /--map-failed/u, `${runtimeKey}: map failures must enter degraded review through the CLI`);
+          assert.match(body, /README.*manifests.*entry points.*configuration.*tests.*CI/is, `${runtimeKey}: review sources must be complete`);
+          assert.match(body, /stage-draft/u, `${runtimeKey}: the host must stage a protocol draft`);
+          assert.match(body, /staging never accepts/u, `${runtimeKey}: staging must remain distinct from acceptance`);
+          assert.match(body, /display the complete grouped review.*requirements.*criteria and proofs.*evidence\/confidence.*unresolved/is, `${runtimeKey}: complete human review payload is required`);
+          assert.match(body, /for\s+revise.*new ID.*stage/is, `${runtimeKey}: revision must return through CLI staging`);
+          assert.match(body, /--discard-draft/u, `${runtimeKey}: discard must use the durable CLI transition`);
+          assert.match(body, /--accept-draft(?!\s+<id>)/u, `${runtimeKey}: active-draft acceptance must be the canonical action`);
+          assert.match(body, /never infer acceptance/is, `${runtimeKey}: acceptance must require an explicit decision`);
+          assert.match(body, /explicit.*exploration.*repository inference/is, `${runtimeKey}: initiative precedence must be explicit`);
+          assert.match(body, /non-goal.*constraint.*unresolved/is, `${runtimeKey}: absence must not be inferred as none`);
+          const ordered = [
+            /CLI-owned preflight/i,
+            /map_refresh_required/i,
+            /DEGRADED COVERAGE/i,
+            /stage-draft/i,
+            /draft_review/i,
+            /explicit human/i,
+            /accept-draft/i,
+            /discard-draft/i,
+            /legion start --json/i
+          ];
+          let cursor = -1;
+          for (const marker of ordered) {
+            const match = marker.exec(body.slice(cursor + 1));
+            assert.ok(match, `${runtimeKey}:${relativePath} missing ordered ${marker}`);
+            cursor += match.index + 1;
+          }
+        }
+      });
+    });
+  }
+});
+
+test("generated start guidance sequence is executable through CLI-owned states", async () => {
+  await withTempProject(async ({ env, project }) => {
+    await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "claude", "--local"], {
+      ...EXEC_OPTIONS, cwd: project, env
+    });
+    const guidance = readFileSync(path.join(project, ".claude/skills/legion/SKILL.md"), "utf8");
+    assert.match(guidance, /stage-draft.*draft_review.*display the complete grouped review.*explicit human.*accept-draft.*discard-draft.*legion start --json/is);
+    assert.match(guidance, /human_decision.*pause.*human/is);
+
+    const { parseJsonOutput, runCliCapture } = await import("./helpers/cli-runner.mjs");
+    const run = (...args) => runCliCapture(["--repository-root", project, ...args]);
+    const initial = parseJsonOutput(await run("start", "--json", "--created-at", "2026-08-08T12:00:00.000Z"));
+    assert.equal(initial.preparation.status, "initiative_required");
+    const prepared = parseJsonOutput(await run("start", "--goal", "Ship a small tool", "--json", "--created-at", "2026-08-08T12:00:00.000Z"));
+    assert.equal(prepared.preparation.status, "repository_review_required");
+    const draft = {
+      schemaVersion: "0.3.0", createdAt: "2026-08-08T12:00:00.000Z", kind: "intake-draft",
+      id: "itd_generated-guidance", status: "draft", graphVersion: "1.2.0",
+      projectMode: prepared.preflight.projectMode, initiative: "Ship a small tool", explorationRefs: [], proposedAnswers: [],
+      injectedQuestions: [], unresolvedNodes: [], diagnostics: []
+    };
+    await writeFile(path.join(project, "draft.json"), JSON.stringify(draft), "utf8");
+    const staged = parseJsonOutput(await run("start", "--stage-draft", "draft.json", "--json", "--created-at", "2026-08-08T12:00:00.000Z"));
+    assert.equal(staged.status, "draft_review");
+    assert.equal(staged.nextAction.type, "human_decision");
+    assert.notEqual(staged.nextAction.command, "legion start");
+    assert.equal(staged.draft.id, "itd_generated-guidance");
+    assert.equal(staged.actions.accept.command, "legion start --accept-draft");
+    assert.equal(staged.actions.discard.command, "legion start --discard-draft");
+    const discarded = parseJsonOutput(await run("start", "--discard-draft", "--json", "--created-at", "2026-08-08T12:00:00.000Z"));
+    assert.equal(discarded.discardedDraft.status, "discarded");
+
+    draft.id = "itd_generated-accepted";
+    await writeFile(path.join(project, "draft-accepted.json"), JSON.stringify(draft), "utf8");
+    const restaged = parseJsonOutput(await run("start", "--stage-draft", "draft-accepted.json", "--json", "--created-at", "2026-08-08T12:00:00.000Z"));
+    assert.equal(restaged.status, "draft_review");
+    const accepted = parseJsonOutput(await run("start", "--accept-draft", "--json", "--created-at", "2026-08-08T12:00:00.000Z"));
+    assert.equal(accepted.status, "interview");
+    const next = parseJsonOutput(await run("start", "--json"));
+    assert.equal(next.status, "question");
+  });
+});
+
+test("default install writes no v8 prompt bundle", async () => {
+  await withTempProject(async ({ env, project }) => {
+    await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "claude", "--local"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+
+    // The four legacy source directories, at their Claude install locations.
+    for (const relativePath of [".claude/agents", ".claude/commands", ".claude/legion/skills", ".claude/legion/adapters"]) {
+      assert.equal(artifactExists(project, relativePath), false, `${relativePath} must not be installed by default`);
+    }
+
+    // Only the entry point and the manifest.
+    assert.deepEqual(readdirSync(path.join(project, ".claude")).sort(), ["legion", "skills"]);
+    assert.equal(artifactExists(project, ".claude/skills/legion/SKILL.md"), true);
+
+    const manifest = JSON.parse(readFileSync(manifestPathFor(project, "claude"), "utf8"));
+    assert.equal(manifest.legacyPrompts, false);
+  });
+});
+
+test("the default entry point dispatches to the CLI, not to markdown", async () => {
+  await withTempProject(async ({ env, project }) => {
+    await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "claude", "--local"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+
+    const skill = readFileSync(path.join(project, ".claude", "skills", "legion", "SKILL.md"), "utf8");
+    assert.match(skill, /legion status --json/);
+    assert.match(skill, /legion build --json/);
+    // The router must not send the host looking for files this install never wrote.
+    assert.doesNotMatch(skill, /Read only the matching command file/);
+    assert.doesNotMatch(skill, /commands[/\\]legion/);
+  });
+});
+
+test("--legacy-prompts restores the v8 bundle and routes the entry point back to it", async () => {
+  await withTempProject(async ({ env, project }) => {
+    await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "claude", "--local", "--legacy-prompts"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+
+    for (const relativePath of [
+      ".claude/agents/polymath.md",
+      ".claude/commands/legion/build.md",
+      ".claude/legion/skills/wave-executor/SKILL.md",
+      ".claude/legion/adapters/codex-cli.md"
+    ]) {
+      assert.equal(artifactExists(project, relativePath), true, `--legacy-prompts must install ${relativePath}`);
+    }
+
+    const skill = readFileSync(path.join(project, ".claude", "skills", "legion", "SKILL.md"), "utf8");
+    assert.match(skill, /Read only the matching command file/);
+
+    const manifest = JSON.parse(readFileSync(manifestPathFor(project, "claude"), "utf8"));
+    assert.equal(manifest.legacyPrompts, true);
+  });
+});
+
+test("update preserves the surface the install chose", async () => {
+  for (const [flags, expected] of [[[], false], [["--legacy-prompts"], true]]) {
+    await withTempProject(async ({ env, project }) => {
+      const run = (args) => execFileAsync(process.execPath, [LEGION_BIN, ...args], { ...EXEC_OPTIONS, cwd: project, env });
+      await run(["install", "--target", "claude", "--local", ...flags]);
+      await run(["update", "--target", "claude", "--local"]);
+
+      const manifest = JSON.parse(readFileSync(manifestPathFor(project, "claude"), "utf8"));
+      assert.equal(manifest.legacyPrompts, expected, `update after install ${flags.join(" ") || "(default)"}`);
+      assert.equal(artifactExists(project, ".claude/agents"), expected);
+    });
+  }
+});
+
+test("every mapped CLI command is a verb the CLI actually has", async () => {
+  const help = await execFileAsync(process.execPath, [LEGION_BIN, "--help"], EXEC_OPTIONS);
+  const verbs = new Set(
+    help.stdout
+      .split(/\r?\n/)
+      .map((line) => /^\s{2}([a-z-]+)\s{2,}\S/u.exec(line))
+      .filter(Boolean)
+      .map((match) => match[1])
+  );
+  // Routed to the installer by bin/legion.js rather than to the workflow CLI,
+  // so it never appears in the workflow help.
+  verbs.add("update");
+
+  assert.ok(verbs.has("status"), "help parsing produced no verbs");
+  for (const entry of LEGION_CLI_COMMANDS) {
+    const head = entry.invoke.split(" ")[0];
+    assert.equal(verbs.has(head), true, `${entry.name} maps to "${entry.invoke}", but "${head}" is not a CLI verb`);
+  }
 });
 
 test("first-class targets install, update, uninstall, and reinstall in temp projects", async () => {

@@ -38,7 +38,8 @@ export const ENTITY_ID_KINDS = [
   "release",
   "observation",
   "event",
-  "intake"
+  "intake",
+  "intake-draft"
 ] as const;
 
 export type EntityIdKind = (typeof ENTITY_ID_KINDS)[number];
@@ -59,7 +60,8 @@ export const ENTITY_ID_PREFIXES: Record<EntityIdKind, string> = {
   release: "rel",
   observation: "obs",
   event: "evt",
-  intake: "itk"
+  intake: "itk",
+  "intake-draft": "itd"
 } as const;
 
 export const timeSortableIdSchema = z
@@ -104,6 +106,7 @@ export const releaseIdSchema = idSchema<"ReleaseId">("rel", slugSuffixPattern, "
 export const observationIdSchema = idSchema<"ObservationId">("obs", slugSuffixPattern, "Observation ID");
 export const eventIdSchema = idSchema<"EventId">("evt", timeSortableSuffixPattern, "Event ID");
 export const intakeSessionIdSchema = idSchema<"IntakeSessionId">("itk", slugSuffixPattern, "Intake session ID");
+export const intakeDraftIdSchema = idSchema<"IntakeDraftId">("itd", slugSuffixPattern, "Intake draft ID");
 
 export type ProjectId = z.infer<typeof projectIdSchema>;
 export type ChangeId = z.infer<typeof changeIdSchema>;
@@ -121,6 +124,7 @@ export type ReleaseId = z.infer<typeof releaseIdSchema>;
 export type ObservationId = z.infer<typeof observationIdSchema>;
 export type EventId = z.infer<typeof eventIdSchema>;
 export type IntakeSessionId = z.infer<typeof intakeSessionIdSchema>;
+export type IntakeDraftId = z.infer<typeof intakeDraftIdSchema>;
 
 export type EntityId =
   | ProjectId
@@ -138,7 +142,8 @@ export type EntityId =
   | ReleaseId
   | ObservationId
   | EventId
-  | IntakeSessionId;
+  | IntakeSessionId
+  | IntakeDraftId;
 
 export const entityIdSchemas = {
   project: projectIdSchema,
@@ -156,7 +161,8 @@ export const entityIdSchemas = {
   release: releaseIdSchema,
   observation: observationIdSchema,
   event: eventIdSchema,
-  intake: intakeSessionIdSchema
+  intake: intakeSessionIdSchema,
+  "intake-draft": intakeDraftIdSchema
 } as const;
 
 export const entityIdKindSchema = z.enum(ENTITY_ID_KINDS);
@@ -177,7 +183,8 @@ export const anyEntityIdSchema = z.union([
   releaseIdSchema,
   observationIdSchema,
   eventIdSchema,
-  intakeSessionIdSchema
+  intakeSessionIdSchema,
+  intakeDraftIdSchema
 ]);
 
 export const entityReferenceSchema = z.strictObject({

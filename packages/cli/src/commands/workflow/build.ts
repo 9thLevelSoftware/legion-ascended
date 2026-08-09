@@ -64,14 +64,18 @@ import {
 } from "../../workflow/run-artifacts.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 
-const BUILD_HELP = `legion build [--executor codex|manual|fake] [--allow-dirty] [--dry-run]
+const BUILD_HELP = `legion build [--executor claude|codex|manual|fake] [--allow-dirty] [--dry-run]
 
 Execute the latest typed taskgraph through a workflow executor and collect pending build evidence.
+
+With no --executor, the first installed driver runs the work: claude, then
+codex, then manual. The manual executor writes an instruction prompt and blocks
+rather than doing nothing quietly.
 
 Examples:
   legion build --dry-run --json
   legion build --executor fake --allow-dirty
-  legion build --executor codex --allow-dirty`;
+  legion build --executor claude --allow-dirty`;
 
 /**
  * @param changeId When given, build this change instead of the newest one.
@@ -809,11 +813,7 @@ function taskRunDocument(input: {
     // bundle that does not exist and could not be integrity-verified — and it
     // looked right, which the fully synthetic version at least did not.
     workerBundle: input.workerBundle,
-    model: {
-      provider: input.executor === "codex" ? "openai" : "legion",
-      id: input.executor === "codex" ? "codex-cli" : input.executor,
-      policyVersion: LEGION_PROTOCOL_VERSION
-    },
+    model: modelManifestForExecutor(input.executor),
     inputs: {
       contractHash: hashContent(stableProtocolJson(input.task)),
       currentSpecsHash: hashContent(stableProtocolJson(input.task.context.specRefs)),
@@ -1775,10 +1775,24 @@ function describeFailingOracles(
   return named.length === 0 ? "" : ` Failing oracle(s): ${named.join(", ")}.`;
 }
 
+// Exhaustive over ExecutionAdapterKind on purpose: a new driver that reaches
+// evidence under provider "legion" would be attributed to Legion itself, and
+// the manifest is what an auditor reads to learn who actually ran the task.
 function modelManifestForExecutor(executor: ExecutionAdapterKind): ModelManifest {
+  const model = ((): { readonly provider: string; readonly id: string } => {
+    switch (executor) {
+      case "claude":
+        return { provider: "anthropic", id: "claude-code" };
+      case "codex":
+        return { provider: "openai", id: "codex-cli" };
+      case "manual":
+      case "fake":
+        return { provider: "legion", id: executor };
+    }
+  })();
   return {
-    provider: executor === "codex" ? "openai" : "legion",
-    id: executor === "codex" ? "codex-cli" : executor,
+    provider: model.provider,
+    id: model.id,
     policyVersion: LEGION_PROTOCOL_VERSION
   };
 }

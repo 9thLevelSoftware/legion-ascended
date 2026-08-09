@@ -12,7 +12,7 @@
  * a fallback, not a second implementation of the interview.
  */
 
-import { lstat, readFile, writeFile } from "node:fs/promises";
+import { lstat, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -24,6 +24,7 @@ import {
 import {
   LEGION_PROTOCOL_VERSION,
   projectSchema,
+  type IntakeDraft,
   type IntakeSession,
   type ProjectId
 } from "@legion/protocol";
@@ -38,7 +39,14 @@ import {
   type CliResult
 } from "../../runtime.js";
 import { createdAtOption, ownerActor, repositoryReference, slugFromName } from "../input.js";
-import { nextAction, renderNextAction } from "../render.js";
+import {
+  AUTHORED_BUILD_CONFIGURATION,
+  AUTHORED_DEPENDENCY_MANIFESTS,
+  AUTHORED_IGNORED_DIRECTORIES,
+  DEFAULT_INTAKE_DRAFT_INPUT_PATH,
+  isDocumentationFile
+} from "../authored-source.js";
+import { humanDecisionAction, nextAction, renderNextAction } from "../render.js";
 import { mintPinnedReferences } from "../pinned-references.js";
 import {
   buildRequirements,
@@ -50,6 +58,20 @@ import {
 } from "./finalize.js";
 import { INTAKE_GRAPH_VERSION, findNode, nextNode, type IntakeNode } from "./graph.js";
 import { loadExploration, listExplorations } from "./exploration-source.js";
+import {
+  acceptStagedDraft,
+  degradedCoverageWarning,
+  discardStagedDraft,
+  findActiveDraft,
+  inspectActiveDraftCandidates,
+  prepareIntakePreflight,
+  pendingAcceptanceRecovered,
+  publishDraftReview,
+  recoverIntakeLifecycleArtifacts,
+  resolveReviewedDraftDecision,
+  stageIntakeDraft,
+  type IntakePreflightState
+} from "./lifecycle.js";
 import { renderIntakeDiagnostics, renderQuestion, renderSessionStatus } from "./render.js";
 import {
   abortSession,
@@ -71,6 +93,7 @@ import { validateAnswer, validateAnswerSet, type IntakeDiagnostic } from "./vali
 
 const ROADMAP_MARKER = "<!-- Rendered by `legion start --finalize`";
 const ROADMAP_FILE = "ROADMAP.md";
+const STAGE_DRAFT_COMMAND = `legion start --stage-draft ${DEFAULT_INTAKE_DRAFT_INPUT_PATH}`;
 
 interface ResolvedSession {
   readonly session: IntakeSession;
@@ -78,6 +101,7 @@ interface ResolvedSession {
   readonly created: boolean;
   /** Non-fatal notes about the seeding exploration, surfaced to the operator. */
   readonly notes: readonly string[];
+  readonly preflight?: IntakePreflightState;
 }
 
 function intakeSessionArtifactPath(sessionId: string): string {
@@ -194,7 +218,7 @@ async function proposalsFor(
  * `--from-exploration` broken in exactly the same way, which is the recurring
  * shape of this PR's findings: the case gets closed and the class does not.
  */
-const VALUE_REQUIRED_OPTIONS = ["session", "from-exploration", "intake", "answer", "slug", "node"] as const;
+const VALUE_REQUIRED_OPTIONS = ["session", "from-exploration", "intake", "answer", "slug", "node", "goal", "map-failed"] as const;
 
 function valuelessOption(context: CliContext): CliResult | undefined {
   for (const key of VALUE_REQUIRED_OPTIONS) {
@@ -226,6 +250,8 @@ async function resolveSession(
     readonly create: boolean;
     readonly allowStaleGraph?: boolean;
     readonly proposals?: boolean;
+    readonly automaticExploration?: boolean;
+    readonly preparation?: boolean;
   }
 ): Promise<ResolvedSession | CliResult> {
   const wantsProposals = options.proposals !== false;
@@ -252,7 +278,15 @@ async function resolveSession(
     };
   }
 
-  const explorationRunId = stringOption(context, "from-exploration");
+  const explicitExplorationRunId = stringOption(context, "from-exploration");
+  const withoutExploration = hasFlag(context, "without-exploration");
+  if (explicitExplorationRunId !== undefined && withoutExploration) {
+    return usageError("--from-exploration and --without-exploration are mutually exclusive.");
+  }
+  const explicitlyLoaded = explicitExplorationRunId === undefined
+    ? undefined
+    : await loadExploration(context.repositoryRoot, explicitExplorationRunId);
+  if (explicitlyLoaded !== undefined && !explicitlyLoaded.ok) return usageError(explicitlyLoaded.reason);
   const found = await findActiveSession(context.repositoryRoot);
   // A corrupt session stops everything rather than being stepped over: resuming
   // an older interview, or quietly opening a new one, would have the operator
@@ -261,15 +295,38 @@ async function resolveSession(
 
   const active = found.session;
   if (active !== undefined) {
+    if (options.preparation === true) {
+      const recovery = await recoverIntakeLifecycleArtifacts(context.repositoryRoot);
+      if (recovery === undefined) {
+        const diagnostics = [{
+          code: "pending_acceptance_blocked",
+          message: "Pending acceptance state could not be inspected under the intake transition lock. Retry after the current transition completes."
+        }];
+        return failure({ ok: false, status: "rejected", diagnostics }, diagnostics[0]!.message);
+      }
+      if (!recovery.ok) {
+        return failure(
+          { ok: false, status: "rejected", diagnostics: recovery.diagnostics },
+          recovery.diagnostics.map((diagnostic) => diagnostic.message).join(" ")
+        );
+      }
+      if (recovery.rolledBackDraftIds.length > 0) {
+        const diagnostic = pendingAcceptanceRecovered(recovery.rolledBackDraftIds);
+        return failure({ ok: false, status: "rejected", diagnostics: [diagnostic] }, diagnostic.message);
+      }
+    }
     // `--from-exploration` only applies at session creation, and the no-argument
     // start prints exactly this command when it finds explorations. Resuming
     // before reading the option meant following that advice silently discarded
     // the chosen exploration — every proposal and every open question with it.
-    if (explorationRunId !== undefined && active.explorationRef?.runId !== explorationRunId) {
+    const explicitEntityRunId = explicitlyLoaded?.ok === true
+      ? explicitlyLoaded.loaded.exploration.runId
+      : undefined;
+    if (explicitEntityRunId !== undefined && active.explorationRef?.runId !== explicitEntityRunId) {
       if (active.answers.length > 0) {
         return usageError(
           `Session ${active.id} is already in progress with ${active.answers.length} answer(s), and seeding only applies when a session is created. ` +
-            `Run legion start --abort --session ${active.id} first if you want to restart from exploration ${explorationRunId}.`
+            `Run legion start --abort --session ${active.id} first if you want to restart from exploration ${explicitExplorationRunId}.`
         );
       }
       // Nothing has been answered, so replacing it loses no work. Abort rather
@@ -292,6 +349,14 @@ async function resolveSession(
     }
   }
 
+  const draftCandidates = await inspectActiveDraftCandidates(context.repositoryRoot);
+  if (!draftCandidates.ok) {
+    return failure(
+      { ok: false, status: "rejected", diagnostics: draftCandidates.diagnostics },
+      "Intake draft artifacts must be repaired before preparation can continue."
+    );
+  }
+
   if (!options.create) {
     return usageError(
       "There is no active intake session. Run legion start to begin one, or pass --session <id>."
@@ -299,6 +364,71 @@ async function resolveSession(
   }
 
   const createdAt = createdAtOption(context) ?? nowTimestamp();
+  const explicitGoal = stringOption(context, "goal")?.trim();
+  const mapFailure = stringOption(context, "map-failed")?.trim();
+  if (explicitGoal === "") return usageError("Invalid --goal value. Provide a non-empty initiative.");
+  if (mapFailure === "") return usageError("Invalid --map-failed value. Provide the map failure diagnostic.");
+
+  const preflight = await prepareIntakePreflightForCli({
+    repositoryRoot: context.repositoryRoot,
+    createdAt,
+    ...(explicitExplorationRunId === undefined ? {} : { explicitRunId: explicitExplorationRunId }),
+    withoutExploration: withoutExploration || (options.automaticExploration === false && explicitExplorationRunId === undefined),
+    ...(explicitGoal === undefined ? {} : { explicitGoal }),
+    ...(mapFailure === undefined ? {} : { mapFailure })
+  });
+  if (isCliResult(preflight)) return preflight;
+  if (preflight.activeDraftId !== undefined) {
+    const stagedDraft = await findActiveDraft(context.repositoryRoot);
+    const explicitPreparationChange = explicitGoal !== undefined || mapFailure !== undefined ||
+      explicitExplorationRunId !== undefined || withoutExploration;
+    if (!explicitPreparationChange && stagedDraft !== undefined) {
+      const artifactPath = `.legion/project/intake/drafts/${stagedDraft.id}.json`;
+      const reviewed = await publishDraftReview({
+        repositoryRoot: context.repositoryRoot,
+        draftId: stagedDraft.id,
+        updatedAt: createdAt
+      });
+      if (!reviewed.ok) {
+        return failure(
+          {
+            ok: false,
+            status: "rejected",
+            preflight,
+            draftId: stagedDraft.id,
+            diagnostics: reviewed.diagnostics
+          },
+          `Intake draft ${stagedDraft.id} must be revised before it can be reviewed or accepted.`
+        );
+      }
+      const review = draftReviewPayload({
+        draft: reviewed.draft,
+        artifactPath,
+        draftSha256: reviewed.review.draftSha256,
+        preflight
+      });
+      return success(review.payload, review.human);
+    }
+    return failure(
+      {
+        ok: false,
+        status: "rejected",
+        preflight,
+        draftId: preflight.activeDraftId,
+        diagnostics: preflight.diagnostics
+      },
+      `Intake draft ${preflight.activeDraftId} is staged for review; accept or revise it before creating a session.`
+    );
+  }
+  const explorationRunId = withoutExploration
+    ? undefined
+    : explicitExplorationRunId ?? (options.automaticExploration === false ? undefined : preflight.selectedExplorationRunId);
+  if (explicitExplorationRunId !== undefined && explorationRunId === undefined) {
+    const message = preflight.diagnostics.find((entry) => entry.runId === explicitExplorationRunId)?.message
+      ?? `Exploration ${explicitExplorationRunId} is unavailable.`;
+    return usageError(message);
+  }
+  if (options.preparation !== false) return preparationResult(context.repositoryRoot, preflight);
 
   // Everything that can refuse runs before the ID is claimed. Claiming first
   // and validating after left an `itk_` directory with no `session.json` behind
@@ -328,7 +458,13 @@ async function resolveSession(
           })
     });
     await saveSession(context.repositoryRoot, seeded.session);
-    return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
+    return {
+      session: seeded.session,
+      proposals: seeded.proposals,
+      created: true,
+      notes: preflight.diagnostics.map((entry) => entry.message),
+      preflight
+    };
   } catch (error) {
     // The claim only means something once a session sits behind it. Releasing
     // it keeps a failure here from poisoning every later invocation.
@@ -337,13 +473,52 @@ async function resolveSession(
   }
 }
 
-function isCliResult(value: ResolvedSession | CliResult): value is CliResult {
+function isCliResult(value: object): value is CliResult {
   return "exitCode" in value;
+}
+
+async function prepareIntakePreflightForCli(
+  input: Parameters<typeof prepareIntakePreflight>[0]
+): Promise<IntakePreflightState | CliResult> {
+  try {
+    return await prepareIntakePreflight(input);
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : undefined;
+    if (!["EEXIST", "ELEASELOST", "EPENDINGACCEPTANCEBLOCKED", "EPENDINGACCEPTANCERECOVERED"].includes(code ?? "")) throw error;
+    const diagnostic = code === "EEXIST"
+      ? {
+          code: "intake_transition_in_progress",
+          message: "Another intake transition owns preparation state; retry after it completes."
+        }
+      : code === "ELEASELOST"
+        ? {
+            code: "intake_transition_lease_lost",
+            message: "Preparation ownership changed before its durable update; no preflight state was published."
+          }
+        : code === "EPENDINGACCEPTANCERECOVERED"
+          ? {
+              code: "pending_acceptance_recovered",
+              message: error instanceof Error ? error.message : "Interrupted draft acceptance was recovered; retry preparation explicitly."
+            }
+          : {
+              code: "pending_acceptance_blocked",
+              message: error instanceof Error ? error.message : "Pending draft acceptance must be repaired before preparation can continue."
+            };
+    return failure(
+      { ok: false, status: "rejected", diagnostics: [diagnostic] },
+      diagnostic.message
+    );
+  }
 }
 
 /** `legion start` / `legion start --next` — emit the current question. */
 export async function handleNextQuestion(context: CliContext): Promise<CliResult> {
-  const resolved = await resolveSession(context, { create: true });
+  // Bare start is the preparation entrance. `--next` and the established
+  // explicit exploration entrance retain the legacy interview driver for
+  // callers that already own their input collection; generated hosts use bare
+  // start and therefore cannot bypass the CLI-owned preparation loop.
+  const preparation = !hasFlag(context, "next") && !context.args.options.has("from-exploration");
+  const resolved = await resolveSession(context, { create: true, preparation });
   if (isCliResult(resolved)) return resolved;
 
   const { session, proposals, created } = resolved;
@@ -413,6 +588,7 @@ export async function handleNextQuestion(context: CliContext): Promise<CliResult
     {
       ok: true,
       status: "question",
+      ...(resolved.preflight === undefined ? {} : { preflight: resolved.preflight }),
       session: sessionPayload(session, answered, total),
       question: questionPayload(node, proposal),
       ...(explorations.length > 0
@@ -424,6 +600,536 @@ export async function handleNextQuestion(context: CliContext): Promise<CliResult
       nextAction: action
     },
     human.join("\n")
+  );
+}
+
+const PREPARATION_SOURCE_CLASSES = [
+  "README and product documentation",
+  "dependency manifests and scripts",
+  "application and library entry points",
+  "configuration",
+  "tests",
+  "CI commands"
+] as const;
+
+const PREPARATION_PROPOSALS = [
+  "compatibility obligations",
+  "acceptance criteria",
+  "executable proof commands",
+  "protected tests",
+  "constraints",
+  "verification defaults",
+  "risk indicators"
+] as const;
+
+interface BoundedReviewBounds {
+  readonly maxFiles: 24;
+  readonly maxDepth: 4;
+  readonly selectionOrder: typeof PREPARATION_SOURCE_CLASSES;
+  readonly selectedPaths: readonly string[];
+}
+
+async function boundedReviewBounds(repositoryRoot: string): Promise<BoundedReviewBounds> {
+  const candidates: Array<{ readonly path: string; readonly priority: number }> = [];
+  async function visit(directory: string, depth: number): Promise<void> {
+    if (depth > 4) return;
+    let entries;
+    try { entries = await readdir(directory, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (entry.isDirectory() && AUTHORED_IGNORED_DIRECTORIES.has(entry.name.toLowerCase())) continue;
+      if (entry.name.startsWith(".") && entry.name !== ".github") continue;
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(absolute, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const relative = path.relative(repositoryRoot, absolute).replace(/\\/gu, "/");
+      const basename = entry.name.toLowerCase();
+      const segments = relative.toLowerCase().split("/");
+      let priority: number | undefined;
+      if (basename.startsWith("readme") || isDocumentationFile(relative)) priority = 0;
+      else if (AUTHORED_DEPENDENCY_MANIFESTS.has(basename)) priority = 1;
+      else if (/^(?:index|main|app|server|cli)\.[a-z0-9]+$/u.test(basename)) priority = 2;
+      else if (AUTHORED_BUILD_CONFIGURATION.has(basename) || basename.includes("config")) priority = 3;
+      else if (segments.some((segment) => ["test", "tests", "spec", "specs", "__tests__"].includes(segment)) || /\.(?:test|spec)\./u.test(basename)) priority = 4;
+      else if (relative.toLowerCase().startsWith(".github/workflows/")) priority = 5;
+      if (priority !== undefined) candidates.push({ path: relative, priority });
+    }
+  }
+  await visit(repositoryRoot, 0);
+  const ordered = candidates.sort((left, right) => left.priority - right.priority || left.path.localeCompare(right.path));
+  const selected: Array<{ readonly path: string; readonly priority: number }> = [];
+  const selectedPaths = new Set<string>();
+  for (let priority = 0; priority < PREPARATION_SOURCE_CLASSES.length; priority += 1) {
+    const representative = ordered.find((candidate) => candidate.priority === priority);
+    if (representative === undefined) continue;
+    selected.push(representative);
+    selectedPaths.add(representative.path);
+  }
+  for (const candidate of ordered) {
+    if (selected.length >= 24) break;
+    if (selectedPaths.has(candidate.path)) continue;
+    selected.push(candidate);
+    selectedPaths.add(candidate.path);
+  }
+  return {
+    maxFiles: 24,
+    maxDepth: 4,
+    selectionOrder: PREPARATION_SOURCE_CLASSES,
+    selectedPaths: selected.map((entry) => entry.path)
+  };
+}
+
+function preparationReview(bounds?: BoundedReviewBounds) {
+  return {
+    scope: "initiative",
+    inferencePrecedence: [
+      "explicit_user_statement_or_edit",
+      "selected_exploration",
+      "repository_inference"
+    ],
+    architectureAnalysis: bounds === undefined ? "full" : "full_synthesis",
+    repositoryCoverage: bounds === undefined ? "full" : "bounded_degraded",
+    ...(bounds === undefined ? {} : { bounds }),
+    sourceClasses: PREPARATION_SOURCE_CLASSES,
+    propose: PREPARATION_PROPOSALS,
+    unrelatedBehavior: "architecture_context_only",
+    conflicts: "unresolved_questions",
+    unsupportedAssumptions: "unresolved_questions",
+    absentNonGoalsAndConstraints: "unresolved_questions"
+  } as const;
+}
+
+function stablePreflightPayload(
+  preflight: IntakePreflightState,
+  preparation: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    preflight,
+    projectMode: preflight.projectMode,
+    exploration: {
+      intent: preflight.explorationSelectionIntent,
+      selectedRunId: preflight.selectedExplorationRunId ?? null,
+      compatible: preflight.compatibleExplorations
+    },
+    mapState: preflight.map,
+    activeDraft: preflight.activeDraftId === undefined
+      ? null
+      : { id: preflight.activeDraftId, status: "draft_review" },
+    activeSession: preflight.activeSessionId === undefined
+      ? null
+      : { id: preflight.activeSessionId, status: "interview" },
+    initiative: preflight.initiative ?? null,
+    reviewContract: "review" in preparation
+      ? preparation["review"]
+      : preparationReview(),
+    preparation,
+    warnings: preflight.diagnostics.map((diagnostic) => ({
+      code: diagnostic.code,
+      message: diagnostic.message
+    })),
+    diagnostics: preflight.diagnostics
+  };
+}
+
+type DraftReviewEntry = IntakeDraft["proposedAnswers"][number];
+
+function reviewEntries(draft: IntakeDraft, predicate: (slot: string) => boolean): readonly DraftReviewEntry[] {
+  return draft.proposedAnswers.filter((answer) => predicate(answer.slot));
+}
+
+function evidenceSummary(draft: IntakeDraft) {
+  const references = [
+    ...draft.explorationRefs,
+    ...(draft.codebaseMapRef === undefined ? [] : [draft.codebaseMapRef]),
+    ...draft.proposedAnswers.flatMap((answer) => answer.evidenceRefs),
+    ...draft.unresolvedNodes.flatMap((node) => node.evidenceRefs)
+  ];
+  const byKind = { exploration: 0, "codebase-map": 0, "repository-file": 0 };
+  for (const reference of references) byKind[reference.kind] += 1;
+  const unique = [...new Map(references.map((reference) => [JSON.stringify(reference), reference])).values()];
+  return { totalReferences: references.length, uniqueReferences: unique.length, byKind, references: unique };
+}
+
+function confidenceSummary(draft: IntakeDraft) {
+  const summary = { researched: 0, inferred: 0, assumed: 0 };
+  for (const answer of draft.proposedAnswers) summary[answer.confidence] += 1;
+  return summary;
+}
+
+function draftEntityReference(artifactPath: string, draftSha256: string) {
+  return {
+    path: artifactPath,
+    sha256: draftSha256
+  };
+}
+
+function groupedDraftReview(draft: IntakeDraft) {
+  const projectAndProblem = reviewEntries(draft, (slot) =>
+    slot.startsWith("project.") || slot.startsWith("problem."));
+  const requirements = reviewEntries(draft, (slot) =>
+    /^requirements\.\d+\.(?:statement|priority|category)$/u.test(slot));
+  const criteriaAndProofs = reviewEntries(draft, (slot) =>
+    /^requirements\.\d+\.criteria\.\d+\./u.test(slot));
+  const constraints = reviewEntries(draft, (slot) =>
+    slot.startsWith("constraints.") || slot === "preferences.notes");
+  const nonGoals = reviewEntries(draft, (slot) => slot === "scope.non-goals");
+  const risk = reviewEntries(draft, (slot) => slot.startsWith("risk."));
+  const budget = reviewEntries(draft, (slot) => slot.startsWith("budget."));
+  const verification = reviewEntries(draft, (slot) => slot === "preferences.verification");
+  const grouped = new Set([
+    ...projectAndProblem, ...requirements, ...criteriaAndProofs, ...constraints,
+    ...nonGoals, ...risk, ...budget, ...verification
+  ].map((entry) => entry.nodeId));
+  const additionalAnswers = draft.proposedAnswers.filter((answer) =>
+    !grouped.has(answer.nodeId) && !answer.slot.endsWith(".more"));
+  return {
+    projectAndProblem,
+    requirements,
+    criteriaAndProofs,
+    constraints,
+    nonGoals,
+    defaults: { risk, budget, verification },
+    additionalAnswers,
+    evidence: evidenceSummary(draft),
+    confidence: confidenceSummary(draft),
+    diagnostics: draft.diagnostics,
+    unresolved: draft.unresolvedNodes
+  };
+}
+
+function renderReviewValue(value: DraftReviewEntry["value"]): string {
+  if (Array.isArray(value)) return value.join(", ");
+  return String(value);
+}
+
+function renderReviewGroup(label: string, entries: readonly DraftReviewEntry[]): string[] {
+  return [label, ...(entries.length === 0
+    ? ["  none recorded"]
+    : entries.map((entry) => `  ${entry.slot}: ${renderReviewValue(entry.value)} [${entry.confidence}]`))];
+}
+
+function draftReviewHuman(draft: IntakeDraft, review: ReturnType<typeof groupedDraftReview>): string {
+  const lines = [
+    `Draft ${draft.id} is staged and unchanged until an explicit decision.`,
+    "",
+    ...renderReviewGroup("Project and problem", review.projectAndProblem),
+    "",
+    ...renderReviewGroup("Requirements", review.requirements),
+    "",
+    ...renderReviewGroup("Criteria and proofs", review.criteriaAndProofs),
+    "",
+    ...renderReviewGroup("Constraints", review.constraints),
+    "",
+    ...renderReviewGroup("Non-goals", review.nonGoals),
+    "",
+    "Risk, budget, and verification defaults",
+    ...renderReviewGroup("  Risk", review.defaults.risk).slice(1).map((line) => `  ${line}`),
+    ...renderReviewGroup("  Budget", review.defaults.budget).slice(1).map((line) => `  ${line}`),
+    ...renderReviewGroup("  Verification", review.defaults.verification).slice(1).map((line) => `  ${line}`),
+    ...(review.additionalAnswers.length === 0
+      ? []
+      : ["", ...renderReviewGroup("Additional reviewed answers", review.additionalAnswers)]),
+    "",
+    "Evidence and confidence",
+    `  ${review.evidence.totalReferences} evidence reference(s); researched ${review.confidence.researched}, inferred ${review.confidence.inferred}, assumed ${review.confidence.assumed}`,
+    ...(review.evidence.references.length === 0
+      ? ["  no cited evidence"]
+      : review.evidence.references.map((reference) => {
+          const anchor = "anchor" in reference && reference.anchor !== undefined ? ` @ ${reference.anchor}` : "";
+          const source = reference.kind === "codebase-map" ? ` source:${reference.sourceFingerprint}` : "";
+          const run = reference.kind === "exploration" ? ` run:${reference.runId}` : "";
+          return `  ${reference.kind}: ${reference.artifact.path} ${reference.artifact.sha256}${anchor}${run}${source}`;
+        })),
+    "",
+    "Diagnostics and unresolved items",
+    ...(review.diagnostics.length === 0 ? ["  no diagnostics"] : review.diagnostics.map((entry) => `  warning: ${entry}`)),
+    ...(review.unresolved.length === 0
+      ? ["  no declared unresolved items"]
+      : review.unresolved.map((entry) => `  ${entry.nodeId} (${entry.slot}): ${entry.question}`)),
+    "",
+    "Decision required",
+    `  Accept: legion start --accept-draft`,
+    `  Revise: ${STAGE_DRAFT_COMMAND}`,
+    `  Discard: legion start --discard-draft`
+  ];
+  return lines.join("\n");
+}
+
+function draftReviewPayload(input: {
+  readonly draft: IntakeDraft;
+  readonly artifactPath: string;
+  readonly draftSha256: string;
+  readonly preflight: IntakePreflightState;
+  readonly replacesDraft?: IntakeDraft;
+}): { readonly payload: Record<string, unknown>; readonly human: string } {
+  const review = groupedDraftReview(input.draft);
+  const entity = draftEntityReference(input.artifactPath, input.draftSha256);
+  const action = humanDecisionAction(
+    "The displayed immutable draft requires an explicit human accept, revise, or discard decision.",
+    [
+      { id: "accept", command: "legion start --accept-draft" },
+      { id: "revise", command: STAGE_DRAFT_COMMAND },
+      { id: "discard", command: "legion start --discard-draft" }
+    ]
+  );
+  return {
+    payload: {
+      ok: true,
+      status: "draft_review",
+      draft: input.draft,
+      draftSummary: {
+        id: input.draft.id,
+        status: input.draft.status,
+        graphVersion: input.draft.graphVersion,
+        projectMode: input.draft.projectMode,
+        initiative: input.draft.initiative,
+        entity
+      },
+      artifactPath: input.artifactPath,
+      preflight: input.preflight,
+      review,
+      unresolvedItems: review.unresolved,
+      warnings: input.draft.diagnostics.map((message) => ({ code: "draft_diagnostic", message })),
+      diagnostics: [],
+      confidenceSummary: review.confidence,
+      evidenceSummary: review.evidence,
+      actions: {
+        accept: { command: "legion start --accept-draft", draftId: input.draft.id },
+        revise: { command: STAGE_DRAFT_COMMAND, replacesDraftId: input.draft.id },
+        discard: { command: "legion start --discard-draft", draftId: input.draft.id }
+      },
+      ...(input.replacesDraft === undefined ? {} : {
+        replacesDraft: { id: input.replacesDraft.id, status: input.replacesDraft.status }
+      }),
+      nextAction: action
+    },
+    human: draftReviewHuman(input.draft, review)
+  };
+}
+
+async function preparationResult(repositoryRoot: string, preflight: IntakePreflightState): Promise<CliResult> {
+  const mapState = "freshness" in preflight.map ? preflight.map : undefined;
+  const mapReadError = "error" in preflight.map ? preflight.map.error : undefined;
+  const mapSkipped = preflight.projectMode !== "brownfield";
+  const mapFailure = preflight.mapFailure?.message ?? mapReadError;
+  const mapAction = mapSkipped
+    ? { action: "skip", coverage: "not_applicable", scope: "." }
+    : mapState?.freshness === "fresh"
+      ? {
+          action: "use_fresh",
+          coverage: "full",
+          scope: ".",
+          sourceFingerprint: mapState.sourceFingerprint,
+          ...(mapState.mapArtifact === null || mapState.mapArtifact === undefined ? {} : { artifact: mapState.mapArtifact })
+        }
+      : mapFailure !== undefined
+        ? {
+            action: "bounded_direct_review",
+            coverage: "degraded",
+            scope: ".",
+            warning: degradedCoverageWarning(mapFailure)
+          }
+        : { action: "refresh", coverage: "pending", scope: "." };
+
+  if (preflight.initiative === undefined) {
+    const action = nextAction(
+      "legion start --goal \"<initiative>\"",
+      "One initiative is required before repository synthesis."
+    );
+    const preparation = {
+      status: "initiative_required",
+      initiativeQuestion: {
+        kind: "free-text",
+        prompt: "What initiative should this project intake prepare?"
+      },
+      map: mapAction
+    };
+    return success(
+      { ok: true, status: "preflight", ...stablePreflightPayload(preflight, preparation), nextAction: action },
+      `What initiative should this project intake prepare?\n${renderNextAction(action)}`
+    );
+  }
+
+  if (!mapSkipped && mapAction.action === "refresh") {
+    const action = nextAction(
+      "legion map --refresh --scope .",
+      `Brownfield intake requires a fresh full-project map; the current map is ${mapState?.freshness ?? "unreadable"}.`
+    );
+    const preparation = {
+      status: "map_refresh_required",
+      initiative: preflight.initiative,
+      map: mapAction
+    };
+    return success(
+      { ok: true, status: "preflight", ...stablePreflightPayload(preflight, preparation), nextAction: action },
+      `Brownfield preparation requires a fresh full-project map.\n${renderNextAction(action)}`
+    );
+  }
+
+  const action = nextAction(
+    STAGE_DRAFT_COMMAND,
+    "Review the repository against the initiative, compose a protocol-valid intake draft with evidence hashes, and stage it through the CLI."
+  );
+  const degradedBounds = mapAction.action === "bounded_direct_review"
+    ? await boundedReviewBounds(repositoryRoot)
+    : undefined;
+  const preparation = {
+    status: "repository_review_required",
+    initiative: preflight.initiative,
+    map: mapAction,
+    review: preparationReview(degradedBounds)
+  };
+  return success(
+    { ok: true, status: "preflight", ...stablePreflightPayload(preflight, preparation), nextAction: action },
+    `${mapAction.action === "bounded_direct_review" ? `${mapAction.warning}\n` : ""}Review the repository against the initiative and stage an intake draft.\n${renderNextAction(action)}`
+  );
+}
+
+interface StageDraftHooks {
+  readonly afterPreparationBeforeStage?: () => Promise<void> | void;
+}
+
+/** Stage a protocol intake draft without allocating an interview session. */
+export async function handleStageDraft(
+  context: CliContext,
+  hooks: StageDraftHooks = {}
+): Promise<CliResult> {
+  const draftFile = stringOption(context, "draft") ?? stringOption(context, "stage-draft");
+  if (draftFile === undefined) return usageError("Provide a draft file with --draft <file>.");
+  const foundSession = await findActiveSession(context.repositoryRoot);
+  if (!foundSession.ok) return usageError(foundSession.reason);
+  if (foundSession.session !== undefined) {
+    const diagnostics = [{
+      code: "active_session",
+      message: `Session ${foundSession.session.id} is already active; accepted draft answers must be revised through the interview, not by staging another draft.`
+    }];
+    return failure(
+      { ok: false, status: "rejected", diagnostics },
+      diagnostics[0]!.message
+    );
+  }
+  const createdAt = createdAtOption(context) ?? nowTimestamp();
+  const explicitRunId = stringOption(context, "from-exploration");
+  const withoutExploration = hasFlag(context, "without-exploration");
+  const explicitGoal = stringOption(context, "goal")?.trim();
+  const mapFailure = stringOption(context, "map-failed")?.trim();
+  if (explicitGoal === "") return usageError("Invalid --goal value. Provide a non-empty initiative.");
+  if (mapFailure === "") return usageError("Invalid --map-failed value. Provide the map failure diagnostic.");
+  if (explicitRunId !== undefined && withoutExploration) {
+    return usageError("Use either --from-exploration <id> or --without-exploration, not both.");
+  }
+  if (explicitRunId !== undefined || withoutExploration || explicitGoal !== undefined || mapFailure !== undefined) {
+    const overridePreflight = await prepareIntakePreflightForCli({
+      repositoryRoot: context.repositoryRoot,
+      createdAt,
+      ...(explicitRunId === undefined ? {} : { explicitRunId }),
+      ...(withoutExploration ? { withoutExploration: true } : {}),
+      ...(explicitGoal === undefined ? {} : { explicitGoal }),
+      ...(mapFailure === undefined ? {} : { mapFailure })
+    });
+    if (isCliResult(overridePreflight)) return overridePreflight;
+    if (explicitRunId !== undefined) {
+      const loaded = await loadExploration(context.repositoryRoot, explicitRunId);
+      const canonicalRunId = loaded.ok ? loaded.loaded.candidate.runId : explicitRunId;
+      const blocking = overridePreflight.diagnostics.filter((diagnostic) =>
+        diagnostic.runId === canonicalRunId && diagnostic.code !== "competing_candidate"
+      );
+      const selectedMatches = loaded.ok && overridePreflight.selectedExplorationRunId === canonicalRunId;
+      if (!selectedMatches || blocking.length > 0) {
+        const diagnostics = blocking.length > 0
+          ? blocking.filter((diagnostic, index) => blocking.findIndex((candidate) =>
+              candidate.code === diagnostic.code && candidate.message === diagnostic.message
+            ) === index)
+          : [{
+              code: "preflight_exploration_mismatch",
+              message: `Explicit exploration ${explicitRunId} did not resolve to a compatible readable start handoff.`
+            }];
+        return failure(
+          { ok: false, status: "rejected", preflight: overridePreflight, diagnostics },
+          `Explicit exploration ${explicitRunId} cannot be used to stage this draft.`
+        );
+      }
+    }
+  }
+  await hooks.afterPreparationBeforeStage?.();
+  const staged = await stageIntakeDraft({ repositoryRoot: context.repositoryRoot, draftFile, createdAt });
+  if (!staged.ok) {
+    return failure({ ok: false, status: "rejected", diagnostics: staged.diagnostics }, "The intake draft needs revision before it can be staged.");
+  }
+  const preflight = await prepareIntakePreflightForCli({ repositoryRoot: context.repositoryRoot, createdAt });
+  if (isCliResult(preflight)) return preflight;
+  const reviewed = await publishDraftReview({ repositoryRoot: context.repositoryRoot, draftId: staged.draft.id, updatedAt: createdAt });
+  if (!reviewed.ok) {
+    return failure({ ok: false, status: "rejected", draftId: staged.draft.id, diagnostics: reviewed.diagnostics }, "The staged draft could not be published as the active review.");
+  }
+  const review = draftReviewPayload({
+    draft: reviewed.draft,
+    artifactPath: staged.artifactPath,
+    draftSha256: reviewed.review.draftSha256,
+    preflight,
+    ...(staged.replacesDraft === undefined ? {} : { replacesDraft: staged.replacesDraft })
+  });
+  return success(review.payload, review.human);
+}
+
+/** Accept one staged draft into one fully populated session record. */
+export async function handleAcceptDraft(context: CliContext): Promise<CliResult> {
+  const explicitDraftId = stringOption(context, "accept-draft");
+  const createdAt = createdAtOption(context) ?? nowTimestamp();
+  const accepted = await acceptStagedDraft({
+    repositoryRoot: context.repositoryRoot,
+    createdAt,
+    requireReviewed: true,
+    ...(explicitDraftId === undefined ? {} : { draftId: explicitDraftId })
+  });
+  if (!accepted.ok) {
+    return failure(
+      {
+        ok: false,
+        status: "rejected",
+        ...(explicitDraftId === undefined ? {} : { draftId: explicitDraftId }),
+        diagnostics: accepted.diagnostics
+      },
+      explicitDraftId === undefined ? "The intake draft remains in review." : `Draft ${explicitDraftId} remains in review.`
+    );
+  }
+  const draftId = accepted.draft.id;
+  return success(
+    { ok: true, status: accepted.status, draft: accepted.draft, session: accepted.session },
+    `Accepted intake draft ${draftId} into session ${accepted.session.id}.`
+  );
+}
+
+/** Discard the active (or compatibility-ID) draft without creating a session. */
+export async function handleDiscardDraft(context: CliContext): Promise<CliResult> {
+  const explicitDraftId = stringOption(context, "discard-draft");
+  const target = await resolveReviewedDraftDecision({
+    repositoryRoot: context.repositoryRoot,
+    ...(explicitDraftId === undefined ? {} : { explicitDraftId })
+  });
+  if (!target.ok) return failure({ ok: false, status: "rejected", diagnostics: target.diagnostics }, "A displayed draft review is required before discard.");
+  const draftId = target.draftId;
+  const discarded = await discardStagedDraft({ repositoryRoot: context.repositoryRoot, draftId, requireReviewed: true });
+  if (!discarded.ok) {
+    return failure(
+      { ok: false, status: "rejected", draftId, diagnostics: discarded.diagnostics },
+      `Draft ${draftId} remains in review.`
+    );
+  }
+  const createdAt = createdAtOption(context) ?? nowTimestamp();
+  const preflight = await prepareIntakePreflightForCli({ repositoryRoot: context.repositoryRoot, createdAt });
+  if (isCliResult(preflight)) return preflight;
+  const prepared = await preparationResult(context.repositoryRoot, preflight);
+  return success(
+    {
+      ...prepared.payload,
+      discardedDraft: { id: discarded.draft.id, status: discarded.draft.status },
+      activeDraft: null,
+      activeSession: null
+    },
+    `Discarded intake draft ${draftId}.\n${prepared.human}`
   );
 }
 
@@ -774,7 +1480,7 @@ export async function handleBatchIntake(context: CliContext): Promise<CliResult>
   }
   const answers = parsed as Record<string, unknown>;
 
-  const resolved = await resolveSession(context, { create: true });
+  const resolved = await resolveSession(context, { create: true, automaticExploration: false, preparation: false });
   if (isCliResult(resolved)) return resolved;
 
   let session = resolved.session;
@@ -910,6 +1616,7 @@ async function classifyRoadmap(target: string): Promise<RoadmapDestination> {
 
 /** `legion start --finalize` — write the typed artifacts. */
 export async function handleFinalize(context: CliContext): Promise<CliResult> {
+  await recoverIntakeLifecycleArtifacts(context.repositoryRoot);
   const resolved = await resolveSession(context, { create: false });
   if (isCliResult(resolved)) return resolved;
 

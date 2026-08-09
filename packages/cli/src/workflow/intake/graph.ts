@@ -699,7 +699,7 @@ export function applicableNodes(input: MaterializeInput): readonly IntakeNode[] 
  * convention is exactly what an injected node ID collided with in the first
  * place.
  */
-export function allGraphNodeIds(): readonly string[] {
+function fullyMaterializedGraphNodes(): readonly IntakeNode[] {
   const answers: IntakeAnswer[] = [];
   const at = "1970-01-01T00:00:00.000Z";
   for (let requirement = 1; requirement <= MAX_REQUIREMENTS; requirement += 1) {
@@ -727,5 +727,14 @@ export function allGraphNodeIds(): readonly string[] {
       });
     }
   }
-  return materializeNodes({ answers, injectedNodes: [] }).map((node) => node.id);
+  return materializeNodes({ answers, injectedNodes: [] });
+}
+
+export function allGraphNodeIds(): readonly string[] {
+  return fullyMaterializedGraphNodes().map((node) => node.id);
+}
+
+/** Every reserved slot, including every bounded requirement/criterion loop shape. */
+export function allGraphSlots(): readonly string[] {
+  return fullyMaterializedGraphNodes().map((node) => node.slot);
 }

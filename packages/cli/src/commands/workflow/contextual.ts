@@ -16,7 +16,7 @@ import {
 } from "../../runtime.js";
 import {
   currentCodebaseFingerprint,
-  getLatestCodebaseMap,
+  discoverLatestCodebaseMap,
   queryCodebaseMap,
   collectMapSource,
   queryTerms,
@@ -54,11 +54,11 @@ import { collectEscalations, type ReviewFindingRecord } from "../../workflow/esc
 import { positionalText } from "./record.js";
 
 const HELP = {
-  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor codex|manual|fake]\n\nBrainstorm freely before the structured start interview. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Note: legion start does not read explorations yet — that handoff is not wired up.",
+  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor claude|codex|manual|fake]\n\nBrainstorm freely before structured intake preparation. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Bare legion start automatically selects a compatible completed exploration; use --from-exploration <id> to select one explicitly or --without-exploration to opt out.",
   map: "legion map [--refresh] [--scope <path>] | [--check] | [--query <text>]\n\nGenerate, check, or query deterministic codebase context.",
-  retro: "legion retro [--phase N|--milestone M] [--executor codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
+  retro: "legion retro [--phase N|--milestone M] [--executor claude|codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
   milestone: "legion milestone --status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>\n\nManage milestone status, summaries, and archives.",
-  council: "legion council <topic> [--executor codex|manual|fake]\n\nRun governance deliberation formerly exposed as /legion:board."
+  council: "legion council <topic> [--executor claude|codex|manual|fake]\n\nRun governance deliberation formerly exposed as /legion:board."
 } as const;
 
 export type ContextualWorkflowCommand = keyof typeof HELP;
@@ -402,7 +402,7 @@ function mapStatePayload(state: MapState, mode: "check" | "summary") {
     sourceFileCount: state.sourceFileCount,
     latestSourceFingerprint: state.latestSourceFingerprint,
     generatedAt: state.generatedAt,
-    diagnostics: []
+    diagnostics: state.diagnostics
   };
 }
 
@@ -453,7 +453,8 @@ async function mapSummary(context: CliContext, scope: string | undefined): Promi
 async function mapQuery(context: CliContext, query: string): Promise<CliResult> {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
-  const latest = await getLatestCodebaseMap(context.repositoryRoot);
+  const discovery = await discoverLatestCodebaseMap(context.repositoryRoot);
+  const latest = discovery.record?.map;
   if (latest === undefined) {
     const action = nextAction("legion map --refresh", "A query requires an existing codebase map.");
     return failure(
@@ -462,7 +463,10 @@ async function mapQuery(context: CliContext, query: string): Promise<CliResult> 
         status: "blocked",
         workflow: "map",
         mode: "query",
-        diagnostics: [{ code: "map_missing", message: "No codebase map exists. Run legion map --refresh first." }],
+        diagnostics: [
+          ...discovery.diagnostics,
+          { code: "map_missing", message: "No valid codebase map exists. Run legion map --refresh first." }
+        ],
         nextAction: action
       },
       ["Map query is blocked.", renderNextAction(action)].join("\n")
@@ -492,7 +496,7 @@ async function mapQuery(context: CliContext, query: string): Promise<CliResult> 
       query,
       matches,
       nextAction: action,
-      diagnostics: []
+      diagnostics: discovery.diagnostics
     },
     [
       `Map query returned ${matches.length} matches.`,
