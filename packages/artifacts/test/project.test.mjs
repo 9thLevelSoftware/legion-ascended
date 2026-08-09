@@ -129,6 +129,70 @@ test("P02-T15 init only allows recognized pre-start workflow records", async () 
   });
 });
 
+test("pre-init intake validation rejects shallow preflight and draft filename mismatch", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const intake = path.join(repositoryRoot, ".legion", "project", "intake");
+    await mkdir(intake, { recursive: true });
+    await writeFile(path.join(intake, "preflight.json"), JSON.stringify({ schemaVersion: 1, status: "preflight" }));
+    const result = await initProject(initInput(repositoryRoot));
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "migration_required");
+  });
+  await withTempRepository(async (repositoryRoot) => {
+    const drafts = path.join(repositoryRoot, ".legion", "project", "intake", "drafts");
+    await mkdir(drafts, { recursive: true });
+    const draft = {
+      schemaVersion: "0.3.0", createdAt: "2026-08-08T12:00:00.000Z", kind: "intake-draft",
+      id: "itd_actual", status: "draft", graphVersion: "1.2.0", projectMode: "greenfield",
+      initiative: "Test", explorationRefs: [], proposedAnswers: [], injectedQuestions: [], unresolvedNodes: [], diagnostics: []
+    };
+    await writeFile(path.join(drafts, "itd_wrong.json"), JSON.stringify(draft));
+    const result = await initProject(initInput(repositoryRoot));
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "migration_required");
+  });
+});
+
+test("pre-init intake validation rejects malformed nested preflight state", async () => {
+  const valid = {
+    schemaVersion: 1,
+    status: "preflight",
+    createdAt: "2026-08-08T12:00:00.000Z",
+    updatedAt: "2026-08-08T12:00:00.000Z",
+    projectMode: "greenfield",
+    map: {
+      freshness: "absent", reason: "No codebase map has been generated.", scope: ".",
+      sourceFingerprint: "0".repeat(64), sourceFileCount: 0,
+      latestSourceFingerprint: null, generatedAt: null, ageDays: null
+    },
+    explorationSelectionIntent: { mode: "automatic" },
+    compatibleExplorations: [{
+      runId: "explore-one", explorationRunId: "run_explore-one",
+      artifactPath: ".legion/project/workflow/explore/explore-one/exploration.json",
+      createdAt: "2026-08-08T10:00:00.000Z", topic: "One"
+    }],
+    diagnostics: [{ runId: "old", code: "competing_candidate", message: "Older." }]
+  };
+  const malformed = [
+    { ...valid, createdAt: "yesterday" },
+    { ...valid, map: { freshness: "absent" } },
+    { ...valid, explorationSelectionIntent: { mode: "explicit" } },
+    { ...valid, compatibleExplorations: [{ runId: "missing-fields" }] },
+    { ...valid, diagnostics: [{ runId: "old", code: "invented", message: "No." }] },
+    { ...valid, map: { ...valid.map, surprise: true } }
+  ];
+  for (const preflight of malformed) {
+    await withTempRepository(async (repositoryRoot) => {
+      const intake = path.join(repositoryRoot, ".legion", "project", "intake");
+      await mkdir(intake, { recursive: true });
+      await writeFile(path.join(intake, "preflight.json"), JSON.stringify(preflight));
+      const result = await initProject(initInput(repositoryRoot));
+      assert.equal(result.ok, false);
+      assert.equal(result.status, "migration_required");
+    });
+  }
+});
+
 test("P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes", async () => {
   await withTempRepository(async (repositoryRoot) => {
     const dryRun = await initProject(initInput(repositoryRoot, { dryRun: true }));

@@ -6,6 +6,7 @@ import { changeSchema } from "./change.js";
 import { decisionSchema } from "./decision.js";
 import { evidenceBundleSchema } from "./evidence.js";
 import { explorationSchema } from "./exploration.js";
+import { intakeDraftSchema } from "./intake-draft.js";
 import { intakeSessionSchema } from "./intake-session.js";
 import { observationSchema } from "./observation.js";
 import { oracleSchema } from "./oracle.js";
@@ -128,6 +129,11 @@ export const entityJsonSchemas = {
     "https://schemas.9thlevelsoftware.com/legion/entities/intake-session.schema.json",
     "Legion protocol intake session entity schema",
     intakeSessionSchema
+  ),
+  intakeDraft: jsonSchemaDocument(
+    "https://schemas.9thlevelsoftware.com/legion/entities/intake-draft.schema.json",
+    "Legion protocol intake draft entity schema",
+    intakeDraftSchema
   ),
   // Here rather than in `lifecycleJsonSchemas`, which is spread in below and
   // would emit the same file. That group is paired with

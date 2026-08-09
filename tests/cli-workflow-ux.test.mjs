@@ -415,12 +415,251 @@ test("workflow codex executor times out with a blocked result", async () => {
   }
 });
 
+// Installs a fake `claude` on PATH whose stdout is `stdout` verbatim. The shim
+// is a node script behind a platform launcher so the fixture JSON never has to
+// survive batch-file quoting.
+async function installClaudeShim(root, { stdout = "", exitCode = 0, sleepMs = 0 } = {}) {
+  const binDir = path.join(root, "bin");
+  await mkdir(binDir, { recursive: true });
+  const implPath = path.join(binDir, "claude-impl.mjs");
+  await writeFile(
+    implPath,
+    [
+      "const sleepMs = " + String(sleepMs) + ";",
+      "const stdout = " + JSON.stringify(stdout) + ";",
+      "await new Promise((resolve) => { setTimeout(resolve, sleepMs); });",
+      "if (stdout.length > 0) process.stdout.write(stdout);",
+      "process.exit(" + String(exitCode) + ");"
+    ].join("\n"),
+    "utf8"
+  );
+  if (process.platform === "win32") {
+    await writeFile(path.join(binDir, "claude.cmd"), `@echo off\r\nnode "%~dp0claude-impl.mjs"\r\n`, "utf8");
+  } else {
+    const shim = path.join(binDir, "claude");
+    await writeFile(shim, `#!/usr/bin/env sh\nexec node "$(dirname "$0")/claude-impl.mjs"\n`, "utf8");
+    await chmod(shim, 0o755);
+  }
+  return binDir;
+}
+
+function claudeRunRequest(root, { readOnly = false, base = "chg_claude", run = "run_claude" } = {}) {
+  const baseArtifactPath = `.legion/project/changes/${base}/runs/${run}`;
+  const absolute = (name) => path.join(root, ".legion", "project", "changes", base, "runs", run, name);
+  return {
+    repositoryRoot: root,
+    changeId: base,
+    runId: run,
+    task: { id: "ctr_claude" },
+    mode: "build",
+    executor: "claude",
+    readOnly,
+    prompt: "Return a Legion executor result.",
+    contextPackArtifactPath: `${baseArtifactPath}/context-pack.md`,
+    contextPackAbsolutePath: absolute("context-pack.md"),
+    promptArtifactPath: `${baseArtifactPath}/executor-prompt.md`,
+    promptAbsolutePath: absolute("executor-prompt.md"),
+    resultArtifactPath: `${baseArtifactPath}/executor-result.json`,
+    resultAbsolutePath: absolute("executor-result.json"),
+    rawLogArtifactPath: `${baseArtifactPath}/executor-raw.log`,
+    rawLogAbsolutePath: absolute("executor-raw.log"),
+    redactedLogArtifactPath: `${baseArtifactPath}/executor-redacted.log`,
+    redactedLogAbsolutePath: absolute("executor-redacted.log")
+  };
+}
+
+function claudeEnvelope(overrides = {}) {
+  return JSON.stringify({
+    type: "result",
+    subtype: "success",
+    is_error: false,
+    result: "",
+    session_id: "sess_test",
+    num_turns: 1,
+    permission_denials: [],
+    api_error_status: null,
+    ...overrides
+  });
+}
+
+async function withClaudeShim(options, run) {
+  const root = await tempRepo();
+  const previousPath = process.env.PATH;
+  const previousTimeout = process.env.LEGION_CLAUDE_EXEC_TIMEOUT_MS;
+  try {
+    const binDir = await installClaudeShim(root, options);
+    process.env.PATH = `${binDir}${path.delimiter}${previousPath ?? ""}`;
+    if (options.timeoutMs !== undefined) process.env.LEGION_CLAUDE_EXEC_TIMEOUT_MS = String(options.timeoutMs);
+    return await run(root);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    if (previousTimeout === undefined) delete process.env.LEGION_CLAUDE_EXEC_TIMEOUT_MS;
+    else process.env.LEGION_CLAUDE_EXEC_TIMEOUT_MS = previousTimeout;
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+test("workflow claude executor args match the claude print surface", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+
+  assert.deepEqual(adapters.claudeExecArgs({ readOnly: false }), [
+    "--print",
+    "--output-format",
+    "json",
+    "--permission-mode",
+    "bypassPermissions"
+  ]);
+
+  // Read-only has no OS sandbox behind it, so the denial list is the whole of
+  // the guarantee and the test names it rather than checking a flag is present.
+  assert.deepEqual(adapters.claudeExecArgs({ readOnly: true }), [
+    "--print",
+    "--output-format",
+    "json",
+    "--permission-mode",
+    "bypassPermissions",
+    "--disallowedTools",
+    "Edit Write NotebookEdit"
+  ]);
+
+  const writeArgs = adapters.claudeExecArgs({ readOnly: false });
+  assert.equal(writeArgs.includes("--dangerously-skip-permissions"), false);
+  assert.equal(writeArgs.includes("--allow-dangerously-skip-permissions"), false);
+});
+
+test("workflow claude executor reads the contract reply out of the result envelope", async () => {
+  const contract = JSON.stringify({
+    status: "succeeded",
+    summary: "Implemented the resolver.",
+    filesChanged: ["src/resolve-asset.ts"],
+    commandsRun: [{ command: "pnpm", args: ["test"], exitCode: 0 }],
+    findings: []
+  });
+  const adapters = await importWorkflowModule("executor/adapters");
+
+  await withClaudeShim({ stdout: claudeEnvelope({ result: contract }) }, async (root) => {
+    const result = await adapters.adapterForKind("claude").run(claudeRunRequest(root));
+
+    assert.equal(result.ok, true);
+    assert.equal(result.status, "succeeded");
+    assert.equal(result.summary, "Implemented the resolver.");
+    assert.deepEqual(result.filesChanged, ["src/resolve-asset.ts"]);
+    // The envelope's `result` field, not the whole transcript.
+    assert.equal(result.structuredOutput, contract);
+
+    const written = await readJsonArtifact(root, ".legion/project/changes/chg_claude/runs/run_claude/executor-result.json");
+    assert.equal(written.parsed.status, "succeeded");
+  });
+});
+
+test("workflow claude executor fails an in-band API error that exits zero", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+  // claude exits 0 and reports the failure inside the envelope, so a status
+  // taken from the exit code alone would record this run as a success.
+  const stdout = claudeEnvelope({
+    is_error: true,
+    subtype: "error_during_execution",
+    api_error_status: "429",
+    result: "Rate limited."
+  });
+
+  await withClaudeShim({ stdout, exitCode: 0 }, async (root) => {
+    const result = await adapters.adapterForKind("claude").run(claudeRunRequest(root));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "failed");
+    assert.equal(result.exitCode, 0);
+    assert.match(result.summary, /API status 429/u);
+  });
+});
+
+test("workflow claude executor records a denied tool as a blocking finding", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+  // A denial is how a run reports success having been stopped from doing the
+  // work, so it has to reach the result rather than only the transcript.
+  const stdout = claudeEnvelope({
+    result: JSON.stringify({ status: "succeeded", summary: "Done." }),
+    permission_denials: [{ tool_name: "Write", tool_use_id: "toolu_1" }]
+  });
+
+  await withClaudeShim({ stdout }, async (root) => {
+    const result = await adapters.adapterForKind("claude").run(claudeRunRequest(root, { readOnly: true }));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "failed");
+    const denial = result.findings.find((finding) => finding.id === "claude-executor-permission-denied");
+    assert.ok(denial, "a denied tool should be recorded as a finding");
+    assert.equal(denial.severity, "blocking");
+    assert.match(denial.body, /Write/u);
+  });
+});
+
+test("workflow claude executor times out with a blocked result", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+
+  await withClaudeShim({ sleepMs: 5_000, timeoutMs: 50 }, async (root) => {
+    const result = await adapters.adapterForKind("claude").run(claudeRunRequest(root));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "blocked");
+    assert.equal(result.exitCode, 124);
+    assert.equal(result.findings.some((finding) => finding.id === "claude-executor-timeout"), true);
+    const written = await readJsonArtifact(root, ".legion/project/changes/chg_claude/runs/run_claude/executor-result.json");
+    assert.equal(written.parsed.status, "blocked");
+  });
+});
+
+test("workflow executor selection accepts claude and names it when rejecting", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+
+  assert.equal(await adapters.selectExecutionAdapterKind("claude"), "claude");
+  assert.equal(adapters.adapterForKind("claude").kind, "claude");
+
+  const rejected = await adapters.selectExecutionAdapterKind("bogus");
+  assert.equal(typeof rejected, "object");
+  assert.equal(rejected.diagnostic.code, "invalid_executor");
+  assert.match(rejected.diagnostic.message, /claude, codex, manual, or fake/u);
+});
+
+test("workflow executor auto-selection does not nest a claude run inside Claude Code", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+  const previousMarker = process.env["CLAUDECODE"];
+  const previousPath = process.env.PATH;
+
+  const root = await tempRepo();
+  try {
+    // A claude that is unambiguously installed, so the only thing that can keep
+    // auto-selection off it is the session marker.
+    const binDir = await installClaudeShim(root, { stdout: claudeEnvelope() });
+    process.env.PATH = `${binDir}${path.delimiter}${previousPath ?? ""}`;
+
+    process.env["CLAUDECODE"] = "1";
+    assert.notEqual(
+      await adapters.selectExecutionAdapterKind(undefined),
+      "claude",
+      "auto-selection inside a Claude Code session must not spawn a nested claude run"
+    );
+    // Named explicitly it still runs — the guard is on the default, not the verb.
+    assert.equal(await adapters.selectExecutionAdapterKind("claude"), "claude");
+
+    delete process.env["CLAUDECODE"];
+    assert.equal(await adapters.selectExecutionAdapterKind(undefined), "claude");
+  } finally {
+    if (previousMarker === undefined) delete process.env["CLAUDECODE"];
+    else process.env["CLAUDECODE"] = previousMarker;
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("core workflow commands expose command-specific help", async () => {
   const cases = [
     ["start", /legion start --name <name>/],
     ["plan", /legion plan <phase-number>/],
-    ["build", /legion build \[--executor codex\|manual\|fake\]/],
-    ["review", /legion review \[--executor codex\|manual\|fake\]/],
+    ["build", /legion build \[--executor claude\|codex\|manual\|fake\]/],
+    ["review", /legion review \[--executor claude\|codex\|manual\|fake\]/],
     ["approve", /legion approve <subject>/],
     ["status", /legion status/],
     ["validate", /legion validate/],
@@ -2274,16 +2513,16 @@ test("legion start reports friendly usage and supports dry-run", async () => {
   const root = await tempRepo();
   try {
     // `legion start` with no arguments used to be a usage error. It is now the
-    // interview entrance, which is why the intake graph could claim that
-    // invocation without breaking any caller: nothing could have been relying
-    // on a command that only ever failed.
+    // preparation entrance. It persists the project classification before a
+    // session exists and asks exactly one initiative question when no goal or
+    // compatible exploration can supply one.
     const bare = await runCliCapture(["--repository-root", root, "start", "--json"]);
     assert.equal(bare.exitCode, 0, bare.stderr);
     const barePayload = parseJsonOutput(bare);
-    assert.equal(barePayload.status, "question");
-    assert.equal(barePayload.question.nodeId, "project-name");
-    assert.equal(barePayload.session.answered, 0);
-    assert.ok(barePayload.session.total > 0, "the session should report how many questions are pending");
+    assert.equal(barePayload.status, "preflight");
+    assert.equal(barePayload.preparation.status, "initiative_required");
+    assert.equal(barePayload.preparation.initiativeQuestion.kind, "free-text");
+    assert.equal(barePayload.session, undefined, "preparation must not allocate a throwaway session");
 
     const valuelessName = await runCliCapture(["--repository-root", root, "start", "--name", "--dry-run", "--json"]);
     assert.equal(valuelessName.exitCode, 1);
@@ -2390,6 +2629,27 @@ test("legion start reports friendly usage and supports dry-run", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("legion start help presents preparation decisions without calling bare start and --next equivalent", async () => {
+  const result = await runCliCapture(["start", "--help"]);
+  assert.equal(result.exitCode, 0, result.stderr);
+  assert.match(result.stdout, /--goal <text>/);
+  assert.match(result.stdout, /--without-exploration/);
+  assert.match(result.stdout, /--stage-draft <file>/);
+  assert.match(result.stdout, /--accept-draft(?:\s|$)/m);
+  assert.match(result.stdout, /--discard-draft(?:\s|$)/m);
+  assert.match(result.stdout, /accept.*revise.*discard/is);
+  assert.doesNotMatch(result.stdout, /the same question/i);
+});
+
+test("legion explore help describes the live start handoff instead of the stale disconnected flow", async () => {
+  const result = await runCliCapture(["explore", "--help"]);
+  assert.equal(result.exitCode, 0, result.stderr);
+  assert.match(result.stdout, /start automatically selects a compatible completed exploration/i);
+  assert.match(result.stdout, /--from-exploration <id>/);
+  assert.match(result.stdout, /--without-exploration/);
+  assert.doesNotMatch(result.stdout, /does not read explorations|handoff is not wired/i);
 });
 
 test("legion validate and doctor report project and shallow path checks", async () => {

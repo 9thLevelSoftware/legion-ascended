@@ -23,6 +23,7 @@ Protocol version: `0.3.0`
 | entities | `oracle` | Legion protocol oracle entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/oracle.schema.json` | `schemas/entities/oracle.schema.json` |
 | entities | `exploration` | Legion protocol exploration entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/exploration.schema.json` | `schemas/entities/exploration.schema.json` |
 | entities | `intakeSession` | Legion protocol intake session entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/intake-session.schema.json` | `schemas/entities/intake-session.schema.json` |
+| entities | `intakeDraft` | Legion protocol intake draft entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/intake-draft.schema.json` | `schemas/entities/intake-draft.schema.json` |
 | entities | `attestation` | Legion protocol attestation entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/attestation.schema.json` | `schemas/entities/attestation.schema.json` |
 | entities | `taskContract` | Legion protocol task contract entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/task-contract.schema.json` | `schemas/entities/task-contract.schema.json` |
 | entities | `task` | Legion protocol task entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/task.schema.json` | `schemas/entities/task.schema.json` |

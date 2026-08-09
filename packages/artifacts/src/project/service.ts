@@ -5,6 +5,7 @@ import {
   LEGION_PROTOCOL_VERSION,
   actorSchema,
   formatEntityId,
+  intakeDraftSchema,
   projectSchema,
   utcTimestampSchema,
   type Actor,
@@ -39,6 +40,7 @@ import {
   projectManifestSchema,
   type ProjectManifest
 } from "./schema.js";
+import { isIntakePreflightRecord } from "./intake-preflight.js";
 
 export const PROJECT_MANIFEST_PATH = PROJECT_ARTIFACT_PATHS.projectManifest;
 export const LEGION_LEGACY_PROTOCOL_ROOT = ".legion/legacy-protocol" as const;
@@ -272,7 +274,8 @@ export async function containsOnlyPreInitWorkflowRecords(projectRoot: string): P
   return recordCount > 0;
 }
 
-/** Intake sessions are `itk_*` directories, each holding a `session.json`. */
+/** Full structural guard for the CLI-owned preflight record before project init. */
+/** Intake lifecycle records: durable preflight/drafts plus `itk_*` sessions. */
 async function intakeSessionDirectoryStats(
   absoluteDirectory: string
 ): Promise<{ readonly valid: boolean; readonly recordCount: number }> {
@@ -281,6 +284,32 @@ async function intakeSessionDirectoryStats(
 
   for (const entry of entries) {
     if (isIgnorableLegionRootEntry(entry.name)) continue;
+    if (entry.isFile() && entry.name === "preflight.json") {
+      try {
+        const parsed = JSON.parse(await readFile(path.join(absoluteDirectory, entry.name), "utf8")) as Record<string, unknown>;
+        if (!isIntakePreflightRecord(parsed)) return { valid: false, recordCount: 0 };
+        recordCount += 1;
+        continue;
+      } catch {
+        return { valid: false, recordCount: 0 };
+      }
+    }
+    if (entry.isDirectory() && entry.name === "drafts") {
+      const drafts = await readdir(path.join(absoluteDirectory, entry.name), { withFileTypes: true });
+      for (const draft of drafts) {
+        if (!draft.isFile() || !draft.name.startsWith("itd_") || !draft.name.endsWith(".json")) {
+          return { valid: false, recordCount: 0 };
+        }
+        try {
+          const parsed = intakeDraftSchema.parse(JSON.parse(await readFile(path.join(absoluteDirectory, entry.name, draft.name), "utf8")));
+          if (`${parsed.id}.json` !== draft.name) return { valid: false, recordCount: 0 };
+          recordCount += 1;
+        } catch {
+          return { valid: false, recordCount: 0 };
+        }
+      }
+      continue;
+    }
     if (!entry.isDirectory() || !entry.name.startsWith("itk_")) return { valid: false, recordCount: 0 };
     // A directory with no session.json is an abandoned ID reservation, left by a
     // process interrupted between claiming the ID and writing the record.

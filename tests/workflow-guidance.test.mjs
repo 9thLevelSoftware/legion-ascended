@@ -130,6 +130,38 @@ test("map refresh, check, and query produce deterministic codebase artifacts", a
   }
 });
 
+test("map query falls back from a corrupt latest artifact and reports its validation diagnostic", async () => {
+  const root = await tempRepo();
+  try {
+    await initProject(root);
+    await writeFile(path.join(root, "README.md"), "# Asset Mapper\n\nMetadata authoring.\n", "utf8");
+    const first = await runCliCapture([
+      "--repository-root", root, "map", "--refresh", "--created-at", "2026-06-23T12:02:00.000Z", "--json"
+    ]);
+    assert.equal(first.exitCode, 0, first.stderr);
+    const second = await runCliCapture([
+      "--repository-root", root, "map", "--refresh", "--created-at", "2026-06-23T12:03:00.000Z", "--json"
+    ]);
+    assert.equal(second.exitCode, 0, second.stderr);
+    const secondPayload = parseJsonOutput(second);
+    const latestMapPath = path.join(root, ...secondPayload.mapArtifactPath.split("/"));
+    const latestMap = JSON.parse(await readFile(latestMapPath, "utf8"));
+    await writeFile(latestMapPath, `${JSON.stringify({ ...latestMap, sourceFingerprint: "0".repeat(64) })}\n`, "utf8");
+
+    const query = await runCliCapture(["--repository-root", root, "map", "--query", "metadata", "--json"]);
+
+    assert.equal(query.exitCode, 0, query.stderr);
+    const payload = parseJsonOutput(query);
+    assert.equal(payload.matches[0].path, "README.md");
+    assert.deepEqual(payload.diagnostics.map(({ code, message }) => ({ code, message })), [{
+      code: "map_artifact_fingerprint_mismatch",
+      message: `Ignored map run ${secondPayload.runId}: declared sourceFingerprint does not match the map file entries.`
+    }]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("quick and polish create typed taskgraphs consumable by build", async () => {
   const root = await tempRepo();
   try {

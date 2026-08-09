@@ -29,15 +29,15 @@ const GLOBAL_OPTIONS = new Set([
 
 const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   start: [
-    "abort", "accept-proposal", "answer", "back", "dry-run", "finalize", "force-roadmap",
-    "from-exploration", "from-planning", "from-roadmap", "intake", "name",
+    "abort", "accept-draft", "accept-proposal", "answer", "back", "discard-draft", "draft", "dry-run", "finalize", "force-roadmap",
+    "from-exploration", "from-planning", "from-roadmap", "goal", "intake", "map-failed", "name", "stage-draft",
     // Declared although no branch reads it: the default path IS "ask the next
     // question", so --next names that explicitly and is the documented way to
     // drive the interview. Refusing it would break the interface the host loop
     // is written against.
     "next",
     "node", "owner", "session", "session-status", "skip", "slug", "summary",
-    "allow-replace-existing-project"
+    "allow-replace-existing-project", "without-exploration"
   ],
   status: [],
   plan: ["auto-refine", "dry-run", "from-roadmap"],

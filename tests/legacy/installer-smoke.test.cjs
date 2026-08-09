@@ -20,8 +20,15 @@ const GLOBAL_INSTALLABLE_RUNTIMES = RUNTIME_ORDER.filter((runtimeKey) => {
   return RUNTIME_METADATA[runtimeKey].scopeSupport.global;
 });
 
+// This file is the v8 prompt-surface contract: every assertion below is about
+// agents/, commands/, skills/, and adapters/ landing on disk. That surface is
+// opt-in as of the CLI-first default, so these runs ask for it explicitly.
+// Coverage for the default surface lives in tests/installer-matrix.test.mjs.
 function runInstaller(args, cwd, homeDir) {
-  return spawnSync(process.execPath, [INSTALLER, ...args], {
+  const withLegacy = args.includes('--uninstall') || args.includes('--legacy-prompts')
+    ? args
+    : [...args, '--legacy-prompts'];
+  return spawnSync(process.execPath, [INSTALLER, ...withLegacy], {
     cwd,
     encoding: 'utf8',
     env: {

@@ -30,6 +30,7 @@ const INSTALLER_FLAGS = new Set([
   '--detect',
   '--explain',
   '--all-targets',
+  '--legacy-prompts',
   '--uninstall',
   '--update',
   '--version',

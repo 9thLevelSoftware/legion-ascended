@@ -66,6 +66,17 @@ legion install --target codex --local
 Note that `--global` here means "install the adapter files into your home directory instead of the
 current project" — it is a Legion scope flag, unrelated to `npm i -g`.
 
+### What gets installed
+
+By default, only the runtime entry points: a `/legion` command or skill for the target runtime, a
+thin alias per workflow command, and a manifest. They dispatch to the `legion` CLI, which is where
+the workflow engine actually lives. For Claude Code that is two files.
+
+`--legacy-prompts` additionally installs the v8 markdown surface — 49 agent personas, 22 command
+prompts, 33 skills, and 13 dispatch adapters, about 2.4 MB — and points the entry points at those
+files instead of at the CLI. The CLI does not read them. Use it if you want the prompt-driven
+agent-swarm workflow; otherwise you do not need it.
+
 Recommended first-class targets:
 
 | Target | Runtime | Canonical entry |
@@ -99,7 +110,10 @@ it is verified rather than aspirational.
 
 ```powershell
 legion status
-legion start                                    # asks the next intake question
+legion start --goal "Map assets deterministically" # CLI preflight returns the exact preparation action
+legion start --stage-draft .legion/var/intake-drafts/intake-draft.json # ignored input; validates and displays the grouped review
+legion start --accept-draft                    # only after explicit human acceptance
+legion start                                    # asks only the remaining intake question, or reports complete
 legion start --answer "<node>=<value>"          # repeat until the interview is done
 legion start --finalize                         # writes requirements, constitution, and ROADMAP.md
 legion plan 1                                   # typed change bundle, oracle, and taskgraph
@@ -109,6 +123,10 @@ legion review --executor codex
 legion review --accept --approver <your-id>
 legion ship
 ```
+
+`draft_review.nextAction.type` is `human_decision`, so hosts pause instead of
+executing another bare start. Accept and discard are bound to the exact displayed
+draft digest; replacement or evidence drift requires a new full review.
 
 Two things in there are easy to get wrong.
 
@@ -188,7 +206,7 @@ without saying which parts.
 
 | Command | Purpose |
 | --- | --- |
-| `legion start` | Run the intake interview; `--finalize` writes requirements, constitution, and ROADMAP.md |
+| `legion start` | Prepare and review an intake draft, require explicit accept/revise/discard, then ask only unresolved questions; `--finalize` writes requirements, constitution, and ROADMAP.md |
 | `legion plan <phase>` | Turn a roadmap phase into a change bundle, oracle, and typed taskgraph |
 | `legion build` | Execute the latest taskgraph through an executor and collect evidence |
 | `legion review` | Review collected evidence; `--accept --approver <id>` is the human boundary |

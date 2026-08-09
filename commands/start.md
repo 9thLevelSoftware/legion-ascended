@@ -1,12 +1,12 @@
 ---
 name: legion:start
-description: Initialize a new project through the CLI-owned intake interview
-argument-hint: "[--from-exploration <runId>]"
+description: Prepare, review, and accept an intake contract before the remaining interview
+argument-hint: "[--goal <text>|--without-exploration|--stage-draft <file>|--accept-draft|--discard-draft]"
 allowed-tools: [Bash, Read, AskUserQuestion]
 ---
 
 <objective>
-Render the intake interview that `legion start` drives. The CLI owns the question graph, the validation, and the decision that the interview is finished. Your job is to display each question, collect the answer, and hand it back.
+Run the CLI-owned preflight, prepare a repository-grounded intake draft, then render the interview that `legion start` drives. The CLI owns project mode, map state, the question graph, validation, persistence, and every transition. The host owns semantic repository review and draft composition.
 </objective>
 
 <authority>
@@ -18,15 +18,59 @@ This is deliberate rather than fussy. An interview owned by a conversation ends 
 </authority>
 
 <process>
-1. START OR RESUME
+1. PREPARE AN INITIATIVE
+
+   Run `legion start --json`. Supply an explicit user statement or edit with `--goal <text>`. Otherwise use the automatically selected exploration initiative. Ask the one free-text initiative question only when the CLI returns `initiative_required`.
+
+   Precedence is explicit user statements and edits, then selected exploration proposals, then repository inference. Never replace an explicit goal with an inference.
+
+2. FOLLOW THE MAP ACTION
+
+   If the CLI returns `map_refresh_required`, run exactly:
 
    ```
-   legion start --next --json
+   legion map --refresh --scope . --json
+   ```
+
+   Mapping is brownfield-only and full-project. Greenfield and documentation-only projects skip mapping. If refresh fails, run `legion start --map-failed "<diagnostic>" --json`, preserve its prominent DEGRADED COVERAGE warning, and continue only with the bounded direct review it specifies.
+
+3. REVIEW AND STAGE THE DRAFT
+
+   Scope synthesis to the initiative. Perform full architecture analysis and review high-signal README/product documentation, manifests and scripts, entry points, configuration, tests, and CI commands. Treat unrelated product behavior as architecture context only.
+
+   Cite evidence hashes when proposing compatibility obligations, acceptance criteria, executable proof commands, protected tests, constraints, verification defaults, and risk indicators. Conflicts and unsupported assumptions stay unresolved questions. An absent non-goal or constraint is unresolved, never `none`.
+
+   Compose a protocol-valid `IntakeDraft` at `.legion/var/intake-drafts/intake-draft.json`, including exploration/map/direct-file evidence and any degraded warning. This recognized runtime-input location is ignored by authored-source mapping, so composing the draft does not stale the fresh map it cites. Then run:
+
+   ```
+   legion start --stage-draft .legion/var/intake-drafts/intake-draft.json --json
+   ```
+
+   Do not write preflight/session state or bypass staging.
+
+4. REVIEW AND DECIDE
+
+   The stage command returns `draft_review`; staging does not accept the draft. Display its complete grouped requirements, criteria/proofs, constraints, non-goals, defaults, deduplicated evidence paths/kinds/hashes/anchors, diagnostics, and unresolved items. Its `nextAction.type` is `human_decision`, so pause and ask rather than executing it.
+
+   - Accept: only after the user explicitly accepts the displayed active draft, run `legion start --accept-draft --json`.
+   - Revise: compose a corrected draft under a new ID, stage it through the CLI, and repeat this review step.
+   - Discard: run `legion start --discard-draft --json`. The CLI durably closes it without creating a session.
+
+   Both active and supplied-ID decisions are bound to the exact displayed digest. Replacement staging clears the prior review binding; the replacement must be displayed before a decision. Supplied IDs remain compatibility forms, not a way to select stale or undisplayed bytes.
+
+   Preparation edits (`--goal`, `--from-exploration`, `--without-exploration`, and `--map-failed`) belong only to bare preparation or `--stage-draft`. Persist the preparation choice first, then enter the interview with a later `--next`. Accept and discard are terminal decisions: do not combine them with preparation selectors, `--next`, `--session`, or another action.
+
+   Never infer acceptance from silence, earlier approval, or the act of staging.
+
+5. START OR RESUME
+
+   ```
+   legion start --json
    ```
 
    The payload is either `{"status":"question", ...}` or `{"status":"complete"}`. If it lists `availableExplorations` and the user wants to build on one, restart with `legion start --from-exploration <runId>` before answering anything — seeding only applies when the session is created.
 
-2. RENDER THE QUESTION
+6. RENDER THE QUESTION
 
    Read `question` from the payload:
 
@@ -40,7 +84,7 @@ This is deliberate rather than fussy. An interview owned by a conversation ends 
 
    Use `session.answered` and `session.total` for progress.
 
-3. RECORD THE ANSWER
+7. RECORD THE ANSWER
 
    ```
    legion start --answer "<nodeId>=<value>"
@@ -55,7 +99,7 @@ This is deliberate rather than fussy. An interview owned by a conversation ends 
 
    If the CLI returns `{"status":"rejected"}`, show its diagnostics and put the same question again. Do not reshape the answer yourself to make it pass.
 
-4. FINALIZE
+8. FINALIZE
 
    When the payload reports `{"status":"complete"}`:
 
@@ -67,7 +111,7 @@ This is deliberate rather than fussy. An interview owned by a conversation ends 
 
    Finalize refuses when the answers do not make a contract: a `must` requirement with no acceptance criteria, a `manual` proof with no stated reason, a budget that cannot be satisfied. Show the diagnostics and reopen the questions they name. Do not work around a refusal.
 
-5. REPORT
+9. REPORT
 
    Show the requirement count, the `requirementSetHash`, and the next action the CLI returned. If it warned that `ROADMAP.md` was left alone, say so plainly — a roadmap this command did not write is never replaced without `--force-roadmap`.
 </process>
@@ -81,7 +125,7 @@ This is deliberate rather than fussy. An interview owned by a conversation ends 
 <inspection>
 - `legion start --session-status` reports progress and every recorded answer with its source, changing nothing.
 - `legion start --abort` closes a session without finalizing.
-- State lives in `.legion/project/intake/<sessionId>/session.json`. If you have lost the thread, read it — or just run `--next` again, which is derived from that same file.
+- State lives in `.legion/project/intake/<sessionId>/session.json`. If you have lost the thread, run bare `legion start --json`; `--next` remains a compatibility form for explicitly requesting the current interview question, not an alias for the preparation entrance.
 </inspection>
 
 <decision_matrix>

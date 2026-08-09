@@ -8,6 +8,7 @@ const readline = require('readline');
 const { spawnSync } = require('child_process');
 const {
   LEGION_COMMANDS,
+  LEGION_CLI_COMMANDS,
   RUNTIME_METADATA,
   RUNTIME_ORDER,
   installableRuntimeKeys,
@@ -32,7 +33,8 @@ function parseArgs(argv) {
     action: 'install',
     verify: false,
     dryRun: false,
-    allTargets: false
+    allTargets: false,
+    legacyPrompts: false
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -50,6 +52,7 @@ function parseArgs(argv) {
     if (arg === '--verify') result.verify = true;
     if (arg === '--dry-run') result.dryRun = true;
     if (arg === '--all-targets') result.allTargets = true;
+    if (arg === '--legacy-prompts') result.legacyPrompts = true;
     // Actions
     if (arg === '--uninstall') result.action = 'uninstall';
     if (arg === '--update')    result.action = 'update';
@@ -165,6 +168,16 @@ Scope:
   --verify      Verify package file hashes before installation
   --dry-run     Print the install plan without writing files
   --all-targets Include compatibility, legacy, and manual-only targets in prompts/lists
+
+Surface:
+  By default the installer writes only the runtime entry points, which dispatch
+  to the "legion" CLI. It does not install the v8 prompt bundle.
+
+  --legacy-prompts  Also install the v8 markdown surface: 49 agent personas,
+                    22 command prompts, 33 skills, and 13 dispatch adapters
+                    (~2.4 MB). The entry points then route to those files
+                    instead of to the CLI. Needed only for the prompt-driven
+                    agent-swarm workflow; the CLI does not read them.
 
 Actions:
   --list-targets Show supported target matrix
@@ -379,7 +392,7 @@ function getNativeSurface(paths, surfaceKey) {
   return paths.nativeSurfaces.find((surface) => surface.key === surfaceKey) || null;
 }
 
-function resolvePaths(runtime, scope, home) {
+function resolvePaths(runtime, scope, home, legacyPrompts = false) {
   const rt = RUNTIME_METADATA[runtime];
   const base = scope === 'local' ? normalizePath(process.cwd()) : home;
   const nativeSurfaces = resolveNativeSurfaces(runtime, scope, home);
@@ -413,6 +426,9 @@ function resolvePaths(runtime, scope, home) {
   const codexBridge = getNativeSurface({ nativeSurfaces }, 'codex-bridge');
 
   return {
+    // Every generator below already receives `paths`, so the legacy decision
+    // rides along with it rather than being threaded through a dozen signatures.
+    legacyPrompts,
     agentsDir,
     commandsDir,
     skillsDir,
@@ -658,12 +674,20 @@ function transformCommand(content, runtimeKey, installedSkillsDir, installedAgen
 }
 
 function commandMappingLines(paths) {
+  if (!paths.legacyPrompts) {
+    return LEGION_CLI_COMMANDS
+      .map((entry) => `- \`legion ${entry.name}\` -> \`${cliInvocationWithJson(entry.name)}\` — ${entry.description}`)
+      .join('\n');
+  }
   return LEGION_COMMANDS
     .map((commandName) => `- \`legion ${commandName}\` -> \`${legionCommandFile(paths, commandName)}\``)
     .join('\n');
 }
 
 function generateLegionRouterBody(paths, runtimeLabel, argumentHint = '$ARGUMENTS') {
+  if (!paths.legacyPrompts) {
+    return generateCliRouterBody(paths, runtimeLabel, argumentHint);
+  }
   return `# Legion
 
 You are the single Legion entry point for ${runtimeLabel}. The user should be able to say or invoke \`legion <command>\` with the same command names as the terminal CLI.
@@ -687,9 +711,89 @@ Legacy host-specific aliases can remain installed, but they must route back to t
 `;
 }
 
+// The default install ships no prompt bundle, so the router's job is to drive
+// the `legion` binary and act on what it returns -- not to locate and read a
+// markdown workflow definition that is not on disk.
+function generateCliRouterBody(paths, runtimeLabel, argumentHint = '$ARGUMENTS') {
+  return `# Legion
+
+You are the single Legion entry point for ${runtimeLabel}. Legion is a command-line
+workflow engine: it owns project state, task contracts, evidence, and the gates
+between them. Your job is to run it, read what it returns, and do the work it
+asks for. The engine decides; you execute and report.
+
+The user should be able to say or invoke \`legion <command>\` with the same command
+names as the terminal CLI.
+
+## Canonical Command Mapping
+
+${commandMappingLines(paths)}
+
+## How To Route
+
+1. Treat the first word after \`legion\` as the workflow command. If no command is
+   given, run \`legion status --json\` and act on the \`nextAction\` it reports.
+2. Run the command with the Bash tool, always with \`--json\`. Run it from the
+   repository root. Do not reimplement, predict, or narrate what the command
+   would have returned -- run it.
+3. Read the JSON. \`status\` tells you where the workflow stands, \`diagnostics\`
+   tells you what is wrong, and \`nextAction\` names the exact command to run next.
+   Relay \`nextAction\` to the user rather than inventing a different next step.
+   When \`nextAction.type\` is \`human_decision\`, it is deliberately not executable:
+   pause and ask the human to choose one of its named decisions.
+4. If a command reports \`blocked\`, do not work around it. The block is the
+   product. Report the diagnostics and the recovery command it names.
+5. Treat \`${argumentHint}\` as user-supplied arguments or clarification when the host
+   provides it.
+6. Preserve the human-in-loop boundary: planning, build, review, acceptance, and
+   ship-readiness stay explicit. Approvals, attestations, and acceptance are the
+   user's to give -- never run \`legion approve\`, \`legion attest\`, or
+   \`legion review --accept\` on the user's behalf without them saying so.
+
+${startPreparationGuidance()}
+
+## Executing A Build
+
+\`legion build\` selects an executor. Run from inside this session it will not
+pick the \`claude\` driver — spawning a second agent to do work you are already
+positioned to do would bypass permissions and bill twice — so unless another
+driver is installed it selects \`manual\`, writes an instruction prompt into the
+change's run directory, and returns \`blocked\` with a \`manual-execution-required\`
+finding. That is your cue, not a failure:
+
+1. Read the prompt artifact the result names.
+2. Do the work it specifies, in this session, against the repository.
+3. Re-run \`legion build --json\` so the engine observes the result and records
+   evidence.
+
+The same pattern applies to \`legion review\`.
+
+If the user explicitly wants the work handed to a separate headless agent rather
+than done here, that is \`legion build --executor claude\` — a nested run someone
+asked for by name. Do not reach for it on your own.
+
+## Discovering The Surface
+
+Every command self-documents. \`legion --help\` lists the workflow commands, and
+\`legion <command> --help\` gives that command's flags. Prefer reading help over
+guessing a flag. \`legion dev --help\` exposes the typed engine and operator
+surfaces, including the board, dashboard, approval-gate, and portfolio
+projections.
+
+## Guardrails
+
+- This install ships no Legion agent personas, prompt bundle, or skill library.
+  Do not look for \`.md\` workflow definitions under the Legion directories and do
+  not claim \`/legion:*\` aliases exist unless the host actually resolves them.
+  If the user wants that surface back, it is \`legion install --legacy-prompts\`.
+- \`${paths.manifestFile}\` records what this install wrote. Read it when you need
+  to resolve installed paths.
+`;
+}
+
 function generateLegionPrompt(paths, runtimeLabel) {
   return `---
-description: "Route legion <command> requests through the installed Legion workflow bundle"
+description: "${routerDescription(paths)}"
 argument-hint: "<command> [args]"
 ---
 
@@ -701,7 +805,7 @@ function generateLegionSkill(paths, runtimeLabel, allowedToolsLine = null) {
   const frontmatter = [
     '---',
     'name: legion',
-    `description: Route legion <command> requests through the installed Legion workflow bundle for ${runtimeLabel}.`,
+    `description: ${routerDescription(paths)} for ${runtimeLabel}.`,
     ...(allowedToolsLine ? [allowedToolsLine] : []),
     '---'
   ].join('\n');
@@ -714,7 +818,7 @@ ${generateLegionRouterBody(paths, runtimeLabel)}
 function generateLegionMarkdownCommand(paths, runtimeLabel, agentName = null) {
   const frontmatter = [
     '---',
-    'description: "Route legion <command> requests through the installed Legion workflow bundle"',
+    `description: "${routerDescription(paths)}"`,
     ...(agentName ? [`agent: ${agentName}`] : []),
     '---'
   ].join('\n');
@@ -727,7 +831,7 @@ ${generateLegionRouterBody(paths, runtimeLabel)}
 function generateGeminiLegionCommand(paths) {
   const prompt = generateLegionRouterBody(paths, 'Gemini CLI', '$ARGUMENTS').replace(/"""/g, '\\"""');
   return [
-    'description = "Route legion <command> requests through the installed Legion workflow bundle"',
+    `description = ${JSON.stringify(routerDescription(paths))}`,
     'prompt = """',
     prompt,
     '"""',
@@ -767,6 +871,8 @@ ${mappingLines}
 5. Use the current project's \`.planning/PROJECT.md\`, \`.planning/ROADMAP.md\`, and \`.planning/STATE.md\` when the Legion workflow expects project state.
 6. For install or update requests, check \`${paths.manifestFile}\` first and use \`${paths.commandsDir}/update.md\` as the workflow reference.
 
+${startPreparationGuidance()}
+
 ## Guardrails
 
 - Do not claim that legacy \`/legion:*\` aliases are native Codex commands unless the runtime explicitly resolves them.
@@ -785,7 +891,30 @@ function legionCommandFile(paths, commandName) {
   return joinPath(paths.commandsDir, `${commandName}.md`);
 }
 
+// What a `/legion:<command>` alias resolves to: a workflow file under the legacy
+// bundle, or the CLI invocation that replaced it.
+function legionCommandTarget(paths, commandName) {
+  return paths.legacyPrompts ? legionCommandFile(paths, commandName) : `${cliInvocationWithJson(commandName)}`;
+}
+
+function aliasMappingLines(paths) {
+  const names = paths.legacyPrompts ? LEGION_COMMANDS : LEGION_CLI_COMMANDS.map((entry) => entry.name);
+  return names
+    .map((commandName) => `- \`/legion:${commandName}\` -> \`${legionCommandTarget(paths, commandName)}\``)
+    .join('\n');
+}
+
 function legionRuntimeWrapperPreamble(runtimeLabel, commandName, paths) {
+  if (!paths.legacyPrompts) {
+    const preamble = [
+      `You are running the Legion \`${commandName}\` workflow inside ${runtimeLabel}.`,
+      `Run \`${cliInvocationWithJson(commandName)}\` from the repository root with the Bash tool and treat its output as authoritative.`,
+      'Read the JSON it returns: act on `nextAction`, report `diagnostics`, and do not work around a `blocked` status.',
+      `Run \`${cliInvocationFor(commandName)} --help\` when you need that command's flags.`,
+      `Use \`${paths.manifestFile}\` if you need to resolve the installed Legion paths.`,
+    ].join('\n');
+    return commandName === 'start' ? `${preamble}\n\n${startPreparationGuidance()}` : preamble;
+  }
   return [
     `You are executing the Legion \`/legion:${commandName}\` workflow inside ${runtimeLabel}.`,
     `Read \`${legionCommandFile(paths, commandName)}\` first and treat it as the authoritative workflow definition.`,
@@ -793,6 +922,74 @@ function legionRuntimeWrapperPreamble(runtimeLabel, commandName, paths) {
     `Use \`${paths.manifestFile}\` if you need to resolve the installed Legion bundle paths.`,
     'Use `.planning/PROJECT.md`, `.planning/ROADMAP.md`, and `.planning/STATE.md` when the workflow expects project state.',
   ].join('\n');
+}
+
+function startPreparationGuidance() {
+  return `## Start Preparation
+
+For \`legion start\`, run the CLI-owned preflight and follow its \`nextAction\`; do not invent project mode, map state, or draft/session transitions.
+
+1. Supply an explicit user initiative with \`--goal <text>\`. Otherwise use the automatically selected exploration initiative. Ask the single free-text initiative question only when the CLI returns \`initiative_required\`. Explicit user statements and edits outrank exploration proposals, which outrank repository inference.
+2. If the CLI returns \`map_refresh_required\`, run exactly \`legion map --refresh --scope .\`, then rerun start. Mapping is brownfield-only and full-project; greenfield and documentation-only projects skip it.
+3. If mapping fails, report the failure through \`legion start --map-failed "<diagnostic>" --json\`. Preserve the prominent DEGRADED COVERAGE warning and perform only the bounded direct review the CLI returns; never claim full coverage.
+4. Review the repository against the initiative. Perform full architecture analysis and inspect README/product documentation, manifests, entry points, configuration, tests, and CI commands. Unrelated behavior is architecture context only.
+5. Use evidence hashes to propose compatibility obligations, acceptance criteria, executable proof commands, protected tests, constraints, verification defaults, and risk indicators. Conflicting evidence and unsupported assumptions remain unresolved. An absent non-goal or constraint remains unresolved; never infer it as none.
+6. Compose a protocol-valid IntakeDraft at \`.legion/var/intake-drafts/intake-draft.json\`, including the selected exploration and fresh map/direct-file evidence references plus any degraded warning, then run \`legion start --stage-draft .legion/var/intake-drafts/intake-draft.json --json\`. This recognized runtime-input location is ignored by authored-source mapping, so composing the draft does not stale the map it cites. The CLI validates and persists it, then returns \`draft_review\`; staging never accepts a draft.
+7. Display the complete grouped review returned in \`draft_review\`: requirements, criteria and proofs, constraints, non-goals, defaults, evidence/confidence, diagnostics, and unresolved items, including concise deduplicated evidence paths, kinds, hashes, and anchors. Its \`nextAction.type\` is \`human_decision\`: pause for an explicit human decision instead of routing it as a command. For accept, only when the user explicitly accepts the currently displayed bytes run \`legion start --accept-draft --json\`. For revise, compose a corrected draft under a new ID at the same ignored input path and run \`legion start --stage-draft .legion/var/intake-drafts/intake-draft.json --json\` again. For discard, run \`legion start --discard-draft --json\`. A supplied draft ID is compatibility syntax and is still bound to the displayed digest.
+8. After acceptance returns \`interview\`, run \`legion start --json\` and render only the still-unanswered CLI question, or finalize when it returns \`complete\`. \`--next\` remains a legacy-compatible explicit interview request; do not describe it as equivalent to the preparation entrance. Never infer acceptance from silence, prior approval, or the act of staging.`;
+}
+
+function routerDescription(paths) {
+  return paths.legacyPrompts
+    ? 'Route legion <command> requests through the installed Legion workflow bundle'
+    : 'Route legion <command> requests to the Legion CLI';
+}
+
+function cliCommandEntry(commandName) {
+  return LEGION_CLI_COMMANDS.find((entry) => entry.name === commandName);
+}
+
+function cliInvocationFor(commandName) {
+  const entry = cliCommandEntry(commandName);
+  return entry ? `legion ${entry.invoke}` : `legion ${commandName}`;
+}
+
+// Most commands emit machine-readable JSON; the ones that do not must not be
+// advertised as if they did.
+function cliInvocationWithJson(commandName) {
+  const entry = cliCommandEntry(commandName);
+  const invocation = cliInvocationFor(commandName);
+  return entry && entry.json === false ? invocation : `${invocation} --json`;
+}
+
+// Stands in for a legacy command file when the prompt bundle is not installed.
+// The per-runtime alias generators read `description` off this and wrap the
+// body, so it has to carry the same frontmatter shape the v8 files did.
+function generateCliCommandStub(commandName) {
+  const entry = cliCommandEntry(commandName);
+  const description = entry ? entry.description : `Run the Legion ${commandName} workflow`;
+  const invocation = cliInvocationFor(commandName);
+  return `---
+name: legion:${commandName}
+description: ${description}
+---
+
+Run \`${cliInvocationWithJson(commandName)}\` from the repository root and act on what it returns.
+
+- \`nextAction\` names the command to run next. Relay it rather than inventing one.
+- \`diagnostics\` explains a non-ready status. Report it verbatim.
+- A \`blocked\` status is a decision, not an error. Do not work around it.
+- \`${invocation} --help\` lists this command's flags.
+${commandName === 'start' ? `\n${startPreparationGuidance()}` : ''}
+`;
+}
+
+// A bullet several subagent/skill generators share, naming where a command's
+// definition lives. Under the default install there is no file to name.
+function commandSourceBullet(paths) {
+  return paths.legacyPrompts
+    ? `- Read only the matching command file under \`${paths.commandsDir}\`.`
+    : '- Run `legion <command> --json` with the Bash tool and act on the `nextAction` it returns.';
 }
 
 function generateGeminiCommand(paths, commandName, commandContent) {
@@ -820,10 +1017,12 @@ mode: subagent
 You are the Legion subagent for OpenCode.
 
 - Use \`${paths.manifestFile}\` to find the installed Legion bundle.
-- Read only the matching command file under \`${paths.commandsDir}\`.
+${commandSourceBullet(paths)}
 - Treat \`/legion\` as the canonical host command and \`legion <command>\` as the canonical workflow language.
 - Route legacy \`/legion:*\` aliases and \`/legion-start\` style commands back to the same command files.
 - Coordinate through artifacts in \`.planning/\`; do not assume direct inter-agent messaging.
+
+${startPreparationGuidance()}
 `;
 }
 
@@ -897,17 +1096,17 @@ You are the Legion subagent for Kilo Code (VS Code extension and Kilo CLI).
 - Treat \`/legion\` as the canonical host command and \`legion <command>\` as the canonical workflow language.
 - Route legacy \`/legion:*\` aliases and \`/legion-start\` style commands back to the same command files.
 - Coordinate through artifacts in \`.planning/\`; do not assume direct inter-agent messaging.
+
+${startPreparationGuidance()}
 `;
 }
 
 function generateKiloCodeSkill(paths) {
-  const mappingLines = LEGION_COMMANDS
-    .map((commandName) => `- \`/legion:${commandName}\` -> \`${legionCommandFile(paths, commandName)}\``)
-    .join('\n');
+  const mappingLines = aliasMappingLines(paths);
 
   return `---
 name: legion
-description: Route Legion requests and /legion:* intents to the installed Legion workflow bundle in Kilo Code.
+description: Route Legion requests and /legion:* intents to ${paths.legacyPrompts ? 'the installed Legion workflow bundle' : 'the Legion CLI'} in Kilo Code.
 ---
 
 # Legion for Kilo Code
@@ -921,12 +1120,18 @@ ${mappingLines}
 ## How To Use
 
 1. Read \`${paths.manifestFile}\` if installed paths need to be resolved.
-2. Read only the matching Legion command file under \`${paths.commandsDir}\`.
-3. Load only the files named in that command's \`<execution_context>\` and \`<context>\`.
+2. ${paths.legacyPrompts
+    ? `Read only the matching Legion command file under \\\`${paths.commandsDir}\\\`.`
+    : 'Run `legion <command> --json` with the Bash tool and act on the `nextAction` it returns.'}
+3. ${paths.legacyPrompts
+    ? 'Load only the files named in that command\'s `<execution_context>` and `<context>`.'
+    : 'Do not work around a `blocked` status; report its diagnostics and the recovery it names.'}
 4. Use the current project's \`.planning/PROJECT.md\`, \`.planning/ROADMAP.md\`, and \`.planning/STATE.md\` when the workflow expects project state.
 5. Prefer the native \`/legion\` workflow or the Legion mode for new interactions.
 6. Use \`/legion-start\`, \`/legion-plan\`, \`/legion-board\`, and related \`/legion-*\` entries only as compatibility aliases.
 7. Treat Kilo Code workflows, Agent Skills, and the single Legion mode as the native plugin surface; do not look for old Kilo CLI command wrappers unless the user explicitly asks for the CLI.
+
+${startPreparationGuidance()}
 
 ## Guardrails
 
@@ -944,9 +1149,13 @@ function generateKiloCodeMode(paths, scope) {
     roleDefinition: [
       'You are Legion\'s coordinator inside Kilo Code.',
       '',
-      'You route Legion requests to the installed Legion workflow bundle and execute the matching workflow faithfully. Legion workflows live as markdown command files, with supporting agents, skills, adapters, and project state resolved through the install manifest.',
+      paths.legacyPrompts
+        ? 'You route Legion requests to the installed Legion workflow bundle and execute the matching workflow faithfully. Legion workflows live as markdown command files, with supporting agents, skills, adapters, and project state resolved through the install manifest.'
+        : 'You route Legion requests to the legion CLI, which owns project state, task contracts, evidence, and the gates between them. You run it, read the JSON it returns, and do the work it asks for.',
       '',
-      'You do not invent alternate orchestration rules. Read the matching workflow first, then load only the explicitly referenced supporting files.'
+      paths.legacyPrompts
+        ? 'You do not invent alternate orchestration rules. Read the matching workflow first, then load only the explicitly referenced supporting files.'
+        : 'You do not invent alternate orchestration rules, and you do not predict what a command would have returned. Run it.'
     ].join('\n'),
     whenToUse: [
       'Use this mode when the user asks for Legion, /legion:* workflows, phase planning, phase build execution, review cycles, status routing, shipping, retrospectives, portfolio work, or Legion advisory sessions.',
@@ -956,13 +1165,21 @@ function generateKiloCodeMode(paths, scope) {
     description: 'Coordinate Legion workflows from the installed Legion bundle',
     customInstructions: [
       `Read ${paths.manifestFile} if you need installed paths.`,
-      `Read the matching workflow file under ${paths.commandsDir} before acting.`,
-      'Load only the files named by that workflow in <execution_context> and <context>.',
+      ...(paths.legacyPrompts
+        ? [
+            `Read the matching workflow file under ${paths.commandsDir} before acting.`,
+            'Load only the files named by that workflow in <execution_context> and <context>.'
+          ]
+        : [
+            'Run `legion <command> --json` from the repository root and act on the nextAction it returns.',
+            'Do not work around a blocked status; report its diagnostics and the recovery it names.'
+          ]),
       'Use .planning/PROJECT.md, .planning/ROADMAP.md, and .planning/STATE.md when the workflow expects project state.',
       'Use the /legion workflow and Legion mode as the primary user-facing entry points.',
       'Use /legion-start.md, /legion-plan.md, /legion-board.md, /legion-review.md, and /legion-* only as compatibility aliases.',
       'Use installed Agent Skills for reusable internals such as planning, wave execution, review panels, board governance, and memory.',
       'Treat the single Legion mode as the coordinator bridge; do not create one mode per Legion command or personality.',
+      startPreparationGuidance(),
       'Leave model selection to Kilo Code sticky models or user settings; do not pin a model from this mode.'
     ].join('\n'),
     groups: ['read', 'edit', 'command', 'mcp'],
@@ -997,19 +1214,21 @@ You are the Legion agent for GitHub Copilot.
 
 - The \`/legion\` skill is the primary Legion entry point.
 - Skills such as \`/legion-start\` and \`/legion-plan\` are compatibility aliases.
-- When the user selects this agent directly, read the matching command file under \`${paths.commandsDir}\` and execute it faithfully.
-- Use \`${paths.manifestFile}\` if you need to resolve the rest of the Legion bundle.
-- Prefer Legion's workflow files over ad-hoc improvisation.
+- When the user selects this agent directly, ${paths.legacyPrompts
+    ? `read the matching command file under \\\`${paths.commandsDir}\\\` and execute it faithfully.`
+    : 'run `legion <command> --json` and act on the `nextAction` it returns.'}
+- Use \`${paths.manifestFile}\` if you need to resolve the rest of the Legion install.
+- Prefer what Legion reports over ad-hoc improvisation.
+
+${startPreparationGuidance()}
 `;
 }
 
 function generateCursorRule(paths) {
-  const mappingLines = LEGION_COMMANDS
-    .map((commandName) => `- \`/legion:${commandName}\` -> \`${legionCommandFile(paths, commandName)}\``)
-    .join('\n');
+  const mappingLines = aliasMappingLines(paths);
 
   return `---
-description: Route Legion requests to the installed Legion workflow bundle
+description: ${routerDescription(paths)}
 alwaysApply: false
 ---
 
@@ -1028,9 +1247,7 @@ Rules:
 }
 
 function generateWindsurfRule(paths) {
-  const mappingLines = LEGION_COMMANDS
-    .map((commandName) => `- \`/legion:${commandName}\` -> \`${legionCommandFile(paths, commandName)}\``)
-    .join('\n');
+  const mappingLines = aliasMappingLines(paths);
 
   return `# Legion for Windsurf
 
@@ -1059,17 +1276,17 @@ tools: [read, edit, write, bash]
 You are the Legion agent for Kiro CLI.
 
 - Read \`${paths.manifestFile}\` if you need to locate the installed Legion bundle.
-- For any Legion request, read the matching command file under \`${paths.commandsDir}\` first and treat it as authoritative.
+- For any Legion request, ${paths.legacyPrompts
+    ? `read the matching command file under \\\`${paths.commandsDir}\\\` first and treat it as authoritative.`
+    : 'run `legion <command> --json` first and treat its output as authoritative.'}
 - Treat \`@legion\` as the canonical Kiro entry point and \`legion <command>\` as the canonical workflow language.
 - Coordinate through artifacts in \`.planning/\`; do not invent hidden cross-agent state.
-- If the user types a legacy \`/legion:*\` alias, map it to the matching command file instead of claiming Kiro supports that slash command natively.
+- If the user types a legacy \`/legion:*\` alias, map it to the matching Legion command instead of claiming Kiro supports that slash command natively.
 `;
 }
 
 function generateKiroSteering(paths) {
-  const mappingLines = LEGION_COMMANDS
-    .map((commandName) => `- \`/legion:${commandName}\` -> \`${legionCommandFile(paths, commandName)}\``)
-    .join('\n');
+  const mappingLines = aliasMappingLines(paths);
 
   return `# Legion Steering
 
@@ -1334,6 +1551,9 @@ function writeManifest(paths, runtimeKey, agentFiles, scope, source, verified, p
     lastVerified: runtime.lastVerified,
     smokeTestStatus: runtime.smokeTestStatus,
     installLifecycle: runtime.installLifecycle,
+    // Recorded so `legion update` reinstalls the surface the user chose, and so
+    // uninstall still knows to sweep legacy directories a prior install wrote.
+    legacyPrompts: paths.legacyPrompts === true,
     paths: {
       agents: paths.agentsDir,
       commands: paths.commandsDir,
@@ -1391,9 +1611,13 @@ function printInstallPlan(runtimeKey, scope, verify, paths) {
   console.log(`  Scope:            ${scope}`);
   console.log(`  Verify package:   ${verify ? 'yes' : 'no'}`);
   console.log(`  Manifest:         ${paths.manifestFile}`);
-  console.log(`  Commands:         ${paths.commandsDir}`);
-  console.log(`  Skills:           ${paths.skillsDir}`);
-  console.log(`  Agents:           ${paths.agentsDir}`);
+  console.log(`  Prompt bundle:    ${paths.legacyPrompts ? 'yes (--legacy-prompts)' : 'no (CLI dispatch only)'}`);
+  if (paths.legacyPrompts) {
+    console.log(`  Commands:         ${paths.commandsDir}`);
+    console.log(`  Skills:           ${paths.skillsDir}`);
+    console.log(`  Agents:           ${paths.agentsDir}`);
+    console.log(`  Adapters:         ${paths.adaptersDir}`);
+  }
   if (paths.nativeSurfaces.length > 0) {
     console.log('  Native surfaces:');
     for (const surface of paths.nativeSurfaces) {
@@ -1405,9 +1629,9 @@ function printInstallPlan(runtimeKey, scope, verify, paths) {
   console.log('\nDry run only. No files were written.\n');
 }
 
-function install(runtimeKey, scope, verify = false, dryRun = false) {
+function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompts = false) {
   const home = resolveHome();
-  const paths = resolvePaths(runtimeKey, scope, home);
+  const paths = resolvePaths(runtimeKey, scope, home, legacyPrompts);
   const src = resolveSourceRoot();
   const rt = RUNTIME_METADATA[runtimeKey];
   const sourceInfo = detectSourceProvenance(src.root);
@@ -1439,10 +1663,7 @@ function install(runtimeKey, scope, verify = false, dryRun = false) {
   });
 
   ensureDirs([
-    paths.agentsDir,
-    paths.commandsDir,
-    paths.skillsDir,
-    paths.adaptersDir,
+    ...(legacyPrompts ? [paths.agentsDir, paths.commandsDir, paths.skillsDir, paths.adaptersDir] : []),
     paths.manifestDir,
     ...nativeDirs,
   ]);
@@ -1451,7 +1672,8 @@ function install(runtimeKey, scope, verify = false, dryRun = false) {
   console.log('=== Agents ===');
   const installedAgents = [];
   const conflicts = [];
-  const agentFiles = listMdFiles(src.agentsSrc);
+  const agentFiles = legacyPrompts ? listMdFiles(src.agentsSrc) : [];
+  if (!legacyPrompts) console.log('  (skipped -- prompt bundle is opt-in via --legacy-prompts)');
 
   for (const agentFile of agentFiles) {
     const base = path.basename(agentFile);
@@ -1474,10 +1696,21 @@ function install(runtimeKey, scope, verify = false, dryRun = false) {
 
   // ── Commands ──
   console.log('\n=== Commands ===');
-  const commandFiles = listMdFiles(src.commandsSrc);
+  const commandFiles = legacyPrompts ? listMdFiles(src.commandsSrc) : [];
   const installedPromptFiles = [];
   const nativeArtifacts = [];
   const transformedCommands = new Map();
+
+  // Runtime-native per-command aliases are not part of the legacy bundle: they
+  // are thin entry points the host resolves. Without the prompt bundle they
+  // still exist, they just dispatch to the CLI instead of naming a workflow file.
+  if (!legacyPrompts) {
+    for (const entry of LEGION_CLI_COMMANDS) {
+      transformedCommands.set(entry.name, generateCliCommandStub(entry.name));
+    }
+    console.log('  (prompt bundle skipped -- opt in with --legacy-prompts)');
+    console.log(`  ${LEGION_CLI_COMMANDS.length} runtime aliases dispatch to the legion CLI`);
+  }
 
   for (const cmdFile of commandFiles) {
     const base = path.basename(cmdFile);
@@ -1501,8 +1734,9 @@ function install(runtimeKey, scope, verify = false, dryRun = false) {
 
   // ── Skills ──
   console.log('\n=== Skills ===');
-  const skillDirs = listDirs(src.skillsSrc);
+  const skillDirs = legacyPrompts ? listDirs(src.skillsSrc) : [];
   let skillCount = 0;
+  if (!legacyPrompts) console.log('  (skipped -- prompt bundle is opt-in via --legacy-prompts)');
 
   for (const skillDir of skillDirs) {
     const skillName = path.basename(skillDir);
@@ -1534,7 +1768,10 @@ function install(runtimeKey, scope, verify = false, dryRun = false) {
 
   // ── Adapters ──
   console.log('\n=== Adapters ===');
-  const adapterFiles = listMdFiles(src.adaptersSrc);
+  // Adapters describe how to dispatch to other CLIs, and only the legacy
+  // cli-dispatch skill reads them. Nothing in the CLI path resolves this directory.
+  const adapterFiles = legacyPrompts ? listMdFiles(src.adaptersSrc) : [];
+  if (!legacyPrompts) console.log('  (skipped -- prompt bundle is opt-in via --legacy-prompts)');
   for (const adapterFile of adapterFiles) {
     const base = path.basename(adapterFile);
     fs.copyFileSync(adapterFile, joinPath(paths.adaptersDir, base));
@@ -1624,8 +1861,8 @@ function install(runtimeKey, scope, verify = false, dryRun = false) {
 
         // 2. Copy skills/ directory recursive to surface.path/skills
         const destSkillsDir = joinPath(surface.path, 'skills');
-        ensureDirs([destSkillsDir]);
-        const skillSrcDirs = listDirs(src.skillsSrc);
+        const skillSrcDirs = legacyPrompts ? listDirs(src.skillsSrc) : [];
+        if (skillSrcDirs.length > 0) ensureDirs([destSkillsDir]);
         for (const skillSrc of skillSrcDirs) {
           const skillName = path.basename(skillSrc);
           const destSkillPath = joinPath(destSkillsDir, skillName);
@@ -1660,19 +1897,19 @@ function install(runtimeKey, scope, verify = false, dryRun = false) {
           walkArtifacts(destSkillPath);
           nativeArtifacts.push({ path: destSkillPath, kind: 'dir' });
         }
-        console.log(`  ${surface.key}: skills -> ${destSkillsDir}`);
+        console.log(`  ${surface.key}: skills -> ${skillSrcDirs.length === 0 ? 'skipped (no prompt bundle)' : destSkillsDir}`);
 
         // 3. Copy agents/ directory to surface.path/agents
         const destAgentsDir = joinPath(surface.path, 'agents');
-        ensureDirs([destAgentsDir]);
-        const agentFiles = listMdFiles(src.agentsSrc);
-        for (const agentFile of agentFiles) {
+        const pluginAgentFiles = legacyPrompts ? listMdFiles(src.agentsSrc) : [];
+        if (pluginAgentFiles.length > 0) ensureDirs([destAgentsDir]);
+        for (const agentFile of pluginAgentFiles) {
           const base = path.basename(agentFile);
           const destAgentPath = joinPath(destAgentsDir, base);
           fs.copyFileSync(agentFile, destAgentPath);
           nativeArtifacts.push({ path: destAgentPath });
         }
-        console.log(`  ${surface.key}: agents -> ${destAgentsDir}`);
+        console.log(`  ${surface.key}: agents -> ${pluginAgentFiles.length === 0 ? 'skipped (no prompt bundle)' : destAgentsDir}`);
 
         // 4. Copy transformed commands/ to surface.path/commands
         const destCommandsDir = joinPath(surface.path, 'commands');
@@ -1768,6 +2005,19 @@ function install(runtimeKey, scope, verify = false, dryRun = false) {
       }
 
       case 'kilo-skills': {
+        // The canonical `legion` skill is generated, not copied, so it survives
+        // when the rest of the prompt bundle is not installed.
+        if (!legacyPrompts) {
+          const destSkillDir = joinPath(surface.path, 'legion');
+          ensureDirs([destSkillDir]);
+          const skillPath = joinPath(destSkillDir, 'SKILL.md');
+          const content = runtimeKey === 'kilocode'
+            ? generateKiloCodeSkill(paths)
+            : generateLegionSkill(paths, 'Kilo CLI');
+          writeManagedFile(skillPath, content, nativeArtifacts);
+          console.log(`  ${surface.key}: ${skillPath}`);
+          break;
+        }
         const skillSrcDirs = listDirs(src.skillsSrc);
         for (const skillSrc of skillSrcDirs) {
           const skillName = path.basename(skillSrc);
@@ -1872,19 +2122,30 @@ function install(runtimeKey, scope, verify = false, dryRun = false) {
   console.log(`  Written to ${paths.manifestFile}`);
 
   // ── Summary ──
-  console.log(`
-${'='.repeat(48)}
-  Legion v${pkg.version} installed successfully!
+  const bundleLines = legacyPrompts
+    ? [
+        `  Agents:   ${installedAgents.length} -> ${paths.agentsDir}`,
+        `  Commands: ${commandFiles.length} -> ${paths.commandsDir}`,
+        `  Skills:   ${skillCount} -> ${paths.skillsDir}`,
+        `  Adapters: ${adapterFiles.length} -> ${paths.adaptersDir}`,
+      ]
+    : [`  Prompts:  none (CLI dispatch only; --legacy-prompts to install the v8 bundle)`];
 
-  Runtime:  ${rt.label}
-  Agents:   ${installedAgents.length} -> ${paths.agentsDir}
-  Commands: ${commandFiles.length} -> ${paths.commandsDir}
-  Native:   ${nativeArtifacts.length} artifact(s)
-  ${paths.promptsDir ? `Prompts:  ${installedPromptFiles.length} -> ${paths.promptsDir}\n  ` : ''}Skills:   ${skillCount} -> ${paths.skillsDir}
-  ${paths.bridgeSkillFile ? `Bridge:   1 -> ${paths.bridgeSkillFile}\n  ` : ''}Scope:    ${scope}
-  Support:  ${rt.supportTier}
-  Source:   ${sourceInfo.source}
-  Verified: ${verify ? 'yes' : 'no'}`);
+  console.log([
+    '',
+    '='.repeat(48),
+    `  Legion v${pkg.version} installed successfully!`,
+    '',
+    `  Runtime:  ${rt.label}`,
+    ...bundleLines,
+    `  Native:   ${nativeArtifacts.length} artifact(s)`,
+    ...(paths.promptsDir ? [`  Prompts:  ${installedPromptFiles.length} -> ${paths.promptsDir}`] : []),
+    ...(paths.bridgeSkillFile ? [`  Bridge:   1 -> ${paths.bridgeSkillFile}`] : []),
+    `  Scope:    ${scope}`,
+    `  Support:  ${rt.supportTier}`,
+    `  Source:   ${sourceInfo.source}`,
+    `  Verified: ${verify ? 'yes' : 'no'}`,
+  ].join('\n'));
 
   if (rt.supportTier !== 'first-class') {
     console.log(`\n  NOTE: ${rt.label} is currently marked ${rt.supportTier} in Legion.`);
@@ -1899,6 +2160,11 @@ ${'='.repeat(48)}
 
   console.log(`${'='.repeat(48)}
 `);
+
+  // The CLI is the product; the host entry point routes to it. Naming only the
+  // slash command left users who had just installed a 22-verb binary with no
+  // indication it existed.
+  console.log('  Terminal entry point: legion status   (legion --help for the full command surface)');
 
   if (runtimeKey === 'codex') {
     console.log(`  Restart Codex to pick up the Legion prompt files and bridge skill.`);
@@ -2159,7 +2425,7 @@ async function fetchNpmLatest(packageName) {
   });
 }
 
-async function update(runtimeKey, scope, verify = false) {
+async function update(runtimeKey, scope, verify = false, legacyPrompts = null) {
   const home = resolveHome();
   const paths = resolvePaths(runtimeKey, scope, home);
   const manifest = readManifest(paths.manifestFile);
@@ -2194,7 +2460,10 @@ async function update(runtimeKey, scope, verify = false) {
     console.log('Cleaning previous managed installation...\n');
     uninstall(runtimeKey, scope);
     console.log('\nRe-installing...\n');
-    install(runtimeKey, scope, verify);
+    // An update keeps whatever surface the user installed, unless this run
+    // explicitly asked for the prompt bundle.
+    const keepLegacy = legacyPrompts === true ? true : manifest.legacyPrompts === true;
+    install(runtimeKey, scope, verify, false, keepLegacy);
   } catch (err) {
     throw new Error(`Update check failed: ${err.message}\nYour installed version is still functional.`);
   }
@@ -2245,10 +2514,10 @@ async function main(argv = process.argv.slice(2)) {
         uninstall(runtime, args.scope);
         break;
       case 'update':
-        await update(runtime, args.scope, args.verify);
+        await update(runtime, args.scope, args.verify, args.legacyPrompts ? true : null);
         break;
       default:
-        install(runtime, args.scope, args.verify, args.dryRun);
+        install(runtime, args.scope, args.verify, args.dryRun, args.legacyPrompts);
     }
     return 0;
   } catch (err) {

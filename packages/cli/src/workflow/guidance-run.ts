@@ -62,6 +62,17 @@ export interface GuidanceRunDocument {
   readonly diagnostics: readonly unknown[];
 }
 
+export interface GuidanceRunDiscoveryDiagnostic {
+  readonly workflow: GuidanceWorkflow;
+  readonly runId: string;
+  readonly message: string;
+}
+
+export interface GuidanceRunDiscovery {
+  readonly runs: readonly GuidanceRunDocument[];
+  readonly diagnostics: readonly GuidanceRunDiscoveryDiagnostic[];
+}
+
 export interface GuidanceExecutorRun {
   readonly executor: ExecutionAdapterKind;
   readonly result: ExecutionResult;
@@ -306,9 +317,18 @@ export async function latestGuidanceRuns(input: {
   readonly workflows?: readonly GuidanceWorkflow[];
   readonly limitPerWorkflow?: number;
 }): Promise<readonly GuidanceRunDocument[]> {
+  return (await discoverGuidanceRuns(input)).runs;
+}
+
+export async function discoverGuidanceRuns(input: {
+  readonly repositoryRoot: string;
+  readonly workflows?: readonly GuidanceWorkflow[];
+  readonly limitPerWorkflow?: number;
+}): Promise<GuidanceRunDiscovery> {
   const workflows = input.workflows ?? ["explore", "map", "advise", "council", "retro", "learn", "milestone", "quick", "polish"];
   const limit = input.limitPerWorkflow ?? 3;
   const runs: GuidanceRunDocument[] = [];
+  const diagnostics: GuidanceRunDiscoveryDiagnostic[] = [];
   for (const workflow of workflows) {
     const workflowRoot = path.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
@@ -320,13 +340,18 @@ export async function latestGuidanceRuns(input: {
     }
 
     const workflowRuns: GuidanceRunDocument[] = [];
-    for (const entry of entries) {
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       if (!entry.isDirectory()) continue;
       const runPath = path.join(workflowRoot, entry.name, "workflow-run.json");
       try {
-        const parsed = JSON.parse(await readFile(runPath, "utf8")) as GuidanceRunDocument;
-        if (parsed.kind === "workflow_run" && parsed.workflow === workflow) workflowRuns.push(parsed);
-      } catch {
+        const parsed = parseGuidanceRun(JSON.parse(await readFile(runPath, "utf8")), workflow, entry.name);
+        workflowRuns.push(parsed);
+      } catch (error) {
+        diagnostics.push({
+          workflow,
+          runId: entry.name,
+          message: `Cannot read workflow run ${entry.name}: ${error instanceof Error ? error.message : String(error)}`
+        });
         continue;
       }
     }
@@ -334,7 +359,28 @@ export async function latestGuidanceRuns(input: {
     runs.push(...workflowRuns.slice(0, limit));
   }
   runs.sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.runId.localeCompare(left.runId));
-  return runs;
+  diagnostics.sort((left, right) =>
+    left.workflow.localeCompare(right.workflow) ||
+    left.runId.localeCompare(right.runId) ||
+    left.message.localeCompare(right.message)
+  );
+  return { runs, diagnostics };
+}
+
+function parseGuidanceRun(value: unknown, workflow: GuidanceWorkflow, directoryRunId: string): GuidanceRunDocument {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("expected an object");
+  const run = value as Record<string, unknown>;
+  if (run["schemaVersion"] !== 1 || run["kind"] !== "workflow_run" || run["workflow"] !== workflow || run["runId"] !== directoryRunId) {
+    throw new Error("identity fields do not match the workflow directory");
+  }
+  if (typeof run["createdAt"] !== "string" || typeof run["status"] !== "string" ||
+      run["input"] === null || typeof run["input"] !== "object" || Array.isArray(run["input"]) ||
+      run["outputs"] === null || typeof run["outputs"] !== "object" || Array.isArray(run["outputs"]) ||
+      !Array.isArray(run["diagnostics"])) throw new Error("required workflow-run fields are malformed");
+  if (run["nextAction"] === null || typeof run["nextAction"] !== "object" || Array.isArray(run["nextAction"])) throw new Error("nextAction is malformed");
+  const action = run["nextAction"] as Record<string, unknown>;
+  if (typeof action["command"] !== "string" || action["command"].length === 0 || typeof action["reason"] !== "string") throw new Error("nextAction is malformed");
+  return run as unknown as GuidanceRunDocument;
 }
 
 export async function guidanceProjectId(repositoryRoot: string): Promise<ProjectId> {

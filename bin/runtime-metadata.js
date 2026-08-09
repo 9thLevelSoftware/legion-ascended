@@ -22,6 +22,37 @@ const LEGION_COMMANDS = [
   'validate',
 ];
 
+// The workflow surface of the shipped CLI, which is what a default install
+// routes to. This is deliberately not LEGION_COMMANDS: that list names the v8
+// prompt files, and three of its entries have no CLI verb behind them
+// (`board` is `council`, `portfolio` lives under `dev board`, and `agent` was a
+// prompt-only authoring flow). Four CLI verbs have no v8 prompt at all.
+const LEGION_CLI_COMMANDS = [
+  { name: 'start', invoke: 'start', description: 'Prepare and display an intake contract, then pause for a human decision' },
+  { name: 'explore', invoke: 'explore', description: 'Create a design discovery artifact before start or planning' },
+  { name: 'map', invoke: 'map', description: 'Generate, refresh, check, or query codebase context' },
+  { name: 'plan', invoke: 'plan', description: 'Plan a phase or change into typed task contracts' },
+  { name: 'build', invoke: 'build', description: 'Execute approved task contracts through a runtime driver' },
+  { name: 'approve', invoke: 'approve', description: "Record a human decision about the change's delta specs" },
+  { name: 'attest', invoke: 'attest', description: "Record a human assertion that pinned files are this change's evidence" },
+  { name: 'review', invoke: 'review', description: 'Review task outputs with verification and independent gates' },
+  { name: 'release', invoke: 'release', description: "Plan how this change's release is observed and taken back" },
+  { name: 'ship', invoke: 'ship', description: 'Run release readiness, promotion, and observation gates' },
+  { name: 'retro', invoke: 'retro', description: 'Record retrospective evidence for future planning' },
+  { name: 'status', invoke: 'status', description: 'Show workflow state and the next recommended action' },
+  { name: 'quick', invoke: 'quick', description: 'Run one ad-hoc task with a task record and risk classification' },
+  { name: 'advise', invoke: 'advise', description: 'Run read-only advisory analysis' },
+  { name: 'polish', invoke: 'polish', description: 'Run scoped cleanup as an ad-hoc workflow' },
+  { name: 'learn', invoke: 'learn', description: 'Record project-specific operational learning' },
+  { name: 'milestone', invoke: 'milestone', description: 'Manage milestone status, summaries, and archives' },
+  { name: 'validate', invoke: 'validate', description: 'Validate committed Legion project state' },
+  { name: 'doctor', invoke: 'doctor', description: 'Validate project state plus bundle-index path presence' },
+  { name: 'board', invoke: 'council', description: 'Run governance deliberation (CLI verb: council)' },
+  { name: 'portfolio', invoke: 'dev board portfolio', description: 'Tenant-scoped portfolio projection and cross-project rollups' },
+  // The installer handles this one; it has no --json surface.
+  { name: 'update', invoke: 'update', json: false, description: 'Check for Legion updates and install the latest version' },
+];
+
 const SUPPORT_TIERS = ['first-class', 'compatible', 'legacy', 'manual-only', 'unsupported'];
 const VERIFIED_ON = '2026-06-23';
 const MANAGED_INSTALL_LIFECYCLE = Object.freeze({
@@ -760,6 +791,7 @@ function recommendedRuntimeKeys() {
 
 module.exports = {
   LEGION_COMMANDS,
+  LEGION_CLI_COMMANDS,
   SUPPORT_TIERS,
   RUNTIME_METADATA,
   RUNTIME_ORDER,

@@ -17,6 +17,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { explorationSchema, type Exploration } from "@legion/protocol";
+import { resolveProjectArtifactPath } from "@legion/artifacts";
 
 import { latestGuidanceRuns, type GuidanceRunDocument } from "../guidance-run.js";
 
@@ -51,7 +52,8 @@ async function readExplorationRunId(
   artifactPath: string
 ): Promise<string | undefined> {
   try {
-    const raw = await readFile(path.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
+    const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath });
+    const raw = await readFile(resolved.absolutePath, "utf8");
     const parsed: unknown = JSON.parse(raw);
     const runId = (parsed as { runId?: unknown }).runId;
     return typeof runId === "string" ? runId : undefined;
@@ -159,7 +161,8 @@ export async function loadExploration(
 
   let raw: string;
   try {
-    raw = await readFile(path.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
+    const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: candidate.artifactPath });
+    raw = await readFile(resolved.absolutePath, "utf8");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, reason: `Exploration ${runId} could not be read: ${message}` };

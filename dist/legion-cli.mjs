@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path50 from "node:path";
+import path52 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -1071,10 +1071,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path51) {
-  if (!path51)
+function getElementAtPath(obj, path53) {
+  if (!path53)
     return obj;
-  return path51.reduce((acc, key) => acc?.[key], obj);
+  return path53.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -1483,11 +1483,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path51, issues) {
+function prefixIssues(path53, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path51);
+    iss.path.unshift(path53);
     return iss;
   });
 }
@@ -1634,16 +1634,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path51 = []) => {
+  const processError = (error52, path53 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path51, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path53, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path51, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path53, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path51, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path53, ...issue2.path]);
       } else {
-        const fullpath = [...path51, ...issue2.path];
+        const fullpath = [...path53, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -1670,17 +1670,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path51 = []) => {
+  const processError = (error52, path53 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path51, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path53, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path51, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path53, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path51, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path53, ...issue2.path]);
       } else {
-        const fullpath = [...path51, ...issue2.path];
+        const fullpath = [...path53, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -1712,8 +1712,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path51 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path51) {
+  const path53 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path53) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -14405,13 +14405,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path51 = ref.slice(1).split("/").filter(Boolean);
-  if (path51.length === 0) {
+  const path53 = ref.slice(1).split("/").filter(Boolean);
+  if (path53.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path51[0] === defsKey) {
-    const key = path51[1];
+  if (path53[0] === defsKey) {
+    const key = path53[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -14836,7 +14836,8 @@ var ENTITY_ID_KINDS = [
   "release",
   "observation",
   "event",
-  "intake"
+  "intake",
+  "intake-draft"
 ];
 var ENTITY_ID_PREFIXES = {
   project: "prj",
@@ -14854,7 +14855,8 @@ var ENTITY_ID_PREFIXES = {
   release: "rel",
   observation: "obs",
   event: "evt",
-  intake: "itk"
+  intake: "itk",
+  "intake-draft": "itd"
 };
 var timeSortableIdSchema = string2().regex(/^[0-9a-hjkmnp-tv-z]{26}$/, "Invalid time-sortable ID").describe("Lowercase Crockford-style 26-character time-sortable ID.");
 var slugSuffixSchema = string2().regex(/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/, "Invalid entity ID suffix").describe("Lowercase slug suffix used after an entity-kind prefix.");
@@ -14880,6 +14882,7 @@ var releaseIdSchema = idSchema("rel", slugSuffixPattern, "Release ID");
 var observationIdSchema = idSchema("obs", slugSuffixPattern, "Observation ID");
 var eventIdSchema = idSchema("evt", timeSortableSuffixPattern, "Event ID");
 var intakeSessionIdSchema = idSchema("itk", slugSuffixPattern, "Intake session ID");
+var intakeDraftIdSchema = idSchema("itd", slugSuffixPattern, "Intake draft ID");
 var entityIdSchemas = {
   project: projectIdSchema,
   change: changeIdSchema,
@@ -14896,7 +14899,8 @@ var entityIdSchemas = {
   release: releaseIdSchema,
   observation: observationIdSchema,
   event: eventIdSchema,
-  intake: intakeSessionIdSchema
+  intake: intakeSessionIdSchema,
+  "intake-draft": intakeDraftIdSchema
 };
 var entityIdKindSchema = _enum2(ENTITY_ID_KINDS);
 var anyEntityIdSchema = union([
@@ -14915,7 +14919,8 @@ var anyEntityIdSchema = union([
   releaseIdSchema,
   observationIdSchema,
   eventIdSchema,
-  intakeSessionIdSchema
+  intakeSessionIdSchema,
+  intakeDraftIdSchema
 ]);
 var entityReferenceSchema = strictObject({
   kind: entityIdKindSchema,
@@ -15091,11 +15096,11 @@ function findProtocolMigrationPath(input) {
         continue;
       if (visited.has(migration.toVersion))
         continue;
-      const path51 = [...next.path, migration];
+      const path53 = [...next.path, migration];
       if (migration.toVersion === toVersion)
-        return path51;
+        return path53;
       visited.add(migration.toVersion);
-      queue.push({ version: migration.toVersion, path: path51 });
+      queue.push({ version: migration.toVersion, path: path53 });
     }
     next = queue.shift();
   }
@@ -17116,10 +17121,14 @@ var decisionSchema = discriminatedUnion("status", [
 // packages/protocol/dist/entities/intake-session.js
 var intakeNodeIdSchema = string2().regex(/^[a-z][a-z0-9-]{1,63}$/, "Invalid intake node ID");
 var intakeSlotIdSchema = string2().regex(/^[a-z][a-z0-9_.-]{1,63}$/, "Invalid intake slot ID");
-var intakeAnswerSourceSchema = _enum2(["human", "proposed-accepted"]);
+var intakeAnswerSourceSchema = _enum2(["human", "proposed-accepted", "draft-accepted"]);
 var intakeProposalRefSchema = strictObject({
   runId: runIdSchema,
   anchor: string2().min(1).max(128)
+});
+var intakeDraftAcceptanceRefSchema = strictObject({
+  draftId: intakeDraftIdSchema,
+  answerAnchor: string2().min(1).max(128)
 });
 var intakeAnswerSchema = strictObject({
   nodeId: intakeNodeIdSchema,
@@ -17127,13 +17136,21 @@ var intakeAnswerSchema = strictObject({
   value: union([string2().max(8192), array(string2().max(1024)).max(64), boolean2()]),
   answeredAt: string2().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
   source: intakeAnswerSourceSchema,
-  proposedFrom: intakeProposalRefSchema.optional()
+  proposedFrom: intakeProposalRefSchema.optional(),
+  draftAcceptedFrom: intakeDraftAcceptanceRefSchema.optional()
 }).superRefine((answer, context) => {
   if (answer.source === "proposed-accepted" && answer.proposedFrom === void 0) {
     context.addIssue({
       code: "custom",
       message: "An accepted proposal must record the exploration it came from.",
       path: ["proposedFrom"]
+    });
+  }
+  if (answer.source === "draft-accepted" && answer.draftAcceptedFrom === void 0) {
+    context.addIssue({
+      code: "custom",
+      message: "A draft-accepted answer must record the immutable accepted draft it came from.",
+      path: ["draftAcceptedFrom"]
     });
   }
 });
@@ -17284,6 +17301,109 @@ var explorationSchema = schemaMetadataSchema.extend({
       message: "A slot cannot carry a proposal and remain an open question; resolve one or the other.",
       path: ["openQuestions", index, "slot"]
     });
+  }
+});
+
+// packages/protocol/dist/entities/intake-draft.js
+var answerValueSchema = union([
+  string2().max(8192),
+  array(string2().max(1024)).max(64),
+  boolean2()
+]);
+var anchorSchema = string2().min(1).max(128);
+var codebaseMapFingerprintSchema = string2().regex(/^[0-9a-f]{64}$/, "Invalid codebase map source fingerprint");
+var intakeDraftExplorationEvidenceReferenceSchema = strictObject({
+  kind: literal("exploration"),
+  runId: runIdSchema,
+  artifact: artifactReferenceSchema,
+  anchor: anchorSchema.optional()
+});
+var intakeDraftCodebaseMapEvidenceReferenceSchema = strictObject({
+  kind: literal("codebase-map"),
+  artifact: artifactReferenceSchema,
+  sourceFingerprint: codebaseMapFingerprintSchema
+});
+var intakeDraftRepositoryFileEvidenceReferenceSchema = strictObject({
+  kind: literal("repository-file"),
+  artifact: artifactReferenceSchema,
+  anchor: anchorSchema.optional()
+});
+var intakeDraftEvidenceReferenceSchema = discriminatedUnion("kind", [
+  intakeDraftExplorationEvidenceReferenceSchema,
+  intakeDraftCodebaseMapEvidenceReferenceSchema,
+  intakeDraftRepositoryFileEvidenceReferenceSchema
+]);
+var intakeDraftStatusSchema = _enum2(["draft", "accepted", "discarded", "invalidated"]);
+var intakeProjectModeSchema = _enum2(["greenfield", "documentation-only", "brownfield"]);
+var intakeDraftAnswerSchema = strictObject({
+  nodeId: intakeNodeIdSchema,
+  slot: intakeSlotIdSchema,
+  value: answerValueSchema,
+  confidence: _enum2(["researched", "inferred", "assumed"]),
+  rationale: string2().min(1).max(2048),
+  /** Stable anchor used by later `draft-accepted` answer provenance. */
+  answerAnchor: anchorSchema,
+  evidenceRefs: array(intakeDraftEvidenceReferenceSchema).max(32)
+});
+var intakeDraftUnresolvedNodeSchema = strictObject({
+  nodeId: intakeNodeIdSchema,
+  slot: intakeSlotIdSchema,
+  question: string2().min(1).max(1024),
+  rationale: string2().min(1).max(2048),
+  evidenceRefs: array(intakeDraftEvidenceReferenceSchema).max(32)
+});
+var intakeDraftSchema = schemaMetadataSchema.extend({
+  kind: literal("intake-draft"),
+  id: intakeDraftIdSchema,
+  status: intakeDraftStatusSchema,
+  graphVersion: string2().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/, "Invalid graph version"),
+  projectMode: intakeProjectModeSchema,
+  initiative: string2().min(1).max(4096),
+  explorationRefs: array(intakeDraftExplorationEvidenceReferenceSchema).max(16),
+  codebaseMapRef: intakeDraftCodebaseMapEvidenceReferenceSchema.optional(),
+  proposedAnswers: array(intakeDraftAnswerSchema).max(512),
+  injectedQuestions: array(intakeInjectedNodeSchema).max(128),
+  unresolvedNodes: array(intakeDraftUnresolvedNodeSchema).max(128),
+  diagnostics: array(string2().min(1).max(1024)).max(128)
+}).superRefine((draft, context) => {
+  const answeredNodes = /* @__PURE__ */ new Set();
+  const answeredSlots = /* @__PURE__ */ new Set();
+  const answerAnchors = /* @__PURE__ */ new Set();
+  for (const [index, answer] of draft.proposedAnswers.entries()) {
+    if (answeredNodes.has(answer.nodeId)) {
+      context.addIssue({ code: "custom", message: "A draft may propose at most one answer per intake node.", path: ["proposedAnswers", index, "nodeId"] });
+    }
+    if (answeredSlots.has(answer.slot)) {
+      context.addIssue({ code: "custom", message: "A draft may propose at most one answer per intake slot.", path: ["proposedAnswers", index, "slot"] });
+    }
+    if (answerAnchors.has(answer.answerAnchor)) {
+      context.addIssue({ code: "custom", message: "Draft answer anchors must be unique.", path: ["proposedAnswers", index, "answerAnchor"] });
+    }
+    answeredNodes.add(answer.nodeId);
+    answeredSlots.add(answer.slot);
+    answerAnchors.add(answer.answerAnchor);
+  }
+  const injectedNodes = /* @__PURE__ */ new Set();
+  for (const [index, question] of draft.injectedQuestions.entries()) {
+    if (injectedNodes.has(question.nodeId)) {
+      context.addIssue({ code: "custom", message: "Injected draft question node IDs must be unique.", path: ["injectedQuestions", index, "nodeId"] });
+    }
+    injectedNodes.add(question.nodeId);
+  }
+  const unresolvedNodes = /* @__PURE__ */ new Set();
+  const unresolvedSlots = /* @__PURE__ */ new Set();
+  for (const [index, node] of draft.unresolvedNodes.entries()) {
+    if (unresolvedNodes.has(node.nodeId)) {
+      context.addIssue({ code: "custom", message: "Unresolved draft node IDs must be unique.", path: ["unresolvedNodes", index, "nodeId"] });
+    }
+    if (unresolvedSlots.has(node.slot)) {
+      context.addIssue({ code: "custom", message: "Unresolved draft slots must be unique.", path: ["unresolvedNodes", index, "slot"] });
+    }
+    if (answeredNodes.has(node.nodeId) || answeredSlots.has(node.slot)) {
+      context.addIssue({ code: "custom", message: "A draft node cannot be proposed and unresolved at the same time.", path: ["unresolvedNodes", index, "nodeId"] });
+    }
+    unresolvedNodes.add(node.nodeId);
+    unresolvedSlots.add(node.slot);
   }
 });
 
@@ -17849,6 +17969,7 @@ var entityJsonSchemas = {
   oracle: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/oracle.schema.json", "Legion protocol oracle entity schema", oracleSchema),
   exploration: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/exploration.schema.json", "Legion protocol exploration entity schema", explorationSchema),
   intakeSession: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/intake-session.schema.json", "Legion protocol intake session entity schema", intakeSessionSchema),
+  intakeDraft: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/intake-draft.schema.json", "Legion protocol intake draft entity schema", intakeDraftSchema),
   // Here rather than in `lifecycleJsonSchemas`, which is spread in below and
   // would emit the same file. That group is paired with
   // `lifecycleFixtureCorpusSchema`, a `z.strictObject` that
@@ -18147,17 +18268,17 @@ function applyMigrations(input, options) {
   const initial = assertVersionedRecord(input);
   const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
   assertSupportedVersion(targetVersion, options.registry, "targetVersion");
-  const path51 = findProtocolMigrationPath({
+  const path53 = findProtocolMigrationPath({
     fromVersion: initial.schemaVersion,
     toVersion: targetVersion,
     migrations: options.registry.migrations
   });
-  if (path51 === null) {
+  if (path53 === null) {
     throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
   }
   let record2 = cloneVersionedRecord(initial);
   const appliedMigrations = [];
-  for (const descriptor of path51) {
+  for (const descriptor of path53) {
     const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
     if (!migration) {
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
@@ -19220,10 +19341,10 @@ function collectScope(taskContract) {
 
 // packages/core/dist/dispatch/blocker.js
 var DISPATCH_BLOCKER_REPORTER = "fresh-context-dispatcher";
-function renderPath(path51) {
-  if (path51.length === 0)
+function renderPath(path53) {
+  if (path53.length === 0)
     return "<root>";
-  return path51.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
+  return path53.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
 }
 function renderIssueReason(issue2) {
   return `code=${issue2.code} path=${renderPath(issue2.path)} :: ${issue2.message}`;
@@ -19948,15 +20069,15 @@ function parseSettings(value) {
   if (result.success)
     return { ok: true, findings: [] };
   const findings = result.error.issues.map((issue2) => {
-    const path51 = issue2.path.join(".");
+    const path53 = issue2.path.join(".");
     if (issue2.code === "unrecognized_keys") {
-      const keys = issue2.keys.map((key) => path51.length === 0 ? key : `${path51}.${key}`);
+      const keys = issue2.keys.map((key) => path53.length === 0 ? key : `${path53}.${key}`);
       return {
-        path: path51,
+        path: path53,
         message: `Unknown setting${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}.`
       };
     }
-    return { path: path51, message: path51.length === 0 ? issue2.message : `${path51}: ${issue2.message}` };
+    return { path: path53, message: path53.length === 0 ? issue2.message : `${path53}: ${issue2.message}` };
   });
   return { ok: false, findings };
 }
@@ -23346,8 +23467,8 @@ var SqliteBoardTaskRepository = class {
           throw new Error("Successor board task " + successorId + " already exists.");
         }
         this.#database.prepare("INSERT INTO board_tasks (task_id, project_id, change_id, contract_id, contract_revision, contract_hash, generation, status, priority, blocker_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, NULL, ?, ?)").run(successorId, String(retired.projectId), String(retired.changeId), String(retired.contractId), retired.contractRevision, retiredContractHash, BOARD_TASK_GENERATION_MIN, retired.priority, now, now);
-        const link = this.#database.prepare("INSERT INTO board_task_links (task_id, depends_on_task_id, relation, created_at) VALUES (?, ?, 'supersedes', ?)").run(successorId, taskIdString, now);
-        if (link.changes !== 1) {
+        const link2 = this.#database.prepare("INSERT INTO board_task_links (task_id, depends_on_task_id, relation, created_at) VALUES (?, ?, 'supersedes', ?)").run(successorId, taskIdString, now);
+        if (link2.changes !== 1) {
           throw new Error("Failed to record board_task_links supersede edge for " + successorId + ".");
         }
         const successorRow = loadBoardTaskRow(this.#database, successorId);
@@ -25053,7 +25174,8 @@ var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
   "session-status",
   "skip",
   "status",
-  "verify"
+  "verify",
+  "without-exploration"
 ]);
 function parseCliArgs(argv) {
   const positionals = [];
@@ -26780,14 +26902,14 @@ function hashContent(content) {
   const hash2 = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash2}`);
 }
-function mediaTypeForArtifactPath(path51) {
-  if (path51.endsWith(".json"))
+function mediaTypeForArtifactPath(path53) {
+  if (path53.endsWith(".json"))
     return "application/json";
-  if (path51.endsWith(".yaml") || path51.endsWith(".yml"))
+  if (path53.endsWith(".yaml") || path53.endsWith(".yml"))
     return "application/yaml";
-  if (path51.endsWith(".md"))
+  if (path53.endsWith(".md"))
     return "text/markdown";
-  if (path51.endsWith(".txt"))
+  if (path53.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -26830,16 +26952,16 @@ function jsonParseLocation(error51, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path51, issues) {
+function schemaDiagnostics(path53, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path51 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path53 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path51
+      path: path53
     });
   });
 }
@@ -27169,6 +27291,87 @@ function validateConstitutionText(input) {
   return diagnostics;
 }
 
+// packages/artifacts/dist/project/intake-preflight.js
+var fingerprintSchema = string2().regex(/^[0-9a-f]{64}$/u, "Invalid source fingerprint");
+var guidanceDirectoryIdSchema = string2().min(1).max(256).regex(/^[A-Za-z0-9._-]+$/u);
+var intakePreflightMapDiagnosticSchema = strictObject({
+  runId: guidanceDirectoryIdSchema,
+  code: _enum2([
+    "map_artifact_path_invalid",
+    "map_artifact_unreadable",
+    "map_artifact_json_invalid",
+    "map_artifact_schema_invalid",
+    "map_artifact_duplicate_path",
+    "map_artifact_unsafe_path",
+    "map_artifact_count_mismatch",
+    "map_artifact_fingerprint_mismatch"
+  ]),
+  message: string2().min(1)
+});
+var intakePreflightMapStateSchema = strictObject({
+  freshness: _enum2(["fresh", "stale", "partial", "absent"]),
+  reason: string2().min(1),
+  scope: string2().min(1),
+  sourceFingerprint: fingerprintSchema,
+  sourceFileCount: number2().int().nonnegative(),
+  latestSourceFingerprint: fingerprintSchema.nullable(),
+  generatedAt: utcTimestampSchema.nullable(),
+  ageDays: number2().finite().nullable(),
+  mapArtifact: artifactReferenceSchema.nullable().optional(),
+  diagnostics: array(intakePreflightMapDiagnosticSchema).optional()
+});
+var intakePreflightExplorationCandidateSchema = strictObject({
+  runId: guidanceDirectoryIdSchema,
+  explorationRunId: runIdSchema,
+  artifactPath: artifactPathSchema,
+  createdAt: utcTimestampSchema,
+  topic: string2().min(1).max(256)
+});
+var intakePreflightDiagnosticSchema = strictObject({
+  runId: guidanceDirectoryIdSchema,
+  code: _enum2(["not_completed", "unrelated_next_action", "unreadable", "competing_candidate"]),
+  message: string2().min(1)
+});
+var intakePreflightInitiativeSchema = discriminatedUnion("source", [
+  strictObject({
+    value: string2().min(1).max(4096),
+    source: literal("explicit")
+  }),
+  strictObject({
+    value: string2().min(1).max(4096),
+    source: literal("exploration"),
+    explorationRunId: guidanceDirectoryIdSchema
+  })
+]);
+var intakePreflightMapFailureSchema = strictObject({
+  message: string2().min(1).max(2048),
+  reportedAt: utcTimestampSchema
+});
+var intakePreflightExplorationSelectionIntentSchema = discriminatedUnion("mode", [
+  strictObject({ mode: literal("automatic") }),
+  strictObject({ mode: literal("explicit"), runId: guidanceDirectoryIdSchema }),
+  strictObject({ mode: literal("none") })
+]);
+var intakePreflightStateSchema = strictObject({
+  schemaVersion: literal(1),
+  status: _enum2(["preflight", "draft_review", "interview"]),
+  createdAt: utcTimestampSchema,
+  updatedAt: utcTimestampSchema,
+  projectMode: _enum2(["greenfield", "documentation-only", "brownfield"]),
+  map: union([intakePreflightMapStateSchema, strictObject({ error: string2().min(1) })]),
+  compatibleExplorations: array(intakePreflightExplorationCandidateSchema),
+  explorationSelectionIntent: intakePreflightExplorationSelectionIntentSchema,
+  selectedExplorationRunId: guidanceDirectoryIdSchema.optional(),
+  initiative: intakePreflightInitiativeSchema.optional(),
+  mapFailure: intakePreflightMapFailureSchema.optional(),
+  activeDraftId: intakeDraftIdSchema.optional(),
+  activeSessionId: intakeSessionIdSchema.optional(),
+  diagnostics: array(intakePreflightDiagnosticSchema)
+});
+function isIntakePreflightRecord(value) {
+  return intakePreflightStateSchema.safeParse(value).success;
+}
+
 // packages/artifacts/dist/project/schema.js
 var PROJECT_MANIFEST_SCHEMA_VERSION = schemaVersionSchema.parse("0.1.0");
 var projectManifestSchema = strictObject({
@@ -27374,6 +27577,34 @@ async function intakeSessionDirectoryStats(absoluteDirectory) {
   for (const entry of entries) {
     if (isIgnorableLegionRootEntry(entry.name))
       continue;
+    if (entry.isFile() && entry.name === "preflight.json") {
+      try {
+        const parsed = JSON.parse(await readFile4(path9.join(absoluteDirectory, entry.name), "utf8"));
+        if (!isIntakePreflightRecord(parsed))
+          return { valid: false, recordCount: 0 };
+        recordCount += 1;
+        continue;
+      } catch {
+        return { valid: false, recordCount: 0 };
+      }
+    }
+    if (entry.isDirectory() && entry.name === "drafts") {
+      const drafts = await readdir(path9.join(absoluteDirectory, entry.name), { withFileTypes: true });
+      for (const draft of drafts) {
+        if (!draft.isFile() || !draft.name.startsWith("itd_") || !draft.name.endsWith(".json")) {
+          return { valid: false, recordCount: 0 };
+        }
+        try {
+          const parsed = intakeDraftSchema.parse(JSON.parse(await readFile4(path9.join(absoluteDirectory, entry.name, draft.name), "utf8")));
+          if (`${parsed.id}.json` !== draft.name)
+            return { valid: false, recordCount: 0 };
+          recordCount += 1;
+        } catch {
+          return { valid: false, recordCount: 0 };
+        }
+      }
+      continue;
+    }
     if (!entry.isDirectory() || !entry.name.startsWith("itk_"))
       return { valid: false, recordCount: 0 };
     if (!await pathExists2(path9.join(absoluteDirectory, entry.name, "session.json")))
@@ -27903,7 +28134,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path51 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path53 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -27917,7 +28148,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path51
+        path: path53
       }))
     };
   }
@@ -29052,7 +29283,7 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path51) {
+function parseBaseGitSha(input, path53) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -29060,18 +29291,18 @@ function parseBaseGitSha(input, path51) {
     return failure4("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path51
+      path: path53
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path51) {
+function assertExpectedRevision(value, path53) {
   if (!Number.isInteger(value) || value < 0) {
     return failure4("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path51
+        path: path53
       })
     ]);
   }
@@ -29389,7 +29620,7 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path51) {
+function parseBaseGitSha2(input, path53) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -29397,18 +29628,18 @@ function parseBaseGitSha2(input, path51) {
     return failure5("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path51
+      path: path53
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path51) {
+function assertExpectedRevision2(value, path53) {
   if (!Number.isInteger(value) || value < 0) {
     return failure5("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path51
+        path: path53
       })
     ]);
   }
@@ -29777,13 +30008,13 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path51) {
+function parseRequirementId2(input, path53) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path51
+      path: path53
     })));
   }
   return parsed.data;
@@ -29799,24 +30030,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path51) {
+function parseBaseGitSha3(input, path53) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path51
+      path: path53
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path51) {
+function parseOwners(input, path53) {
   if (input.length === 0) {
     return failure6("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path51
+        path: path53
       })
     ]);
   }
@@ -29828,7 +30059,7 @@ function parseOwners(input, path51) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path51
+        path: path53
       })));
       continue;
     }
@@ -30116,7 +30347,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path51) {
+function conflictDiagnostics(deltas, path53) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -30125,7 +30356,7 @@ function conflictDiagnostics(deltas, path51) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path51
+        path: path53
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -31209,18 +31440,18 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path51) {
+function parseOracleId2(input, path53) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path51
+      path: path53
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path51) {
+function parseBaseGitSha4(input, path53) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -31228,7 +31459,7 @@ function parseBaseGitSha4(input, path51) {
     return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path51
+      path: path53
     })));
   }
   return parsed.data;
@@ -31494,13 +31725,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path51) {
+function assertExpectedRevision3(value, path53) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path51
+        path: path53
       })
     ]);
   }
@@ -31777,13 +32008,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path51) {
+function assertExpectedRevision4(value, path53) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path51
+        path: path53
       })
     ]);
   }
@@ -32064,13 +32295,13 @@ function parseBaseGitSha7(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision5(value, path51) {
+function assertExpectedRevision5(value, path53) {
   if (!Number.isInteger(value) || value < 0) {
     return failure10("invalid", [
       approvalDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path51
+        path: path53
       })
     ]);
   }
@@ -32794,8 +33025,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path51) {
-  return nodeId("artifact", path51);
+function artifactNodeId(path53) {
+  return nodeId("artifact", path53);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -32831,8 +33062,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path51) {
-  const fileName = path51.split("/").at(-1);
+function oracleIdFromPath(path53) {
+  const fileName = path53.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -32947,13 +33178,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path51 = [];
+  const path53 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path51.indexOf(node);
+      const cycleStartIndex = path53.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path51.length; index++) {
-          const cyclicNode = path51[index];
+        for (let index = cycleStartIndex; index < path53.length; index++) {
+          const cyclicNode = path53[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -32963,11 +33194,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path51.push(node);
+    path53.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path51.pop();
+    path53.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -32995,10 +33226,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path51 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path53 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path51,
+        path: path53,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -33655,13 +33886,13 @@ function parseChangeId12(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path51) {
+function parseArchivedAt(input, path53) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path51
+      path: path53
     })));
   }
   return parsed.data;
@@ -33690,7 +33921,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path51) {
+function archiveHashDiagnostics(record2, path53) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -33698,11 +33929,11 @@ function archiveHashDiagnostics(record2, path51) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path51
+      path: path53
     })
   ];
 }
-async function assertWorktreeTarget(input, path51) {
+async function assertWorktreeTarget(input, path53) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -33716,7 +33947,7 @@ async function assertWorktreeTarget(input, path51) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path51
+        path: path53
       })
     ]);
   } catch (error51) {
@@ -33724,7 +33955,7 @@ async function assertWorktreeTarget(input, path51) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error51 instanceof Error ? error51.message : String(error51),
-        path: path51
+        path: path53
       })
     ]);
   }
@@ -33803,11 +34034,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path51 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path51 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path51)) : remaining;
+    const path53 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path53 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path53)) : remaining;
     return {
-      path: path51,
+      path: path53,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -33870,9 +34101,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path51, document) {
+function validatePlannedDocument(path53, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path51,
+    artifactPath: path53,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -33883,7 +34114,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path51, document]) => [path51, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path53, document]) => [path53, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -33907,17 +34138,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path51 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path51)) {
+      const path53 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path53)) {
         return failure14("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path51}.`,
-            path: path51
+            message: `Archive add target already exists: ${path53}.`,
+            path: path53
           })
         ]);
       }
-      plannedDocs.set(path51, {
+      plannedDocs.set(path53, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -33930,7 +34161,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path51);
+      touchedPaths.add(path53);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -34115,8 +34346,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path51 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path51);
+  const path53 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path53);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -34360,10 +34591,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path51 = archivePath(changeId);
+  const path53 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path51,
+    artifactPath: path53,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -34375,22 +34606,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path51
+        path: path53
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path51);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path53);
   if (hashDiagnostics.length > 0)
     return failure14("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path51,
+    artifactPath: path53,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path51,
+      path: path53,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -35484,10 +35715,10 @@ async function validateNoSymbolicLinks(input) {
   const links = await listSymbolicLinks(input.root, input.displayedRoot);
   if (links.length === 0)
     return void 0;
-  return failure15("conflict", links.map((link) => diagnostic({
+  return failure15("conflict", links.map((link2) => diagnostic({
     code: "unsupported_symbolic_link",
     message: "Codex .legion migration cannot preserve symbolic links safely; replace the link with a regular file or migrate it manually.",
-    sourcePath: link
+    sourcePath: link2
   })));
 }
 async function hashFiles(root, files) {
@@ -37680,14 +37911,132 @@ function isStableDefaultBranch(branch) {
 }
 
 // packages/cli/src/workflow/intake/driver.ts
-import { lstat as lstat3, readFile as readFile17, writeFile as writeFile8 } from "node:fs/promises";
-import path30 from "node:path";
+import { lstat as lstat4, readFile as readFile19, readdir as readdir15, writeFile as writeFile9 } from "node:fs/promises";
+import path33 from "node:path";
+
+// packages/cli/src/workflow/authored-source.ts
+import path25 from "node:path";
+var AUTHORED_SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([
+  ".c",
+  ".cc",
+  ".cpp",
+  ".cs",
+  ".css",
+  ".go",
+  ".h",
+  ".hpp",
+  ".html",
+  ".java",
+  ".js",
+  ".jsx",
+  ".kt",
+  ".kts",
+  ".mjs",
+  ".php",
+  ".py",
+  ".rb",
+  ".rs",
+  ".scala",
+  ".sh",
+  ".sql",
+  ".swift",
+  ".ts",
+  ".tsx",
+  ".vue"
+]);
+var AUTHORED_DEPENDENCY_MANIFESTS = /* @__PURE__ */ new Set([
+  "package.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "package-lock.json",
+  "bun.lock",
+  "bun.lockb",
+  "deno.json",
+  "deno.jsonc",
+  "cargo.toml",
+  "cargo.lock",
+  "go.mod",
+  "go.sum",
+  "composer.json",
+  "gemfile",
+  "gemfile.lock",
+  "requirements.txt",
+  "pyproject.toml",
+  "poetry.lock",
+  "pipfile",
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
+  "packages.config"
+]);
+var AUTHORED_BUILD_CONFIGURATION = /* @__PURE__ */ new Set([
+  "tsconfig.json",
+  "jsconfig.json",
+  "vite.config.js",
+  "vite.config.ts",
+  "webpack.config.js",
+  "webpack.config.ts",
+  "rollup.config.js",
+  "rollup.config.ts",
+  "makefile",
+  "cmakelists.txt",
+  "dockerfile",
+  "compose.yaml",
+  "docker-compose.yml",
+  "turbo.json",
+  "nx.json"
+]);
+var AUTHORED_IGNORED_DIRECTORIES = /* @__PURE__ */ new Set([
+  ".git",
+  ".hg",
+  ".svn",
+  ".legion",
+  ".worktrees",
+  "node_modules",
+  "dist",
+  "build",
+  "coverage",
+  ".next",
+  ".turbo",
+  ".cache",
+  "target",
+  "tmp",
+  "temp"
+]);
+var INTAKE_DRAFT_INPUT_DIRECTORY = ".legion/var/intake-drafts";
+var DEFAULT_INTAKE_DRAFT_INPUT_PATH = `${INTAKE_DRAFT_INPUT_DIRECTORY}/intake-draft.json`;
+function shouldTraverseAuthoredDirectory(name) {
+  return !AUTHORED_IGNORED_DIRECTORIES.has(name.toLowerCase());
+}
+var DOCUMENT_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".mdx", ".rst", ".txt", ".adoc"]);
+var MAP_CONTEXT_EXTENSIONS = /* @__PURE__ */ new Set([".json", ".toml", ".yaml", ".yml", ...DOCUMENT_EXTENSIONS]);
+function isAuthoredCodeOrBuildFile(file2) {
+  const basename = path25.basename(file2).toLowerCase();
+  return AUTHORED_SOURCE_EXTENSIONS.has(path25.extname(basename)) || AUTHORED_DEPENDENCY_MANIFESTS.has(basename) || AUTHORED_BUILD_CONFIGURATION.has(basename);
+}
+function isDocumentationFile(file2) {
+  const basename = path25.basename(file2).toLowerCase();
+  return DOCUMENT_EXTENSIONS.has(path25.extname(basename)) || basename === "license" || basename.startsWith("license.");
+}
+function isFullMapAuthoredFile(file2) {
+  const normalized = file2.replace(/\\/gu, "/").replace(/^\.\//u, "");
+  if (normalized === INTAKE_DRAFT_INPUT_DIRECTORY || normalized.startsWith(`${INTAKE_DRAFT_INPUT_DIRECTORY}/`)) return false;
+  const basename = path25.basename(file2).toLowerCase();
+  return isAuthoredCodeOrBuildFile(file2) || MAP_CONTEXT_EXTENSIONS.has(path25.extname(basename)) || ["readme", "license", "changelog"].includes(basename);
+}
 
 // packages/cli/src/workflow/render.ts
 function nextAction(command, reason) {
   return { command, reason };
 }
+function humanDecisionAction(reason, choices) {
+  return { type: "human_decision", command: "", reason, choices };
+}
 function renderNextAction(action) {
+  if (action.type === "human_decision") {
+    return `Next: human decision required
+Reason: ${action.reason}`;
+  }
   return `Next: ${action.command}
 Reason: ${action.reason}`;
 }
@@ -37707,13 +38056,13 @@ function renderDiagnostics(diagnostics) {
 
 // packages/cli/src/workflow/pinned-references.ts
 import { readFile as readFile12, realpath as realpath3 } from "node:fs/promises";
-import path25 from "node:path";
+import path26 from "node:path";
 function isErrorCode(error51, ...codes) {
   return error51 !== null && typeof error51 === "object" && "code" in error51 && typeof error51.code === "string" && codes.includes(error51.code);
 }
 function contains(root, candidate) {
-  const relative = path25.relative(root, candidate);
-  return relative === "" || !relative.startsWith("..") && !path25.isAbsolute(relative);
+  const relative = path26.relative(root, candidate);
+  return relative === "" || !relative.startsWith("..") && !path26.isAbsolute(relative);
 }
 function isWindowsStreamPath(artifactPath) {
   return artifactPath.includes(":");
@@ -37724,12 +38073,12 @@ function isCaseFoldedAlias(declaredPath, resolvedRelative) {
 async function resolveOne(repositoryRoot, artifactPath, retainContent) {
   if (isWindowsStreamPath(artifactPath)) return { kind: "unverified" };
   const segments = artifactPath.split("/");
-  const target = path25.resolve(repositoryRoot, ...segments);
-  if (!contains(path25.resolve(repositoryRoot), target)) return { kind: "unverified" };
+  const target = path26.resolve(repositoryRoot, ...segments);
+  if (!contains(path26.resolve(repositoryRoot), target)) return { kind: "unverified" };
   try {
     const [realRoot, realTarget] = await Promise.all([realpath3(repositoryRoot), realpath3(target)]);
     if (!contains(realRoot, realTarget)) return { kind: "unverified" };
-    if (isCaseFoldedAlias(artifactPath, path25.relative(realRoot, realTarget).split(path25.sep).join("/"))) {
+    if (isCaseFoldedAlias(artifactPath, path26.relative(realRoot, realTarget).split(path26.sep).join("/"))) {
       return { kind: "unverified" };
     }
     const bytes = await readFile12(realTarget);
@@ -38237,6 +38586,39 @@ function answersByNodeId(answers) {
 function applicableNodes(input) {
   const answers = answerMap(input.answers);
   return materializeNodes(input).filter((node) => isNodeApplicable(node, answers));
+}
+function fullyMaterializedGraphNodes() {
+  const answers = [];
+  const at = "1970-01-01T00:00:00.000Z";
+  for (let requirement = 1; requirement <= MAX_REQUIREMENTS; requirement += 1) {
+    answers.push({
+      nodeId: `req-${requirement}-priority`,
+      slot: `requirements.${requirement}.priority`,
+      value: "must",
+      answeredAt: at,
+      source: "human"
+    });
+    answers.push({
+      nodeId: `req-${requirement}-more`,
+      slot: `requirements.${requirement}.more`,
+      value: true,
+      answeredAt: at,
+      source: "human"
+    });
+    for (let criterion = 1; criterion <= MAX_CRITERIA_PER_REQUIREMENT; criterion += 1) {
+      answers.push({
+        nodeId: `req-${requirement}-ac-${criterion}-more`,
+        slot: `requirements.${requirement}.criteria.${criterion}.more`,
+        value: true,
+        answeredAt: at,
+        source: "human"
+      });
+    }
+  }
+  return materializeNodes({ answers, injectedNodes: [] });
+}
+function allGraphSlots() {
+  return fullyMaterializedGraphNodes().map((node) => node.slot);
 }
 
 // packages/cli/src/workflow/intake/validators.ts
@@ -38912,8 +39294,8 @@ function declaredSurfacePaths(answers) {
     if (draft.priority === "wont") continue;
     for (const criterion of draft.criteria) {
       if (criterion.surfaceKind.trim().length === 0) continue;
-      for (const path51 of parsePathList(criterion.surfacePins)) {
-        declared.push({ requirementIndex: draft.index, criterionIndex: criterion.index, path: path51 });
+      for (const path53 of parsePathList(criterion.surfacePins)) {
+        declared.push({ requirementIndex: draft.index, criterionIndex: criterion.index, path: path53 });
       }
     }
   }
@@ -39094,11 +39476,11 @@ function resolvedOpenQuestions(session) {
 // packages/cli/src/workflow/intake/exploration-source.ts
 import { createHash as createHash18 } from "node:crypto";
 import { readFile as readFile15 } from "node:fs/promises";
-import path28 from "node:path";
+import "node:path";
 
 // packages/cli/src/workflow/guidance-run.ts
 import { mkdir as mkdir11, readdir as readdir11, readFile as readFile14 } from "node:fs/promises";
-import path27 from "node:path";
+import path28 from "node:path";
 
 // packages/cli/src/workflow/budget.ts
 var DEFAULT_LINES_PER_FILE = 200;
@@ -39135,7 +39517,7 @@ import { promisify as promisify4 } from "node:util";
 // packages/cli/src/workflow/executor/fake-plan.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
 import { mkdirSync as mkdirSync2, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import path26 from "node:path";
+import path27 from "node:path";
 var FAKE_PLAN_ENV = "LEGION_FAKE_EXECUTOR_PLAN";
 function readFakeExecutorPlan() {
   const raw = process.env[FAKE_PLAN_ENV];
@@ -39148,9 +39530,9 @@ function readFakeExecutorPlan() {
   }
 }
 function resolveInsideRepository(repositoryRoot, relative) {
-  const root = path26.resolve(repositoryRoot);
-  const absolute = path26.resolve(root, relative);
-  const prefix = root.endsWith(path26.sep) ? root : `${root}${path26.sep}`;
+  const root = path27.resolve(repositoryRoot);
+  const absolute = path27.resolve(root, relative);
+  const prefix = root.endsWith(path27.sep) ? root : `${root}${path27.sep}`;
   return absolute === root || absolute.startsWith(prefix) ? absolute : void 0;
 }
 function applyFakeExecutorPlan(input) {
@@ -39160,7 +39542,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.writes ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path26.dirname(absolute), { recursive: true });
+    mkdirSync2(path27.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     written.push(entry.path);
     staged.push(entry.path);
@@ -39175,7 +39557,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.symlinks ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path26.dirname(absolute), { recursive: true });
+    mkdirSync2(path27.dirname(absolute), { recursive: true });
     rmSync(absolute, { force: true });
     symlinkSync(entry.target, absolute);
     written.push(entry.path);
@@ -39195,7 +39577,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.writesAfterCommit ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path26.dirname(absolute), { recursive: true });
+    mkdirSync2(path27.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     if (!written.includes(entry.path)) written.push(entry.path);
   }
@@ -39333,6 +39715,20 @@ function parseReviewVerdict(value) {
 // packages/cli/src/workflow/executor/adapters.ts
 var execFileAsync2 = promisify4(execFile4);
 var DEFAULT_CODEX_EXEC_TIMEOUT_MS = 3e5;
+var DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 9e5;
+var CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit"];
+function claudeExecArgs(input) {
+  return [
+    "--print",
+    "--output-format",
+    "json",
+    // No human is attached to answer a permission prompt. This is the same
+    // posture as the codex adapter's `approval_policy="never"`.
+    "--permission-mode",
+    "bypassPermissions",
+    ...input.readOnly ? ["--disallowedTools", CLAUDE_READ_ONLY_DENIED_TOOLS.join(" ")] : []
+  ];
+}
 function codexExecArgs(input) {
   return [
     "exec",
@@ -39350,19 +39746,27 @@ function codexExecArgs(input) {
 }
 async function selectExecutionAdapterKind(explicit) {
   if (explicit !== void 0) {
-    if (explicit === "codex" || explicit === "manual" || explicit === "fake") return explicit;
+    if (explicit === "claude" || explicit === "codex" || explicit === "manual" || explicit === "fake") return explicit;
     return {
       ok: false,
       diagnostic: {
         code: "invalid_executor",
-        message: `Unsupported executor "${explicit}". Use codex, manual, or fake.`
+        message: `Unsupported executor "${explicit}". Use claude, codex, manual, or fake.`
       }
     };
   }
-  return await codexAvailable() ? "codex" : "manual";
+  if (!runningInsideClaudeCode() && await claudeAvailable()) return "claude";
+  if (await codexAvailable()) return "codex";
+  return "manual";
+}
+function runningInsideClaudeCode() {
+  const marker = process.env["CLAUDECODE"];
+  return marker !== void 0 && marker.length > 0 && marker !== "0";
 }
 function adapterForKind(kind) {
   switch (kind) {
+    case "claude":
+      return claudeAdapter;
     case "codex":
       return codexAdapter;
     case "manual":
@@ -39374,6 +39778,18 @@ function adapterForKind(kind) {
 async function codexAvailable() {
   try {
     const invocation = codexInvocation(["exec", "--help"]);
+    await execFileAsync2(invocation.command, invocation.args, {
+      timeout: 5e3,
+      windowsHide: true
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function claudeAvailable() {
+  try {
+    const invocation = claudeInvocation(["--version"]);
     await execFileAsync2(invocation.command, invocation.args, {
       timeout: 5e3,
       windowsHide: true
@@ -39452,6 +39868,97 @@ var manualAdapter = {
     return result;
   }
 };
+var claudeAdapter = {
+  kind: "claude",
+  async run(request) {
+    const args = claudeExecArgs({ readOnly: request.readOnly });
+    const invocation = claudeInvocation(args);
+    const processResult = await spawnWithInput(
+      invocation.command,
+      invocation.args,
+      request.prompt,
+      request.repositoryRoot,
+      claudeExecTimeoutMs()
+    );
+    const rawOutput = [
+      processResult.stdout,
+      processResult.stderr
+    ].filter((entry) => entry.length > 0).join("\n");
+    const envelope = parseClaudeEnvelope(processResult.stdout);
+    const lastMessage = envelope?.result ?? "";
+    const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
+    const status2 = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 || envelope?.isError === true ? "failed" : "succeeded";
+    const normalized = normalizeExecutionResult(parsed, {
+      status: status2,
+      summary: claudeFallbackSummary(processResult, envelope),
+      rawOutput,
+      exitCode: processResult.exitCode
+    });
+    const withStructured = lastMessage.length > 0 ? { ...normalized, structuredOutput: lastMessage } : normalized;
+    const blockingFindings = [];
+    if (processResult.timedOut) {
+      blockingFindings.push({
+        id: "claude-executor-timeout",
+        title: "Claude executor timed out",
+        body: `Claude did not complete within ${processResult.timeoutMs}ms. Check Claude Code auth/configuration, raise LEGION_CLAUDE_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    }
+    if (envelope !== void 0 && envelope.permissionDenials.length > 0) {
+      blockingFindings.push({
+        id: "claude-executor-permission-denied",
+        title: "Claude executor was denied a tool it asked for",
+        body: `Denied: ${envelope.permissionDenials.join(", ")}. The run may be incomplete even where it reports success.`,
+        severity: "blocking"
+      });
+    }
+    const result = blockingFindings.length === 0 ? withStructured : {
+      ...withStructured,
+      ok: false,
+      status: processResult.timedOut ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
+    };
+    const redacted = redactTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
+` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    return result;
+  }
+};
+function parseClaudeEnvelope(stdout) {
+  const trimmed = stdout.trim();
+  if (trimmed.length === 0) return void 0;
+  let value;
+  try {
+    value = JSON.parse(trimmed);
+  } catch {
+    return void 0;
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return void 0;
+  const record2 = value;
+  if (record2["type"] !== "result") return void 0;
+  const denials = Array.isArray(record2["permission_denials"]) ? record2["permission_denials"].map(claudeDenialLabel).filter((entry) => entry !== void 0) : [];
+  return {
+    isError: record2["is_error"] === true,
+    result: typeof record2["result"] === "string" ? record2["result"] : "",
+    apiErrorStatus: typeof record2["api_error_status"] === "string" ? record2["api_error_status"] : void 0,
+    permissionDenials: denials
+  };
+}
+function claudeDenialLabel(entry) {
+  if (typeof entry === "string") return entry;
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return void 0;
+  const name = entry["tool_name"];
+  return typeof name === "string" && name.length > 0 ? name : void 0;
+}
+function claudeFallbackSummary(processResult, envelope) {
+  if (processResult.timedOut) return `Claude executor timed out after ${processResult.timeoutMs}ms.`;
+  if (envelope?.apiErrorStatus !== void 0) return `Claude executor failed with API status ${envelope.apiErrorStatus}.`;
+  if (envelope?.isError === true) return "Claude executor reported an error.";
+  return processResult.exitCode === 0 ? "Claude executor completed." : "Claude executor failed.";
+}
 var codexAdapter = {
   kind: "codex",
   async run(request) {
@@ -39519,6 +40026,15 @@ function codexInvocation(args) {
     args: ["/d", "/s", "/c", "codex", ...args]
   };
 }
+function claudeInvocation(args) {
+  if (process.platform !== "win32") {
+    return { command: "claude", args };
+  }
+  return {
+    command: "cmd.exe",
+    args: ["/d", "/s", "/c", "claude", ...args]
+  };
+}
 function fakeSummary(request) {
   if (request.mode === "review") return `Fake review passed for ${request.task.id}.`;
   if (request.mode === "fix") return `Fake fix cycle completed for ${request.task.id}.`;
@@ -39529,6 +40045,12 @@ function codexExecTimeoutMs() {
   if (configured === void 0) return DEFAULT_CODEX_EXEC_TIMEOUT_MS;
   const parsed = Number.parseInt(configured, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CODEX_EXEC_TIMEOUT_MS;
+}
+function claudeExecTimeoutMs() {
+  const configured = process.env["LEGION_CLAUDE_EXEC_TIMEOUT_MS"];
+  if (configured === void 0) return DEFAULT_CLAUDE_EXEC_TIMEOUT_MS;
+  const parsed = Number.parseInt(configured, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CLAUDE_EXEC_TIMEOUT_MS;
 }
 async function spawnWithInput(command, args, input, cwd, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -39617,7 +40139,7 @@ function guidanceCreatedAt(context) {
   }
 }
 async function createGuidanceRunPaths(input) {
-  const workflowRoot = path27.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
+  const workflowRoot = path28.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
   await mkdir11(workflowRoot, { recursive: true });
   const safeTimestamp = input.createdAt.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+$/g, "");
   const slug = slugFromName(input.slugSource);
@@ -39625,7 +40147,7 @@ async function createGuidanceRunPaths(input) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const runId = `${safeTimestamp}-${slug}${suffix}`;
     const artifactRoot = artifactPathSchema.parse(`.legion/project/workflow/${input.workflow}/${runId}`);
-    const absoluteRunRoot = path27.join(input.repositoryRoot, ...artifactRoot.split("/"));
+    const absoluteRunRoot = path28.join(input.repositoryRoot, ...artifactRoot.split("/"));
     try {
       await mkdir11(absoluteRunRoot);
       return {
@@ -39801,11 +40323,15 @@ async function runGuidanceExecutor(input) {
   };
 }
 async function latestGuidanceRuns(input) {
+  return (await discoverGuidanceRuns(input)).runs;
+}
+async function discoverGuidanceRuns(input) {
   const workflows = input.workflows ?? ["explore", "map", "advise", "council", "retro", "learn", "milestone", "quick", "polish"];
   const limit = input.limitPerWorkflow ?? 3;
   const runs = [];
+  const diagnostics = [];
   for (const workflow of workflows) {
-    const workflowRoot = path27.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path28.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir11(workflowRoot, { withFileTypes: true });
@@ -39814,13 +40340,18 @@ async function latestGuidanceRuns(input) {
       throw error51;
     }
     const workflowRuns = [];
-    for (const entry of entries) {
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       if (!entry.isDirectory()) continue;
-      const runPath = path27.join(workflowRoot, entry.name, "workflow-run.json");
+      const runPath = path28.join(workflowRoot, entry.name, "workflow-run.json");
       try {
-        const parsed = JSON.parse(await readFile14(runPath, "utf8"));
-        if (parsed.kind === "workflow_run" && parsed.workflow === workflow) workflowRuns.push(parsed);
-      } catch {
+        const parsed = parseGuidanceRun(JSON.parse(await readFile14(runPath, "utf8")), workflow, entry.name);
+        workflowRuns.push(parsed);
+      } catch (error51) {
+        diagnostics.push({
+          workflow,
+          runId: entry.name,
+          message: `Cannot read workflow run ${entry.name}: ${error51 instanceof Error ? error51.message : String(error51)}`
+        });
         continue;
       }
     }
@@ -39828,7 +40359,22 @@ async function latestGuidanceRuns(input) {
     runs.push(...workflowRuns.slice(0, limit));
   }
   runs.sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.runId.localeCompare(left.runId));
-  return runs;
+  diagnostics.sort(
+    (left, right) => left.workflow.localeCompare(right.workflow) || left.runId.localeCompare(right.runId) || left.message.localeCompare(right.message)
+  );
+  return { runs, diagnostics };
+}
+function parseGuidanceRun(value, workflow, directoryRunId) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("expected an object");
+  const run = value;
+  if (run["schemaVersion"] !== 1 || run["kind"] !== "workflow_run" || run["workflow"] !== workflow || run["runId"] !== directoryRunId) {
+    throw new Error("identity fields do not match the workflow directory");
+  }
+  if (typeof run["createdAt"] !== "string" || typeof run["status"] !== "string" || run["input"] === null || typeof run["input"] !== "object" || Array.isArray(run["input"]) || run["outputs"] === null || typeof run["outputs"] !== "object" || Array.isArray(run["outputs"]) || !Array.isArray(run["diagnostics"])) throw new Error("required workflow-run fields are malformed");
+  if (run["nextAction"] === null || typeof run["nextAction"] !== "object" || Array.isArray(run["nextAction"])) throw new Error("nextAction is malformed");
+  const action = run["nextAction"];
+  if (typeof action["command"] !== "string" || action["command"].length === 0 || typeof action["reason"] !== "string") throw new Error("nextAction is malformed");
+  return run;
 }
 async function guidanceProjectId(repositoryRoot) {
   const project = await loadProject({ repositoryRoot });
@@ -39886,7 +40432,8 @@ function explorationArtifactPathOf(run) {
 }
 async function readExplorationRunId(repositoryRoot, artifactPath) {
   try {
-    const raw = await readFile15(path28.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
+    const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath });
+    const raw = await readFile15(resolved.absolutePath, "utf8");
     const parsed = JSON.parse(raw);
     const runId = parsed.runId;
     return typeof runId === "string" ? runId : void 0;
@@ -39937,7 +40484,8 @@ async function loadExploration(repositoryRoot, runId) {
   }
   let raw;
   try {
-    raw = await readFile15(path28.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
+    const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: candidate.artifactPath });
+    raw = await readFile15(resolved.absolutePath, "utf8");
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
     return { ok: false, reason: `Exploration ${runId} could not be read: ${message}` };
@@ -39967,6 +40515,3060 @@ async function loadExploration(repositoryRoot, runId) {
       candidate
     }
   };
+}
+
+// packages/cli/src/workflow/intake/lifecycle.ts
+import { createHash as createHash20, randomUUID as randomUUID3 } from "node:crypto";
+import { link, lstat as lstat3, open as open2, readFile as readFile18, readdir as readdir14, realpath as realpath4, rename as rename5, rm as rm7, rmdir as rmdir2, writeFile as writeFile8 } from "node:fs/promises";
+import path32 from "node:path";
+
+// packages/cli/src/workflow/codebase-map.ts
+import { createHash as createHash19 } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { readdir as readdir12, readFile as readFile16, stat as stat6 } from "node:fs/promises";
+import path30 from "node:path";
+async function collectMapSource(input) {
+  const scope = normalizeScope(input.repositoryRoot, input.scope);
+  return { scope, files: await collectSourceFiles(input.repositoryRoot, scope) };
+}
+async function refreshCodebaseMap(input) {
+  const { scope, files } = input;
+  const map2 = {
+    schemaVersion: 1,
+    kind: "codebase_map",
+    generatedAt: input.paths.createdAt,
+    scope,
+    sourceFingerprint: fingerprintFiles(files),
+    sourceFileCount: files.length,
+    files
+  };
+  const codebaseArtifactPath = guidanceArtifactPath(input.paths, "codebase.md");
+  const indexArtifactPath = guidanceArtifactPath(input.paths, "index.jsonl");
+  const symbolsArtifactPath = guidanceArtifactPath(input.paths, "symbols.json");
+  const searchArtifactPath = guidanceArtifactPath(input.paths, "search.md");
+  const mapArtifactPath = guidanceArtifactPath(input.paths, "map.json");
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: codebaseArtifactPath,
+    text: renderCodebaseMarkdown(map2)
+  });
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: indexArtifactPath,
+    text: `${files.map((file2) => stableProtocolJson(file2).trimEnd()).join("\n")}
+`
+  });
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: symbolsArtifactPath,
+    text: stableProtocolJson({
+      schemaVersion: 1,
+      kind: "codebase_symbols",
+      generatedAt: map2.generatedAt,
+      symbols: files.flatMap((file2) => file2.symbols.map((symbol2) => ({ symbol: symbol2, path: file2.path })))
+    })
+  });
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: searchArtifactPath,
+    text: renderSearchMarkdown(map2)
+  });
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: mapArtifactPath,
+    text: stableProtocolJson(map2)
+  });
+  return {
+    map: map2,
+    codebaseArtifactPath,
+    indexArtifactPath,
+    symbolsArtifactPath,
+    searchArtifactPath,
+    mapArtifactPath
+  };
+}
+var MapCandidateValidationError = class extends Error {
+  code;
+  constructor(code, message) {
+    super(message);
+    this.name = "MapCandidateValidationError";
+    this.code = code;
+  }
+};
+var MAP_DOCUMENT_KEYS = ["files", "generatedAt", "kind", "schemaVersion", "scope", "sourceFileCount", "sourceFingerprint"];
+var MAP_FILE_KEYS = ["headings", "lineCount", "path", "sha256", "sizeBytes", "summary", "symbols"];
+function exactObject(value, keys, label) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", `${label} must be an object`);
+  }
+  const record2 = value;
+  const actual = Object.keys(record2).sort();
+  if (actual.length !== keys.length || !keys.every((key, index) => actual[index] === key)) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", `${label} has an invalid field set`);
+  }
+  return record2;
+}
+function safeMapRelativePath(value, options = {}) {
+  if (typeof value !== "string" || value.length === 0 || value.includes("\\") || value.includes("\0") || value.startsWith("/") || path30.posix.isAbsolute(value) || path30.win32.isAbsolute(value)) {
+    throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${String(value)}`);
+  }
+  if (options.allowDot === true && value === ".") return value;
+  const segments = value.split("/");
+  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..") || path30.posix.normalize(value) !== value) {
+    throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${value}`);
+  }
+  return value;
+}
+function stringArray(value, label) {
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", `${label} must be an array of strings`);
+  }
+  return value;
+}
+function nonnegativeInteger(value, label) {
+  if (!Number.isSafeInteger(value) || Number(value) < 0) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", `${label} must be a nonnegative safe integer`);
+  }
+  return Number(value);
+}
+function parseCodebaseMapDocument(value) {
+  const record2 = exactObject(value, MAP_DOCUMENT_KEYS, "codebase map");
+  if (record2["schemaVersion"] !== 1 || record2["kind"] !== "codebase_map") {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", "codebase map identity is invalid");
+  }
+  const generatedAt = utcTimestampSchema.safeParse(record2["generatedAt"]);
+  if (!generatedAt.success) throw new MapCandidateValidationError("map_artifact_schema_invalid", "codebase map generatedAt is invalid");
+  const scope = safeMapRelativePath(record2["scope"], { allowDot: true });
+  if (typeof record2["sourceFingerprint"] !== "string" || !/^[0-9a-f]{64}$/u.test(record2["sourceFingerprint"])) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", "codebase map sourceFingerprint is invalid");
+  }
+  const sourceFileCount = nonnegativeInteger(record2["sourceFileCount"], "codebase map sourceFileCount");
+  if (!Array.isArray(record2["files"])) {
+    throw new MapCandidateValidationError("map_artifact_schema_invalid", "codebase map files must be an array");
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const files = record2["files"].map((entry, index) => {
+    const file2 = exactObject(entry, MAP_FILE_KEYS, `codebase map file ${index}`);
+    const filePath = safeMapRelativePath(file2["path"]);
+    if (seen.has(filePath)) {
+      throw new MapCandidateValidationError("map_artifact_duplicate_path", `codebase map repeats file path ${filePath}`);
+    }
+    seen.add(filePath);
+    if (scope !== "." && filePath !== scope && !filePath.startsWith(`${scope}/`)) {
+      throw new MapCandidateValidationError("map_artifact_unsafe_path", `map file ${filePath} is outside declared scope ${scope}`);
+    }
+    if (typeof file2["sha256"] !== "string" || !/^[0-9a-f]{64}$/u.test(file2["sha256"])) {
+      throw new MapCandidateValidationError("map_artifact_schema_invalid", `codebase map file ${filePath} has an invalid sha256`);
+    }
+    if (typeof file2["summary"] !== "string") {
+      throw new MapCandidateValidationError("map_artifact_schema_invalid", `codebase map file ${filePath} has an invalid summary`);
+    }
+    return {
+      path: filePath,
+      sha256: file2["sha256"],
+      sizeBytes: nonnegativeInteger(file2["sizeBytes"], `codebase map file ${filePath} sizeBytes`),
+      lineCount: nonnegativeInteger(file2["lineCount"], `codebase map file ${filePath} lineCount`),
+      symbols: stringArray(file2["symbols"], `codebase map file ${filePath} symbols`),
+      headings: stringArray(file2["headings"], `codebase map file ${filePath} headings`),
+      summary: file2["summary"]
+    };
+  });
+  if (sourceFileCount !== files.length) {
+    throw new MapCandidateValidationError("map_artifact_count_mismatch", `declared sourceFileCount ${sourceFileCount} does not match ${files.length} files`);
+  }
+  const sourceFingerprint = record2["sourceFingerprint"];
+  const computedFingerprint = fingerprintFiles(files);
+  if (sourceFingerprint !== computedFingerprint) {
+    throw new MapCandidateValidationError("map_artifact_fingerprint_mismatch", "declared sourceFingerprint does not match the map file entries");
+  }
+  return {
+    schemaVersion: 1,
+    kind: "codebase_map",
+    generatedAt: generatedAt.data,
+    scope,
+    sourceFingerprint,
+    sourceFileCount,
+    files
+  };
+}
+function mapCandidateDiagnostic(runId, error51) {
+  return { runId, code: error51.code, message: `Ignored map run ${runId}: ${error51.message}.` };
+}
+async function discoverLatestCodebaseMap(repositoryRoot) {
+  const runs = await latestGuidanceRuns({ repositoryRoot, workflows: ["map"], limitPerWorkflow: 20 });
+  const diagnostics = [];
+  for (const run of runs) {
+    const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : void 0;
+    if (artifactPath === void 0) continue;
+    const expectedArtifactPath = `.legion/project/workflow/map/${run.runId}/map.json`;
+    let resolved;
+    try {
+      resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath });
+      if (resolved.repositoryPath !== expectedArtifactPath) {
+        throw new Error("map output does not belong to its declaring run");
+      }
+    } catch {
+      diagnostics.push(mapCandidateDiagnostic(run.runId, new MapCandidateValidationError(
+        "map_artifact_path_invalid",
+        "map artifact path is unsafe or does not belong to its declaring run"
+      )));
+      continue;
+    }
+    let bytes;
+    try {
+      bytes = await readFile16(resolved.absolutePath);
+    } catch {
+      diagnostics.push(mapCandidateDiagnostic(run.runId, new MapCandidateValidationError(
+        "map_artifact_unreadable",
+        "map artifact cannot be read"
+      )));
+      continue;
+    }
+    let value;
+    try {
+      value = JSON.parse(bytes.toString("utf8"));
+    } catch {
+      diagnostics.push(mapCandidateDiagnostic(run.runId, new MapCandidateValidationError(
+        "map_artifact_json_invalid",
+        "map artifact is not valid JSON"
+      )));
+      continue;
+    }
+    try {
+      const map2 = parseCodebaseMapDocument(value);
+      return {
+        record: {
+          map: map2,
+          artifact: {
+            path: resolved.repositoryPath,
+            sha256: `sha256:${sha256(bytes)}`
+          }
+        },
+        diagnostics
+      };
+    } catch (error51) {
+      const validation = error51 instanceof MapCandidateValidationError ? error51 : new MapCandidateValidationError("map_artifact_schema_invalid", "map artifact schema is invalid");
+      diagnostics.push(mapCandidateDiagnostic(run.runId, validation));
+    }
+  }
+  return { diagnostics };
+}
+async function getLatestCodebaseMapRecord(repositoryRoot) {
+  return (await discoverLatestCodebaseMap(repositoryRoot)).record;
+}
+async function getLatestCodebaseMap(repositoryRoot) {
+  return (await getLatestCodebaseMapRecord(repositoryRoot))?.map;
+}
+async function currentCodebaseFingerprint(input) {
+  const scope = normalizeScope(input.repositoryRoot, input.scope);
+  const files = await collectSourceFiles(input.repositoryRoot, scope);
+  return {
+    scope,
+    sourceFingerprint: fingerprintFiles(files),
+    sourceFileCount: files.length
+  };
+}
+function queryCodebaseMap(map2, query, limit = 10) {
+  const terms = tokenize(query);
+  if (terms.length === 0) return [];
+  return map2.files.map((file2) => {
+    const haystack = [
+      file2.path,
+      file2.summary,
+      ...file2.symbols,
+      ...file2.headings
+    ].join(" ").toLowerCase();
+    const score = terms.reduce((total, term) => total + occurrences(haystack, term), 0);
+    return { file: file2, score };
+  }).filter((entry) => entry.score > 0).sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path)).slice(0, limit).map((entry) => ({
+    path: entry.file.path,
+    score: entry.score,
+    symbols: entry.file.symbols.slice(0, 8),
+    summary: entry.file.summary
+  }));
+}
+function normalizeScope(repositoryRoot, scope) {
+  if (scope === void 0 || scope.trim().length === 0 || scope.trim() === ".") return ".";
+  const absolute = path30.resolve(repositoryRoot, scope);
+  const relative = path30.relative(repositoryRoot, absolute).replace(/\\/g, "/");
+  if (relative.length === 0) return ".";
+  if (relative.startsWith("../") || path30.isAbsolute(relative)) {
+    throw new Error(`Map scope must stay inside the repository: ${scope}`);
+  }
+  return relative;
+}
+async function collectSourceFiles(repositoryRoot, scope) {
+  const root = scope === "." ? repositoryRoot : path30.join(repositoryRoot, ...scope.split("/"));
+  const rootStat = await stat6(root);
+  const candidates = rootStat.isFile() ? [root] : await walk(root);
+  const files = [];
+  for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
+    const relative = path30.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
+    if (!isFullMapAuthoredFile(relative)) continue;
+    const fileStat = await stat6(absolutePath);
+    if (!fileStat.isFile()) continue;
+    const bytes = fileStat.size <= 512 * 1024 ? await readFile16(absolutePath) : void 0;
+    const analyzable = bytes !== void 0 && !bytes.includes(0);
+    const text = analyzable ? bytes.toString("utf8") : "";
+    const lines = analyzable ? text.split(/\r?\n/u) : [];
+    const symbols = analyzable ? extractSymbols(text) : [];
+    const headings = analyzable ? extractHeadings(text) : [];
+    files.push({
+      path: relative,
+      sha256: bytes === void 0 ? await sha256File2(absolutePath) : sha256(bytes),
+      sizeBytes: fileStat.size,
+      lineCount: lines.length,
+      symbols,
+      headings,
+      summary: analyzable ? summarizeFile(relative, lines, symbols, headings) : `${relative} is fingerprinted but omitted from textual analysis (${fileStat.size > 512 * 1024 ? "size limit" : "opaque content"})`
+    });
+  }
+  return files;
+}
+async function walk(root) {
+  const files = [];
+  const entries = await readdir12(root, { withFileTypes: true });
+  for (const entry of entries) {
+    const absolute = path30.join(root, entry.name);
+    if (entry.isDirectory()) {
+      if (!shouldTraverseAuthoredDirectory(entry.name)) continue;
+      files.push(...await walk(absolute));
+      continue;
+    }
+    if (entry.isFile()) files.push(absolute);
+  }
+  return files;
+}
+function extractSymbols(text) {
+  const symbols = /* @__PURE__ */ new Set();
+  const patterns = [
+    /^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gmu,
+    /^\s*(?:export\s+)?class\s+([A-Za-z_$][\w$]*)/gmu,
+    /^\s*(?:export\s+)?interface\s+([A-Za-z_$][\w$]*)/gmu,
+    /^\s*(?:export\s+)?type\s+([A-Za-z_$][\w$]*)/gmu,
+    /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)/gmu,
+    /^\s*def\s+([A-Za-z_][\w]*)/gmu,
+    /^\s*class\s+([A-Za-z_][\w]*)/gmu
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      if (match[1] !== void 0) symbols.add(match[1]);
+    }
+  }
+  return [...symbols].sort((left, right) => left.localeCompare(right)).slice(0, 50);
+}
+function extractHeadings(text) {
+  return text.split(/\r?\n/u).map((line) => /^#{1,6}\s+(.+)$/u.exec(line.trim())?.[1]?.trim()).filter((value) => value !== void 0 && value.length > 0).slice(0, 20);
+}
+function summarizeFile(relative, lines, symbols, headings) {
+  const firstContent = lines.map((line) => line.trim()).find((line) => line.length > 0 && !line.startsWith("//") && !line.startsWith("#"));
+  const parts = [`${relative} has ${lines.length} lines`];
+  if (symbols.length > 0) parts.push(`symbols: ${symbols.slice(0, 6).join(", ")}`);
+  if (headings.length > 0) parts.push(`headings: ${headings.slice(0, 3).join(", ")}`);
+  if (firstContent !== void 0) parts.push(`first content: ${firstContent.slice(0, 120)}`);
+  return parts.join("; ");
+}
+function fingerprintFiles(files) {
+  return sha256(Buffer.from(files.map((file2) => `${file2.path}\0${file2.sha256}`).join("\n"), "utf8"));
+}
+function renderCodebaseMarkdown(map2) {
+  const byExtension = /* @__PURE__ */ new Map();
+  for (const file2 of map2.files) {
+    const extension = path30.extname(file2.path).toLowerCase() || "(none)";
+    byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
+  }
+  const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
+  return [
+    "# Codebase Map",
+    "",
+    `Generated: ${map2.generatedAt}`,
+    `Scope: ${map2.scope}`,
+    `Source fingerprint: ${map2.sourceFingerprint}`,
+    `Source files: ${map2.sourceFileCount}`,
+    "",
+    "## File Types",
+    "",
+    ...extensionRows,
+    "",
+    "## Files",
+    "",
+    ...map2.files.slice(0, 200).map((file2) => `- ${file2.path} (${file2.lineCount} lines): ${file2.summary}`),
+    ""
+  ].join("\n");
+}
+function renderSearchMarkdown(map2) {
+  return [
+    "# Codebase Search Index",
+    "",
+    "Use `legion map --query <text>` to search this deterministic index.",
+    "",
+    ...map2.files.map((file2) => [
+      `## ${file2.path}`,
+      "",
+      file2.summary,
+      file2.symbols.length > 0 ? `Symbols: ${file2.symbols.join(", ")}` : "Symbols: none",
+      ""
+    ].join("\n")),
+    ""
+  ].join("\n");
+}
+function queryTerms(value) {
+  return tokenize(value);
+}
+function tokenize(value) {
+  return value.toLowerCase().split(/[^a-z0-9_/-]+/u).map((entry) => entry.trim()).filter((entry) => entry.length >= 2);
+}
+function occurrences(value, term) {
+  let count = 0;
+  let index = value.indexOf(term);
+  while (index !== -1) {
+    count += 1;
+    index = value.indexOf(term, index + term.length);
+  }
+  return count;
+}
+function sha256(bytes) {
+  return createHash19("sha256").update(bytes).digest("hex");
+}
+async function sha256File2(absolutePath) {
+  const hash2 = createHash19("sha256");
+  for await (const chunk of createReadStream(absolutePath)) hash2.update(chunk);
+  return hash2.digest("hex");
+}
+var MAP_MAX_AGE_DAYS = 30;
+async function resolveMapState(repositoryRoot, scope, now) {
+  const discovery = await discoverLatestCodebaseMap(repositoryRoot);
+  const latestRecord = discovery.record;
+  const latest = latestRecord?.map;
+  let current;
+  try {
+    current = await currentCodebaseFingerprint({ repositoryRoot, ...scope === void 0 ? {} : { scope } });
+  } catch (error51) {
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return { error: `Unable to read the codebase map. ${message}` };
+  }
+  const base = {
+    scope: current.scope,
+    sourceFingerprint: current.sourceFingerprint,
+    sourceFileCount: current.sourceFileCount,
+    latestSourceFingerprint: latest?.sourceFingerprint ?? null,
+    generatedAt: latest?.generatedAt ?? null,
+    mapArtifact: latestRecord?.artifact ?? null,
+    diagnostics: discovery.diagnostics
+  };
+  if (latest === void 0) {
+    return { ...base, freshness: "absent", reason: "No codebase map has been generated.", ageDays: null };
+  }
+  const ageDays = ageInDays(latest.generatedAt, now);
+  if (latest.scope !== current.scope) {
+    return {
+      ...base,
+      freshness: "partial",
+      reason: `The stored map covers ${latest.scope}, which is not the scope being checked (${current.scope}).`,
+      ageDays
+    };
+  }
+  if (latest.sourceFingerprint !== current.sourceFingerprint) {
+    return { ...base, freshness: "stale", reason: "Source files have changed since the map was generated.", ageDays };
+  }
+  if (ageDays !== null && ageDays > MAP_MAX_AGE_DAYS) {
+    return {
+      ...base,
+      freshness: "stale",
+      reason: `The map is ${Math.floor(ageDays)} days old, past the ${MAP_MAX_AGE_DAYS}-day limit.`,
+      ageDays
+    };
+  }
+  return { ...base, freshness: "fresh", reason: "The map matches the current source files.", ageDays };
+}
+function ageInDays(generatedAt, now) {
+  const from = Date.parse(generatedAt);
+  const to = Date.parse(now);
+  if (Number.isNaN(from) || Number.isNaN(to)) return null;
+  return (to - from) / 864e5;
+}
+
+// packages/cli/src/workflow/intake/session.ts
+import { mkdir as mkdir12, readFile as readFile17, readdir as readdir13, rename as rename4, rm as rm6, rmdir, stat as stat7, writeFile as writeFile7 } from "node:fs/promises";
+import path31 from "node:path";
+var INTAKE_ROOT = ".legion/project/intake";
+var SESSION_FILE = "session.json";
+function intakeSessionDirectory(repositoryRoot, sessionId) {
+  return path31.join(repositoryRoot, ".legion", "project", "intake", sessionId);
+}
+function intakeSessionArtifactPath(sessionId) {
+  return `${INTAKE_ROOT}/${sessionId}/${SESSION_FILE}`;
+}
+function isNodeErrorCode2(error51, code) {
+  return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === code);
+}
+function sessionFilePath(repositoryRoot, sessionId) {
+  return path31.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
+}
+function nowTimestamp2() {
+  return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
+}
+function intakeSessionIdFor(createdAt, salt = "") {
+  const compact = createdAt.replace(/[-:.]/g, "").replace("T", "-").replace("Z", "");
+  return formatEntityId("intake", `${compact}${salt}`);
+}
+function createSession(input) {
+  const id = input.sessionId ?? intakeSessionIdFor(input.createdAt, input.salt ?? "");
+  const proposals = /* @__PURE__ */ new Map();
+  const injectedNodes = [];
+  if (input.exploration !== void 0) {
+    const exploration = input.exploration;
+    for (const proposal of exploration.proposals) {
+      proposals.set(proposal.slot, {
+        value: proposal.value,
+        rationale: proposal.rationale,
+        anchor: proposal.anchor,
+        confidence: proposal.confidence,
+        runId: exploration.runId
+      });
+    }
+    injectedNodes.push(...normalizeInjectedNodes(exploration.openQuestions.map((question) => ({
+      nodeId: question.nodeId,
+      slot: question.slot,
+      prompt: question.question,
+      origin: { runId: exploration.runId, anchor: question.slot }
+    }))));
+  }
+  const explorationRef = input.exploration !== void 0 && input.explorationArtifact !== void 0 ? {
+    runId: input.exploration.runId,
+    artifact: {
+      path: input.explorationArtifact.path,
+      sha256: input.explorationArtifact.sha256
+    }
+  } : void 0;
+  const draft = {
+    schemaVersion: input.schemaVersion,
+    createdAt: input.createdAt,
+    kind: "intake-session",
+    id,
+    graphVersion: INTAKE_GRAPH_VERSION,
+    status: "active",
+    ...explorationRef === void 0 ? {} : { explorationRef },
+    answers: [],
+    injectedNodes,
+    diagnostics: []
+  };
+  const withCursor = withRecomputedCursor(intakeSessionSchema.parse(draft));
+  return { session: withCursor, proposals };
+}
+function withRecomputedCursor(session) {
+  const { node } = nextNode({ answers: session.answers, injectedNodes: session.injectedNodes });
+  const next = node === void 0 ? {} : { cursor: node.id };
+  const { cursor: _dropped, ...rest } = session;
+  return intakeSessionSchema.parse({ ...rest, ...next });
+}
+function recordAnswer(input) {
+  if (input.session.status !== "active") {
+    return { ok: false, reason: `This session is ${input.session.status} and cannot take new answers.` };
+  }
+  const node = findNode(
+    { answers: input.session.answers, injectedNodes: input.session.injectedNodes },
+    input.nodeId
+  );
+  if (node === void 0) {
+    return {
+      ok: false,
+      reason: `${input.nodeId} is not a question in this session. Ask for the next question rather than choosing one.`
+    };
+  }
+  if (!isNodeApplicable(node, answersByNodeId(input.session.answers))) {
+    return {
+      ok: false,
+      reason: `${input.nodeId} is not being asked; an earlier answer ruled it out.`
+    };
+  }
+  const answer = {
+    nodeId: node.id,
+    slot: node.slot,
+    value: input.value,
+    answeredAt: input.answeredAt,
+    source: input.source ?? "human",
+    ...input.proposedFrom === void 0 ? {} : { proposedFrom: input.proposedFrom },
+    ...input.draftAcceptedFrom === void 0 ? {} : { draftAcceptedFrom: input.draftAcceptedFrom }
+  };
+  const answers = [...input.session.answers.filter((entry) => entry.nodeId !== node.id), answer];
+  const parsed = intakeSessionSchema.safeParse({ ...input.session, answers });
+  if (!parsed.success) {
+    return { ok: false, reason: parsed.error.issues.map((issue2) => issue2.message).join("; ") };
+  }
+  return { ok: true, session: withRecomputedCursor(pruneOrphanedAnswers(parsed.data)) };
+}
+function pruneOrphanedAnswers(session) {
+  let current = session;
+  for (; ; ) {
+    const live = new Set(
+      applicableNodes({ answers: current.answers, injectedNodes: current.injectedNodes }).map(
+        (node) => node.id
+      )
+    );
+    const answers = current.answers.filter((answer) => live.has(answer.nodeId));
+    if (answers.length === current.answers.length) return current;
+    current = intakeSessionSchema.parse({ ...current, answers });
+  }
+}
+function stepBack(session) {
+  if (session.status !== "active") {
+    return { ok: false, reason: `This session is ${session.status} and cannot be rewound.` };
+  }
+  const last = session.answers.at(-1);
+  if (last === void 0) {
+    return { ok: false, reason: "Nothing has been answered yet." };
+  }
+  const answers = session.answers.filter((entry) => entry.nodeId !== last.nodeId);
+  const pruned = pruneOrphanedAnswers(intakeSessionSchema.parse({ ...session, answers }));
+  return { ok: true, session: withRecomputedCursor(pruned), nodeId: last.nodeId };
+}
+function abortSession(session) {
+  return intakeSessionSchema.parse({ ...session, status: "aborted" });
+}
+function finalizeSession(session, projectId) {
+  const { cursor: _dropped, ...rest } = session;
+  return intakeSessionSchema.parse({ ...rest, status: "finalized", projectId });
+}
+function withDiagnostics(session, diagnostics) {
+  return intakeSessionSchema.parse({ ...session, diagnostics: [...diagnostics] });
+}
+function intakeSessionBytes(session) {
+  return `${JSON.stringify(intakeSessionSchema.parse(session), void 0, 2)}
+`;
+}
+function graphVersionMismatch(session, options = {}) {
+  if (session.status !== "active" && options.producingArtifacts !== true) return void 0;
+  if (session.status === "aborted") return void 0;
+  if (session.graphVersion === INTAKE_GRAPH_VERSION) return void 0;
+  return `Session ${session.id} was started under intake graph ${session.graphVersion}, but this CLI ships ${INTAKE_GRAPH_VERSION}. Its answers were given to a different set of questions. Run legion start --abort --session ${session.id} and begin again, or finish it with the CLI version it was started under.`;
+}
+async function loadSession(repositoryRoot, sessionId) {
+  let text;
+  try {
+    text = await readFile17(sessionFilePath(repositoryRoot, sessionId), "utf8");
+  } catch (error51) {
+    if (isEnoent6(error51)) return { ok: false, reason: `No intake session ${sessionId} exists.` };
+    throw error51;
+  }
+  let parsedJson;
+  try {
+    parsedJson = JSON.parse(text);
+  } catch (error51) {
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return { ok: false, reason: `Intake session ${sessionId} is not valid JSON: ${message}` };
+  }
+  const parsed = intakeSessionSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      reason: `Intake session ${sessionId} does not match the protocol: ${parsed.error.issues.map((issue2) => `${issue2.path.join(".")}: ${issue2.message}`).join("; ")}`
+    };
+  }
+  return { ok: true, session: parsed.data };
+}
+async function saveSession(repositoryRoot, session, hooksOrBeforeMutation) {
+  const validated = intakeSessionSchema.parse(session);
+  const hooks = typeof hooksOrBeforeMutation === "function" ? { beforeMutation: hooksOrBeforeMutation } : hooksOrBeforeMutation ?? {};
+  await hooks.beforeMutation?.();
+  const resolved = await ensureProjectArtifactParent({
+    repositoryRoot,
+    artifactPath: intakeSessionArtifactPath(validated.id)
+  });
+  const temporary = `${resolved.absolutePath}.tmp`;
+  await hooks.beforeMutation?.();
+  await rm6(temporary, { force: true });
+  await hooks.beforeMutation?.();
+  await writeFile7(temporary, intakeSessionBytes(validated), "utf8");
+  await hooks.afterTemporaryWrite?.();
+  await hooks.beforeMutation?.();
+  await rename4(temporary, resolved.absolutePath);
+  await hooks.afterPublish?.();
+}
+async function claimSessionDirectory(repositoryRoot, sessionId, beforeMutation) {
+  const resolved = await resolveProjectArtifactPath({
+    repositoryRoot,
+    artifactPath: intakeSessionArtifactPath(sessionId)
+  });
+  const sessionDirectory = path31.dirname(resolved.absolutePath);
+  await beforeMutation?.();
+  await mkdir12(path31.dirname(sessionDirectory), { recursive: true });
+  try {
+    await beforeMutation?.();
+    await mkdir12(sessionDirectory, { recursive: false });
+    return true;
+  } catch (error51) {
+    if (isNodeErrorCode2(error51, "EEXIST")) return false;
+    throw error51;
+  }
+}
+async function releaseSessionId(repositoryRoot, sessionId, beforeMutation) {
+  try {
+    await beforeMutation?.();
+    await rmdir(intakeSessionDirectory(repositoryRoot, sessionId));
+  } catch {
+  }
+}
+function normalizeInjectedNodes(nodes) {
+  const taken = /* @__PURE__ */ new Set();
+  return nodes.map((question) => {
+    const base = namespaceInjectedNodeId(question.nodeId);
+    let nodeId2 = base;
+    let collision = 0;
+    while (taken.has(nodeId2)) {
+      const suffix = `-${++collision}`;
+      nodeId2 = `${base.slice(0, MAX_NODE_ID_LENGTH - suffix.length)}${suffix}`;
+    }
+    taken.add(nodeId2);
+    return { ...question, nodeId: nodeId2 };
+  });
+}
+async function rollbackSessionCreation(repositoryRoot, sessionId, beforeMutation) {
+  try {
+    await beforeMutation?.();
+    await rm6(sessionFilePath(repositoryRoot, sessionId), { force: true });
+  } finally {
+    await releaseSessionId(repositoryRoot, sessionId, beforeMutation);
+  }
+}
+async function listSessions(repositoryRoot) {
+  const root = path31.join(repositoryRoot, ".legion", "project", "intake");
+  let entries;
+  try {
+    entries = await readdir13(root, { withFileTypes: true });
+  } catch (error51) {
+    if (isEnoent6(error51)) return [];
+    throw error51;
+  }
+  const candidates = entries.filter((entry) => entry.isDirectory() && entry.name.startsWith("itk_")).map((entry) => entry.name).sort((left, right) => left < right ? 1 : left > right ? -1 : 0);
+  const recorded = await Promise.all(
+    candidates.map(async (name) => await pathExists5(sessionFilePath(repositoryRoot, name)) ? name : void 0)
+  );
+  return recorded.filter((name) => name !== void 0);
+}
+async function pathExists5(absolutePath) {
+  try {
+    await stat7(absolutePath);
+    return true;
+  } catch (error51) {
+    if (isEnoent6(error51)) return false;
+    throw error51;
+  }
+}
+async function findActiveSession(repositoryRoot) {
+  for (const sessionId of await listSessions(repositoryRoot)) {
+    const loaded = await loadSession(repositoryRoot, sessionId);
+    if (!loaded.ok) {
+      return {
+        ok: false,
+        reason: `${loaded.reason} Repair or remove ${INTAKE_ROOT}/${sessionId}, or name a different session with --session.`
+      };
+    }
+    if (loaded.session.status === "active") return { ok: true, session: loaded.session };
+  }
+  return { ok: true, session: void 0 };
+}
+async function allocateSessionId(repositoryRoot, createdAt, beforeMutation) {
+  if (await claimSessionDirectory(repositoryRoot, intakeSessionIdFor(createdAt), beforeMutation)) {
+    return intakeSessionIdFor(createdAt);
+  }
+  for (let attempt = 1; attempt <= 999; attempt += 1) {
+    const candidate = intakeSessionIdFor(createdAt, `-${String(attempt).padStart(3, "0")}`);
+    if (await claimSessionDirectory(repositoryRoot, candidate, beforeMutation)) return candidate;
+  }
+  throw new Error(`Could not allocate an intake session ID for ${createdAt}.`);
+}
+function isEnoent6(error51) {
+  return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
+}
+
+// packages/cli/src/workflow/intake/lifecycle.ts
+async function repositoryFiles(root) {
+  const files = [];
+  async function visit(directory) {
+    const entries = await readdir14(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && !shouldTraverseAuthoredDirectory(entry.name)) continue;
+      const absolute = path32.join(directory, entry.name);
+      if (entry.isDirectory()) await visit(absolute);
+      else if (entry.isFile()) files.push(path32.relative(root, absolute).replace(/\\/gu, "/"));
+    }
+  }
+  await visit(root);
+  return files;
+}
+async function classifyProjectMode(repositoryRoot) {
+  const files = await repositoryFiles(repositoryRoot);
+  if (files.some(isAuthoredCodeOrBuildFile)) return "brownfield";
+  if (files.some(isDocumentationFile)) return "documentation-only";
+  return "greenfield";
+}
+async function resolveExplorationSelection(input) {
+  const discovery = await discoverGuidanceRuns({
+    repositoryRoot: input.repositoryRoot,
+    workflows: ["explore"],
+    limitPerWorkflow: Number.MAX_SAFE_INTEGER
+  });
+  const diagnostics = discovery.diagnostics.map((entry) => ({
+    runId: entry.runId,
+    code: "unreadable",
+    message: entry.message
+  }));
+  let selected;
+  for (const run of discovery.runs) {
+    if (run.status !== "completed") {
+      diagnostics.push({
+        runId: run.runId,
+        code: "not_completed",
+        message: `Exploration ${run.runId} is ${run.status}, not completed.`
+      });
+      continue;
+    }
+    if (run.nextAction.command.trim() !== "legion start") {
+      diagnostics.push({
+        runId: run.runId,
+        code: "unrelated_next_action",
+        message: `Exploration ${run.runId} hands off to ${run.nextAction.command}, not legion start.`
+      });
+      continue;
+    }
+    const loaded = await loadExploration(input.repositoryRoot, run.runId);
+    if (!loaded.ok) {
+      diagnostics.push({ runId: run.runId, code: "unreadable", message: loaded.reason });
+      continue;
+    }
+    if (selected === void 0) {
+      selected = loaded.loaded;
+      continue;
+    }
+    diagnostics.push({
+      runId: run.runId,
+      code: "competing_candidate",
+      message: `Exploration ${run.runId} is compatible but older than selected exploration ${selected.candidate.runId}.`
+    });
+  }
+  if (input.withoutExploration === true) return { diagnostics };
+  if (input.explicitRunId !== void 0) {
+    const loaded = await loadExploration(input.repositoryRoot, input.explicitRunId);
+    if (!loaded.ok) {
+      return { diagnostics: [...diagnostics, { runId: input.explicitRunId, code: "unreadable", message: loaded.reason }] };
+    }
+    const incompatible = diagnostics.some(
+      (diagnostic3) => diagnostic3.runId === loaded.loaded.candidate.runId && diagnostic3.code !== "competing_candidate"
+    );
+    return incompatible ? { diagnostics } : { selected: loaded.loaded, diagnostics };
+  }
+  return { ...selected === void 0 ? {} : { selected }, diagnostics };
+}
+var ACTIVE_REVIEW_ARTIFACT_PATH = ".legion/project/intake/active-review.json";
+var INTAKE_TRANSITION_KEY = "intake-transition";
+var REPLACEMENT_JOURNAL_ARTIFACT_PATH = ".legion/project/intake/transactions/draft-replacement.json";
+function degradedCoverageWarning(mapFailure) {
+  return `DEGRADED COVERAGE: full-project mapping failed (${mapFailure}). Review only the bounded high-signal sources and preserve this warning in the draft diagnostics.`;
+}
+async function validateDraftPreflightBinding(input, lease) {
+  const preflight = await readPreflight(input.repositoryRoot, lease);
+  if (preflight === void 0 || preflight.initiative === void 0) {
+    return [{ code: "preflight_required", message: "Run legion start preflight to completion before staging an intake draft." }];
+  }
+  const diagnostics = [];
+  const projectMode = await classifyProjectMode(input.repositoryRoot);
+  if (projectMode !== preflight.projectMode || input.draft.projectMode !== preflight.projectMode) {
+    diagnostics.push({
+      code: "preflight_project_mode_mismatch",
+      message: `Draft project mode ${input.draft.projectMode} does not match current preflight mode ${preflight.projectMode} (repository now classifies as ${projectMode}).`
+    });
+  }
+  if (input.draft.initiative !== preflight.initiative.value) {
+    diagnostics.push({
+      code: "preflight_initiative_mismatch",
+      message: "The draft initiative does not match the current explicit/exploration initiative; revise and restage the draft."
+    });
+  }
+  if (preflight.explorationSelectionIntent.mode === "explicit") {
+    const selection = await resolveExplorationSelection({
+      repositoryRoot: input.repositoryRoot,
+      explicitRunId: preflight.explorationSelectionIntent.runId
+    });
+    const loaded = selection.selected;
+    const reference = input.draft.explorationRefs[0];
+    if (loaded === void 0 || preflight.selectedExplorationRunId !== loaded.candidate.runId || input.draft.explorationRefs.length !== 1 || reference === void 0 || reference.runId !== loaded.exploration.runId || reference.artifact.path !== loaded.artifact.path || reference.artifact.sha256 !== loaded.artifact.sha256) {
+      diagnostics.push({
+        code: "preflight_exploration_mismatch",
+        message: `Explicit exploration ${preflight.explorationSelectionIntent.runId} must resolve compatibly and be cited exactly by the draft.`
+      });
+    }
+  } else if (preflight.selectedExplorationRunId === void 0) {
+    if (input.draft.explorationRefs.length !== 0) {
+      diagnostics.push({ code: "preflight_exploration_mismatch", message: "The current preflight selected no exploration, but the draft cites one." });
+    }
+  } else {
+    const loaded = await loadExploration(input.repositoryRoot, preflight.selectedExplorationRunId);
+    const reference = input.draft.explorationRefs[0];
+    if (!loaded.ok || input.draft.explorationRefs.length !== 1 || reference === void 0 || reference.runId !== loaded.loaded.exploration.runId || reference.artifact.path !== loaded.loaded.artifact.path || reference.artifact.sha256 !== loaded.loaded.artifact.sha256) {
+      diagnostics.push({
+        code: "preflight_exploration_mismatch",
+        message: `The draft must cite exactly the exploration selected by current preflight (${preflight.selectedExplorationRunId}).`
+      });
+    }
+  }
+  const now = input.now ?? preflight.updatedAt;
+  const map2 = await resolveMapState(input.repositoryRoot, void 0, now);
+  if (preflight.projectMode === "brownfield") {
+    if (preflight.mapFailure !== void 0) {
+      const warning = degradedCoverageWarning(preflight.mapFailure.message);
+      if (!("error" in map2) && map2.freshness === "fresh") {
+        diagnostics.push({
+          code: "preflight_map_mismatch",
+          message: "A fresh full-project map now exists; revise the degraded draft to cite its exact artifact, hash, and source fingerprint."
+        });
+      } else if (input.draft.codebaseMapRef !== void 0 || !input.draft.diagnostics.includes(warning)) {
+        diagnostics.push({
+          code: "preflight_degraded_coverage_mismatch",
+          message: "A degraded brownfield draft must omit full-map evidence and preserve the current degraded-coverage warning verbatim."
+        });
+      }
+    } else {
+      const reference = input.draft.codebaseMapRef;
+      if ("error" in map2 || map2.freshness !== "fresh" || map2.scope !== "." || map2.mapArtifact === null || reference === void 0 || reference.sourceFingerprint !== map2.sourceFingerprint || reference.artifact.path !== map2.mapArtifact.path || reference.artifact.sha256 !== map2.mapArtifact.sha256) {
+        diagnostics.push({
+          code: "preflight_map_mismatch",
+          message: "A brownfield draft requires the exact current fresh full-project map artifact, hash, and source fingerprint."
+        });
+      }
+    }
+  } else if (input.draft.codebaseMapRef !== void 0) {
+    diagnostics.push({ code: "preflight_map_mismatch", message: "Greenfield and documentation-only drafts must not claim codebase-map coverage." });
+  }
+  return diagnostics;
+}
+function draftArtifactPath(draftId) {
+  return `.legion/project/intake/drafts/${draftId}.json`;
+}
+function draftBytes(draft) {
+  return `${JSON.stringify(intakeDraftSchema.parse(draft), void 0, 2)}
+`;
+}
+function sha2562(bytes) {
+  return `sha256:${createHash20("sha256").update(bytes).digest("hex")}`;
+}
+function parseActiveDraftReview(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid active review");
+  const record2 = value;
+  const keys = Object.keys(record2).sort();
+  const expected = ["draftId", "draftSha256", "schemaVersion", "state", "token", "updatedAt"];
+  if (keys.length !== expected.length || !expected.every((key, index) => keys[index] === key)) throw new Error("invalid active review");
+  if (record2["schemaVersion"] !== 1 || !["reviewed", "unreviewed", "consumed"].includes(String(record2["state"])) || typeof record2["draftId"] !== "string" || !/^itd_[a-z0-9-]+$/u.test(record2["draftId"]) || typeof record2["draftSha256"] !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(record2["draftSha256"]) || typeof record2["token"] !== "string" || record2["token"].length === 0 || !utcTimestampSchema.safeParse(record2["updatedAt"]).success) throw new Error("invalid active review");
+  return record2;
+}
+async function readActiveDraftReview(repositoryRoot) {
+  try {
+    const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: ACTIVE_REVIEW_ARTIFACT_PATH });
+    const bytes = await readFile18(resolved.absolutePath);
+    return { review: parseActiveDraftReview(JSON.parse(bytes.toString("utf8"))), hash: createHash20("sha256").update(bytes).digest("hex") };
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") return {};
+    throw error51;
+  }
+}
+async function writeActiveDraftReviewCas(repositoryRoot, review, lease, expectedHash) {
+  await assertTransitionLeaseOwned(lease);
+  const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath: ACTIVE_REVIEW_ARTIFACT_PATH });
+  if (expectedHash !== void 0) {
+    const current = await readFile18(resolved.absolutePath);
+    if (createHash20("sha256").update(current).digest("hex") !== expectedHash) throw new Error("active review changed during transition");
+  } else {
+    try {
+      await readFile18(resolved.absolutePath);
+      throw new Error("active review changed during transition");
+    } catch (error51) {
+      if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
+    }
+  }
+  const temporary = `${resolved.absolutePath}.${randomUUID3()}.tmp`;
+  await assertTransitionLeaseOwned(lease);
+  await writeFile8(temporary, `${JSON.stringify(review, void 0, 2)}
+`, { encoding: "utf8", flag: "wx" });
+  try {
+    await assertTransitionLeaseOwned(lease);
+    await rename5(temporary, resolved.absolutePath);
+  } catch (error51) {
+    if (await renewAndValidateLease(lease)) await rm7(temporary, { force: true });
+    throw error51;
+  }
+}
+async function markActiveReview(repositoryRoot, input, lease) {
+  const current = await readActiveDraftReview(repositoryRoot);
+  const review = {
+    schemaVersion: 1,
+    state: input.state,
+    draftId: input.draftId,
+    draftSha256: input.draftSha256,
+    token: randomUUID3(),
+    updatedAt: utcTimestampSchema.parse(input.updatedAt ?? (/* @__PURE__ */ new Date()).toISOString())
+  };
+  await writeActiveDraftReviewCas(repositoryRoot, review, lease, current.hash);
+  return review;
+}
+async function consumeActiveReviewForDraft(repositoryRoot, draftId, lease) {
+  const current = await readActiveDraftReview(repositoryRoot);
+  if (current.review?.draftId !== draftId) return;
+  const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: ACTIVE_REVIEW_ARTIFACT_PATH });
+  const bytes = await readFile18(resolved.absolutePath);
+  if (createHash20("sha256").update(bytes).digest("hex") !== current.hash) throw new Error("active review changed during transition");
+  await assertTransitionLeaseOwned(lease);
+  await rm7(resolved.absolutePath);
+}
+async function writeDraftExclusive(repositoryRoot, draft, lease, beforePublish, afterPublish) {
+  const artifactPath = draftArtifactPath(draft.id);
+  await assertTransitionLeaseOwned(lease);
+  const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath });
+  const temporary = `${resolved.absolutePath}.${randomUUID3()}.tmp`;
+  await assertTransitionLeaseOwned(lease);
+  const handle = await open2(temporary, "wx", 384);
+  try {
+    await handle.writeFile(draftBytes(draft), "utf8");
+    await handle.sync();
+    await handle.close();
+    await beforePublish?.();
+    await assertTransitionLeaseOwned(lease);
+    await link(temporary, resolved.absolutePath);
+  } catch (error51) {
+    await handle.close().catch(() => void 0);
+    if (await renewAndValidateLease(lease)) await rm7(temporary, { force: true });
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "EEXIST") {
+      await removeDraftPublishTemps(resolved.absolutePath, lease);
+    }
+    throw error51;
+  }
+  await afterPublish?.();
+  await removeDraftPublishTemps(resolved.absolutePath, lease);
+  return artifactPath;
+}
+async function removeDraftPublishTemps(finalPath, lease) {
+  const directory = path32.dirname(finalPath);
+  const prefix = `${path32.basename(finalPath)}.`;
+  for (const name of await readdir14(directory)) {
+    if (name.startsWith(prefix) && name.endsWith(".tmp")) {
+      await assertTransitionLeaseOwned(lease);
+      await rm7(path32.join(directory, name), { force: true }).catch(() => void 0);
+    }
+  }
+}
+async function writeDraftCas(repositoryRoot, draft, expectedHash, lease) {
+  const artifactPath = draftArtifactPath(draft.id);
+  await assertTransitionLeaseOwned(lease);
+  const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath });
+  const current = await readFile18(resolved.absolutePath);
+  const actualHash = createHash20("sha256").update(current).digest("hex");
+  if (actualHash !== expectedHash) throw new Error("draft changed during acceptance");
+  const temporary = `${resolved.absolutePath}.${process.pid}.${Date.now()}.tmp`;
+  await assertTransitionLeaseOwned(lease);
+  await writeFile8(temporary, draftBytes(draft), { encoding: "utf8", flag: "wx" });
+  try {
+    await assertTransitionLeaseOwned(lease);
+    await rename5(temporary, resolved.absolutePath);
+  } catch (error51) {
+    if (await renewAndValidateLease(lease)) await rm7(temporary, { force: true });
+    throw error51;
+  }
+  return artifactPath;
+}
+async function writeReplacementJournal(repositoryRoot, journal, lease) {
+  await assertTransitionLeaseOwned(lease);
+  const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath: REPLACEMENT_JOURNAL_ARTIFACT_PATH });
+  const temporary = `${resolved.absolutePath}.${randomUUID3()}.tmp`;
+  await assertTransitionLeaseOwned(lease);
+  await writeFile8(temporary, `${JSON.stringify(journal, void 0, 2)}
+`, { encoding: "utf8", flag: "wx" });
+  try {
+    await assertTransitionLeaseOwned(lease);
+    await rename5(temporary, resolved.absolutePath);
+  } catch (error51) {
+    if (await renewAndValidateLease(lease)) await rm7(temporary, { force: true });
+    throw error51;
+  }
+}
+async function removeReplacementJournal(repositoryRoot, lease) {
+  const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: REPLACEMENT_JOURNAL_ARTIFACT_PATH });
+  await assertTransitionLeaseOwned(lease);
+  await rm7(resolved.absolutePath, { force: true });
+}
+async function readReplacementJournal(repositoryRoot) {
+  let value;
+  try {
+    const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: REPLACEMENT_JOURNAL_ARTIFACT_PATH });
+    value = JSON.parse(await readFile18(resolved.absolutePath, "utf8"));
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") return void 0;
+    throw error51;
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid draft replacement journal");
+  const record2 = value;
+  const keys = Object.keys(record2).sort();
+  const expected = ["kind", "priorDraftId", "priorDraftSha256", "replacement", "schemaVersion"];
+  if (keys.length !== expected.length || !expected.every((key, index) => keys[index] === key) || record2["schemaVersion"] !== 1 || record2["kind"] !== "draft-replacement" || typeof record2["priorDraftId"] !== "string" || !/^itd_[a-z0-9-]+$/u.test(record2["priorDraftId"]) || typeof record2["priorDraftSha256"] !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(record2["priorDraftSha256"])) {
+    throw new Error("invalid draft replacement journal");
+  }
+  return {
+    schemaVersion: 1,
+    kind: "draft-replacement",
+    priorDraftId: record2["priorDraftId"],
+    priorDraftSha256: record2["priorDraftSha256"],
+    replacement: intakeDraftSchema.parse(record2["replacement"])
+  };
+}
+async function recoverDraftReplacement(repositoryRoot, lease) {
+  await assertTransitionLeaseOwned(lease);
+  const journal = await readReplacementJournal(repositoryRoot);
+  if (journal === void 0) return;
+  const candidates = await inspectActiveDraftCandidates(repositoryRoot);
+  if (!candidates.ok) throw new Error(candidates.diagnostics.map((entry) => entry.message).join(" "));
+  const conflicting = candidates.drafts.filter(
+    (draft) => draft.id !== journal.priorDraftId && draft.id !== journal.replacement.id
+  );
+  if (conflicting.length > 0) {
+    throw new Error(`replacement recovery conflicts with open draft(s): ${conflicting.map((draft) => draft.id).join(", ")}`);
+  }
+  const priorResolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: draftArtifactPath(journal.priorDraftId) });
+  const priorRaw = await readFile18(priorResolved.absolutePath);
+  const prior = intakeDraftSchema.parse(JSON.parse(priorRaw.toString("utf8")));
+  if (prior.status === "accepted" || prior.status === "discarded") {
+    const replacement = await loadStagedDraft(repositoryRoot, journal.replacement.id);
+    if (replacement?.status === "draft") {
+      const replacementResolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: draftArtifactPath(replacement.id) });
+      const replacementRaw = await readFile18(replacementResolved.absolutePath);
+      await assertTransitionLeaseOwned(lease);
+      await writeDraftCas(repositoryRoot, intakeDraftSchema.parse({ ...replacement, status: "invalidated" }), createHash20("sha256").update(replacementRaw).digest("hex"), lease);
+    }
+    await assertTransitionLeaseOwned(lease);
+    await removeReplacementJournal(repositoryRoot, lease);
+    return;
+  }
+  if (prior.status === "draft") {
+    if (sha2562(priorRaw) !== journal.priorDraftSha256) throw new Error("prior draft changed during replacement recovery");
+    await assertTransitionLeaseOwned(lease);
+    await writeDraftCas(repositoryRoot, intakeDraftSchema.parse({ ...prior, status: "invalidated" }), createHash20("sha256").update(priorRaw).digest("hex"), lease);
+  } else if (prior.status !== "invalidated") {
+    throw new Error(`prior draft ${prior.id} has unsupported replacement state ${prior.status}`);
+  }
+  const existing = await loadStagedDraft(repositoryRoot, journal.replacement.id);
+  if (existing === void 0) {
+    await assertTransitionLeaseOwned(lease);
+    await writeDraftExclusive(repositoryRoot, journal.replacement, lease);
+  } else if (draftBytes(existing) !== draftBytes(journal.replacement)) {
+    throw new Error(`replacement draft ${journal.replacement.id} conflicts with its journal`);
+  }
+  await assertTransitionLeaseOwned(lease);
+  await markActiveReview(repositoryRoot, {
+    state: "unreviewed",
+    draftId: journal.replacement.id,
+    draftSha256: sha2562(draftBytes(journal.replacement))
+  }, lease);
+  await assertTransitionLeaseOwned(lease);
+  await removeReplacementJournal(repositoryRoot, lease);
+}
+function diagnosticForProposal(proposal, code, message) {
+  return { code, message, nodeId: proposal.nodeId, slot: proposal.slot };
+}
+async function replayDraft(repositoryRoot, draft) {
+  if (draft.graphVersion !== INTAKE_GRAPH_VERSION) {
+    return {
+      ok: false,
+      diagnostics: [{
+        code: "draft_graph_mismatch",
+        message: `Draft ${draft.id} targets intake graph ${draft.graphVersion}, but this CLI ships ${INTAKE_GRAPH_VERSION}.`
+      }]
+    };
+  }
+  const base = createSession({
+    sessionId: "itk_19700101-000000000",
+    createdAt: draft.createdAt,
+    schemaVersion: LEGION_PROTOCOL_VERSION
+  }).session;
+  const injectedNodes = normalizeInjectedNodes(draft.injectedQuestions);
+  const occupiedSlots = new Set(allGraphSlots());
+  for (const question of injectedNodes) {
+    if (occupiedSlots.has(question.slot)) {
+      return { ok: false, diagnostics: [{ code: "injected_slot_conflict", message: `Injected question ${question.nodeId} collides with slot ${question.slot}.` }] };
+    }
+    occupiedSlots.add(question.slot);
+  }
+  for (const question of injectedNodes) {
+    const evidence = draft.explorationRefs.find((reference) => reference.runId === question.origin.runId);
+    let verified = evidence !== void 0 && await evidenceMatches(repositoryRoot, evidence);
+    if (verified && evidence !== void 0) {
+      try {
+        const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: evidence.artifact.path });
+        const exploration = explorationSchema.parse(JSON.parse(await readFile18(resolved.absolutePath, "utf8")));
+        verified = exploration.runId === question.origin.runId && exploration.openQuestions.some(
+          (candidate) => candidate.slot === question.origin.anchor && candidate.slot === question.slot && candidate.question === question.prompt
+        );
+      } catch {
+        verified = false;
+      }
+    }
+    if (!verified) {
+      return { ok: false, diagnostics: [{ code: "unverified_injected_origin", message: `Injected question ${question.nodeId} does not resolve to cited exploration ${question.origin.runId} at ${question.origin.anchor}.` }] };
+    }
+  }
+  let session = intakeSessionSchema.parse({
+    ...base,
+    injectedNodes
+  });
+  const pending = [...draft.proposedAnswers];
+  const diagnostics = [];
+  while (pending.length > 0) {
+    let progressed = false;
+    for (let index = 0; index < pending.length; ) {
+      const proposal = pending[index];
+      const node = findNode({ answers: session.answers, injectedNodes: session.injectedNodes }, proposal.nodeId);
+      if (node === void 0) {
+        index += 1;
+        continue;
+      }
+      if (node.slot !== proposal.slot) {
+        diagnostics.push(diagnosticForProposal(
+          proposal,
+          "conflicting_slot",
+          `${proposal.nodeId} belongs to ${node.slot}, not the proposed slot ${proposal.slot}.`
+        ));
+        pending.splice(index, 1);
+        progressed = true;
+        continue;
+      }
+      const answerMap2 = answersByNodeId(session.answers);
+      if (!isNodeApplicable(node, answerMap2)) {
+        const dependencyAnswered = node.dependsOn === void 0 || answerMap2.has(node.dependsOn.nodeId);
+        if (dependencyAnswered) {
+          diagnostics.push(diagnosticForProposal(
+            proposal,
+            "inapplicable_answer",
+            `${proposal.nodeId} is not applicable because ${node.dependsOn?.nodeId ?? "the graph"} rules it out.`
+          ));
+          pending.splice(index, 1);
+          progressed = true;
+          continue;
+        }
+        index += 1;
+        continue;
+      }
+      const validated = validateAnswer(node, proposal.value);
+      if (validated.value === void 0 || validated.diagnostics.length > 0) {
+        diagnostics.push(...validated.diagnostics);
+        pending.splice(index, 1);
+        progressed = true;
+        continue;
+      }
+      const recorded = recordAnswer({
+        session,
+        nodeId: node.id,
+        value: validated.value,
+        answeredAt: draft.createdAt,
+        source: "draft-accepted",
+        draftAcceptedFrom: { draftId: draft.id, answerAnchor: proposal.answerAnchor }
+      });
+      if (!recorded.ok) {
+        diagnostics.push(diagnosticForProposal(proposal, "conflicting_answer", recorded.reason));
+      } else {
+        session = recorded.session;
+      }
+      pending.splice(index, 1);
+      progressed = true;
+    }
+    if (progressed) continue;
+    for (const proposal of pending.splice(0)) {
+      const materialized = findNode({ answers: session.answers, injectedNodes: session.injectedNodes }, proposal.nodeId);
+      diagnostics.push(diagnosticForProposal(
+        proposal,
+        materialized === void 0 ? "unknown_node" : "inapplicable_answer",
+        materialized === void 0 ? `${proposal.nodeId} is not a question materialized by the current intake graph.` : `${proposal.nodeId} depends on an unresolved earlier answer.`
+      ));
+    }
+  }
+  if (diagnostics.length > 0) return { ok: false, diagnostics };
+  for (const unresolved of draft.unresolvedNodes) {
+    const node = findNode({ answers: session.answers, injectedNodes: session.injectedNodes }, unresolved.nodeId);
+    if (node === void 0) {
+      diagnostics.push({
+        code: "unknown_unresolved_node",
+        message: `${unresolved.nodeId} is not a question materialized by the current intake graph.`,
+        nodeId: unresolved.nodeId,
+        slot: unresolved.slot
+      });
+      continue;
+    }
+    if (node.slot !== unresolved.slot) {
+      diagnostics.push({
+        code: "conflicting_unresolved_slot",
+        message: `${unresolved.nodeId} belongs to ${node.slot}, not unresolved slot ${unresolved.slot}.`,
+        nodeId: unresolved.nodeId,
+        slot: unresolved.slot
+      });
+      continue;
+    }
+    if (session.answers.some((answer) => answer.nodeId === unresolved.nodeId || answer.slot === unresolved.slot)) {
+      diagnostics.push({
+        code: "resolved_node_marked_unresolved",
+        message: `${unresolved.nodeId} already has a validated proposed answer and cannot also be unresolved.`,
+        nodeId: unresolved.nodeId,
+        slot: unresolved.slot
+      });
+    }
+  }
+  if (diagnostics.length > 0) return { ok: false, diagnostics };
+  return { ok: true, previewSession: session };
+}
+async function stageIntakeDraft(input) {
+  const absoluteSource = path32.resolve(input.repositoryRoot, input.draftFile);
+  const relativeSource = path32.relative(input.repositoryRoot, absoluteSource);
+  if (relativeSource.startsWith("..") || path32.isAbsolute(relativeSource)) {
+    return { diagnostics: [{ code: "draft_path_outside_repository", message: "The intake draft file must stay inside the repository." }], ok: false };
+  }
+  let json2;
+  try {
+    if ((await lstat3(absoluteSource)).isSymbolicLink()) throw new Error("The intake draft file cannot be a symbolic link.");
+    const [rootRealPath, sourceRealPath] = await Promise.all([
+      realpath4(path32.resolve(input.repositoryRoot)),
+      realpath4(absoluteSource)
+    ]);
+    const contained = path32.relative(rootRealPath, sourceRealPath);
+    if (contained.startsWith("..") || path32.isAbsolute(contained)) {
+      throw new Error("The intake draft file escapes the repository through a symbolic-link ancestor.");
+    }
+    json2 = JSON.parse(await readFile18(sourceRealPath, "utf8"));
+  } catch (error51) {
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return { diagnostics: [{ code: "invalid_draft", message: `The intake draft could not be read as JSON: ${message}` }], ok: false };
+  }
+  const parsed = intakeDraftSchema.safeParse(json2);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      diagnostics: parsed.error.issues.map((issue2) => ({
+        code: "invalid_draft",
+        message: `${issue2.path.join(".")}: ${issue2.message}`
+      }))
+    };
+  }
+  const draft = parsed.data;
+  if (draft.status !== "draft") {
+    return { ok: false, diagnostics: [{ code: "draft_not_open", message: `Draft ${draft.id} is ${draft.status}, not open for staging.` }] };
+  }
+  let replayed;
+  let artifactPath = draftArtifactPath(draft.id);
+  let replacesDraft;
+  if (input.persist === false) {
+    let lease;
+    try {
+      lease = await acquireDraftAcceptanceLease(input.repositoryRoot, draft.id);
+    } catch (error51) {
+      if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "EEXIST") return {
+        ok: false,
+        diagnostics: [{ code: "draft_transition_in_progress", message: "Another intake draft transition is in progress." }]
+      };
+      throw error51;
+    }
+    try {
+      const acceptance = await reconcilePendingAcceptanceJournals(input.repositoryRoot, lease);
+      if (!acceptance.ok) return { ok: false, diagnostics: acceptance.diagnostics };
+      if (acceptance.rolledBackDraftIds.length > 0) return {
+        ok: false,
+        diagnostics: [pendingAcceptanceRecovered(acceptance.rolledBackDraftIds)]
+      };
+      const bindingDiagnostics = await validateDraftPreflightBinding({
+        repositoryRoot: input.repositoryRoot,
+        draft,
+        ...input.createdAt === void 0 ? {} : { now: input.createdAt }
+      }, lease);
+      if (bindingDiagnostics.length > 0) return { ok: false, diagnostics: bindingDiagnostics };
+      const evidenceDiagnostics = await validateDraftEvidence(input.repositoryRoot, draft);
+      if (evidenceDiagnostics.length > 0) return { ok: false, diagnostics: evidenceDiagnostics };
+      const validatedReplay = await replayDraft(input.repositoryRoot, draft);
+      if (!validatedReplay.ok) return validatedReplay;
+      replayed = validatedReplay;
+    } finally {
+      await releaseDraftAcceptanceLease(lease);
+    }
+  } else {
+    let lease;
+    try {
+      lease = await acquireDraftAcceptanceLease(input.repositoryRoot, draft.id);
+    } catch (error51) {
+      if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "EEXIST") return {
+        ok: false,
+        diagnostics: [{ code: "draft_transition_in_progress", message: "Another intake draft transition is in progress." }]
+      };
+      throw error51;
+    }
+    try {
+      await input.afterLeaseAcquired?.(lease.path);
+      if (!await renewAndValidateLease(lease)) return {
+        ok: false,
+        diagnostics: [{ code: "draft_transition_lease_lost", message: "The intake transition lock changed before staging." }]
+      };
+      const acceptance = await reconcilePendingAcceptanceJournals(input.repositoryRoot, lease);
+      if (!acceptance.ok) return { ok: false, diagnostics: acceptance.diagnostics };
+      if (acceptance.rolledBackDraftIds.length > 0) return {
+        ok: false,
+        diagnostics: [pendingAcceptanceRecovered(acceptance.rolledBackDraftIds)]
+      };
+      await recoverDraftReplacement(input.repositoryRoot, lease);
+      await assertTransitionLeaseOwned(lease);
+      const bindingDiagnostics = await validateDraftPreflightBinding({
+        repositoryRoot: input.repositoryRoot,
+        draft,
+        ...input.createdAt === void 0 ? {} : { now: input.createdAt }
+      }, lease);
+      if (bindingDiagnostics.length > 0) return { ok: false, diagnostics: bindingDiagnostics };
+      const evidenceDiagnostics = await validateDraftEvidence(input.repositoryRoot, draft);
+      if (evidenceDiagnostics.length > 0) return { ok: false, diagnostics: evidenceDiagnostics };
+      const validatedReplay = await replayDraft(input.repositoryRoot, draft);
+      if (!validatedReplay.ok) return validatedReplay;
+      replayed = validatedReplay;
+      try {
+        const target = await resolveProjectArtifactPath({
+          repositoryRoot: input.repositoryRoot,
+          artifactPath: draftArtifactPath(draft.id)
+        });
+        await lstat3(target.absolutePath);
+        return {
+          ok: false,
+          diagnostics: [{ code: "draft_already_exists", message: `Draft ${draft.id} already exists and cannot be overwritten.` }]
+        };
+      } catch (error51) {
+        if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
+      }
+      const foundSession = await findActiveSession(input.repositoryRoot);
+      if (!foundSession.ok) return {
+        ok: false,
+        diagnostics: [{ code: "invalid_session", message: foundSession.reason }]
+      };
+      if (foundSession.session !== void 0) return {
+        ok: false,
+        diagnostics: [{
+          code: "active_session",
+          message: `Session ${foundSession.session.id} is already active; accepted draft answers must be revised through the interview, not by staging another draft.`
+        }]
+      };
+      const scanned = await inspectActiveDraftCandidates(input.repositoryRoot);
+      if (!scanned.ok) return scanned;
+      const open3 = scanned.drafts;
+      if (open3.length > 1) return {
+        ok: false,
+        diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; resolve them before staging a replacement." }]
+      };
+      const previous = open3[0];
+      if (previous !== void 0 && previous.id !== draft.id && previous.status === "draft") {
+        const previousResolved = await resolveProjectArtifactPath({
+          repositoryRoot: input.repositoryRoot,
+          artifactPath: draftArtifactPath(previous.id)
+        });
+        const previousBytes = await readFile18(previousResolved.absolutePath);
+        const previousHash = createHash20("sha256").update(previousBytes).digest("hex");
+        replacesDraft = intakeDraftSchema.parse({ ...previous, status: "invalidated" });
+        try {
+          const replacementResolved = await resolveProjectArtifactPath({ repositoryRoot: input.repositoryRoot, artifactPath: draftArtifactPath(draft.id) });
+          await lstat3(replacementResolved.absolutePath);
+          return { ok: false, diagnostics: [{ code: "draft_already_exists", message: `Draft ${draft.id} already exists and cannot be overwritten.` }] };
+        } catch (error51) {
+          if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
+        }
+        await assertTransitionLeaseOwned(lease);
+        await markActiveReview(input.repositoryRoot, {
+          state: "unreviewed",
+          draftId: previous.id,
+          draftSha256: sha2562(previousBytes),
+          ...input.createdAt === void 0 ? {} : { updatedAt: input.createdAt }
+        }, lease);
+        await assertTransitionLeaseOwned(lease);
+        await writeReplacementJournal(input.repositoryRoot, {
+          schemaVersion: 1,
+          kind: "draft-replacement",
+          priorDraftId: previous.id,
+          priorDraftSha256: sha2562(previousBytes),
+          replacement: draft
+        }, lease);
+        await input.afterReplacementJournal?.();
+        await assertTransitionLeaseOwned(lease);
+        await writeDraftCas(input.repositoryRoot, replacesDraft, previousHash, lease);
+        await input.afterPriorInvalidated?.();
+        await assertTransitionLeaseOwned(lease);
+        artifactPath = await writeDraftExclusive(input.repositoryRoot, draft, lease, async () => {
+          await input.beforeDraftPublish?.();
+          await assertTransitionLeaseOwned(lease);
+        }, input.afterDraftPublish);
+        await input.afterReplacementPublished?.();
+        await assertTransitionLeaseOwned(lease);
+        await markActiveReview(input.repositoryRoot, {
+          state: "unreviewed",
+          draftId: draft.id,
+          draftSha256: sha2562(draftBytes(draft)),
+          ...input.createdAt === void 0 ? {} : { updatedAt: input.createdAt }
+        }, lease);
+        await assertTransitionLeaseOwned(lease);
+        await removeReplacementJournal(input.repositoryRoot, lease);
+      } else {
+        try {
+          await assertTransitionLeaseOwned(lease);
+          artifactPath = await writeDraftExclusive(input.repositoryRoot, draft, lease, async () => {
+            await input.beforeDraftPublish?.();
+            await assertTransitionLeaseOwned(lease);
+          }, input.afterDraftPublish);
+        } catch (error51) {
+          if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "EEXIST") {
+            return {
+              ok: false,
+              diagnostics: [{ code: "draft_already_exists", message: `Draft ${draft.id} already exists and cannot be overwritten.` }]
+            };
+          }
+          throw error51;
+        }
+        await assertTransitionLeaseOwned(lease);
+        await markActiveReview(input.repositoryRoot, {
+          state: "unreviewed",
+          draftId: draft.id,
+          draftSha256: sha2562(draftBytes(draft)),
+          ...input.createdAt === void 0 ? {} : { updatedAt: input.createdAt }
+        }, lease);
+      }
+    } catch (error51) {
+      if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ELEASELOST") return {
+        ok: false,
+        diagnostics: [{ code: "draft_transition_lease_lost", message: "The intake transition lock changed before staging completed." }]
+      };
+      throw error51;
+    } finally {
+      await releaseDraftAcceptanceLease(lease);
+    }
+  }
+  if (replayed === void 0) throw new Error("draft staging completed without validator replay");
+  return {
+    ok: true,
+    draft,
+    previewSession: replayed.previewSession,
+    diagnostics: [],
+    artifactPath,
+    ...replacesDraft === void 0 ? {} : { replacesDraft }
+  };
+}
+async function loadStagedDraft(repositoryRoot, draftId) {
+  try {
+    const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: draftArtifactPath(draftId) });
+    return intakeDraftSchema.parse(JSON.parse(await readFile18(resolved.absolutePath, "utf8")));
+  } catch {
+    return void 0;
+  }
+}
+async function findActiveDraft(repositoryRoot) {
+  return activeDraft(repositoryRoot);
+}
+async function artifactMatches(repositoryRoot, artifact) {
+  try {
+    const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: artifact.path });
+    const bytes = await readFile18(resolved.absolutePath);
+    return `sha256:${createHash20("sha256").update(bytes).digest("hex")}` === artifact.sha256;
+  } catch {
+    return false;
+  }
+}
+async function evidenceMatches(repositoryRoot, evidence) {
+  if (evidence.kind === "exploration") {
+    const loaded = await loadExploration(repositoryRoot, evidence.runId);
+    return loaded.ok && loaded.loaded.artifact.path === evidence.artifact.path && loaded.loaded.artifact.sha256 === evidence.artifact.sha256;
+  }
+  if (evidence.kind === "repository-file") {
+    try {
+      const absolute = path32.resolve(repositoryRoot, evidence.artifact.path);
+      const relative = path32.relative(path32.resolve(repositoryRoot), absolute);
+      if (relative.startsWith("..") || path32.isAbsolute(relative) || (await lstat3(absolute)).isSymbolicLink()) return false;
+      const [rootRealPath, evidenceRealPath] = await Promise.all([realpath4(path32.resolve(repositoryRoot)), realpath4(absolute)]);
+      const contained = path32.relative(rootRealPath, evidenceRealPath);
+      if (contained.startsWith("..") || path32.isAbsolute(contained)) return false;
+      return sha2562(await readFile18(evidenceRealPath)) === evidence.artifact.sha256;
+    } catch {
+      return false;
+    }
+  }
+  if (!await artifactMatches(repositoryRoot, evidence.artifact)) return false;
+  if (evidence.kind === "codebase-map") {
+    try {
+      const current = await currentCodebaseFingerprint({ repositoryRoot });
+      return current.sourceFingerprint === evidence.sourceFingerprint;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+async function validateDraftEvidence(repositoryRoot, draft) {
+  const diagnostics = [];
+  const inspect = async (references, owner) => {
+    for (const reference of references) {
+      if (await evidenceMatches(repositoryRoot, reference)) continue;
+      diagnostics.push({
+        code: "evidence_drift",
+        message: `${owner.label} cites changed or unreadable ${reference.kind} evidence at ${reference.artifact.path}.`,
+        ...owner.nodeId === void 0 ? {} : { nodeId: owner.nodeId },
+        ...owner.slot === void 0 ? {} : { slot: owner.slot }
+      });
+    }
+  };
+  await inspect(draft.explorationRefs, { label: `Draft ${draft.id}` });
+  if (draft.codebaseMapRef !== void 0) await inspect([draft.codebaseMapRef], { label: `Draft ${draft.id}` });
+  for (const answer of draft.proposedAnswers) {
+    await inspect(answer.evidenceRefs, { label: answer.nodeId, nodeId: answer.nodeId, slot: answer.slot });
+  }
+  for (const unresolved of draft.unresolvedNodes) {
+    await inspect(unresolved.evidenceRefs, { label: unresolved.nodeId, nodeId: unresolved.nodeId, slot: unresolved.slot });
+  }
+  return diagnostics.filter((diagnostic3, index) => diagnostics.findIndex(
+    (candidate) => candidate.code === diagnostic3.code && candidate.message === diagnostic3.message && candidate.nodeId === diagnostic3.nodeId && candidate.slot === diagnostic3.slot
+  ) === index);
+}
+var DraftDecisionValidationError = class extends Error {
+  diagnostics;
+  constructor(diagnostics) {
+    super(diagnostics.map((diagnostic3) => diagnostic3.message).join(" "));
+    this.name = "DraftDecisionValidationError";
+    this.diagnostics = diagnostics;
+  }
+};
+var ACCEPTANCE_LEASE_MS = 5 * 60 * 1e3;
+var PUBLISHED_LEASE_CLAIM_KEYS = [
+  "createdAt",
+  "expiresAt",
+  "generation",
+  "pid",
+  "schemaVersion",
+  "token"
+];
+function parsePublishedLeaseClaim(input) {
+  const value = JSON.parse(input.bytes);
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("malformed lease");
+  }
+  const record2 = value;
+  const keys = Object.keys(record2).sort();
+  if (keys.length !== PUBLISHED_LEASE_CLAIM_KEYS.length || !PUBLISHED_LEASE_CLAIM_KEYS.every((key, index) => keys[index] === key)) {
+    throw new Error("malformed lease");
+  }
+  if (record2["schemaVersion"] !== 1 || !Number.isSafeInteger(record2["generation"]) || Number(record2["generation"]) < 1 || typeof record2["token"] !== "string" || record2["token"].length === 0 || !Number.isSafeInteger(record2["pid"]) || Number(record2["pid"]) < 1) {
+    throw new Error("malformed lease");
+  }
+  const createdAt = utcTimestampSchema.safeParse(record2["createdAt"]);
+  const expiresAt = utcTimestampSchema.safeParse(record2["expiresAt"]);
+  if (!createdAt.success || !expiresAt.success) throw new Error("malformed lease");
+  const filename = path32.basename(input.claimPath);
+  const prefix = `${path32.basename(input.journalPath)}.lock.`;
+  if (!filename.startsWith(prefix)) throw new Error("malformed lease");
+  const suffix = filename.slice(prefix.length);
+  const filenameClaim = /^(\d{8,})\.([^.]+)\.json$/u.exec(suffix);
+  const generation = Number(record2["generation"]);
+  const token = record2["token"];
+  if (filenameClaim === null || Number(filenameClaim[1]) !== generation || filenameClaim[2] !== token) {
+    throw new Error("malformed lease");
+  }
+  const metadata = {
+    schemaVersion: 1,
+    generation,
+    token,
+    pid: Number(record2["pid"]),
+    createdAt: createdAt.data,
+    expiresAt: expiresAt.data
+  };
+  return {
+    path: input.claimPath,
+    journalPath: input.journalPath,
+    token: metadata.token,
+    pid: metadata.pid,
+    generation: metadata.generation,
+    expiresAt: Date.parse(metadata.expiresAt)
+  };
+}
+async function leaseClaims(journalAbsolutePath) {
+  const directory = path32.dirname(journalAbsolutePath);
+  const prefix = `${path32.basename(journalAbsolutePath)}.lock.`;
+  const claims = [];
+  for (const name of await readdir14(directory)) {
+    if (!name.startsWith(prefix) || !name.endsWith(".json")) continue;
+    const claimPath = path32.join(directory, name);
+    try {
+      claims.push(parsePublishedLeaseClaim({
+        bytes: await readFile18(claimPath, "utf8"),
+        claimPath,
+        journalPath: journalAbsolutePath
+      }));
+    } catch {
+      const error51 = new Error("A malformed published acceptance lease is present.");
+      error51.code = "EEXIST";
+      throw error51;
+    }
+  }
+  return claims.sort((left, right) => right.generation - left.generation || right.token.localeCompare(left.token));
+}
+var TRANSITION_LOCK_KEYS = ["createdAt", "pid", "schemaVersion", "token"];
+function parseTransitionLock(bytes) {
+  const value = JSON.parse(bytes);
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("malformed transition lock");
+  const record2 = value;
+  const keys = Object.keys(record2).sort();
+  if (keys.length !== TRANSITION_LOCK_KEYS.length || !TRANSITION_LOCK_KEYS.every((key, index) => keys[index] === key) || record2["schemaVersion"] !== 1 || !Number.isSafeInteger(record2["pid"]) || Number(record2["pid"]) < 1 || typeof record2["token"] !== "string" || record2["token"].length === 0 || !utcTimestampSchema.safeParse(record2["createdAt"]).success) throw new Error("malformed transition lock");
+  return {
+    schemaVersion: 1,
+    pid: Number(record2["pid"]),
+    token: record2["token"],
+    createdAt: String(record2["createdAt"])
+  };
+}
+function transitionLockBytes(metadata) {
+  return `${JSON.stringify(metadata)}
+`;
+}
+function processDefinitelyAbsent(pid) {
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error51) {
+    return error51 !== null && typeof error51 === "object" && "code" in error51 && error51.code === "ESRCH";
+  }
+}
+function transitionBusyError() {
+  const error51 = new Error("An intake transition is already owned or cannot be recovered safely.");
+  error51.code = "EEXIST";
+  return error51;
+}
+async function reclaimDeadTransitionLock(lockPath) {
+  let observed;
+  try {
+    observed = parseTransitionLock(await readFile18(lockPath, "utf8"));
+  } catch {
+    throw transitionBusyError();
+  }
+  if (!processDefinitelyAbsent(observed.pid)) throw transitionBusyError();
+  const quarantine = `${lockPath}.reclaim.${randomUUID3()}`;
+  try {
+    await rename5(lockPath, quarantine);
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") return true;
+    throw error51;
+  }
+  let moved;
+  try {
+    moved = parseTransitionLock(await readFile18(quarantine, "utf8"));
+  } catch {
+    try {
+      await rename5(quarantine, lockPath);
+    } catch {
+    }
+    throw transitionBusyError();
+  }
+  if (moved.token !== observed.token || moved.pid !== observed.pid || !processDefinitelyAbsent(moved.pid)) {
+    try {
+      await rename5(quarantine, lockPath);
+    } catch {
+    }
+    throw transitionBusyError();
+  }
+  await rm7(quarantine);
+  return true;
+}
+async function acquireDraftAcceptanceLease(repositoryRoot, draftId) {
+  const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath: `.legion/project/intake/transactions/${INTAKE_TRANSITION_KEY}.lock` });
+  if (draftId !== INTAKE_TRANSITION_KEY) {
+    const legacy = await ensureProjectArtifactParent({
+      repositoryRoot,
+      artifactPath: `.legion/project/intake/transactions/${draftId}.json`
+    });
+    const legacyClaims = await leaseClaims(legacy.absolutePath);
+    if (legacyClaims.some((claim) => claim.expiresAt > Date.now())) {
+      const error51 = new Error("Draft acceptance is already leased.");
+      error51.code = "EEXIST";
+      throw error51;
+    }
+  }
+  const legacyGlobal = path32.join(path32.dirname(resolved.absolutePath), `${INTAKE_TRANSITION_KEY}.json`);
+  const legacyGlobalClaims = await leaseClaims(legacyGlobal);
+  if (legacyGlobalClaims.some((claim) => claim.expiresAt > Date.now())) throw transitionBusyError();
+  for (; ; ) {
+    const token = randomUUID3();
+    const metadata = {
+      schemaVersion: 1,
+      pid: process.pid,
+      token,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    let handle;
+    try {
+      handle = await open2(resolved.absolutePath, "wx", 384);
+      await handle.writeFile(transitionLockBytes(metadata), "utf8");
+      await handle.sync();
+      await handle.close();
+      const lease = { path: resolved.absolutePath, journalPath: resolved.absolutePath, token, generation: 1, pid: process.pid };
+      if (!await renewAndValidateLease(lease)) throw transitionBusyError();
+      return lease;
+    } catch (error51) {
+      await handle?.close().catch(() => void 0);
+      if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "EEXIST")) throw error51;
+      if (!await reclaimDeadTransitionLock(resolved.absolutePath)) throw transitionBusyError();
+    }
+  }
+}
+async function renewAndValidateLease(lease) {
+  try {
+    const current = parseTransitionLock(await readFile18(lease.path, "utf8"));
+    return current.token === lease.token && current.pid === lease.pid;
+  } catch {
+    return false;
+  }
+}
+async function assertTransitionLeaseOwned(lease) {
+  if (await renewAndValidateLease(lease)) return;
+  const error51 = new Error("The intake transition lock changed before the durable boundary.");
+  error51.code = "ELEASELOST";
+  throw error51;
+}
+async function releaseDraftAcceptanceLease(lease, beforeRemove, beforeRename) {
+  await beforeRemove?.();
+  if (!await renewAndValidateLease(lease)) return;
+  await beforeRename?.();
+  if (!await renewAndValidateLease(lease)) return;
+  const quarantine = `${lease.path}.release.${lease.token}`;
+  try {
+    await rename5(lease.path, quarantine);
+    let metadata;
+    try {
+      metadata = parseTransitionLock(await readFile18(quarantine, "utf8"));
+    } catch {
+      try {
+        await rename5(quarantine, lease.path);
+      } catch {
+      }
+      return;
+    }
+    if (metadata.token === lease.token && metadata.pid === lease.pid) await rm7(quarantine);
+    else {
+      try {
+        await rename5(quarantine, lease.path);
+      } catch {
+      }
+    }
+  } catch (error51) {
+    if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
+  }
+  try {
+    const transactionsDirectory = path32.dirname(lease.path);
+    await rmdir2(transactionsDirectory);
+    let ancestor = path32.dirname(transactionsDirectory);
+    for (let index = 0; index < 3; index += 1) {
+      try {
+        await rmdir2(ancestor);
+      } catch (error51) {
+        if (error51 && typeof error51 === "object" && "code" in error51 && ["ENOENT", "ENOTEMPTY", "EEXIST"].includes(String(error51.code))) break;
+        throw error51;
+      }
+      ancestor = path32.dirname(ancestor);
+    }
+  } catch (error51) {
+    if (!(error51 && typeof error51 === "object" && "code" in error51 && ["ENOENT", "ENOTEMPTY", "EEXIST"].includes(String(error51.code)))) throw error51;
+  }
+}
+function acceptanceJournalPath(draftId) {
+  return `.legion/project/intake/transactions/${draftId}.json`;
+}
+function acceptanceJournalPublicationPath(draftId) {
+  return `${acceptanceJournalPath(draftId)}.tmp`;
+}
+function acceptanceRollbackMarkerPath(draftId) {
+  return `${acceptanceJournalPath(draftId)}.rollback`;
+}
+var LEGACY_ACCEPTANCE_JOURNAL_KEYS = ["draftId", "schemaVersion", "sessionId"];
+var PUBLISHING_SESSION_JOURNAL_KEYS = [
+  "acceptedDraftSha256",
+  "draftId",
+  "draftSha256",
+  "phase",
+  "schemaVersion",
+  "sessionId",
+  "sessionSha256"
+];
+function legacyAcceptanceOwnershipName(name) {
+  const publication = /^((?:itd_[a-z0-9-]+|intake-transition)\.json)\.lock\.[0-9a-f-]{36}\.tmp$/u.exec(name);
+  if (publication !== null) return { kind: "publication-temp", journalName: publication[1] };
+  const claim = /^((?:itd_[a-z0-9-]+|intake-transition)\.json)\.lock\.\d{8,}\.[^.]+\.json$/u.exec(name);
+  return claim === null ? void 0 : { kind: "published-claim", journalName: claim[1] };
+}
+function pendingAcceptanceBlocked(message) {
+  return { code: "pending_acceptance_blocked", message };
+}
+function pendingAcceptanceRecovered(draftIds) {
+  return {
+    code: "pending_acceptance_recovered",
+    message: `Recovered interrupted acceptance for ${draftIds.join(", ")} by removing only its strictly verified journaled session publication, reservation, and transaction record. Retry the requested draft transition explicitly.`
+  };
+}
+function pendingAcceptanceLifecycleError(code, diagnostics) {
+  const error51 = new Error(diagnostics.map((diagnostic3) => diagnostic3.message).join(" "));
+  error51.code = code;
+  return error51;
+}
+function parseAcceptanceJournal(bytes, filenameDraftId) {
+  const value = JSON.parse(bytes.toString("utf8"));
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("journal is not an object");
+  const record2 = value;
+  const keys = Object.keys(record2).sort();
+  const draftId = intakeDraftIdSchema.parse(record2["draftId"]);
+  const sessionId = intakeSessionIdSchema.parse(record2["sessionId"]);
+  if (draftId !== filenameDraftId) throw new Error(`journal draft ${draftId} does not match filename ${filenameDraftId}`);
+  if (record2["schemaVersion"] === 1) {
+    if (keys.length !== LEGACY_ACCEPTANCE_JOURNAL_KEYS.length || !LEGACY_ACCEPTANCE_JOURNAL_KEYS.every((key, index) => keys[index] === key)) {
+      throw new Error("journal shape is invalid");
+    }
+    return { schemaVersion: 1, draftId, sessionId };
+  }
+  if (record2["schemaVersion"] !== 2 || keys.length !== PUBLISHING_SESSION_JOURNAL_KEYS.length || !PUBLISHING_SESSION_JOURNAL_KEYS.every((key, index) => keys[index] === key) || record2["phase"] !== "publishing-session" || typeof record2["draftSha256"] !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(record2["draftSha256"]) || typeof record2["acceptedDraftSha256"] !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(record2["acceptedDraftSha256"]) || typeof record2["sessionSha256"] !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(record2["sessionSha256"])) {
+    throw new Error("journal shape is invalid");
+  }
+  return {
+    schemaVersion: 2,
+    phase: "publishing-session",
+    draftId,
+    sessionId,
+    draftSha256: record2["draftSha256"],
+    acceptedDraftSha256: record2["acceptedDraftSha256"],
+    sessionSha256: record2["sessionSha256"]
+  };
+}
+async function assertCommittedSessionDirectoryShape(sessionDirectoryPath, sessionPath) {
+  const directoryInfo = await lstat3(sessionDirectoryPath);
+  if (!directoryInfo.isDirectory()) throw new Error("committed session parent is not a regular directory");
+  const entries = await readdir14(sessionDirectoryPath, { withFileTypes: true });
+  if (entries.length !== 1 || entries[0]?.name !== path32.basename(sessionPath) || !entries[0].isFile()) {
+    throw new Error("committed session directory contains unexpected state");
+  }
+  const sessionInfo = await lstat3(sessionPath);
+  if (!sessionInfo.isFile()) throw new Error("committed session is not a regular file");
+}
+async function inspectOpenAcceptanceReservation(input) {
+  let entries;
+  try {
+    const reservationInfo = await lstat3(input.reservationPath);
+    if (!reservationInfo.isDirectory()) throw new Error("session reservation is not a regular directory");
+    entries = await readdir14(input.reservationPath, { withFileTypes: true });
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
+      const attributableSessionRollback = input.journal.schemaVersion === 2 && input.phase === "publishing-session";
+      if (!["publishing-journal", "rolling-back"].includes(input.phase) && !attributableSessionRollback) {
+        throw new Error("open-draft acceptance reservation is missing without a rollback marker");
+      }
+      return { reservationState: "missing" };
+    }
+    throw error51;
+  }
+  if (entries.length === 0) return { reservationState: "empty" };
+  if (input.journal.schemaVersion !== 2 || !["publishing-session", "rolling-back"].includes(input.phase)) {
+    throw new Error("open-draft acceptance reservation contains unexpected state");
+  }
+  if (entries.length !== 1 || !entries[0].isFile() || !["session.json.tmp", "session.json"].includes(entries[0].name)) {
+    throw new Error("open-draft acceptance reservation contains unexpected state");
+  }
+  const isTemporary = entries[0].name === "session.json.tmp";
+  const artifactPath = `${intakeSessionArtifactPath(input.journal.sessionId)}${isTemporary ? ".tmp" : ""}`;
+  const resolved = await resolveProjectArtifactPath({ repositoryRoot: input.repositoryRoot, artifactPath });
+  const info = await lstat3(resolved.absolutePath);
+  if (!info.isFile()) throw new Error("journaled session publication is not a regular file");
+  const sessionRaw = await readFile18(resolved.absolutePath);
+  if (sha2562(sessionRaw) !== input.journal.sessionSha256) {
+    throw new Error("journaled session publication bytes do not match their transaction hash");
+  }
+  const session = intakeSessionSchema.parse(JSON.parse(sessionRaw.toString("utf8")));
+  if (session.id !== input.journal.sessionId || !await sessionMatchesAcceptedDraft(input.repositoryRoot, session, input.draft)) {
+    throw new Error("journaled session publication does not match draft provenance");
+  }
+  return {
+    reservationState: isTemporary ? "session-temporary" : "session-published",
+    sessionArtifactPath: resolved.absolutePath,
+    sessionRaw
+  };
+}
+async function acceptanceTransactionsDirectory(repositoryRoot) {
+  const sentinel = await resolveProjectArtifactPath({
+    repositoryRoot,
+    artifactPath: ".legion/project/intake/transactions/.acceptance-scan"
+  });
+  return path32.dirname(sentinel.absolutePath);
+}
+async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
+  await assertTransitionLeaseOwned(lease);
+  const transactions = await acceptanceTransactionsDirectory(repositoryRoot);
+  let entries;
+  try {
+    entries = await readdir14(transactions, { withFileTypes: true });
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
+      return { candidates: [], ownershipArtifacts: [], diagnostics: [] };
+    }
+    return {
+      candidates: [],
+      ownershipArtifacts: [],
+      diagnostics: [pendingAcceptanceBlocked("Pending acceptance transactions cannot be inspected safely.")]
+    };
+  }
+  const candidates = [];
+  const ownershipArtifacts = [];
+  const diagnostics = [];
+  const seenDraftIds = /* @__PURE__ */ new Set();
+  const seenSessionIds = /* @__PURE__ */ new Set();
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const ownership = legacyAcceptanceOwnershipName(entry.name);
+    if (ownership !== void 0) {
+      const artifactPath = path32.join(transactions, entry.name);
+      try {
+        if (!entry.isFile()) throw new Error("ownership artifact is not a regular file");
+        const info = await lstat3(artifactPath);
+        if (!info.isFile()) throw new Error("ownership artifact is not a regular file");
+        const raw = await readFile18(artifactPath);
+        if (ownership.kind === "publication-temp") {
+          if (Date.now() - info.mtimeMs <= ACCEPTANCE_LEASE_MS) {
+            throw new Error("lease publication may still have a live owner");
+          }
+        } else {
+          const claim = parsePublishedLeaseClaim({
+            bytes: raw.toString("utf8"),
+            claimPath: artifactPath,
+            journalPath: path32.join(transactions, ownership.journalName)
+          });
+          if (claim.expiresAt > Date.now()) throw new Error("published lease still has a live owner");
+        }
+        ownershipArtifacts.push({
+          kind: ownership.kind,
+          artifactPath,
+          journalPath: path32.join(transactions, ownership.journalName),
+          raw,
+          mtimeMs: info.mtimeMs
+        });
+      } catch (error51) {
+        const message = error51 instanceof Error ? error51.message : String(error51);
+        diagnostics.push(pendingAcceptanceBlocked(`Acceptance ownership artifact ${entry.name} cannot be crossed safely: ${message}.`));
+      }
+      continue;
+    }
+    if (!entry.name.startsWith("itd_")) continue;
+    const publicationMatch = /^(itd_[a-z0-9-]+)\.json\.tmp$/u.exec(entry.name);
+    const journalMatch = /^(itd_[a-z0-9-]+)\.json$/u.exec(entry.name);
+    const rollbackMatch = /^(itd_[a-z0-9-]+)\.json\.rollback$/u.exec(entry.name);
+    const match = publicationMatch ?? journalMatch ?? rollbackMatch;
+    if (match === null) {
+      diagnostics.push(pendingAcceptanceBlocked(`Acceptance-like transaction ${entry.name} is not a recognized journal, rollback marker, or ownership artifact.`));
+      continue;
+    }
+    if (!entry.isFile()) {
+      diagnostics.push(pendingAcceptanceBlocked(`Acceptance transaction ${entry.name} is not a strictly named regular journal.`));
+      continue;
+    }
+    const filenameDraftId = match[1];
+    try {
+      const unresolvedPhase = publicationMatch !== null ? "publishing-journal" : rollbackMatch !== null ? "rolling-back" : "prepared";
+      const resolvedJournal = await resolveProjectArtifactPath({
+        repositoryRoot,
+        artifactPath: publicationMatch !== null ? acceptanceJournalPublicationPath(filenameDraftId) : rollbackMatch !== null ? acceptanceRollbackMarkerPath(filenameDraftId) : acceptanceJournalPath(filenameDraftId)
+      });
+      const resolvedRollbackMarker = await resolveProjectArtifactPath({
+        repositoryRoot,
+        artifactPath: acceptanceRollbackMarkerPath(filenameDraftId)
+      });
+      const journalRaw = await readFile18(resolvedJournal.absolutePath);
+      const journal = parseAcceptanceJournal(journalRaw, filenameDraftId);
+      const phase = unresolvedPhase === "prepared" && journal.schemaVersion === 2 ? "publishing-session" : unresolvedPhase;
+      if (seenDraftIds.has(journal.draftId) || seenSessionIds.has(journal.sessionId)) {
+        diagnostics.push(pendingAcceptanceBlocked(`Acceptance transaction ${entry.name} duplicates a draft or session claim.`));
+        continue;
+      }
+      seenDraftIds.add(journal.draftId);
+      seenSessionIds.add(journal.sessionId);
+      const resolvedDraft = await resolveProjectArtifactPath({
+        repositoryRoot,
+        artifactPath: draftArtifactPath(journal.draftId)
+      });
+      const draftInfo = await lstat3(resolvedDraft.absolutePath);
+      if (!draftInfo.isFile()) throw new Error("referenced draft is not a regular file");
+      const draftRaw = await readFile18(resolvedDraft.absolutePath);
+      const draft = intakeDraftSchema.parse(JSON.parse(draftRaw.toString("utf8")));
+      if (draft.id !== journal.draftId) throw new Error(`referenced draft declares ${draft.id}`);
+      if (journal.schemaVersion === 2) {
+        const expectedDraftSha256 = draft.status === "accepted" ? journal.acceptedDraftSha256 : journal.draftSha256;
+        if (sha2562(draftRaw) !== expectedDraftSha256) throw new Error("referenced draft bytes do not match their transaction hash");
+      }
+      const resolvedSession = await resolveProjectArtifactPath({
+        repositoryRoot,
+        artifactPath: intakeSessionArtifactPath(journal.sessionId)
+      });
+      const reservationPath = path32.dirname(resolvedSession.absolutePath);
+      if (draft.status === "draft") {
+        const reservation = await inspectOpenAcceptanceReservation({
+          repositoryRoot,
+          journal,
+          draft,
+          reservationPath,
+          phase
+        });
+        const active = await readActiveDraftReview(repositoryRoot);
+        if (active.review === void 0 || active.hash === void 0 || active.review.state === "consumed" || active.review.draftId !== draft.id || active.review.draftSha256 !== sha2562(draftRaw)) {
+          throw new Error("open draft is not bound to its exact active review");
+        }
+        candidates.push({
+          kind: "prepared",
+          phase,
+          journal,
+          journalPath: resolvedJournal.absolutePath,
+          rollbackMarkerPath: resolvedRollbackMarker.absolutePath,
+          journalRaw,
+          draft,
+          draftRaw,
+          reservationPath,
+          ...reservation,
+          reviewHash: active.hash
+        });
+        continue;
+      }
+      if (phase === "rolling-back") throw new Error(`rollback marker references ${draft.status} draft`);
+      if (phase === "publishing-journal") throw new Error(`journal publication temporary references ${draft.status} draft`);
+      if (draft.status !== "accepted") throw new Error(`referenced draft is ${draft.status}`);
+      await assertCommittedSessionDirectoryShape(reservationPath, resolvedSession.absolutePath);
+      const sessionRaw = await readFile18(resolvedSession.absolutePath);
+      if (journal.schemaVersion === 2 && sha2562(sessionRaw) !== journal.sessionSha256) {
+        throw new Error("committed session bytes do not match their transaction hash");
+      }
+      const session = intakeSessionSchema.parse(JSON.parse(sessionRaw.toString("utf8")));
+      if (session.id !== journal.sessionId || !await sessionMatchesAcceptedDraft(repositoryRoot, session, draft)) {
+        throw new Error("committed session does not match accepted draft provenance");
+      }
+      candidates.push({
+        kind: "committed",
+        journal,
+        journalPath: resolvedJournal.absolutePath,
+        journalRaw,
+        draft,
+        draftRaw,
+        session,
+        sessionDirectoryPath: reservationPath,
+        sessionPath: resolvedSession.absolutePath,
+        sessionRaw
+      });
+    } catch (error51) {
+      if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ELEASELOST") throw error51;
+      const message = error51 instanceof Error ? error51.message : String(error51);
+      diagnostics.push(pendingAcceptanceBlocked(`Acceptance transaction ${entry.name} is not recoverable automatically: ${message}`));
+    }
+  }
+  if (candidates.filter((candidate) => candidate.kind === "prepared").length > 1) {
+    diagnostics.push(pendingAcceptanceBlocked("Multiple prepared acceptance journals are present; their ownership is ambiguous."));
+  }
+  await assertTransitionLeaseOwned(lease);
+  return { candidates, ownershipArtifacts, diagnostics };
+}
+async function assertLegacyAcceptanceOwnershipUnchanged(artifact, lease) {
+  await assertTransitionLeaseOwned(lease);
+  const info = await lstat3(artifact.artifactPath);
+  if (!info.isFile() || info.mtimeMs !== artifact.mtimeMs) {
+    throw new Error("acceptance ownership artifact changed during recovery");
+  }
+  const raw = await readFile18(artifact.artifactPath);
+  if (!raw.equals(artifact.raw)) throw new Error("acceptance ownership artifact changed during recovery");
+  if (artifact.kind === "publication-temp") {
+    if (Date.now() - info.mtimeMs <= ACCEPTANCE_LEASE_MS) {
+      throw new Error("acceptance lease publication became live during recovery");
+    }
+  } else {
+    const claim = parsePublishedLeaseClaim({
+      bytes: raw.toString("utf8"),
+      claimPath: artifact.artifactPath,
+      journalPath: artifact.journalPath
+    });
+    if (claim.expiresAt > Date.now()) throw new Error("acceptance lease became live during recovery");
+  }
+  await assertTransitionLeaseOwned(lease);
+}
+async function assertAcceptanceRecoveryCandidateUnchanged(repositoryRoot, candidate, lease) {
+  await assertTransitionLeaseOwned(lease);
+  if (!(await readFile18(candidate.journalPath)).equals(candidate.journalRaw)) throw new Error("acceptance journal changed during recovery");
+  const resolvedDraft = await resolveProjectArtifactPath({
+    repositoryRoot,
+    artifactPath: draftArtifactPath(candidate.journal.draftId)
+  });
+  if (!(await readFile18(resolvedDraft.absolutePath)).equals(candidate.draftRaw)) throw new Error("acceptance draft changed during recovery");
+  if (candidate.kind === "prepared") {
+    const active = await readActiveDraftReview(repositoryRoot);
+    if (active.hash !== candidate.reviewHash) throw new Error("active review changed during acceptance recovery");
+    if (candidate.reservationState === "missing") {
+      try {
+        await lstat3(candidate.reservationPath);
+        throw new Error("acceptance reservation reappeared during recovery");
+      } catch (error51) {
+        if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
+      }
+    } else {
+      const info = await lstat3(candidate.reservationPath);
+      if (!info.isDirectory()) throw new Error("acceptance reservation changed during recovery");
+      const entries = await readdir14(candidate.reservationPath, { withFileTypes: true });
+      if (candidate.reservationState === "empty") {
+        if (entries.length !== 0) throw new Error("acceptance reservation changed during recovery");
+      } else {
+        if (candidate.sessionArtifactPath === void 0 || candidate.sessionRaw === void 0 || entries.length !== 1 || !entries[0].isFile() || path32.join(candidate.reservationPath, entries[0].name) !== candidate.sessionArtifactPath || !(await readFile18(candidate.sessionArtifactPath)).equals(candidate.sessionRaw)) {
+          throw new Error("journaled session publication changed during recovery");
+        }
+      }
+    }
+  } else {
+    await assertCommittedSessionDirectoryShape(candidate.sessionDirectoryPath, candidate.sessionPath);
+    if (!(await readFile18(candidate.sessionPath)).equals(candidate.sessionRaw)) {
+      throw new Error("committed acceptance session changed during recovery");
+    }
+  }
+  await assertTransitionLeaseOwned(lease);
+}
+async function reconcilePendingAcceptanceJournals(repositoryRoot, lease, hooks = {}) {
+  const scanned = await scanAcceptanceRecoveryCandidates(repositoryRoot, lease);
+  if (scanned.diagnostics.length > 0) return { ok: false, diagnostics: scanned.diagnostics };
+  const preparedCandidates = scanned.candidates.filter(
+    (candidate) => candidate.kind === "prepared"
+  );
+  const committedCandidates = scanned.candidates.filter(
+    (candidate) => candidate.kind === "committed"
+  );
+  const mixedAcceptanceState = preparedCandidates.length > 0 && committedCandidates.length > 0;
+  let candidates = mixedAcceptanceState ? preparedCandidates : scanned.candidates;
+  const scope = hooks.scope;
+  if (!mixedAcceptanceState && scope?.kind === "bare-acceptance") {
+    if (committedCandidates.length > 1) {
+      return {
+        ok: false,
+        diagnostics: [pendingAcceptanceBlocked("Multiple committed acceptance journals are present; name the draft to replay its session.")]
+      };
+    }
+    if (committedCandidates.length === 1) candidates = committedCandidates;
+  } else if (!mixedAcceptanceState && scope?.kind === "explicit-acceptance" && committedCandidates.length > 0) {
+    const selected = committedCandidates.find((candidate) => candidate.draft.id === scope.draftId);
+    if (selected === void 0) {
+      return {
+        ok: false,
+        diagnostics: [pendingAcceptanceBlocked(`Committed acceptance journals exist, but none belongs to requested draft ${scope.draftId}.`)]
+      };
+    }
+    candidates = [selected];
+  }
+  for (const artifact of scanned.ownershipArtifacts) {
+    try {
+      await hooks.beforeMutation?.();
+      await assertLegacyAcceptanceOwnershipUnchanged(artifact, lease);
+      await assertTransitionLeaseOwned(lease);
+      await rm7(artifact.artifactPath);
+    } catch (error51) {
+      if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ELEASELOST") throw error51;
+      const message = error51 instanceof Error ? error51.message : String(error51);
+      return {
+        ok: false,
+        diagnostics: [pendingAcceptanceBlocked(`Acceptance ownership artifact ${path32.basename(artifact.artifactPath)} changed before recovery: ${message}`)]
+      };
+    }
+  }
+  const rolledBackDraftIds = [];
+  const committed = [];
+  for (const candidate of candidates) {
+    try {
+      await hooks.beforeMutation?.();
+      if (candidate.kind === "prepared") {
+        let rollback = candidate;
+        if (candidate.phase !== "rolling-back") {
+          await assertAcceptanceRecoveryCandidateUnchanged(repositoryRoot, candidate, lease);
+          await assertTransitionLeaseOwned(lease);
+          await rename5(candidate.journalPath, candidate.rollbackMarkerPath);
+          rollback = {
+            ...candidate,
+            phase: "rolling-back",
+            journalPath: candidate.rollbackMarkerPath
+          };
+        }
+        if (rollback.reservationState === "session-temporary" || rollback.reservationState === "session-published") {
+          await assertAcceptanceRecoveryCandidateUnchanged(repositoryRoot, rollback, lease);
+          if (rollback.sessionArtifactPath === void 0) throw new Error("journaled session publication path is missing");
+          await assertTransitionLeaseOwned(lease);
+          await rm7(rollback.sessionArtifactPath);
+          const {
+            sessionArtifactPath: _removedSessionArtifactPath,
+            sessionRaw: _removedSessionRaw,
+            ...withoutSessionPublication
+          } = rollback;
+          rollback = {
+            ...withoutSessionPublication,
+            reservationState: "empty"
+          };
+        }
+        if (rollback.reservationState === "empty") {
+          await assertAcceptanceRecoveryCandidateUnchanged(repositoryRoot, rollback, lease);
+          await assertTransitionLeaseOwned(lease);
+          await rmdir2(rollback.reservationPath);
+          await hooks.afterReservationRemoved?.();
+          rollback = { ...rollback, reservationState: "missing" };
+        }
+        await assertAcceptanceRecoveryCandidateUnchanged(repositoryRoot, rollback, lease);
+        await assertTransitionLeaseOwned(lease);
+        await rm7(rollback.journalPath);
+        rolledBackDraftIds.push(rollback.draft.id);
+      } else {
+        await assertAcceptanceRecoveryCandidateUnchanged(repositoryRoot, candidate, lease);
+        await assertTransitionLeaseOwned(lease);
+        await rm7(candidate.journalPath);
+        committed.push({ draft: candidate.draft, session: candidate.session });
+      }
+    } catch (error51) {
+      if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ELEASELOST") throw error51;
+      const message = error51 instanceof Error ? error51.message : String(error51);
+      return {
+        ok: false,
+        diagnostics: [pendingAcceptanceBlocked(`Acceptance transaction ${candidate.journal.draftId} changed before recovery: ${message}`)]
+      };
+    }
+  }
+  return { ok: true, rolledBackDraftIds, committed, stoppedAfterMixedRecovery: mixedAcceptanceState };
+}
+async function writeAcceptanceJournal(repositoryRoot, journal, lease, afterTemporaryWrite) {
+  const validated = parseAcceptanceJournal(
+    Buffer.from(`${JSON.stringify(journal)}
+`, "utf8"),
+    journal.draftId
+  );
+  if (validated.schemaVersion !== 2) throw new Error("acceptance journal did not retain its publication phase");
+  await assertTransitionLeaseOwned(lease);
+  const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath: acceptanceJournalPath(journal.draftId) });
+  const temporaryResolved = await resolveProjectArtifactPath({
+    repositoryRoot,
+    artifactPath: acceptanceJournalPublicationPath(journal.draftId)
+  });
+  const temporary = temporaryResolved.absolutePath;
+  await assertTransitionLeaseOwned(lease);
+  await rm7(temporary, { force: true });
+  await assertTransitionLeaseOwned(lease);
+  await writeFile8(temporary, `${JSON.stringify(validated)}
+`, { encoding: "utf8", flag: "wx" });
+  await afterTemporaryWrite?.();
+  await assertTransitionLeaseOwned(lease);
+  await rename5(temporary, resolved.absolutePath);
+}
+async function removeAcceptanceJournal(repositoryRoot, draftId, lease) {
+  const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: acceptanceJournalPath(draftId) });
+  await assertTransitionLeaseOwned(lease);
+  await rm7(resolved.absolutePath, { force: true });
+}
+async function sessionMatchesAcceptedDraft(repositoryRoot, session, draft) {
+  const replayed = await replayDraft(repositoryRoot, draft);
+  if (!replayed.ok || session.answers.length !== replayed.previewSession.answers.length) return false;
+  return replayed.previewSession.answers.every((expected) => session.answers.some(
+    (answer) => answer.nodeId === expected.nodeId && answer.slot === expected.slot && JSON.stringify(answer.value) === JSON.stringify(expected.value) && answer.source === "draft-accepted" && answer.draftAcceptedFrom?.draftId === expected.draftAcceptedFrom?.draftId && answer.draftAcceptedFrom?.answerAnchor === expected.draftAcceptedFrom?.answerAnchor
+  ));
+}
+async function recoverIntakeLifecycleArtifactsWithLease(repositoryRoot, recoveryLease, hooks = {}) {
+  const acceptance = await reconcilePendingAcceptanceJournals(repositoryRoot, recoveryLease, {
+    ...hooks.beforeAcceptanceJournalCleanup === void 0 ? {} : { beforeMutation: hooks.beforeAcceptanceJournalCleanup },
+    ...hooks.afterAcceptanceReservationRemoved === void 0 ? {} : { afterReservationRemoved: hooks.afterAcceptanceReservationRemoved }
+  });
+  if (!acceptance.ok) return acceptance;
+  if (acceptance.rolledBackDraftIds.length > 0) return acceptance;
+  try {
+    await assertTransitionLeaseOwned(recoveryLease);
+    await recoverDraftReplacement(repositoryRoot, recoveryLease);
+    await assertTransitionLeaseOwned(recoveryLease);
+    try {
+      const review = (await readActiveDraftReview(repositoryRoot)).review;
+      if (review !== void 0) {
+        const draft = await loadStagedDraft(repositoryRoot, review.draftId);
+        if (draft !== void 0 && draft.status !== "draft") {
+          await consumeActiveReviewForDraft(repositoryRoot, review.draftId, recoveryLease);
+        }
+      }
+    } catch {
+    }
+    const drafts = path32.join(repositoryRoot, ".legion", "project", "intake", "drafts");
+    try {
+      const names = await readdir14(drafts);
+      for (const name of names) {
+        const match = /^(itd_[a-z0-9-]+\.json)\.[^.]+\.tmp$/u.exec(name);
+        if (match === null || !names.includes(match[1])) continue;
+        await assertTransitionLeaseOwned(recoveryLease);
+        await rm7(path32.join(drafts, name), { force: true });
+      }
+    } catch (error51) {
+      if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
+    }
+  } catch {
+  }
+  return acceptance;
+}
+async function recoverIntakeLifecycleArtifacts(repositoryRoot, hooks = {}) {
+  let recoveryLease;
+  try {
+    recoveryLease = await acquireDraftAcceptanceLease(repositoryRoot, INTAKE_TRANSITION_KEY);
+    return await recoverIntakeLifecycleArtifactsWithLease(repositoryRoot, recoveryLease, hooks);
+  } catch {
+    return void 0;
+  } finally {
+    if (recoveryLease !== void 0) await releaseDraftAcceptanceLease(recoveryLease);
+  }
+}
+async function publishDraftReview(input) {
+  let lease;
+  try {
+    lease = await acquireDraftAcceptanceLease(input.repositoryRoot, input.draftId);
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "EEXIST") return {
+      ok: false,
+      diagnostics: [{ code: "draft_transition_in_progress", message: "Another intake draft transition is in progress." }]
+    };
+    throw error51;
+  }
+  try {
+    const acceptance = await reconcilePendingAcceptanceJournals(input.repositoryRoot, lease);
+    if (!acceptance.ok) return { ok: false, diagnostics: acceptance.diagnostics };
+    if (acceptance.rolledBackDraftIds.length > 0) return {
+      ok: false,
+      diagnostics: [pendingAcceptanceRecovered(acceptance.rolledBackDraftIds)]
+    };
+    const scanned = await inspectActiveDraftCandidates(input.repositoryRoot);
+    if (!scanned.ok) return scanned;
+    const open3 = scanned.drafts;
+    if (open3.length > 1) return {
+      ok: false,
+      diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; no review can be selected safely." }]
+    };
+    if (open3[0]?.id !== input.draftId) return {
+      ok: false,
+      diagnostics: [{ code: "draft_not_open", message: `Draft ${input.draftId} is not the single open draft.` }]
+    };
+    const resolved = await resolveProjectArtifactPath({ repositoryRoot: input.repositoryRoot, artifactPath: draftArtifactPath(input.draftId) });
+    const raw = await readFile18(resolved.absolutePath);
+    const draft = intakeDraftSchema.parse(JSON.parse(raw.toString("utf8")));
+    const binding = await validateDraftPreflightBinding(
+      { repositoryRoot: input.repositoryRoot, draft, ...input.updatedAt === void 0 ? {} : { now: input.updatedAt } },
+      lease
+    );
+    const evidence = await validateDraftEvidence(input.repositoryRoot, draft);
+    const drift = [...binding, ...evidence];
+    if (drift.length > 0) {
+      const invalidated = intakeDraftSchema.parse({ ...draft, status: "invalidated" });
+      await assertTransitionLeaseOwned(lease);
+      await writeDraftCas(input.repositoryRoot, invalidated, createHash20("sha256").update(raw).digest("hex"), lease);
+      await assertTransitionLeaseOwned(lease);
+      await markActiveReview(input.repositoryRoot, {
+        state: "unreviewed",
+        draftId: draft.id,
+        draftSha256: sha2562(raw),
+        ...input.updatedAt === void 0 ? {} : { updatedAt: input.updatedAt }
+      }, lease);
+      return {
+        ok: false,
+        diagnostics: [...drift, { code: "replacement_draft_required", message: `Draft ${draft.id} was invalidated without changing its content; stage and display a new draft ID.` }]
+      };
+    }
+    const replayed = await replayDraft(input.repositoryRoot, draft);
+    if (!replayed.ok) return replayed;
+    await input.beforeReviewPublication?.();
+    await assertTransitionLeaseOwned(lease);
+    const review = await markActiveReview(input.repositoryRoot, {
+      state: "reviewed",
+      draftId: draft.id,
+      draftSha256: sha2562(raw),
+      ...input.updatedAt === void 0 ? {} : { updatedAt: input.updatedAt }
+    }, lease);
+    return { ok: true, draft, review, artifactPath: draftArtifactPath(draft.id) };
+  } catch (error51) {
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return {
+      ok: false,
+      diagnostics: [{
+        code: error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ELEASELOST" ? "draft_transition_lease_lost" : "invalid_draft",
+        message
+      }]
+    };
+  } finally {
+    await releaseDraftAcceptanceLease(lease);
+  }
+}
+async function resolveReviewedDraftDecision(input) {
+  const scanned = await inspectActiveDraftCandidates(input.repositoryRoot);
+  if (!scanned.ok) return scanned;
+  const open3 = scanned.drafts;
+  if (open3.length > 1) return {
+    ok: false,
+    diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; name and repair them before making a decision." }]
+  };
+  let active;
+  try {
+    active = (await readActiveDraftReview(input.repositoryRoot)).review;
+  } catch {
+    return { ok: false, diagnostics: [{ code: "invalid_active_review", message: "The active review record is unreadable and must be repaired." }] };
+  }
+  if (active === void 0 || active.state !== "reviewed") return {
+    ok: false,
+    diagnostics: [{ code: "draft_review_required", message: "Display a fully validated draft review before accepting or discarding it." }]
+  };
+  if (input.explicitDraftId !== void 0 && input.explicitDraftId !== active.draftId) return {
+    ok: false,
+    diagnostics: [{ code: "stale_draft_decision", message: `Draft ${input.explicitDraftId} is not the currently displayed draft ${active.draftId}.` }]
+  };
+  if (open3[0]?.id !== active.draftId) return {
+    ok: false,
+    diagnostics: [{ code: "stale_draft_decision", message: `Displayed draft ${active.draftId} is no longer the single open draft.` }]
+  };
+  return { ok: true, draftId: active.draftId };
+}
+async function validateReviewedBinding(repositoryRoot, draftId, raw, lease, beforeMismatchRebind, expected) {
+  const scanned = await inspectActiveDraftCandidates(repositoryRoot);
+  if (!scanned.ok) return { ok: false, diagnostics: scanned.diagnostics };
+  const open3 = scanned.drafts;
+  if (open3.length > 1) return {
+    ok: false,
+    diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; no decision is safe." }]
+  };
+  const current = await readActiveDraftReview(repositoryRoot);
+  const review = current.review;
+  if (review === void 0 || current.hash === void 0 || review.state !== "reviewed") return {
+    ok: false,
+    diagnostics: [{ code: "draft_review_required", message: "Display this draft review before making a decision." }]
+  };
+  if (review.draftId !== draftId) return {
+    ok: false,
+    diagnostics: [{ code: "stale_draft_decision", message: `Draft ${draftId} is not the currently displayed draft ${review.draftId}.` }]
+  };
+  if (review.draftSha256 !== sha2562(raw)) {
+    await beforeMismatchRebind?.();
+    if (!await renewAndValidateLease(lease)) return {
+      ok: false,
+      diagnostics: [{
+        code: "draft_transition_lease_lost",
+        message: `Draft ${draftId} transition ownership changed before the review binding could be updated.`
+      }]
+    };
+    await markActiveReview(repositoryRoot, { state: "unreviewed", draftId: review.draftId, draftSha256: review.draftSha256 }, lease);
+    return {
+      ok: false,
+      diagnostics: [{ code: "displayed_draft_changed", message: `Draft ${draftId} bytes changed after display; display a new validated review.` }]
+    };
+  }
+  const binding = { recordHash: current.hash, review };
+  if (expected !== void 0 && (binding.recordHash !== expected.recordHash || binding.review.token !== expected.review.token || binding.review.state !== expected.review.state || binding.review.draftId !== expected.review.draftId || binding.review.draftSha256 !== expected.review.draftSha256)) {
+    return {
+      ok: false,
+      diagnostics: [{ code: "stale_draft_decision", message: `The displayed review binding for draft ${draftId} changed before the decision boundary.` }]
+    };
+  }
+  return { ok: true, binding };
+}
+async function revalidateDraftDecisionBoundary(input) {
+  await assertTransitionLeaseOwned(input.lease);
+  const resolved = await resolveProjectArtifactPath({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: draftArtifactPath(input.draft.id)
+  });
+  let currentRaw;
+  try {
+    currentRaw = await readFile18(resolved.absolutePath);
+  } catch {
+    return {
+      ok: false,
+      diagnostics: [{ code: "draft_not_found", message: `No staged intake draft ${input.draft.id} exists.` }]
+    };
+  }
+  if (!currentRaw.equals(input.expectedRaw)) {
+    return {
+      ok: false,
+      diagnostics: [{ code: "displayed_draft_changed", message: `Draft ${input.draft.id} bytes changed before the decision boundary.` }]
+    };
+  }
+  const reviewed = input.requireReviewed ? await validateReviewedBinding(
+    input.repositoryRoot,
+    input.draft.id,
+    currentRaw,
+    input.lease,
+    void 0,
+    input.expectedReviewedBinding
+  ) : void 0;
+  const reviewDiagnostics = reviewed === void 0 || reviewed.ok ? [] : reviewed.diagnostics;
+  const bindingDiagnostics = await validateDraftPreflightBinding({
+    repositoryRoot: input.repositoryRoot,
+    draft: input.draft,
+    ...input.now === void 0 ? {} : { now: input.now }
+  }, input.lease);
+  const evidenceDiagnostics = await validateDraftEvidence(input.repositoryRoot, input.draft);
+  const diagnostics = [...reviewDiagnostics, ...bindingDiagnostics, ...evidenceDiagnostics];
+  if (diagnostics.length > 0) return { ok: false, diagnostics };
+  const replayed = await replayDraft(input.repositoryRoot, input.draft);
+  await assertTransitionLeaseOwned(input.lease);
+  return replayed;
+}
+async function discardStagedDraft(input) {
+  let lease;
+  try {
+    lease = await acquireDraftAcceptanceLease(input.repositoryRoot, input.draftId);
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "EEXIST") {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [{ code: "draft_transition_in_progress", message: `Draft ${input.draftId} is already being accepted or discarded.` }]
+      };
+    }
+    throw error51;
+  }
+  try {
+    await input.afterLeaseAcquired?.(lease.path);
+    const acceptance = await reconcilePendingAcceptanceJournals(input.repositoryRoot, lease);
+    if (!acceptance.ok) return { ok: false, status: "draft_review", diagnostics: acceptance.diagnostics };
+    if (acceptance.rolledBackDraftIds.length > 0) return {
+      ok: false,
+      status: "draft_review",
+      diagnostics: [pendingAcceptanceRecovered(acceptance.rolledBackDraftIds)]
+    };
+    const foundSession = await findActiveSession(input.repositoryRoot);
+    if (!foundSession.ok) {
+      return { ok: false, status: "draft_review", diagnostics: [{ code: "invalid_session", message: foundSession.reason }] };
+    }
+    if (foundSession.session !== void 0) {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [{ code: "active_session", message: `Session ${foundSession.session.id} is already active; a draft cannot be discarded after session creation.` }]
+      };
+    }
+    const resolved = await resolveProjectArtifactPath({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: draftArtifactPath(input.draftId)
+    });
+    let bytes;
+    let draft;
+    try {
+      bytes = await readFile18(resolved.absolutePath);
+      draft = intakeDraftSchema.parse(JSON.parse(bytes.toString("utf8")));
+    } catch {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [{ code: "draft_not_found", message: `No staged intake draft ${input.draftId} exists.` }]
+      };
+    }
+    if (draft.status !== "draft") {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [{ code: "draft_not_open", message: `Draft ${draft.id} is ${draft.status}, not open for discard.` }]
+      };
+    }
+    let reviewedBinding;
+    if (input.requireReviewed === true) {
+      const reviewed = await validateReviewedBinding(
+        input.repositoryRoot,
+        draft.id,
+        bytes,
+        lease,
+        input.beforeActiveReviewMismatchRebind
+      );
+      if (!reviewed.ok) return { ok: false, status: "draft_review", diagnostics: reviewed.diagnostics };
+      reviewedBinding = reviewed.binding;
+    }
+    await input.afterInitialBindingValidation?.();
+    const finalStaged = await revalidateDraftDecisionBoundary({
+      repositoryRoot: input.repositoryRoot,
+      draft,
+      expectedRaw: bytes,
+      lease,
+      requireReviewed: input.requireReviewed === true,
+      ...reviewedBinding === void 0 ? {} : { expectedReviewedBinding: reviewedBinding }
+    });
+    if (!finalStaged.ok) return { ok: false, status: "draft_review", diagnostics: finalStaged.diagnostics };
+    const discarded = intakeDraftSchema.parse({ ...draft, status: "discarded" });
+    await writeDraftCas(input.repositoryRoot, discarded, createHash20("sha256").update(bytes).digest("hex"), lease);
+    if (await renewAndValidateLease(lease)) await consumeActiveReviewForDraft(input.repositoryRoot, draft.id, lease);
+    return { ok: true, status: "discarded", draft: discarded };
+  } finally {
+    await releaseDraftAcceptanceLease(lease, void 0, input.beforeLeaseReleaseRename);
+  }
+}
+async function acceptStagedDraft(input) {
+  const requestedDraftId = input.draftId;
+  const requestedLabel = requestedDraftId === void 0 ? "The reviewed draft" : `Draft ${requestedDraftId}`;
+  let lease;
+  try {
+    lease = await acquireDraftAcceptanceLease(input.repositoryRoot, requestedDraftId ?? INTAKE_TRANSITION_KEY);
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "EEXIST") {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [{ code: "draft_acceptance_in_progress", message: `${requestedLabel} is already being accepted.` }]
+      };
+    }
+    throw error51;
+  }
+  try {
+    await input.afterLeaseAcquired?.(lease.path);
+    if (!await renewAndValidateLease(lease)) {
+      return { ok: false, status: "draft_review", diagnostics: [{ code: "draft_acceptance_lease_lost", message: `${requestedLabel} acceptance lease was superseded.` }] };
+    }
+    let acceptance;
+    try {
+      acceptance = await reconcilePendingAcceptanceJournals(input.repositoryRoot, lease, {
+        scope: requestedDraftId === void 0 ? { kind: "bare-acceptance" } : { kind: "explicit-acceptance", draftId: requestedDraftId },
+        ...input.beforeAcceptanceRecoveryMutation === void 0 ? {} : { beforeMutation: input.beforeAcceptanceRecoveryMutation }
+      });
+    } catch (error51) {
+      if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ELEASELOST") {
+        return {
+          ok: false,
+          status: "draft_review",
+          diagnostics: [{ code: "draft_acceptance_lease_lost", message: `${requestedLabel} acceptance ownership changed during recovery.` }]
+        };
+      }
+      throw error51;
+    }
+    if (!acceptance.ok) return { ok: false, status: "draft_review", diagnostics: acceptance.diagnostics };
+    if (acceptance.stoppedAfterMixedRecovery) {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [pendingAcceptanceRecovered(acceptance.rolledBackDraftIds)]
+      };
+    }
+    const committedAcceptance = requestedDraftId === void 0 ? acceptance.committed.length === 1 ? acceptance.committed[0] : void 0 : acceptance.committed.find((candidate) => candidate.draft.id === requestedDraftId);
+    if (committedAcceptance !== void 0) {
+      return { ok: true, status: "interview", draft: committedAcceptance.draft, session: committedAcceptance.session };
+    }
+    if (acceptance.rolledBackDraftIds.length > 0 && requestedDraftId !== void 0 && !acceptance.rolledBackDraftIds.includes(requestedDraftId)) {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [pendingAcceptanceRecovered(acceptance.rolledBackDraftIds)]
+      };
+    }
+    let draftId = requestedDraftId;
+    if (input.requireReviewed === true) {
+      await assertTransitionLeaseOwned(lease);
+      const target = await resolveReviewedDraftDecision({
+        repositoryRoot: input.repositoryRoot,
+        ...requestedDraftId === void 0 ? {} : { explicitDraftId: requestedDraftId }
+      });
+      await assertTransitionLeaseOwned(lease);
+      if (!target.ok) return { ok: false, status: "draft_review", diagnostics: target.diagnostics };
+      draftId = target.draftId;
+    }
+    if (draftId === void 0) {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [{ code: "draft_not_found", message: "Name a staged draft for acceptance." }]
+      };
+    }
+    const draftResolved = await resolveProjectArtifactPath({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: draftArtifactPath(draftId)
+    });
+    let draftRaw;
+    let draft;
+    try {
+      draftRaw = await readFile18(draftResolved.absolutePath);
+      draft = intakeDraftSchema.parse(JSON.parse(draftRaw.toString("utf8")));
+    } catch {
+      draftRaw = Buffer.alloc(0);
+      draft = void 0;
+    }
+    if (draft === void 0) {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [{ code: "draft_not_found", message: `No staged intake draft ${draftId} exists.` }]
+      };
+    }
+    if (draft.status !== "draft") {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [{ code: "draft_not_open", message: `Draft ${draft.id} is ${draft.status}, not open for acceptance.` }]
+      };
+    }
+    let reviewedBinding;
+    if (input.requireReviewed === true) {
+      const reviewed = await validateReviewedBinding(
+        input.repositoryRoot,
+        draft.id,
+        draftRaw,
+        lease,
+        input.beforeActiveReviewMismatchRebind
+      );
+      if (!reviewed.ok) return { ok: false, status: "draft_review", diagnostics: reviewed.diagnostics };
+      reviewedBinding = reviewed.binding;
+    }
+    const foundSession = await findActiveSession(input.repositoryRoot);
+    if (!foundSession.ok) {
+      return { ok: false, status: "draft_review", diagnostics: [{ code: "invalid_session", message: foundSession.reason }] };
+    }
+    if (foundSession.session !== void 0) {
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [{ code: "active_session", message: `Session ${foundSession.session.id} is already active; abort it before accepting ${draft.id}.` }]
+      };
+    }
+    const bindingDiagnostics = await validateDraftPreflightBinding({
+      repositoryRoot: input.repositoryRoot,
+      draft,
+      now: input.createdAt
+    }, lease);
+    const expectedDraftHash = createHash20("sha256").update(draftRaw).digest("hex");
+    const evidenceDiagnostics = await validateDraftEvidence(input.repositoryRoot, draft);
+    const driftDiagnostics = [...bindingDiagnostics, ...evidenceDiagnostics];
+    if (driftDiagnostics.length > 0) {
+      const invalidated = intakeDraftSchema.parse({ ...draft, status: "invalidated" });
+      if (!await renewAndValidateLease(lease)) {
+        return { ok: false, status: "draft_review", diagnostics: [{ code: "draft_acceptance_lease_lost", message: `Draft ${draft.id} acceptance lease was superseded before evidence-drift update.` }] };
+      }
+      await writeDraftCas(input.repositoryRoot, invalidated, expectedDraftHash, lease);
+      if (input.requireReviewed === true && await renewAndValidateLease(lease)) {
+        await markActiveReview(input.repositoryRoot, { state: "unreviewed", draftId: draft.id, draftSha256: sha2562(draftRaw) }, lease);
+      }
+      return {
+        ok: false,
+        status: "draft_review",
+        diagnostics: [...driftDiagnostics, { code: "replacement_draft_required", message: `Draft ${draft.id} was invalidated without changing its content; stage and display a new draft ID.` }]
+      };
+    }
+    const staged = await replayDraft(input.repositoryRoot, draft);
+    if (!staged.ok) return { ok: false, status: "draft_review", diagnostics: staged.diagnostics };
+    await input.afterInitialBindingValidation?.();
+    await assertTransitionLeaseOwned(lease);
+    const finalStaged = await revalidateDraftDecisionBoundary({
+      repositoryRoot: input.repositoryRoot,
+      draft,
+      expectedRaw: draftRaw,
+      lease,
+      now: input.createdAt,
+      requireReviewed: input.requireReviewed === true,
+      ...reviewedBinding === void 0 ? {} : { expectedReviewedBinding: reviewedBinding }
+    });
+    if (!finalStaged.ok) return { ok: false, status: "draft_review", diagnostics: finalStaged.diagnostics };
+    const mutationFence = () => assertTransitionLeaseOwned(lease);
+    const sessionId = await allocateSessionId(input.repositoryRoot, input.createdAt, mutationFence);
+    let committed = false;
+    let committedDraft;
+    let committedSession;
+    try {
+      const explorationRef = draft.explorationRefs[0];
+      const session = intakeSessionSchema.parse({
+        ...finalStaged.previewSession,
+        id: sessionId,
+        createdAt: input.createdAt,
+        answers: finalStaged.previewSession.answers.map((answer) => ({ ...answer, answeredAt: input.createdAt })),
+        ...explorationRef === void 0 ? {} : { explorationRef: { runId: explorationRef.runId, artifact: explorationRef.artifact } }
+      });
+      const acceptedDraft = intakeDraftSchema.parse({ ...draft, status: "accepted" });
+      const journal = {
+        schemaVersion: 2,
+        phase: "publishing-session",
+        draftId: draft.id,
+        sessionId,
+        draftSha256: sha2562(draftRaw),
+        acceptedDraftSha256: sha2562(draftBytes(acceptedDraft)),
+        sessionSha256: sha2562(intakeSessionBytes(session))
+      };
+      if (!await renewAndValidateLease(lease)) throw new Error("draft acceptance lease was superseded before journal write");
+      await writeAcceptanceJournal(
+        input.repositoryRoot,
+        journal,
+        lease,
+        input.afterAcceptanceJournalTemporaryWrite
+      );
+      await input.afterAcceptanceJournal?.();
+      if (!await renewAndValidateLease(lease)) throw new Error("draft acceptance lease was superseded before session write");
+      await input.beforeSessionPublish?.();
+      const beforeSessionBoundary = await revalidateDraftDecisionBoundary({
+        repositoryRoot: input.repositoryRoot,
+        draft,
+        expectedRaw: draftRaw,
+        lease,
+        now: input.createdAt,
+        requireReviewed: input.requireReviewed === true,
+        ...reviewedBinding === void 0 ? {} : { expectedReviewedBinding: reviewedBinding }
+      });
+      if (!beforeSessionBoundary.ok) throw new DraftDecisionValidationError(beforeSessionBoundary.diagnostics);
+      await saveSession(input.repositoryRoot, session, {
+        beforeMutation: mutationFence,
+        ...input.afterSessionTemporaryWrite === void 0 ? {} : { afterTemporaryWrite: input.afterSessionTemporaryWrite },
+        ...input.afterSessionPublish === void 0 ? {} : { afterPublish: input.afterSessionPublish }
+      });
+      await input.beforeDraftCommit?.();
+      if (!await renewAndValidateLease(lease)) throw new Error("draft acceptance lease was superseded before draft commit");
+      const beforeDraftBoundary = await revalidateDraftDecisionBoundary({
+        repositoryRoot: input.repositoryRoot,
+        draft,
+        expectedRaw: draftRaw,
+        lease,
+        now: input.createdAt,
+        requireReviewed: input.requireReviewed === true,
+        ...reviewedBinding === void 0 ? {} : { expectedReviewedBinding: reviewedBinding }
+      });
+      if (!beforeDraftBoundary.ok) throw new DraftDecisionValidationError(beforeDraftBoundary.diagnostics);
+      await writeDraftCas(input.repositoryRoot, acceptedDraft, expectedDraftHash, lease);
+      committed = true;
+      committedDraft = acceptedDraft;
+      committedSession = session;
+      if (!await renewAndValidateLease(lease)) return { ok: true, status: "interview", draft: acceptedDraft, session };
+      await consumeActiveReviewForDraft(input.repositoryRoot, draft.id, lease);
+      await input.afterDraftCommit?.();
+      await input.beforeJournalCleanup?.();
+      if (!await renewAndValidateLease(lease)) return { ok: true, status: "interview", draft: acceptedDraft, session };
+      await removeAcceptanceJournal(input.repositoryRoot, draft.id, lease);
+      return { ok: true, status: "interview", draft: acceptedDraft, session };
+    } catch (error51) {
+      if (committed && committedDraft !== void 0 && committedSession !== void 0) {
+        return { ok: true, status: "interview", draft: committedDraft, session: committedSession };
+      }
+      await rollbackSessionCreation(input.repositoryRoot, sessionId, mutationFence).catch(() => void 0);
+      await removeAcceptanceJournal(input.repositoryRoot, draft.id, lease).catch(() => void 0);
+      if (error51 instanceof DraftDecisionValidationError) {
+        return { ok: false, status: "draft_review", diagnostics: error51.diagnostics };
+      }
+      const message = error51 instanceof Error ? error51.message : String(error51);
+      return { ok: false, status: "draft_review", diagnostics: [{ code: "draft_acceptance_failed", message }] };
+    }
+  } finally {
+    await releaseDraftAcceptanceLease(lease, input.beforeLeaseRelease, input.beforeLeaseReleaseRename);
+  }
+}
+var PREFLIGHT_ARTIFACT_PATH = ".legion/project/intake/preflight.json";
+async function readPreflight(repositoryRoot, lease) {
+  await assertTransitionLeaseOwned(lease);
+  try {
+    const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: PREFLIGHT_ARTIFACT_PATH });
+    const value = JSON.parse(await readFile18(resolved.absolutePath, "utf8"));
+    const parsed = intakePreflightStateSchema.safeParse(value);
+    await assertTransitionLeaseOwned(lease);
+    return parsed.success ? parsed.data : void 0;
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ELEASELOST") throw error51;
+    await assertTransitionLeaseOwned(lease);
+    return void 0;
+  }
+}
+async function writePreflight(repositoryRoot, state, lease, hooks = {}) {
+  const validated = intakePreflightStateSchema.parse(state);
+  await assertTransitionLeaseOwned(lease);
+  const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath: PREFLIGHT_ARTIFACT_PATH });
+  const temporary = `${resolved.absolutePath}.${randomUUID3()}.tmp`;
+  await hooks.beforeWrite?.();
+  await assertTransitionLeaseOwned(lease);
+  await writeFile8(temporary, `${JSON.stringify(validated, void 0, 2)}
+`, { encoding: "utf8", flag: "wx" });
+  try {
+    await hooks.beforePublish?.();
+    await assertTransitionLeaseOwned(lease);
+    await rename5(temporary, resolved.absolutePath);
+  } catch (error51) {
+    if (await renewAndValidateLease(lease)) await rm7(temporary, { force: true });
+    throw error51;
+  }
+}
+async function inspectActiveDraftCandidates(repositoryRoot) {
+  const directory = path32.join(repositoryRoot, ".legion", "project", "intake", "drafts");
+  let entries;
+  try {
+    entries = await readdir14(directory, { withFileTypes: true });
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") return { ok: true, drafts: [] };
+    return { ok: false, diagnostics: [{ code: "invalid_draft_candidate", message: "The intake draft directory cannot be read safely." }] };
+  }
+  const candidates = entries.filter((entry) => entry.name.startsWith("itd_") && entry.name.endsWith(".json")).sort((left, right) => left.name < right.name ? 1 : left.name > right.name ? -1 : 0);
+  const drafts = [];
+  const diagnostics = [];
+  for (const entry of candidates) {
+    const draftId = entry.name.slice(0, -5);
+    if (!entry.isFile()) {
+      diagnostics.push({ code: "invalid_draft_candidate", message: `Draft candidate ${entry.name} is not a regular file.` });
+      continue;
+    }
+    try {
+      const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: draftArtifactPath(draftId) });
+      const draft = intakeDraftSchema.parse(JSON.parse(await readFile18(resolved.absolutePath, "utf8")));
+      if (draft.id !== draftId) {
+        diagnostics.push({ code: "invalid_draft_candidate", message: `Draft candidate ${entry.name} declares mismatched ID ${draft.id}.` });
+      } else if (draft.status === "draft") drafts.push(draft);
+    } catch {
+      diagnostics.push({ code: "invalid_draft_candidate", message: `Draft candidate ${entry.name} is unreadable or invalid.` });
+    }
+  }
+  return diagnostics.length > 0 ? { ok: false, diagnostics } : { ok: true, drafts };
+}
+async function activeDraft(repositoryRoot) {
+  const scanned = await inspectActiveDraftCandidates(repositoryRoot);
+  return scanned.ok && scanned.drafts.length === 1 ? scanned.drafts[0] : void 0;
+}
+async function prepareIntakePreflight(input) {
+  const lease = await acquireDraftAcceptanceLease(input.repositoryRoot, INTAKE_TRANSITION_KEY);
+  try {
+    const recovery = await recoverIntakeLifecycleArtifactsWithLease(input.repositoryRoot, lease);
+    if (!recovery.ok) {
+      throw pendingAcceptanceLifecycleError("EPENDINGACCEPTANCEBLOCKED", recovery.diagnostics);
+    }
+    if (recovery.rolledBackDraftIds.length > 0) {
+      const diagnostic3 = pendingAcceptanceRecovered(recovery.rolledBackDraftIds);
+      throw pendingAcceptanceLifecycleError("EPENDINGACCEPTANCERECOVERED", [diagnostic3]);
+    }
+    const existing = await readPreflight(input.repositoryRoot, lease);
+    const explorationSelectionIntent = input.explicitRunId !== void 0 ? { mode: "explicit", runId: input.explicitRunId } : input.withoutExploration === true ? { mode: "none" } : existing?.explorationSelectionIntent ?? { mode: "automatic" };
+    const [projectMode, map2, candidates, selection, draft, foundSession] = await Promise.all([
+      classifyProjectMode(input.repositoryRoot),
+      resolveMapState(input.repositoryRoot, void 0, input.createdAt),
+      listExplorations(input.repositoryRoot),
+      resolveExplorationSelection({
+        repositoryRoot: input.repositoryRoot,
+        ...explorationSelectionIntent.mode === "explicit" ? { explicitRunId: explorationSelectionIntent.runId } : {},
+        ...explorationSelectionIntent.mode === "none" ? { withoutExploration: true } : {}
+      }),
+      activeDraft(input.repositoryRoot),
+      findActiveSession(input.repositoryRoot)
+    ]);
+    const session = foundSession.ok ? foundSession.session : void 0;
+    const status2 = session !== void 0 ? "interview" : draft !== void 0 ? "draft_review" : "preflight";
+    const initiative = input.explicitGoal !== void 0 ? { value: input.explicitGoal, source: "explicit" } : existing?.initiative?.source === "explicit" ? existing.initiative : selection.selected === void 0 ? void 0 : {
+      value: selection.selected.exploration.summary,
+      source: "exploration",
+      explorationRunId: selection.selected.candidate.runId
+    };
+    const mapFailure = projectMode !== "brownfield" || !("freshness" in map2) || map2.freshness === "fresh" ? void 0 : input.mapFailure !== void 0 ? { message: input.mapFailure, reportedAt: input.createdAt } : existing?.mapFailure;
+    const state = intakePreflightStateSchema.parse({
+      schemaVersion: 1,
+      status: status2,
+      createdAt: existing?.createdAt ?? input.createdAt,
+      updatedAt: input.createdAt,
+      projectMode,
+      map: map2,
+      compatibleExplorations: candidates.filter(
+        (candidate) => !selection.diagnostics.some(
+          (diagnostic3) => diagnostic3.runId === candidate.runId && diagnostic3.code !== "competing_candidate"
+        )
+      ),
+      explorationSelectionIntent,
+      ...selection.selected === void 0 ? {} : { selectedExplorationRunId: selection.selected.candidate.runId },
+      ...initiative === void 0 ? {} : { initiative },
+      ...mapFailure === void 0 ? {} : { mapFailure },
+      ...draft === void 0 ? {} : { activeDraftId: draft.id },
+      ...session === void 0 ? {} : { activeSessionId: session.id },
+      diagnostics: selection.diagnostics
+    });
+    await writePreflight(input.repositoryRoot, state, lease, {
+      ...input.beforePreflightWrite === void 0 ? {} : { beforeWrite: input.beforePreflightWrite },
+      ...input.beforePreflightPublish === void 0 ? {} : { beforePublish: input.beforePreflightPublish }
+    });
+    return state;
+  } finally {
+    await releaseDraftAcceptanceLease(lease);
+  }
 }
 
 // packages/cli/src/workflow/intake/render.ts
@@ -40028,277 +43630,10 @@ function renderSessionStatus(input) {
   return lines.join("\n");
 }
 
-// packages/cli/src/workflow/intake/session.ts
-import { mkdir as mkdir12, readFile as readFile16, readdir as readdir12, rename as rename4, rm as rm6, rmdir, stat as stat6, writeFile as writeFile7 } from "node:fs/promises";
-import path29 from "node:path";
-var INTAKE_ROOT = ".legion/project/intake";
-var SESSION_FILE = "session.json";
-function intakeSessionDirectory(repositoryRoot, sessionId) {
-  return path29.join(repositoryRoot, ".legion", "project", "intake", sessionId);
-}
-function intakeSessionArtifactPath(sessionId) {
-  return `${INTAKE_ROOT}/${sessionId}/${SESSION_FILE}`;
-}
-function isNodeErrorCode2(error51, code) {
-  return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === code);
-}
-function sessionFilePath(repositoryRoot, sessionId) {
-  return path29.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
-}
-function nowTimestamp2() {
-  return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
-}
-function intakeSessionIdFor(createdAt, salt = "") {
-  const compact = createdAt.replace(/[-:.]/g, "").replace("T", "-").replace("Z", "");
-  return formatEntityId("intake", `${compact}${salt}`);
-}
-function createSession(input) {
-  const id = input.sessionId ?? intakeSessionIdFor(input.createdAt, input.salt ?? "");
-  const proposals = /* @__PURE__ */ new Map();
-  const injectedNodes = [];
-  if (input.exploration !== void 0) {
-    for (const proposal of input.exploration.proposals) {
-      proposals.set(proposal.slot, {
-        value: proposal.value,
-        rationale: proposal.rationale,
-        anchor: proposal.anchor,
-        confidence: proposal.confidence,
-        runId: input.exploration.runId
-      });
-    }
-    const takenNodeIds = /* @__PURE__ */ new Set();
-    for (const question of input.exploration.openQuestions) {
-      let nodeId2 = namespaceInjectedNodeId(question.nodeId);
-      let collision = 0;
-      while (takenNodeIds.has(nodeId2)) {
-        collision += 1;
-        const suffix = `-${collision}`;
-        nodeId2 = `${namespaceInjectedNodeId(question.nodeId).slice(0, MAX_NODE_ID_LENGTH - suffix.length)}${suffix}`;
-      }
-      takenNodeIds.add(nodeId2);
-      injectedNodes.push({
-        nodeId: nodeId2,
-        slot: question.slot,
-        prompt: question.question,
-        origin: { runId: input.exploration.runId, anchor: question.slot }
-      });
-    }
-  }
-  const explorationRef = input.exploration !== void 0 && input.explorationArtifact !== void 0 ? {
-    runId: input.exploration.runId,
-    artifact: {
-      path: input.explorationArtifact.path,
-      sha256: input.explorationArtifact.sha256
-    }
-  } : void 0;
-  const draft = {
-    schemaVersion: input.schemaVersion,
-    createdAt: input.createdAt,
-    kind: "intake-session",
-    id,
-    graphVersion: INTAKE_GRAPH_VERSION,
-    status: "active",
-    ...explorationRef === void 0 ? {} : { explorationRef },
-    answers: [],
-    injectedNodes,
-    diagnostics: []
-  };
-  const withCursor = withRecomputedCursor(intakeSessionSchema.parse(draft));
-  return { session: withCursor, proposals };
-}
-function withRecomputedCursor(session) {
-  const { node } = nextNode({ answers: session.answers, injectedNodes: session.injectedNodes });
-  const next = node === void 0 ? {} : { cursor: node.id };
-  const { cursor: _dropped, ...rest } = session;
-  return intakeSessionSchema.parse({ ...rest, ...next });
-}
-function recordAnswer(input) {
-  if (input.session.status !== "active") {
-    return { ok: false, reason: `This session is ${input.session.status} and cannot take new answers.` };
-  }
-  const node = findNode(
-    { answers: input.session.answers, injectedNodes: input.session.injectedNodes },
-    input.nodeId
-  );
-  if (node === void 0) {
-    return {
-      ok: false,
-      reason: `${input.nodeId} is not a question in this session. Ask for the next question rather than choosing one.`
-    };
-  }
-  if (!isNodeApplicable(node, answersByNodeId(input.session.answers))) {
-    return {
-      ok: false,
-      reason: `${input.nodeId} is not being asked; an earlier answer ruled it out.`
-    };
-  }
-  const answer = {
-    nodeId: node.id,
-    slot: node.slot,
-    value: input.value,
-    answeredAt: input.answeredAt,
-    source: input.source ?? "human",
-    ...input.proposedFrom === void 0 ? {} : { proposedFrom: input.proposedFrom }
-  };
-  const answers = [...input.session.answers.filter((entry) => entry.nodeId !== node.id), answer];
-  const parsed = intakeSessionSchema.safeParse({ ...input.session, answers });
-  if (!parsed.success) {
-    return { ok: false, reason: parsed.error.issues.map((issue2) => issue2.message).join("; ") };
-  }
-  return { ok: true, session: withRecomputedCursor(pruneOrphanedAnswers(parsed.data)) };
-}
-function pruneOrphanedAnswers(session) {
-  let current = session;
-  for (; ; ) {
-    const live = new Set(
-      applicableNodes({ answers: current.answers, injectedNodes: current.injectedNodes }).map(
-        (node) => node.id
-      )
-    );
-    const answers = current.answers.filter((answer) => live.has(answer.nodeId));
-    if (answers.length === current.answers.length) return current;
-    current = intakeSessionSchema.parse({ ...current, answers });
-  }
-}
-function stepBack(session) {
-  if (session.status !== "active") {
-    return { ok: false, reason: `This session is ${session.status} and cannot be rewound.` };
-  }
-  const last = session.answers.at(-1);
-  if (last === void 0) {
-    return { ok: false, reason: "Nothing has been answered yet." };
-  }
-  const answers = session.answers.filter((entry) => entry.nodeId !== last.nodeId);
-  const pruned = pruneOrphanedAnswers(intakeSessionSchema.parse({ ...session, answers }));
-  return { ok: true, session: withRecomputedCursor(pruned), nodeId: last.nodeId };
-}
-function abortSession(session) {
-  return intakeSessionSchema.parse({ ...session, status: "aborted" });
-}
-function finalizeSession(session, projectId) {
-  const { cursor: _dropped, ...rest } = session;
-  return intakeSessionSchema.parse({ ...rest, status: "finalized", projectId });
-}
-function withDiagnostics(session, diagnostics) {
-  return intakeSessionSchema.parse({ ...session, diagnostics: [...diagnostics] });
-}
-function graphVersionMismatch(session, options = {}) {
-  if (session.status !== "active" && options.producingArtifacts !== true) return void 0;
-  if (session.status === "aborted") return void 0;
-  if (session.graphVersion === INTAKE_GRAPH_VERSION) return void 0;
-  return `Session ${session.id} was started under intake graph ${session.graphVersion}, but this CLI ships ${INTAKE_GRAPH_VERSION}. Its answers were given to a different set of questions. Run legion start --abort --session ${session.id} and begin again, or finish it with the CLI version it was started under.`;
-}
-async function loadSession(repositoryRoot, sessionId) {
-  let text;
-  try {
-    text = await readFile16(sessionFilePath(repositoryRoot, sessionId), "utf8");
-  } catch (error51) {
-    if (isEnoent6(error51)) return { ok: false, reason: `No intake session ${sessionId} exists.` };
-    throw error51;
-  }
-  let parsedJson;
-  try {
-    parsedJson = JSON.parse(text);
-  } catch (error51) {
-    const message = error51 instanceof Error ? error51.message : String(error51);
-    return { ok: false, reason: `Intake session ${sessionId} is not valid JSON: ${message}` };
-  }
-  const parsed = intakeSessionSchema.safeParse(parsedJson);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      reason: `Intake session ${sessionId} does not match the protocol: ${parsed.error.issues.map((issue2) => `${issue2.path.join(".")}: ${issue2.message}`).join("; ")}`
-    };
-  }
-  return { ok: true, session: parsed.data };
-}
-async function saveSession(repositoryRoot, session) {
-  const validated = intakeSessionSchema.parse(session);
-  const resolved = await ensureProjectArtifactParent({
-    repositoryRoot,
-    artifactPath: intakeSessionArtifactPath(validated.id)
-  });
-  const temporary = `${resolved.absolutePath}.tmp`;
-  await rm6(temporary, { force: true });
-  await writeFile7(temporary, `${JSON.stringify(validated, void 0, 2)}
-`, "utf8");
-  await rename4(temporary, resolved.absolutePath);
-}
-async function claimSessionDirectory(repositoryRoot, sessionId) {
-  const resolved = await resolveProjectArtifactPath({
-    repositoryRoot,
-    artifactPath: intakeSessionArtifactPath(sessionId)
-  });
-  const sessionDirectory = path29.dirname(resolved.absolutePath);
-  await mkdir12(path29.dirname(sessionDirectory), { recursive: true });
-  try {
-    await mkdir12(sessionDirectory, { recursive: false });
-    return true;
-  } catch (error51) {
-    if (isNodeErrorCode2(error51, "EEXIST")) return false;
-    throw error51;
-  }
-}
-async function releaseSessionId(repositoryRoot, sessionId) {
-  try {
-    await rmdir(intakeSessionDirectory(repositoryRoot, sessionId));
-  } catch {
-  }
-}
-async function listSessions(repositoryRoot) {
-  const root = path29.join(repositoryRoot, ".legion", "project", "intake");
-  let entries;
-  try {
-    entries = await readdir12(root, { withFileTypes: true });
-  } catch (error51) {
-    if (isEnoent6(error51)) return [];
-    throw error51;
-  }
-  const candidates = entries.filter((entry) => entry.isDirectory() && entry.name.startsWith("itk_")).map((entry) => entry.name).sort((left, right) => left < right ? 1 : left > right ? -1 : 0);
-  const recorded = await Promise.all(
-    candidates.map(async (name) => await pathExists5(sessionFilePath(repositoryRoot, name)) ? name : void 0)
-  );
-  return recorded.filter((name) => name !== void 0);
-}
-async function pathExists5(absolutePath) {
-  try {
-    await stat6(absolutePath);
-    return true;
-  } catch (error51) {
-    if (isEnoent6(error51)) return false;
-    throw error51;
-  }
-}
-async function findActiveSession(repositoryRoot) {
-  for (const sessionId of await listSessions(repositoryRoot)) {
-    const loaded = await loadSession(repositoryRoot, sessionId);
-    if (!loaded.ok) {
-      return {
-        ok: false,
-        reason: `${loaded.reason} Repair or remove ${INTAKE_ROOT}/${sessionId}, or name a different session with --session.`
-      };
-    }
-    if (loaded.session.status === "active") return { ok: true, session: loaded.session };
-  }
-  return { ok: true, session: void 0 };
-}
-async function allocateSessionId(repositoryRoot, createdAt) {
-  if (await claimSessionDirectory(repositoryRoot, intakeSessionIdFor(createdAt))) {
-    return intakeSessionIdFor(createdAt);
-  }
-  for (let attempt = 1; attempt <= 999; attempt += 1) {
-    const candidate = intakeSessionIdFor(createdAt, `-${String(attempt).padStart(3, "0")}`);
-    if (await claimSessionDirectory(repositoryRoot, candidate)) return candidate;
-  }
-  throw new Error(`Could not allocate an intake session ID for ${createdAt}.`);
-}
-function isEnoent6(error51) {
-  return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
-}
-
 // packages/cli/src/workflow/intake/driver.ts
 var ROADMAP_MARKER = "<!-- Rendered by `legion start --finalize`";
 var ROADMAP_FILE = "ROADMAP.md";
+var STAGE_DRAFT_COMMAND = `legion start --stage-draft ${DEFAULT_INTAKE_DRAFT_INPUT_PATH}`;
 function intakeSessionArtifactPath2(sessionId) {
   return `.legion/project/intake/${sessionId}/session.json`;
 }
@@ -40366,7 +43701,7 @@ async function proposalsFor(repositoryRoot, session) {
   }
   return { proposals, diagnostics: [] };
 }
-var VALUE_REQUIRED_OPTIONS = ["session", "from-exploration", "intake", "answer", "slug", "node"];
+var VALUE_REQUIRED_OPTIONS = ["session", "from-exploration", "intake", "answer", "slug", "node", "goal", "map-failed"];
 function valuelessOption(context) {
   for (const key of VALUE_REQUIRED_OPTIONS) {
     if (context.args.options.get(key) === true) {
@@ -40395,15 +43730,42 @@ async function resolveSession(context, options) {
       notes: seeded.diagnostics
     };
   }
-  const explorationRunId = stringOption(context, "from-exploration");
+  const explicitExplorationRunId = stringOption(context, "from-exploration");
+  const withoutExploration = hasFlag(context, "without-exploration");
+  if (explicitExplorationRunId !== void 0 && withoutExploration) {
+    return usageError("--from-exploration and --without-exploration are mutually exclusive.");
+  }
+  const explicitlyLoaded = explicitExplorationRunId === void 0 ? void 0 : await loadExploration(context.repositoryRoot, explicitExplorationRunId);
+  if (explicitlyLoaded !== void 0 && !explicitlyLoaded.ok) return usageError(explicitlyLoaded.reason);
   const found = await findActiveSession(context.repositoryRoot);
   if (!found.ok) return failure({ ok: false, status: "invalid_session", diagnostics: [{ code: "corrupt_session", message: found.reason }] }, found.reason);
   const active = found.session;
   if (active !== void 0) {
-    if (explorationRunId !== void 0 && active.explorationRef?.runId !== explorationRunId) {
+    if (options.preparation === true) {
+      const recovery = await recoverIntakeLifecycleArtifacts(context.repositoryRoot);
+      if (recovery === void 0) {
+        const diagnostics = [{
+          code: "pending_acceptance_blocked",
+          message: "Pending acceptance state could not be inspected under the intake transition lock. Retry after the current transition completes."
+        }];
+        return failure({ ok: false, status: "rejected", diagnostics }, diagnostics[0].message);
+      }
+      if (!recovery.ok) {
+        return failure(
+          { ok: false, status: "rejected", diagnostics: recovery.diagnostics },
+          recovery.diagnostics.map((diagnostic3) => diagnostic3.message).join(" ")
+        );
+      }
+      if (recovery.rolledBackDraftIds.length > 0) {
+        const diagnostic3 = pendingAcceptanceRecovered(recovery.rolledBackDraftIds);
+        return failure({ ok: false, status: "rejected", diagnostics: [diagnostic3] }, diagnostic3.message);
+      }
+    }
+    const explicitEntityRunId = explicitlyLoaded?.ok === true ? explicitlyLoaded.loaded.exploration.runId : void 0;
+    if (explicitEntityRunId !== void 0 && active.explorationRef?.runId !== explicitEntityRunId) {
       if (active.answers.length > 0) {
         return usageError(
-          `Session ${active.id} is already in progress with ${active.answers.length} answer(s), and seeding only applies when a session is created. Run legion start --abort --session ${active.id} first if you want to restart from exploration ${explorationRunId}.`
+          `Session ${active.id} is already in progress with ${active.answers.length} answer(s), and seeding only applies when a session is created. Run legion start --abort --session ${active.id} first if you want to restart from exploration ${explicitExplorationRunId}.`
         );
       }
       await saveSession(context.repositoryRoot, abortSession(active));
@@ -40421,12 +43783,79 @@ async function resolveSession(context, options) {
       };
     }
   }
+  const draftCandidates = await inspectActiveDraftCandidates(context.repositoryRoot);
+  if (!draftCandidates.ok) {
+    return failure(
+      { ok: false, status: "rejected", diagnostics: draftCandidates.diagnostics },
+      "Intake draft artifacts must be repaired before preparation can continue."
+    );
+  }
   if (!options.create) {
     return usageError(
       "There is no active intake session. Run legion start to begin one, or pass --session <id>."
     );
   }
   const createdAt = createdAtOption(context) ?? nowTimestamp2();
+  const explicitGoal = stringOption(context, "goal")?.trim();
+  const mapFailure = stringOption(context, "map-failed")?.trim();
+  if (explicitGoal === "") return usageError("Invalid --goal value. Provide a non-empty initiative.");
+  if (mapFailure === "") return usageError("Invalid --map-failed value. Provide the map failure diagnostic.");
+  const preflight = await prepareIntakePreflightForCli({
+    repositoryRoot: context.repositoryRoot,
+    createdAt,
+    ...explicitExplorationRunId === void 0 ? {} : { explicitRunId: explicitExplorationRunId },
+    withoutExploration: withoutExploration || options.automaticExploration === false && explicitExplorationRunId === void 0,
+    ...explicitGoal === void 0 ? {} : { explicitGoal },
+    ...mapFailure === void 0 ? {} : { mapFailure }
+  });
+  if (isCliResult3(preflight)) return preflight;
+  if (preflight.activeDraftId !== void 0) {
+    const stagedDraft = await findActiveDraft(context.repositoryRoot);
+    const explicitPreparationChange = explicitGoal !== void 0 || mapFailure !== void 0 || explicitExplorationRunId !== void 0 || withoutExploration;
+    if (!explicitPreparationChange && stagedDraft !== void 0) {
+      const artifactPath = `.legion/project/intake/drafts/${stagedDraft.id}.json`;
+      const reviewed = await publishDraftReview({
+        repositoryRoot: context.repositoryRoot,
+        draftId: stagedDraft.id,
+        updatedAt: createdAt
+      });
+      if (!reviewed.ok) {
+        return failure(
+          {
+            ok: false,
+            status: "rejected",
+            preflight,
+            draftId: stagedDraft.id,
+            diagnostics: reviewed.diagnostics
+          },
+          `Intake draft ${stagedDraft.id} must be revised before it can be reviewed or accepted.`
+        );
+      }
+      const review = draftReviewPayload({
+        draft: reviewed.draft,
+        artifactPath,
+        draftSha256: reviewed.review.draftSha256,
+        preflight
+      });
+      return success2(review.payload, review.human);
+    }
+    return failure(
+      {
+        ok: false,
+        status: "rejected",
+        preflight,
+        draftId: preflight.activeDraftId,
+        diagnostics: preflight.diagnostics
+      },
+      `Intake draft ${preflight.activeDraftId} is staged for review; accept or revise it before creating a session.`
+    );
+  }
+  const explorationRunId = withoutExploration ? void 0 : explicitExplorationRunId ?? (options.automaticExploration === false ? void 0 : preflight.selectedExplorationRunId);
+  if (explicitExplorationRunId !== void 0 && explorationRunId === void 0) {
+    const message = preflight.diagnostics.find((entry) => entry.runId === explicitExplorationRunId)?.message ?? `Exploration ${explicitExplorationRunId} is unavailable.`;
+    return usageError(message);
+  }
+  if (options.preparation !== false) return preparationResult(context.repositoryRoot, preflight);
   let exploration;
   if (explorationRunId !== void 0) {
     exploration = await loadExploration(context.repositoryRoot, explorationRunId);
@@ -40444,7 +43873,13 @@ async function resolveSession(context, options) {
       }
     });
     await saveSession(context.repositoryRoot, seeded.session);
-    return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
+    return {
+      session: seeded.session,
+      proposals: seeded.proposals,
+      created: true,
+      notes: preflight.diagnostics.map((entry) => entry.message),
+      preflight
+    };
   } catch (error51) {
     await releaseSessionId(context.repositoryRoot, sessionId);
     throw error51;
@@ -40453,8 +43888,34 @@ async function resolveSession(context, options) {
 function isCliResult3(value) {
   return "exitCode" in value;
 }
+async function prepareIntakePreflightForCli(input) {
+  try {
+    return await prepareIntakePreflight(input);
+  } catch (error51) {
+    const code = error51 && typeof error51 === "object" && "code" in error51 ? String(error51.code) : void 0;
+    if (!["EEXIST", "ELEASELOST", "EPENDINGACCEPTANCEBLOCKED", "EPENDINGACCEPTANCERECOVERED"].includes(code ?? "")) throw error51;
+    const diagnostic3 = code === "EEXIST" ? {
+      code: "intake_transition_in_progress",
+      message: "Another intake transition owns preparation state; retry after it completes."
+    } : code === "ELEASELOST" ? {
+      code: "intake_transition_lease_lost",
+      message: "Preparation ownership changed before its durable update; no preflight state was published."
+    } : code === "EPENDINGACCEPTANCERECOVERED" ? {
+      code: "pending_acceptance_recovered",
+      message: error51 instanceof Error ? error51.message : "Interrupted draft acceptance was recovered; retry preparation explicitly."
+    } : {
+      code: "pending_acceptance_blocked",
+      message: error51 instanceof Error ? error51.message : "Pending draft acceptance must be repaired before preparation can continue."
+    };
+    return failure(
+      { ok: false, status: "rejected", diagnostics: [diagnostic3] },
+      diagnostic3.message
+    );
+  }
+}
 async function handleNextQuestion(context) {
-  const resolved = await resolveSession(context, { create: true });
+  const preparation = !hasFlag(context, "next") && !context.args.options.has("from-exploration");
+  const resolved = await resolveSession(context, { create: true, preparation });
   if (isCliResult3(resolved)) return resolved;
   const { session, proposals, created } = resolved;
   const { node, answered, total } = nextNode({
@@ -40507,6 +43968,7 @@ ${renderNextAction(action2)}`
     {
       ok: true,
       status: "question",
+      ...resolved.preflight === void 0 ? {} : { preflight: resolved.preflight },
       session: sessionPayload(session, answered, total),
       question: questionPayload(node, proposal),
       ...explorations.length > 0 ? { availableExplorations: explorations.map((entry) => ({ runId: entry.runId, topic: entry.topic })) } : {},
@@ -40514,6 +43976,473 @@ ${renderNextAction(action2)}`
       nextAction: action
     },
     human.join("\n")
+  );
+}
+var PREPARATION_SOURCE_CLASSES = [
+  "README and product documentation",
+  "dependency manifests and scripts",
+  "application and library entry points",
+  "configuration",
+  "tests",
+  "CI commands"
+];
+var PREPARATION_PROPOSALS = [
+  "compatibility obligations",
+  "acceptance criteria",
+  "executable proof commands",
+  "protected tests",
+  "constraints",
+  "verification defaults",
+  "risk indicators"
+];
+async function boundedReviewBounds(repositoryRoot) {
+  const candidates = [];
+  async function visit(directory, depth) {
+    if (depth > 4) return;
+    let entries;
+    try {
+      entries = await readdir15(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory() && AUTHORED_IGNORED_DIRECTORIES.has(entry.name.toLowerCase())) continue;
+      if (entry.name.startsWith(".") && entry.name !== ".github") continue;
+      const absolute = path33.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(absolute, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const relative = path33.relative(repositoryRoot, absolute).replace(/\\/gu, "/");
+      const basename = entry.name.toLowerCase();
+      const segments = relative.toLowerCase().split("/");
+      let priority;
+      if (basename.startsWith("readme") || isDocumentationFile(relative)) priority = 0;
+      else if (AUTHORED_DEPENDENCY_MANIFESTS.has(basename)) priority = 1;
+      else if (/^(?:index|main|app|server|cli)\.[a-z0-9]+$/u.test(basename)) priority = 2;
+      else if (AUTHORED_BUILD_CONFIGURATION.has(basename) || basename.includes("config")) priority = 3;
+      else if (segments.some((segment) => ["test", "tests", "spec", "specs", "__tests__"].includes(segment)) || /\.(?:test|spec)\./u.test(basename)) priority = 4;
+      else if (relative.toLowerCase().startsWith(".github/workflows/")) priority = 5;
+      if (priority !== void 0) candidates.push({ path: relative, priority });
+    }
+  }
+  await visit(repositoryRoot, 0);
+  const ordered = candidates.sort((left, right) => left.priority - right.priority || left.path.localeCompare(right.path));
+  const selected = [];
+  const selectedPaths = /* @__PURE__ */ new Set();
+  for (let priority = 0; priority < PREPARATION_SOURCE_CLASSES.length; priority += 1) {
+    const representative = ordered.find((candidate) => candidate.priority === priority);
+    if (representative === void 0) continue;
+    selected.push(representative);
+    selectedPaths.add(representative.path);
+  }
+  for (const candidate of ordered) {
+    if (selected.length >= 24) break;
+    if (selectedPaths.has(candidate.path)) continue;
+    selected.push(candidate);
+    selectedPaths.add(candidate.path);
+  }
+  return {
+    maxFiles: 24,
+    maxDepth: 4,
+    selectionOrder: PREPARATION_SOURCE_CLASSES,
+    selectedPaths: selected.map((entry) => entry.path)
+  };
+}
+function preparationReview(bounds) {
+  return {
+    scope: "initiative",
+    inferencePrecedence: [
+      "explicit_user_statement_or_edit",
+      "selected_exploration",
+      "repository_inference"
+    ],
+    architectureAnalysis: bounds === void 0 ? "full" : "full_synthesis",
+    repositoryCoverage: bounds === void 0 ? "full" : "bounded_degraded",
+    ...bounds === void 0 ? {} : { bounds },
+    sourceClasses: PREPARATION_SOURCE_CLASSES,
+    propose: PREPARATION_PROPOSALS,
+    unrelatedBehavior: "architecture_context_only",
+    conflicts: "unresolved_questions",
+    unsupportedAssumptions: "unresolved_questions",
+    absentNonGoalsAndConstraints: "unresolved_questions"
+  };
+}
+function stablePreflightPayload(preflight, preparation) {
+  return {
+    preflight,
+    projectMode: preflight.projectMode,
+    exploration: {
+      intent: preflight.explorationSelectionIntent,
+      selectedRunId: preflight.selectedExplorationRunId ?? null,
+      compatible: preflight.compatibleExplorations
+    },
+    mapState: preflight.map,
+    activeDraft: preflight.activeDraftId === void 0 ? null : { id: preflight.activeDraftId, status: "draft_review" },
+    activeSession: preflight.activeSessionId === void 0 ? null : { id: preflight.activeSessionId, status: "interview" },
+    initiative: preflight.initiative ?? null,
+    reviewContract: "review" in preparation ? preparation["review"] : preparationReview(),
+    preparation,
+    warnings: preflight.diagnostics.map((diagnostic3) => ({
+      code: diagnostic3.code,
+      message: diagnostic3.message
+    })),
+    diagnostics: preflight.diagnostics
+  };
+}
+function reviewEntries(draft, predicate) {
+  return draft.proposedAnswers.filter((answer) => predicate(answer.slot));
+}
+function evidenceSummary(draft) {
+  const references = [
+    ...draft.explorationRefs,
+    ...draft.codebaseMapRef === void 0 ? [] : [draft.codebaseMapRef],
+    ...draft.proposedAnswers.flatMap((answer) => answer.evidenceRefs),
+    ...draft.unresolvedNodes.flatMap((node) => node.evidenceRefs)
+  ];
+  const byKind = { exploration: 0, "codebase-map": 0, "repository-file": 0 };
+  for (const reference of references) byKind[reference.kind] += 1;
+  const unique = [...new Map(references.map((reference) => [JSON.stringify(reference), reference])).values()];
+  return { totalReferences: references.length, uniqueReferences: unique.length, byKind, references: unique };
+}
+function confidenceSummary(draft) {
+  const summary = { researched: 0, inferred: 0, assumed: 0 };
+  for (const answer of draft.proposedAnswers) summary[answer.confidence] += 1;
+  return summary;
+}
+function draftEntityReference(artifactPath, draftSha256) {
+  return {
+    path: artifactPath,
+    sha256: draftSha256
+  };
+}
+function groupedDraftReview(draft) {
+  const projectAndProblem = reviewEntries(draft, (slot) => slot.startsWith("project.") || slot.startsWith("problem."));
+  const requirements = reviewEntries(draft, (slot) => /^requirements\.\d+\.(?:statement|priority|category)$/u.test(slot));
+  const criteriaAndProofs = reviewEntries(draft, (slot) => /^requirements\.\d+\.criteria\.\d+\./u.test(slot));
+  const constraints = reviewEntries(draft, (slot) => slot.startsWith("constraints.") || slot === "preferences.notes");
+  const nonGoals = reviewEntries(draft, (slot) => slot === "scope.non-goals");
+  const risk = reviewEntries(draft, (slot) => slot.startsWith("risk."));
+  const budget = reviewEntries(draft, (slot) => slot.startsWith("budget."));
+  const verification = reviewEntries(draft, (slot) => slot === "preferences.verification");
+  const grouped = new Set([
+    ...projectAndProblem,
+    ...requirements,
+    ...criteriaAndProofs,
+    ...constraints,
+    ...nonGoals,
+    ...risk,
+    ...budget,
+    ...verification
+  ].map((entry) => entry.nodeId));
+  const additionalAnswers = draft.proposedAnswers.filter((answer) => !grouped.has(answer.nodeId) && !answer.slot.endsWith(".more"));
+  return {
+    projectAndProblem,
+    requirements,
+    criteriaAndProofs,
+    constraints,
+    nonGoals,
+    defaults: { risk, budget, verification },
+    additionalAnswers,
+    evidence: evidenceSummary(draft),
+    confidence: confidenceSummary(draft),
+    diagnostics: draft.diagnostics,
+    unresolved: draft.unresolvedNodes
+  };
+}
+function renderReviewValue(value) {
+  if (Array.isArray(value)) return value.join(", ");
+  return String(value);
+}
+function renderReviewGroup(label, entries) {
+  return [label, ...entries.length === 0 ? ["  none recorded"] : entries.map((entry) => `  ${entry.slot}: ${renderReviewValue(entry.value)} [${entry.confidence}]`)];
+}
+function draftReviewHuman(draft, review) {
+  const lines = [
+    `Draft ${draft.id} is staged and unchanged until an explicit decision.`,
+    "",
+    ...renderReviewGroup("Project and problem", review.projectAndProblem),
+    "",
+    ...renderReviewGroup("Requirements", review.requirements),
+    "",
+    ...renderReviewGroup("Criteria and proofs", review.criteriaAndProofs),
+    "",
+    ...renderReviewGroup("Constraints", review.constraints),
+    "",
+    ...renderReviewGroup("Non-goals", review.nonGoals),
+    "",
+    "Risk, budget, and verification defaults",
+    ...renderReviewGroup("  Risk", review.defaults.risk).slice(1).map((line) => `  ${line}`),
+    ...renderReviewGroup("  Budget", review.defaults.budget).slice(1).map((line) => `  ${line}`),
+    ...renderReviewGroup("  Verification", review.defaults.verification).slice(1).map((line) => `  ${line}`),
+    ...review.additionalAnswers.length === 0 ? [] : ["", ...renderReviewGroup("Additional reviewed answers", review.additionalAnswers)],
+    "",
+    "Evidence and confidence",
+    `  ${review.evidence.totalReferences} evidence reference(s); researched ${review.confidence.researched}, inferred ${review.confidence.inferred}, assumed ${review.confidence.assumed}`,
+    ...review.evidence.references.length === 0 ? ["  no cited evidence"] : review.evidence.references.map((reference) => {
+      const anchor = "anchor" in reference && reference.anchor !== void 0 ? ` @ ${reference.anchor}` : "";
+      const source = reference.kind === "codebase-map" ? ` source:${reference.sourceFingerprint}` : "";
+      const run = reference.kind === "exploration" ? ` run:${reference.runId}` : "";
+      return `  ${reference.kind}: ${reference.artifact.path} ${reference.artifact.sha256}${anchor}${run}${source}`;
+    }),
+    "",
+    "Diagnostics and unresolved items",
+    ...review.diagnostics.length === 0 ? ["  no diagnostics"] : review.diagnostics.map((entry) => `  warning: ${entry}`),
+    ...review.unresolved.length === 0 ? ["  no declared unresolved items"] : review.unresolved.map((entry) => `  ${entry.nodeId} (${entry.slot}): ${entry.question}`),
+    "",
+    "Decision required",
+    `  Accept: legion start --accept-draft`,
+    `  Revise: ${STAGE_DRAFT_COMMAND}`,
+    `  Discard: legion start --discard-draft`
+  ];
+  return lines.join("\n");
+}
+function draftReviewPayload(input) {
+  const review = groupedDraftReview(input.draft);
+  const entity = draftEntityReference(input.artifactPath, input.draftSha256);
+  const action = humanDecisionAction(
+    "The displayed immutable draft requires an explicit human accept, revise, or discard decision.",
+    [
+      { id: "accept", command: "legion start --accept-draft" },
+      { id: "revise", command: STAGE_DRAFT_COMMAND },
+      { id: "discard", command: "legion start --discard-draft" }
+    ]
+  );
+  return {
+    payload: {
+      ok: true,
+      status: "draft_review",
+      draft: input.draft,
+      draftSummary: {
+        id: input.draft.id,
+        status: input.draft.status,
+        graphVersion: input.draft.graphVersion,
+        projectMode: input.draft.projectMode,
+        initiative: input.draft.initiative,
+        entity
+      },
+      artifactPath: input.artifactPath,
+      preflight: input.preflight,
+      review,
+      unresolvedItems: review.unresolved,
+      warnings: input.draft.diagnostics.map((message) => ({ code: "draft_diagnostic", message })),
+      diagnostics: [],
+      confidenceSummary: review.confidence,
+      evidenceSummary: review.evidence,
+      actions: {
+        accept: { command: "legion start --accept-draft", draftId: input.draft.id },
+        revise: { command: STAGE_DRAFT_COMMAND, replacesDraftId: input.draft.id },
+        discard: { command: "legion start --discard-draft", draftId: input.draft.id }
+      },
+      ...input.replacesDraft === void 0 ? {} : {
+        replacesDraft: { id: input.replacesDraft.id, status: input.replacesDraft.status }
+      },
+      nextAction: action
+    },
+    human: draftReviewHuman(input.draft, review)
+  };
+}
+async function preparationResult(repositoryRoot, preflight) {
+  const mapState = "freshness" in preflight.map ? preflight.map : void 0;
+  const mapReadError = "error" in preflight.map ? preflight.map.error : void 0;
+  const mapSkipped = preflight.projectMode !== "brownfield";
+  const mapFailure = preflight.mapFailure?.message ?? mapReadError;
+  const mapAction = mapSkipped ? { action: "skip", coverage: "not_applicable", scope: "." } : mapState?.freshness === "fresh" ? {
+    action: "use_fresh",
+    coverage: "full",
+    scope: ".",
+    sourceFingerprint: mapState.sourceFingerprint,
+    ...mapState.mapArtifact === null || mapState.mapArtifact === void 0 ? {} : { artifact: mapState.mapArtifact }
+  } : mapFailure !== void 0 ? {
+    action: "bounded_direct_review",
+    coverage: "degraded",
+    scope: ".",
+    warning: degradedCoverageWarning(mapFailure)
+  } : { action: "refresh", coverage: "pending", scope: "." };
+  if (preflight.initiative === void 0) {
+    const action2 = nextAction(
+      'legion start --goal "<initiative>"',
+      "One initiative is required before repository synthesis."
+    );
+    const preparation2 = {
+      status: "initiative_required",
+      initiativeQuestion: {
+        kind: "free-text",
+        prompt: "What initiative should this project intake prepare?"
+      },
+      map: mapAction
+    };
+    return success2(
+      { ok: true, status: "preflight", ...stablePreflightPayload(preflight, preparation2), nextAction: action2 },
+      `What initiative should this project intake prepare?
+${renderNextAction(action2)}`
+    );
+  }
+  if (!mapSkipped && mapAction.action === "refresh") {
+    const action2 = nextAction(
+      "legion map --refresh --scope .",
+      `Brownfield intake requires a fresh full-project map; the current map is ${mapState?.freshness ?? "unreadable"}.`
+    );
+    const preparation2 = {
+      status: "map_refresh_required",
+      initiative: preflight.initiative,
+      map: mapAction
+    };
+    return success2(
+      { ok: true, status: "preflight", ...stablePreflightPayload(preflight, preparation2), nextAction: action2 },
+      `Brownfield preparation requires a fresh full-project map.
+${renderNextAction(action2)}`
+    );
+  }
+  const action = nextAction(
+    STAGE_DRAFT_COMMAND,
+    "Review the repository against the initiative, compose a protocol-valid intake draft with evidence hashes, and stage it through the CLI."
+  );
+  const degradedBounds = mapAction.action === "bounded_direct_review" ? await boundedReviewBounds(repositoryRoot) : void 0;
+  const preparation = {
+    status: "repository_review_required",
+    initiative: preflight.initiative,
+    map: mapAction,
+    review: preparationReview(degradedBounds)
+  };
+  return success2(
+    { ok: true, status: "preflight", ...stablePreflightPayload(preflight, preparation), nextAction: action },
+    `${mapAction.action === "bounded_direct_review" ? `${mapAction.warning}
+` : ""}Review the repository against the initiative and stage an intake draft.
+${renderNextAction(action)}`
+  );
+}
+async function handleStageDraft(context, hooks = {}) {
+  const draftFile = stringOption(context, "draft") ?? stringOption(context, "stage-draft");
+  if (draftFile === void 0) return usageError("Provide a draft file with --draft <file>.");
+  const foundSession = await findActiveSession(context.repositoryRoot);
+  if (!foundSession.ok) return usageError(foundSession.reason);
+  if (foundSession.session !== void 0) {
+    const diagnostics = [{
+      code: "active_session",
+      message: `Session ${foundSession.session.id} is already active; accepted draft answers must be revised through the interview, not by staging another draft.`
+    }];
+    return failure(
+      { ok: false, status: "rejected", diagnostics },
+      diagnostics[0].message
+    );
+  }
+  const createdAt = createdAtOption(context) ?? nowTimestamp2();
+  const explicitRunId = stringOption(context, "from-exploration");
+  const withoutExploration = hasFlag(context, "without-exploration");
+  const explicitGoal = stringOption(context, "goal")?.trim();
+  const mapFailure = stringOption(context, "map-failed")?.trim();
+  if (explicitGoal === "") return usageError("Invalid --goal value. Provide a non-empty initiative.");
+  if (mapFailure === "") return usageError("Invalid --map-failed value. Provide the map failure diagnostic.");
+  if (explicitRunId !== void 0 && withoutExploration) {
+    return usageError("Use either --from-exploration <id> or --without-exploration, not both.");
+  }
+  if (explicitRunId !== void 0 || withoutExploration || explicitGoal !== void 0 || mapFailure !== void 0) {
+    const overridePreflight = await prepareIntakePreflightForCli({
+      repositoryRoot: context.repositoryRoot,
+      createdAt,
+      ...explicitRunId === void 0 ? {} : { explicitRunId },
+      ...withoutExploration ? { withoutExploration: true } : {},
+      ...explicitGoal === void 0 ? {} : { explicitGoal },
+      ...mapFailure === void 0 ? {} : { mapFailure }
+    });
+    if (isCliResult3(overridePreflight)) return overridePreflight;
+    if (explicitRunId !== void 0) {
+      const loaded = await loadExploration(context.repositoryRoot, explicitRunId);
+      const canonicalRunId = loaded.ok ? loaded.loaded.candidate.runId : explicitRunId;
+      const blocking = overridePreflight.diagnostics.filter(
+        (diagnostic3) => diagnostic3.runId === canonicalRunId && diagnostic3.code !== "competing_candidate"
+      );
+      const selectedMatches = loaded.ok && overridePreflight.selectedExplorationRunId === canonicalRunId;
+      if (!selectedMatches || blocking.length > 0) {
+        const diagnostics = blocking.length > 0 ? blocking.filter((diagnostic3, index) => blocking.findIndex(
+          (candidate) => candidate.code === diagnostic3.code && candidate.message === diagnostic3.message
+        ) === index) : [{
+          code: "preflight_exploration_mismatch",
+          message: `Explicit exploration ${explicitRunId} did not resolve to a compatible readable start handoff.`
+        }];
+        return failure(
+          { ok: false, status: "rejected", preflight: overridePreflight, diagnostics },
+          `Explicit exploration ${explicitRunId} cannot be used to stage this draft.`
+        );
+      }
+    }
+  }
+  await hooks.afterPreparationBeforeStage?.();
+  const staged = await stageIntakeDraft({ repositoryRoot: context.repositoryRoot, draftFile, createdAt });
+  if (!staged.ok) {
+    return failure({ ok: false, status: "rejected", diagnostics: staged.diagnostics }, "The intake draft needs revision before it can be staged.");
+  }
+  const preflight = await prepareIntakePreflightForCli({ repositoryRoot: context.repositoryRoot, createdAt });
+  if (isCliResult3(preflight)) return preflight;
+  const reviewed = await publishDraftReview({ repositoryRoot: context.repositoryRoot, draftId: staged.draft.id, updatedAt: createdAt });
+  if (!reviewed.ok) {
+    return failure({ ok: false, status: "rejected", draftId: staged.draft.id, diagnostics: reviewed.diagnostics }, "The staged draft could not be published as the active review.");
+  }
+  const review = draftReviewPayload({
+    draft: reviewed.draft,
+    artifactPath: staged.artifactPath,
+    draftSha256: reviewed.review.draftSha256,
+    preflight,
+    ...staged.replacesDraft === void 0 ? {} : { replacesDraft: staged.replacesDraft }
+  });
+  return success2(review.payload, review.human);
+}
+async function handleAcceptDraft(context) {
+  const explicitDraftId = stringOption(context, "accept-draft");
+  const createdAt = createdAtOption(context) ?? nowTimestamp2();
+  const accepted = await acceptStagedDraft({
+    repositoryRoot: context.repositoryRoot,
+    createdAt,
+    requireReviewed: true,
+    ...explicitDraftId === void 0 ? {} : { draftId: explicitDraftId }
+  });
+  if (!accepted.ok) {
+    return failure(
+      {
+        ok: false,
+        status: "rejected",
+        ...explicitDraftId === void 0 ? {} : { draftId: explicitDraftId },
+        diagnostics: accepted.diagnostics
+      },
+      explicitDraftId === void 0 ? "The intake draft remains in review." : `Draft ${explicitDraftId} remains in review.`
+    );
+  }
+  const draftId = accepted.draft.id;
+  return success2(
+    { ok: true, status: accepted.status, draft: accepted.draft, session: accepted.session },
+    `Accepted intake draft ${draftId} into session ${accepted.session.id}.`
+  );
+}
+async function handleDiscardDraft(context) {
+  const explicitDraftId = stringOption(context, "discard-draft");
+  const target = await resolveReviewedDraftDecision({
+    repositoryRoot: context.repositoryRoot,
+    ...explicitDraftId === void 0 ? {} : { explicitDraftId }
+  });
+  if (!target.ok) return failure({ ok: false, status: "rejected", diagnostics: target.diagnostics }, "A displayed draft review is required before discard.");
+  const draftId = target.draftId;
+  const discarded = await discardStagedDraft({ repositoryRoot: context.repositoryRoot, draftId, requireReviewed: true });
+  if (!discarded.ok) {
+    return failure(
+      { ok: false, status: "rejected", draftId, diagnostics: discarded.diagnostics },
+      `Draft ${draftId} remains in review.`
+    );
+  }
+  const createdAt = createdAtOption(context) ?? nowTimestamp2();
+  const preflight = await prepareIntakePreflightForCli({ repositoryRoot: context.repositoryRoot, createdAt });
+  if (isCliResult3(preflight)) return preflight;
+  const prepared = await preparationResult(context.repositoryRoot, preflight);
+  return success2(
+    {
+      ...prepared.payload,
+      discardedDraft: { id: discarded.draft.id, status: discarded.draft.status },
+      activeDraft: null,
+      activeSession: null
+    },
+    `Discarded intake draft ${draftId}.
+${prepared.human}`
   );
 }
 function resolveAnswerTarget(resolved, nodeId2) {
@@ -40773,8 +44702,8 @@ async function handleBatchIntake(context) {
   if (filePath === void 0) return usageError("Provide a file as --intake <file>.");
   let parsed;
   try {
-    const absolute = path30.isAbsolute(filePath) ? filePath : path30.resolve(context.repositoryRoot, filePath);
-    parsed = JSON.parse(await readFile17(absolute, "utf8"));
+    const absolute = path33.isAbsolute(filePath) ? filePath : path33.resolve(context.repositoryRoot, filePath);
+    parsed = JSON.parse(await readFile19(absolute, "utf8"));
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
     return usageError(`Failed to read intake file ${filePath}: ${message}`);
@@ -40783,7 +44712,7 @@ async function handleBatchIntake(context) {
     return usageError("An intake file must be a JSON object mapping node IDs to answers.");
   }
   const answers = parsed;
-  const resolved = await resolveSession(context, { create: true });
+  const resolved = await resolveSession(context, { create: true, automaticExploration: false, preparation: false });
   if (isCliResult3(resolved)) return resolved;
   let session = resolved.session;
   const diagnostics = [];
@@ -40869,7 +44798,7 @@ ${renderNextAction(action)}`
 async function classifyRoadmap(target) {
   let stats;
   try {
-    stats = await lstat3(target);
+    stats = await lstat4(target);
   } catch (error51) {
     if (error51 !== null && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
       return { kind: "absent" };
@@ -40888,6 +44817,7 @@ async function classifyRoadmap(target) {
   return { kind: "file" };
 }
 async function handleFinalize(context) {
+  await recoverIntakeLifecycleArtifacts(context.repositoryRoot);
   const resolved = await resolveSession(context, { create: false });
   if (isCliResult3(resolved)) return resolved;
   const session = resolved.session;
@@ -41076,7 +45006,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     resolvedQuestions: resolvedOpenQuestions(session),
     createdAt
   });
-  const roadmapPath = path30.join(context.repositoryRoot, ROADMAP_FILE);
+  const roadmapPath = path33.join(context.repositoryRoot, ROADMAP_FILE);
   const roadmap = renderRoadmap({
     projectName: name,
     answers: session.answers,
@@ -41088,9 +45018,9 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
   if (destination.kind === "refused") {
     notes.push(destination.reason);
   } else if (destination.kind === "file") {
-    const existing = await readFile17(roadmapPath, "utf8");
+    const existing = await readFile19(roadmapPath, "utf8");
     if (existing.includes(ROADMAP_MARKER) || hasFlag(context, "force-roadmap")) {
-      await writeFile8(roadmapPath, roadmap, "utf8");
+      await writeFile9(roadmapPath, roadmap, "utf8");
       roadmapWritten = true;
     } else {
       notes.push(
@@ -41098,7 +45028,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
       );
     }
   } else {
-    await writeFile8(roadmapPath, roadmap, "utf8");
+    await writeFile9(roadmapPath, roadmap, "utf8");
     roadmapWritten = true;
   }
   if (refinalizing) {
@@ -41143,14 +45073,22 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
 
 // packages/cli/src/commands/workflow/start.ts
 var START_EXAMPLE = `Example: legion start --name "My Project" --summary "..." --owner dasbl`;
-var START_HELP = `legion start [--next] [--json]
+var START_HELP = `legion start [preparation option] [--json]
 
-Run the intake interview. The CLI owns the question graph; a host renders each
-question and relays the answer. State lives in .legion/project/intake, so an
-interrupted interview resumes exactly where it stopped.
+Prepare and review an intake contract, then run only the remaining interview.
+The CLI owns validation, state, and transitions; a host renders the returned
+review or question and relays the human's explicit decision.
 
-  legion start                         Begin or resume; print the next question
-  legion start --next --json           The same question, machine-readable
+Preparation and review:
+  legion start                         Run or resume the CLI-owned preparation state
+  legion start --goal <text>           Set or revise the preparation initiative
+  legion start --without-exploration   Explicitly opt out of exploration selection
+  legion start --stage-draft <file>    Validate and stage a replacement draft for review
+  legion start --accept-draft          Accept the active displayed draft after human approval
+  legion start --discard-draft         Durably close the active draft without a session
+
+Interview compatibility:
+  legion start --next --json           Request the current interview question explicitly
   legion start --answer "<node>=<v>"   Record one answer and advance
   legion start --accept-proposal       Take the exploration's suggestion for this question
   legion start --skip                  Decline an optional question
@@ -41159,20 +45097,81 @@ interrupted interview resumes exactly where it stopped.
   legion start --abort                 Close the session without finalizing
   legion start --intake <file>         Answer everything at once, same validators
   legion start --finalize              Write requirements, constitution and ROADMAP.md
-  legion start --from-exploration <id> Seed a new session from a legion explore run
+  legion start --from-exploration <id> Select an exploration (legacy compatibility form)
+  legion start --map-failed <reason>    Continue with explicitly degraded direct review
+
+Every staged draft returns a complete grouped review with inspectable evidence.
+Ask the human to accept, revise, or discard it. Its typed human_decision next
+action is a pause, not an executable command. An
+accept/discard is bound to the exact displayed draft digest; a supplied ID remains
+compatible but cannot select stale or undisplayed bytes.
 
 Options: --session <id> selects a session explicitly, --slug overrides the derived
 project slug, --force-roadmap replaces a ROADMAP.md this command did not write.
+Preparation selectors are accepted only during bare preparation or alongside
+--stage-draft; enter the interview with a later --next. Accept/discard are
+terminal decisions and cannot be combined with selectors, session modes, or --next.
 
 Direct initialization, which asks nothing and creates no requirements:
   legion start --name <name> [--summary <text>] [--owner <name>] [--dry-run]`;
+var START_COMMON_OPTIONS = ["created-at", "help", "json", "no-color", "repo", "repository-root"];
+var START_PREPARATION_SELECTORS = ["goal", "map-failed", "from-exploration", "without-exploration"];
+function allowedStartOptions(mode) {
+  const modeOptions = {
+    preparation: START_PREPARATION_SELECTORS,
+    stage: ["draft", "stage-draft", ...START_PREPARATION_SELECTORS],
+    accept: ["accept-draft"],
+    discard: ["discard-draft"],
+    "session-status": ["session-status", "session"],
+    abort: ["abort", "session"],
+    back: ["back", "session"],
+    finalize: ["finalize", "session", "force-roadmap"],
+    "accept-proposal": ["accept-proposal", "session", "node"],
+    skip: ["skip", "session", "node"],
+    answer: ["answer", "session"],
+    intake: ["intake", "session"],
+    "direct-initialization": ["name", "summary", "owner", "slug", "dry-run"],
+    next: ["next", "session"]
+  };
+  return /* @__PURE__ */ new Set([...START_COMMON_OPTIONS, ...modeOptions[mode] ?? []]);
+}
 async function handleStartCommand(context) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(START_HELP);
   }
+  const startActions = [
+    context.args.options.has("draft") || context.args.options.has("stage-draft") ? "stage" : void 0,
+    context.args.options.has("accept-draft") ? "accept" : void 0,
+    context.args.options.has("discard-draft") ? "discard" : void 0,
+    context.args.options.has("session-status") ? "session-status" : void 0,
+    context.args.options.has("abort") ? "abort" : void 0,
+    context.args.options.has("back") ? "back" : void 0,
+    context.args.options.has("finalize") ? "finalize" : void 0,
+    context.args.options.has("accept-proposal") ? "accept-proposal" : void 0,
+    context.args.options.has("skip") ? "skip" : void 0,
+    context.args.options.has("answer") ? "answer" : void 0,
+    context.args.options.has("intake") ? "intake" : void 0,
+    context.args.options.has("name") ? "direct-initialization" : void 0
+  ].filter((action2) => action2 !== void 0);
+  const action = startActions[0];
+  const mode = action ?? (context.args.options.has("next") || context.args.options.has("session") ? "next" : "preparation");
+  const allowed = allowedStartOptions(mode);
+  const unexpected = [...context.args.options.keys()].filter((option) => !allowed.has(option)).sort();
+  const mutuallyExclusiveSelection = context.args.options.has("from-exploration") && context.args.options.has("without-exploration");
+  const duplicateStageSelector = context.args.options.has("draft") && context.args.options.has("stage-draft");
+  if (startActions.length > 1 || unexpected.length > 0 || mutuallyExclusiveSelection || duplicateStageSelector) {
+    const detail = unexpected.length === 0 ? "" : ` Invalid for ${mode}: ${unexpected.map((option) => `--${option}`).join(", ")}.`;
+    return usageError(`Choose one compatible start mode; terminal draft decisions cannot be combined with preparation selectors, interview selection, or another action.${detail}`);
+  }
+  if (hasFlag(context, "dry-run") && !context.args.options.has("name")) {
+    return usageError("legion start --dry-run is supported only with direct --name initialization.");
+  }
   if (context.args.options.has("name")) {
     return directInitialization(context);
   }
+  if (context.args.options.has("draft") || context.args.options.has("stage-draft")) return handleStageDraft(context);
+  if (context.args.options.has("accept-draft")) return handleAcceptDraft(context);
+  if (context.args.options.has("discard-draft")) return handleDiscardDraft(context);
   if (hasFlag(context, "session-status")) return handleSessionStatus(context);
   if (hasFlag(context, "abort")) return handleAbort(context);
   if (hasFlag(context, "back")) return handleBack(context);
@@ -41239,16 +45238,63 @@ async function directInitialization(context) {
     const message = error51 instanceof Error ? error51.message : String(error51);
     return usageError(`Invalid --slug value. Use lowercase letters, numbers, and hyphens, 3-64 characters, starting and ending with a letter or number. ${message}`);
   }
+  const summaryValueless = valuelessStartOption(
+    context,
+    "summary",
+    "Missing required value for --summary. Use a description up to 2048 characters."
+  );
+  if (summaryValueless !== void 0) return summaryValueless;
   const summary = stringOption(context, "summary")?.trim();
+  const dryRun = hasFlag(context, "dry-run");
+  const initializedAt = createdAt ?? utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
+  const repository = repositoryReference(context.repositoryRoot);
+  const plannedRepository = {
+    provider: repository.provider ?? "git",
+    defaultBranch: repository.defaultBranch ?? "main",
+    ...repository.remoteUrl === void 0 ? {} : { remoteUrl: repository.remoteUrl }
+  };
+  try {
+    const constitutionPath = artifactPathForRole({ role: "constitution" });
+    const constitution = artifactRevisionForContent({
+      role: "constitution",
+      path: constitutionPath,
+      content: DEFAULT_PROJECT_CONSTITUTION,
+      revision: 1,
+      mediaType: "text/markdown"
+    });
+    projectSchema.parse({
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt: initializedAt,
+      kind: "project",
+      id: formatEntityId("project", slug),
+      slug,
+      name,
+      ...summary === void 0 || summary.length === 0 ? {} : { description: summary },
+      repository: plannedRepository,
+      policy: {
+        constitution: constitution.artifact,
+        currentSpecRoot: PROJECT_ARTIFACT_PATHS.currentSpecs,
+        changeRoot: PROJECT_ARTIFACT_PATHS.changes,
+        adrRoot: PROJECT_ARTIFACT_PATHS.adr,
+        riskPolicyRefs: [],
+        oraclePolicyRefs: [],
+        decisionOwners: [decisionOwner]
+      }
+    });
+  } catch (error51) {
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return usageError(`Invalid direct project initialization. ${message}`);
+  }
+  if (!dryRun) await recoverIntakeLifecycleArtifacts(context.repositoryRoot);
   const result = await initProject({
     repositoryRoot: context.repositoryRoot,
     slug,
     name,
     ...summary === void 0 || summary.length === 0 ? {} : { description: summary },
-    repository: repositoryReference(context.repositoryRoot),
+    repository: plannedRepository,
     decisionOwners: [decisionOwner],
-    ...createdAt === void 0 ? {} : { createdAt },
-    dryRun: hasFlag(context, "dry-run")
+    createdAt: initializedAt,
+    dryRun
   });
   if (!result.ok) {
     return failure(
@@ -41290,359 +45336,9 @@ function startFailureHuman(diagnostics) {
 ${rendered}` : "Project initialization failed.";
 }
 
-// packages/cli/src/workflow/codebase-map.ts
-import { createHash as createHash19 } from "node:crypto";
-import { readdir as readdir13, readFile as readFile18, stat as stat7 } from "node:fs/promises";
-import path31 from "node:path";
-var EXCLUDED_DIRECTORIES = /* @__PURE__ */ new Set([
-  ".git",
-  ".hg",
-  ".svn",
-  ".legion",
-  ".worktrees",
-  "node_modules",
-  "dist",
-  "coverage",
-  ".turbo",
-  ".cache",
-  "target",
-  "build",
-  ".next"
-]);
-var TEXT_EXTENSIONS = /* @__PURE__ */ new Set([
-  ".c",
-  ".cc",
-  ".cpp",
-  ".cs",
-  ".css",
-  ".go",
-  ".h",
-  ".hpp",
-  ".html",
-  ".java",
-  ".js",
-  ".json",
-  ".jsx",
-  ".kt",
-  ".kts",
-  ".md",
-  ".mjs",
-  ".py",
-  ".rs",
-  ".sql",
-  ".toml",
-  ".ts",
-  ".tsx",
-  ".txt",
-  ".yaml",
-  ".yml"
-]);
-async function collectMapSource(input) {
-  const scope = normalizeScope(input.repositoryRoot, input.scope);
-  return { scope, files: await collectSourceFiles(input.repositoryRoot, scope) };
-}
-async function refreshCodebaseMap(input) {
-  const { scope, files } = input;
-  const map2 = {
-    schemaVersion: 1,
-    kind: "codebase_map",
-    generatedAt: input.paths.createdAt,
-    scope,
-    sourceFingerprint: fingerprintFiles(files),
-    sourceFileCount: files.length,
-    files
-  };
-  const codebaseArtifactPath = guidanceArtifactPath(input.paths, "codebase.md");
-  const indexArtifactPath = guidanceArtifactPath(input.paths, "index.jsonl");
-  const symbolsArtifactPath = guidanceArtifactPath(input.paths, "symbols.json");
-  const searchArtifactPath = guidanceArtifactPath(input.paths, "search.md");
-  const mapArtifactPath = guidanceArtifactPath(input.paths, "map.json");
-  await writeProjectTextFile({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: codebaseArtifactPath,
-    text: renderCodebaseMarkdown(map2)
-  });
-  await writeProjectTextFile({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: indexArtifactPath,
-    text: `${files.map((file2) => stableProtocolJson(file2).trimEnd()).join("\n")}
-`
-  });
-  await writeProjectTextFile({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: symbolsArtifactPath,
-    text: stableProtocolJson({
-      schemaVersion: 1,
-      kind: "codebase_symbols",
-      generatedAt: map2.generatedAt,
-      symbols: files.flatMap((file2) => file2.symbols.map((symbol2) => ({ symbol: symbol2, path: file2.path })))
-    })
-  });
-  await writeProjectTextFile({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: searchArtifactPath,
-    text: renderSearchMarkdown(map2)
-  });
-  await writeProjectTextFile({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: mapArtifactPath,
-    text: stableProtocolJson(map2)
-  });
-  return {
-    map: map2,
-    codebaseArtifactPath,
-    indexArtifactPath,
-    symbolsArtifactPath,
-    searchArtifactPath,
-    mapArtifactPath
-  };
-}
-async function getLatestCodebaseMap(repositoryRoot) {
-  const runs = await latestGuidanceRuns({ repositoryRoot, workflows: ["map"], limitPerWorkflow: 20 });
-  for (const run of runs) {
-    const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : void 0;
-    if (artifactPath === void 0) continue;
-    try {
-      return JSON.parse(await readFile18(path31.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
-    } catch {
-      continue;
-    }
-  }
-  return void 0;
-}
-async function currentCodebaseFingerprint(input) {
-  const scope = normalizeScope(input.repositoryRoot, input.scope);
-  const files = await collectSourceFiles(input.repositoryRoot, scope);
-  return {
-    scope,
-    sourceFingerprint: fingerprintFiles(files),
-    sourceFileCount: files.length
-  };
-}
-function queryCodebaseMap(map2, query, limit = 10) {
-  const terms = tokenize(query);
-  if (terms.length === 0) return [];
-  return map2.files.map((file2) => {
-    const haystack = [
-      file2.path,
-      file2.summary,
-      ...file2.symbols,
-      ...file2.headings
-    ].join(" ").toLowerCase();
-    const score = terms.reduce((total, term) => total + occurrences(haystack, term), 0);
-    return { file: file2, score };
-  }).filter((entry) => entry.score > 0).sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path)).slice(0, limit).map((entry) => ({
-    path: entry.file.path,
-    score: entry.score,
-    symbols: entry.file.symbols.slice(0, 8),
-    summary: entry.file.summary
-  }));
-}
-function normalizeScope(repositoryRoot, scope) {
-  if (scope === void 0 || scope.trim().length === 0 || scope.trim() === ".") return ".";
-  const absolute = path31.resolve(repositoryRoot, scope);
-  const relative = path31.relative(repositoryRoot, absolute).replace(/\\/g, "/");
-  if (relative.length === 0) return ".";
-  if (relative.startsWith("../") || path31.isAbsolute(relative)) {
-    throw new Error(`Map scope must stay inside the repository: ${scope}`);
-  }
-  return relative;
-}
-async function collectSourceFiles(repositoryRoot, scope) {
-  const root = scope === "." ? repositoryRoot : path31.join(repositoryRoot, ...scope.split("/"));
-  const rootStat = await stat7(root);
-  const candidates = rootStat.isFile() ? [root] : await walk(root);
-  const files = [];
-  for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
-    const relative = path31.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
-    const extension = path31.extname(relative).toLowerCase();
-    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path31.basename(relative))) continue;
-    const fileStat = await stat7(absolutePath);
-    if (!fileStat.isFile() || fileStat.size > 512 * 1024) continue;
-    const bytes = await readFile18(absolutePath);
-    if (bytes.includes(0)) continue;
-    const text = bytes.toString("utf8");
-    const lines = text.split(/\r?\n/u);
-    const symbols = extractSymbols(text);
-    const headings = extractHeadings(text);
-    files.push({
-      path: relative,
-      sha256: sha256(bytes),
-      sizeBytes: fileStat.size,
-      lineCount: lines.length,
-      symbols,
-      headings,
-      summary: summarizeFile(relative, lines, symbols, headings)
-    });
-  }
-  return files;
-}
-async function walk(root) {
-  const files = [];
-  const entries = await readdir13(root, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.name.startsWith(".") && ![".github", ".codex-plugin", ".npmrc", ".nvmrc", ".node-version"].includes(entry.name)) continue;
-    const absolute = path31.join(root, entry.name);
-    if (entry.isDirectory()) {
-      if (EXCLUDED_DIRECTORIES.has(entry.name)) continue;
-      files.push(...await walk(absolute));
-      continue;
-    }
-    if (entry.isFile()) files.push(absolute);
-  }
-  return files;
-}
-function extractSymbols(text) {
-  const symbols = /* @__PURE__ */ new Set();
-  const patterns = [
-    /^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gmu,
-    /^\s*(?:export\s+)?class\s+([A-Za-z_$][\w$]*)/gmu,
-    /^\s*(?:export\s+)?interface\s+([A-Za-z_$][\w$]*)/gmu,
-    /^\s*(?:export\s+)?type\s+([A-Za-z_$][\w$]*)/gmu,
-    /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)/gmu,
-    /^\s*def\s+([A-Za-z_][\w]*)/gmu,
-    /^\s*class\s+([A-Za-z_][\w]*)/gmu
-  ];
-  for (const pattern of patterns) {
-    for (const match of text.matchAll(pattern)) {
-      if (match[1] !== void 0) symbols.add(match[1]);
-    }
-  }
-  return [...symbols].sort((left, right) => left.localeCompare(right)).slice(0, 50);
-}
-function extractHeadings(text) {
-  return text.split(/\r?\n/u).map((line) => /^#{1,6}\s+(.+)$/u.exec(line.trim())?.[1]?.trim()).filter((value) => value !== void 0 && value.length > 0).slice(0, 20);
-}
-function summarizeFile(relative, lines, symbols, headings) {
-  const firstContent = lines.map((line) => line.trim()).find((line) => line.length > 0 && !line.startsWith("//") && !line.startsWith("#"));
-  const parts = [`${relative} has ${lines.length} lines`];
-  if (symbols.length > 0) parts.push(`symbols: ${symbols.slice(0, 6).join(", ")}`);
-  if (headings.length > 0) parts.push(`headings: ${headings.slice(0, 3).join(", ")}`);
-  if (firstContent !== void 0) parts.push(`first content: ${firstContent.slice(0, 120)}`);
-  return parts.join("; ");
-}
-function fingerprintFiles(files) {
-  return sha256(Buffer.from(files.map((file2) => `${file2.path}\0${file2.sha256}`).join("\n"), "utf8"));
-}
-function renderCodebaseMarkdown(map2) {
-  const byExtension = /* @__PURE__ */ new Map();
-  for (const file2 of map2.files) {
-    const extension = path31.extname(file2.path).toLowerCase() || "(none)";
-    byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
-  }
-  const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
-  return [
-    "# Codebase Map",
-    "",
-    `Generated: ${map2.generatedAt}`,
-    `Scope: ${map2.scope}`,
-    `Source fingerprint: ${map2.sourceFingerprint}`,
-    `Source files: ${map2.sourceFileCount}`,
-    "",
-    "## File Types",
-    "",
-    ...extensionRows,
-    "",
-    "## Files",
-    "",
-    ...map2.files.slice(0, 200).map((file2) => `- ${file2.path} (${file2.lineCount} lines): ${file2.summary}`),
-    ""
-  ].join("\n");
-}
-function renderSearchMarkdown(map2) {
-  return [
-    "# Codebase Search Index",
-    "",
-    "Use `legion map --query <text>` to search this deterministic index.",
-    "",
-    ...map2.files.map((file2) => [
-      `## ${file2.path}`,
-      "",
-      file2.summary,
-      file2.symbols.length > 0 ? `Symbols: ${file2.symbols.join(", ")}` : "Symbols: none",
-      ""
-    ].join("\n")),
-    ""
-  ].join("\n");
-}
-function queryTerms(value) {
-  return tokenize(value);
-}
-function tokenize(value) {
-  return value.toLowerCase().split(/[^a-z0-9_/-]+/u).map((entry) => entry.trim()).filter((entry) => entry.length >= 2);
-}
-function occurrences(value, term) {
-  let count = 0;
-  let index = value.indexOf(term);
-  while (index !== -1) {
-    count += 1;
-    index = value.indexOf(term, index + term.length);
-  }
-  return count;
-}
-function isTextLikeName(name) {
-  return [
-    "README",
-    "LICENSE",
-    "CHANGELOG",
-    "Dockerfile"
-  ].includes(name);
-}
-function sha256(bytes) {
-  return createHash19("sha256").update(bytes).digest("hex");
-}
-var MAP_MAX_AGE_DAYS = 30;
-async function resolveMapState(repositoryRoot, scope, now) {
-  const latest = await getLatestCodebaseMap(repositoryRoot);
-  let current;
-  try {
-    current = await currentCodebaseFingerprint({ repositoryRoot, ...scope === void 0 ? {} : { scope } });
-  } catch (error51) {
-    const message = error51 instanceof Error ? error51.message : String(error51);
-    return { error: `Unable to read the codebase map. ${message}` };
-  }
-  const base = {
-    scope: current.scope,
-    sourceFingerprint: current.sourceFingerprint,
-    sourceFileCount: current.sourceFileCount,
-    latestSourceFingerprint: latest?.sourceFingerprint ?? null,
-    generatedAt: latest?.generatedAt ?? null
-  };
-  if (latest === void 0) {
-    return { ...base, freshness: "absent", reason: "No codebase map has been generated.", ageDays: null };
-  }
-  const ageDays = ageInDays(latest.generatedAt, now);
-  if (latest.scope !== current.scope) {
-    return {
-      ...base,
-      freshness: "partial",
-      reason: `The stored map covers ${latest.scope}, which is not the scope being checked (${current.scope}).`,
-      ageDays
-    };
-  }
-  if (latest.sourceFingerprint !== current.sourceFingerprint) {
-    return { ...base, freshness: "stale", reason: "Source files have changed since the map was generated.", ageDays };
-  }
-  if (ageDays !== null && ageDays > MAP_MAX_AGE_DAYS) {
-    return {
-      ...base,
-      freshness: "stale",
-      reason: `The map is ${Math.floor(ageDays)} days old, past the ${MAP_MAX_AGE_DAYS}-day limit.`,
-      ageDays
-    };
-  }
-  return { ...base, freshness: "fresh", reason: "The map matches the current source files.", ageDays };
-}
-function ageInDays(generatedAt, now) {
-  const from = Date.parse(generatedAt);
-  const to = Date.parse(now);
-  if (Number.isNaN(from) || Number.isNaN(to)) return null;
-  return (to - from) / 864e5;
-}
-
 // packages/cli/src/workflow/traceability-check.ts
-import { readdir as readdir14 } from "node:fs/promises";
-import path32 from "node:path";
+import { readdir as readdir16 } from "node:fs/promises";
+import path34 from "node:path";
 var CHANGES_ROOT = ".legion/project/changes";
 var CURRENT_SPECS_ROOT = ".legion/project/specs";
 function taskgraphArtifactPath(changeId) {
@@ -41667,7 +45363,7 @@ async function guarded(artifactPath, code, read) {
 }
 async function changeIds(repositoryRoot) {
   return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
-    const entries = await readdir14(path32.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
+    const entries = await readdir16(path34.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   });
 }
@@ -41936,12 +45632,12 @@ function renderTraceabilityLine(traceability) {
 }
 
 // packages/cli/src/workflow/state.ts
-import { readdir as readdir16 } from "node:fs/promises";
-import path36 from "node:path";
+import { readdir as readdir18 } from "node:fs/promises";
+import path38 from "node:path";
 
 // packages/cli/src/workflow/context.ts
-import { readdir as readdir15, stat as stat8 } from "node:fs/promises";
-import path33 from "node:path";
+import { readdir as readdir17, stat as stat8 } from "node:fs/promises";
+import path35 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -41967,17 +45663,17 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path33.join(repositoryRoot, ".legion");
+  const legionRoot = path35.join(repositoryRoot, ".legion");
   if (!await pathExists6(legionRoot)) return [];
-  const entries = await readdir15(legionRoot, { withFileTypes: true });
+  const entries = await readdir17(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
   if (unknownEntries.length > 0) {
     return [
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path33.join(legionRoot, "project");
-  const manifestPath = path33.join(projectRoot, "project.json");
+  const projectRoot = path35.join(legionRoot, "project");
+  const manifestPath = path35.join(projectRoot, "project.json");
   if (await pathExists6(projectRoot) && !await pathExists6(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -42036,8 +45732,8 @@ function latestEvidenceEntries(entries) {
 }
 
 // packages/cli/src/workflow/run-artifacts.ts
-import { createHash as createHash20 } from "node:crypto";
-import path34 from "node:path";
+import { createHash as createHash21 } from "node:crypto";
+import path36 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -42053,7 +45749,7 @@ function reviewIdForChange(input) {
   return formatEntityId("review", derivedSuffix(input.changeId.slice("chg_".length), `-review-${input.sequence}`));
 }
 function approvalIdForSubject(input) {
-  const digest = createHash20("sha256").update(`${input.action}
+  const digest = createHash21("sha256").update(`${input.action}
 ${input.subject.kind}
 ${input.subject.id}`).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
   return formatEntityId(
@@ -42073,7 +45769,7 @@ function releaseIdForChange(input) {
 function derivedSuffix(baseSuffix, tail) {
   const full = `${baseSuffix}${tail}`;
   if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
-  const digest = createHash20("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  const digest = createHash21("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
   const reservedLength = tail.length + digest.length + 1;
   const prefixLength = ENTITY_SUFFIX_MAX_LENGTH - reservedLength;
   if (prefixLength < 1) {
@@ -42089,11 +45785,11 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path34.join(repositoryRoot, ...artifactPath.split("/"));
+  return path36.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/workflow/evidence-sources.ts
-import path35 from "node:path";
+import path37 from "node:path";
 function asObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
@@ -42164,7 +45860,7 @@ function subchecksClean(checks, blocksSubcheck) {
   return { clean: true, reason: "" };
 }
 function shippedRoot(repositoryRoot) {
-  return path35.isAbsolute(repositoryRoot) ? repositoryRoot : path35.resolve(repositoryRoot);
+  return path37.isAbsolute(repositoryRoot) ? repositoryRoot : path37.resolve(repositoryRoot);
 }
 function sameTree(declared, repositoryRoot) {
   const fold = (value) => value.replace(/[\\/]+/g, "/").replace(/\/+$/, "").replace(/^([A-Za-z]):/, (_match, drive) => `${drive.toLowerCase()}:`);
@@ -42507,9 +46203,9 @@ function humanApprovalStatus(input) {
     };
   }
   if (newestGrant !== void 0) {
-    const link = approvedReviewLink({ approval: newestGrant, reviews: input.reviews, taskId: input.taskId });
-    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
-    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    const link2 = approvedReviewLink({ approval: newestGrant, reviews: input.reviews, taskId: input.taskId });
+    if (link2.kind === "stale") return { status: "unsatisfied", reason: link2.reason };
+    if (link2.kind === "unknown") return { status: "unevaluable", reason: link2.reason };
     return {
       status: "satisfied",
       reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} accepting this task's review.`
@@ -42644,14 +46340,14 @@ function deltaSpecApprovalStatus(input) {
     };
   }
   if (newestGrant !== void 0) {
-    const link = approvedDeltaSpecPin({
+    const link2 = approvedDeltaSpecPin({
       approval: newestGrant,
       delta: input.delta,
       changeId: input.changeId,
       verifyPin: input.verifyPin
     });
-    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
-    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    if (link2.kind === "stale") return { status: "unsatisfied", reason: link2.reason };
+    if (link2.kind === "unknown") return { status: "unevaluable", reason: link2.reason };
     return {
       status: "satisfied",
       reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving the delta spec for ${input.delta.requirementId}.`,
@@ -43353,17 +47049,17 @@ function oracleApprovalStatus(input) {
     };
   }
   if (newestGrant !== void 0) {
-    const link = approvedOraclePin({
+    const link2 = approvedOraclePin({
       approval: newestGrant,
       oracle: input.oracle,
       changeId: input.changeId,
       verifyPin: input.verifyPin
     });
-    if (link.kind === "stale") {
-      return { status: "unsatisfied", reason: link.reason, recovery: ORACLE_BYTES_RECOVERY };
+    if (link2.kind === "stale") {
+      return { status: "unsatisfied", reason: link2.reason, recovery: ORACLE_BYTES_RECOVERY };
     }
-    if (link.kind === "unknown") {
-      return { status: "unevaluable", reason: link.reason, recovery: ORACLE_APPROVE_RECOVERY };
+    if (link2.kind === "unknown") {
+      return { status: "unevaluable", reason: link2.reason, recovery: ORACLE_APPROVE_RECOVERY };
     }
     return {
       status: "satisfied",
@@ -45107,10 +48803,10 @@ function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function listWorkflowChanges(repositoryRoot) {
-  const changesRoot = path36.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path38.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
-    entries = await readdir16(changesRoot, { withFileTypes: true });
+    entries = await readdir18(changesRoot, { withFileTypes: true });
   } catch (error51) {
     if (isNodeErrorCode3(error51, "ENOENT")) {
       return noWorkflowChange(changesRoot);
@@ -45163,7 +48859,7 @@ async function findLatestWorkflowChangeId(repositoryRoot) {
   const listed = await listWorkflowChanges(repositoryRoot);
   if (!listed.ok) return listed;
   const latest = listed.changes.at(-1);
-  if (latest === void 0) return noWorkflowChange(path36.join(repositoryRoot, ".legion", "project", "changes"));
+  if (latest === void 0) return noWorkflowChange(path38.join(repositoryRoot, ".legion", "project", "changes"));
   return { ok: true, changeId: latest.changeId };
 }
 async function isChangeComplete(input) {
@@ -45486,8 +49182,8 @@ function buildOracleArtifactInputs(options) {
 }
 
 // packages/cli/src/workflow/phase-compat.ts
-import { readFile as readFile19 } from "node:fs/promises";
-import path37 from "node:path";
+import { readFile as readFile20 } from "node:fs/promises";
+import path39 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -45535,17 +49231,17 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path37.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path37.join(context.repositoryRoot, "ROADMAP.md")
+    path39.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path39.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path37.isAbsolute(roadmapPath) ? roadmapPath : path37.resolve(repositoryRoot, roadmapPath);
+  return path39.isAbsolute(roadmapPath) ? roadmapPath : path39.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
-    return await readFile19(sourcePath, "utf8");
+    return await readFile20(sourcePath, "utf8");
   } catch (error51) {
     if (isEnoent8(error51)) return void 0;
     throw error51;
@@ -45559,8 +49255,8 @@ function phaseChangeIdPrefix(phaseNumber) {
 }
 
 // packages/cli/src/workflow/retro-index.ts
-import { readFile as readFile20 } from "node:fs/promises";
-import path38 from "node:path";
+import { readFile as readFile21 } from "node:fs/promises";
+import path40 from "node:path";
 var STAGED_ENTRY_FILE = "retro-entry.json";
 var RETRO_INDEX_ARTIFACT_PATH = ".legion/project/workflow/retro/retro-index.json";
 var EMPTY_INDEX = Object.freeze({
@@ -45583,9 +49279,9 @@ function isRetroIndexEntry(value) {
   return typeof entry["id"] === "string" && typeof entry["createdAt"] === "string" && typeof entry["artifactPath"] === "string" && typeof entry["summary"] === "string" && (entry["scopedChangeIds"] === void 0 || Array.isArray(entry["scopedChangeIds"]) && entry["scopedChangeIds"].every((id) => typeof id === "string")) && (entry["scopeLabel"] === void 0 || typeof entry["scopeLabel"] === "string") && Array.isArray(entry["actions"]) && entry["actions"].every(isRetroAction);
 }
 async function readRetroIndex(repositoryRoot) {
-  const indexPath = path38.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
+  const indexPath = path40.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
   try {
-    const parsed = JSON.parse(await readFile20(indexPath, "utf8"));
+    const parsed = JSON.parse(await readFile21(indexPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null) return EMPTY_INDEX;
     const candidate = parsed;
     if (candidate["kind"] !== "retro_index" || !Array.isArray(candidate["retrospectives"])) return EMPTY_INDEX;
@@ -46114,11 +49810,11 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action, retroActio
 
 // packages/cli/src/commands/workflow/build.ts
 import { execFileSync as execFileSync6 } from "node:child_process";
-import { readFile as readFile22 } from "node:fs/promises";
+import { readFile as readFile23 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
-import { readdir as readdir17, readFile as readFile21 } from "node:fs/promises";
-import path39 from "node:path";
+import { readdir as readdir19, readFile as readFile22 } from "node:fs/promises";
+import path41 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -46282,19 +49978,19 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path39.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path41.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
-      entries = await readdir17(workflowRoot, { withFileTypes: true });
+      entries = await readdir19(workflowRoot, { withFileTypes: true });
     } catch (error51) {
       if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") continue;
       throw error51;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path39.join(workflowRoot, entry.name, "workflow-run.json") : path39.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path41.join(workflowRoot, entry.name, "workflow-run.json") : path41.join(workflowRoot, entry.name);
       let text = "";
       try {
-        text = await readFile21(absolutePath, "utf8");
+        text = await readFile22(absolutePath, "utf8");
       } catch {
         continue;
       }
@@ -46310,9 +50006,9 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path39.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path41.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
-    const text = await readFile21(indexPath, "utf8");
+    const text = await readFile22(indexPath, "utf8");
     return ["```json", truncate4(text.trim(), 4e3), "```"].join("\n");
   } catch {
     return "No learned project guidance found.";
@@ -46326,9 +50022,9 @@ function truncate4(text, maxLength) {
 
 // packages/cli/src/workflow/executor/verification-runner.ts
 import { spawn as spawn2 } from "node:child_process";
-import { createHash as createHash21 } from "node:crypto";
+import { createHash as createHash22 } from "node:crypto";
 import { existsSync as existsSync4 } from "node:fs";
-import path40 from "node:path";
+import path42 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
@@ -46337,12 +50033,12 @@ var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args) {
   if (command !== "legion") return { command, args };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path40.join(sourceRoot, ...LEGION_BIN.split("/"));
+  const binPath = path42.join(sourceRoot, ...LEGION_BIN.split("/"));
   if (!existsSync4(binPath)) return { command, args };
   return { command: process.execPath, args: [binPath, ...args] };
 }
-function sha2562(value) {
-  return `sha256:${createHash21("sha256").update(value, "utf8").digest("hex")}`;
+function sha2563(value) {
+  return `sha256:${createHash22("sha256").update(value, "utf8").digest("hex")}`;
 }
 function terminateProcessTree2(pid) {
   if (pid === void 0) return;
@@ -46435,14 +50131,14 @@ function createVerificationRunner(options) {
       args: [...request.args],
       exitCode: outcome.exitCode,
       expectedExitCode: request.expectedExitCode,
-      stdoutSha256: sha2562(outcome.stdout),
-      stderrSha256: sha2562(outcome.stderr),
+      stdoutSha256: sha2563(outcome.stdout),
+      stderrSha256: sha2563(outcome.stderr),
       // `sha256(stdout ++ stderr)`, in that order — NOT a digest of the two
       // streams interleaved as a terminal would show them. The streams are
       // captured separately, so real arrival order is not recoverable here.
       // Treat this as a cheap combined fingerprint, not a reproduction of the
       // run's console output.
-      combinedSha256: sha2562(`${outcome.stdout}${outcome.stderr}`),
+      combinedSha256: sha2563(`${outcome.stdout}${outcome.stderr}`),
       durationMs: Date.now() - startedMs,
       timedOut: outcome.timedOut,
       startedAt,
@@ -46453,9 +50149,9 @@ function createVerificationRunner(options) {
 }
 
 // packages/cli/src/workflow/executor/worker-bundles.ts
-import { createHash as createHash22 } from "node:crypto";
+import { createHash as createHash23 } from "node:crypto";
 import { readFileSync } from "node:fs";
-import path41 from "node:path";
+import path43 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
 var BUNDLE_INDEX = "bundles/index.json";
 var WorkerBundleIntegrityError = class extends Error {
@@ -46467,11 +50163,11 @@ var WorkerBundleIntegrityError = class extends Error {
   }
 };
 function sha256Hex5(value) {
-  return createHash22("sha256").update(value, "utf8").digest("hex");
+  return createHash23("sha256").update(value, "utf8").digest("hex");
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path41.join(root, ...BUNDLE_INDEX.split("/"));
+  const indexPath = path43.join(root, ...BUNDLE_INDEX.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(indexPath, "utf8"));
@@ -46498,7 +50194,7 @@ function loadWorkerBundles(sourceRoot) {
       );
     }
     {
-      const promptPath = path41.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      const promptPath = path43.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
         promptBody = readFileSync(promptPath, "utf8");
@@ -46561,14 +50257,14 @@ async function loadOracleFacts(input) {
   return oracles;
 }
 async function loadReleaseFact(input) {
-  const path51 = releaseArtifactPath(input.changeId);
+  const path53 = releaseArtifactPath(input.changeId);
   const read = await absentOnFailure(
     () => readRelease({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
   );
-  if (read === void 0) return { kind: "unreadable", path: path51 };
+  if (read === void 0) return { kind: "unreadable", path: path53 };
   if (read.ok) return { kind: "document", document: read.document };
   if (read.status === "not_found") return { kind: "absent" };
-  return { kind: "unreadable", path: path51 };
+  return { kind: "unreadable", path: path53 };
 }
 function releaseArtifactPath(changeId) {
   try {
@@ -46592,8 +50288,8 @@ function readState(value) {
   if (kind === "absent") return { kind: "absent" };
   if (kind === "directory") return { kind: "directory" };
   if (kind === "file") {
-    const sha2563 = record2["sha256"];
-    return typeof sha2563 === "string" && sha2563.length > 0 ? { kind: "file", sha256: sha2563 } : void 0;
+    const sha2564 = record2["sha256"];
+    return typeof sha2564 === "string" && sha2564.length > 0 ? { kind: "file", sha256: sha2564 } : void 0;
   }
   if (kind === "symlink") {
     const target = record2["target"];
@@ -46696,15 +50392,15 @@ async function acceptanceBaselineFromEvidence(input) {
 
 // packages/cli/src/workflow/guarded-execution.ts
 import { execFileSync as execFileSync5 } from "node:child_process";
-import { createHash as createHash24 } from "node:crypto";
+import { createHash as createHash25 } from "node:crypto";
 import { lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, statSync as statSync2, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import path44 from "node:path";
+import path46 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync4 } from "node:child_process";
-import { createHash as createHash23 } from "node:crypto";
+import { createHash as createHash24 } from "node:crypto";
 import { readFileSync as readFileSync2, rmSync as rmSync2, statSync } from "node:fs";
-import path42 from "node:path";
+import path44 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
   return {
@@ -46733,7 +50429,7 @@ function splitLines(value) {
 function hashFileContent(absolutePath) {
   try {
     if (statSync(absolutePath).size > MAX_HASHED_BYTES) return void 0;
-    return createHash23("sha256").update(readFileSync2(absolutePath)).digest("hex");
+    return createHash24("sha256").update(readFileSync2(absolutePath)).digest("hex");
   } catch {
     return void 0;
   }
@@ -46781,7 +50477,7 @@ function observeWorkingTreeDiff(input) {
       if (filePath.length === 0) continue;
       if (code === "??") {
         created.add(filePath);
-        lines.set(filePath, countUntrackedLines(path42.join(input.repositoryRoot, filePath)));
+        lines.set(filePath, countUntrackedLines(path44.join(input.repositoryRoot, filePath)));
       } else if (!lines.has(filePath)) {
         lines.set(filePath, 0);
       }
@@ -46797,7 +50493,7 @@ function observeWorkingTreeDiff(input) {
     path: filePath,
     linesChanged,
     isNew: created.has(filePath),
-    contentSha256: hashFileContent(path42.join(input.repositoryRoot, filePath))
+    contentSha256: hashFileContent(path44.join(input.repositoryRoot, filePath))
   }));
   return {
     status: "clean",
@@ -46912,11 +50608,11 @@ function reconcileTaskDiff(input) {
 
 // packages/cli/src/workflow/project-files.ts
 import { lstatSync, readdirSync } from "node:fs";
-import path43 from "node:path";
+import path45 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
   try {
-    const rootStat = lstatSync(path43.join(repositoryRoot, relativeRoot));
+    const rootStat = lstatSync(path45.join(repositoryRoot, relativeRoot));
     if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
     }
@@ -46929,7 +50625,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
   const walk2 = (relative) => {
     let entries;
     try {
-      entries = readdirSync(path43.join(repositoryRoot, relative), { withFileTypes: true });
+      entries = readdirSync(path45.join(repositoryRoot, relative), { withFileTypes: true });
     } catch {
       return;
     }
@@ -46946,7 +50642,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
       if (!entry.isFile()) continue;
       let size;
       try {
-        size = lstatSync(path43.join(repositoryRoot, child)).size;
+        size = lstatSync(path45.join(repositoryRoot, child)).size;
       } catch {
         size = void 0;
       }
@@ -46978,7 +50674,7 @@ function isInsideControlPlane(relative) {
 }
 function digestOf(absolute) {
   try {
-    return createHash24("sha256").update(readFileSync3(absolute)).digest("hex");
+    return createHash25("sha256").update(readFileSync3(absolute)).digest("hex");
   } catch {
     return void 0;
   }
@@ -46993,7 +50689,7 @@ function readTarget(absolute) {
 function readTargetKind(linkPath, target) {
   if (target === void 0) return void 0;
   try {
-    const resolved = path44.isAbsolute(target) ? target : path44.resolve(path44.dirname(linkPath), target);
+    const resolved = path46.isAbsolute(target) ? target : path46.resolve(path46.dirname(linkPath), target);
     return statSync2(resolved).isDirectory() ? "dir" : "file";
   } catch {
     return void 0;
@@ -47017,7 +50713,7 @@ function snapshotProtectedState(input) {
   const entries = /* @__PURE__ */ new Map();
   for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
-    const absolute = path44.join(input.repositoryRoot, entry.path);
+    const absolute = path46.join(input.repositoryRoot, entry.path);
     if (entry.kind === "symlink") {
       const snapshotTarget = readTarget(absolute);
       entries.set(entry.path, {
@@ -47052,9 +50748,9 @@ function classifyAcceptancePath(repositoryRoot, relative, harnessPaths) {
   if (isHarnessPath(relative, harnessPaths)) {
     return { kind: "unreadable", reason: "is written by the harness for this run" };
   }
-  const absolute = path44.join(repositoryRoot, relative);
-  const contained = path44.relative(repositoryRoot, absolute);
-  if (contained.startsWith("..") || path44.isAbsolute(contained)) {
+  const absolute = path46.join(repositoryRoot, relative);
+  const contained = path46.relative(repositoryRoot, absolute);
+  if (contained.startsWith("..") || path46.isAbsolute(contained)) {
     return { kind: "unreadable", reason: "resolves outside the repository" };
   }
   let stat10;
@@ -47068,9 +50764,9 @@ function classifyAcceptancePath(repositoryRoot, relative, harnessPaths) {
   if (stat10.isSymbolicLink()) return { kind: "symlink", target: readTarget(absolute) };
   if (stat10.isDirectory()) return { kind: "directory" };
   if (!stat10.isFile()) return { kind: "unreadable", reason: "is not a regular file" };
-  const sha2563 = digestOf(absolute);
-  if (sha2563 === void 0) return { kind: "unreadable", reason: "could not be read" };
-  return { kind: "file", sha256: sha2563 };
+  const sha2564 = digestOf(absolute);
+  if (sha2564 === void 0) return { kind: "unreadable", reason: "could not be read" };
+  return { kind: "file", sha256: sha2564 };
 }
 function snapshotAcceptancePaths(input) {
   const entries = /* @__PURE__ */ new Map();
@@ -47136,7 +50832,7 @@ function protectedPathsTouched(input) {
       touched.add(relative);
       continue;
     }
-    const absolute = path44.join(input.repositoryRoot, relative);
+    const absolute = path46.join(input.repositoryRoot, relative);
     const nowIsSymlink = now.kind === "symlink";
     if (before.kind === "symlink" || nowIsSymlink) {
       if (before.kind !== "symlink" || !nowIsSymlink) {
@@ -47219,7 +50915,7 @@ function restoreProtectedFiles(input) {
   const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
   const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
   for (const relative of ordered) {
-    const absolute = path44.join(input.repositoryRoot, relative);
+    const absolute = path46.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
     if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
       restored.push(relative);
@@ -47233,14 +50929,14 @@ function restoreProtectedFiles(input) {
       }
       if (before.kind === "file") {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path44.dirname(absolute), { recursive: true });
+        mkdirSync3(path46.dirname(absolute), { recursive: true });
         writeFileSync2(absolute, before.bytes);
         restored.push(relative);
         continue;
       }
       if (before.kind === "symlink" && before.target !== void 0) {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path44.dirname(absolute), { recursive: true });
+        mkdirSync3(path46.dirname(absolute), { recursive: true });
         symlinkSync2(before.target, absolute, before.targetKind ?? "file");
         restored.push(relative);
         continue;
@@ -47382,14 +51078,18 @@ async function runGuardedExecution(input) {
 }
 
 // packages/cli/src/commands/workflow/build.ts
-var BUILD_HELP = `legion build [--executor codex|manual|fake] [--allow-dirty] [--dry-run]
+var BUILD_HELP = `legion build [--executor claude|codex|manual|fake] [--allow-dirty] [--dry-run]
 
 Execute the latest typed taskgraph through a workflow executor and collect pending build evidence.
+
+With no --executor, the first installed driver runs the work: claude, then
+codex, then manual. The manual executor writes an instruction prompt and blocks
+rather than doing nothing quietly.
 
 Examples:
   legion build --dry-run --json
   legion build --executor fake --allow-dirty
-  legion build --executor codex --allow-dirty`;
+  legion build --executor claude --allow-dirty`;
 async function handleBuildWorkflow(context, changeId) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(BUILD_HELP);
@@ -47911,11 +51611,7 @@ function taskRunDocument(input) {
     // bundle that does not exist and could not be integrity-verified — and it
     // looked right, which the fully synthetic version at least did not.
     workerBundle: input.workerBundle,
-    model: {
-      provider: input.executor === "codex" ? "openai" : "legion",
-      id: input.executor === "codex" ? "codex-cli" : input.executor,
-      policyVersion: LEGION_PROTOCOL_VERSION
-    },
+    model: modelManifestForExecutor(input.executor),
     inputs: {
       contractHash: hashContent(stableProtocolJson(input.task)),
       currentSpecsHash: hashContent(stableProtocolJson(input.task.context.specRefs)),
@@ -47978,7 +51674,7 @@ function protectedAcceptanceVerdict(report) {
 async function evidenceEntryForExecution(input) {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
-  const logBytes = await readFile22(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
+  const logBytes = await readFile23(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
   const command = commandForEvidence(input.result, logBytes, input.startedAt, input.finishedAt);
   const traceRefs = [
     {
@@ -48140,7 +51836,7 @@ function commandForEvidence(result, logBytes, startedAt, endedAt) {
   };
 }
 async function referenceForFile(repositoryRoot, artifactPath) {
-  const bytes = await readFile22(absoluteArtifactPath(repositoryRoot, artifactPath));
+  const bytes = await readFile23(absoluteArtifactPath(repositoryRoot, artifactPath));
   return artifactReferenceForContent({
     path: artifactPath,
     content: bytes
@@ -48266,12 +51962,12 @@ async function loadReaffirmedPins(input) {
   }
   if (approvals.length === 0) return () => false;
   const evaluatedAt = currentUtcTimestamp();
-  return (path51, sha2563) => approvals.some(
+  return (path53, sha2564) => approvals.some(
     (approval) => isLiveSurfaceReaffirmation({
       approval,
       changeId: input.changeId,
-      path: path51,
-      currentSha256: sha2563,
+      path: path53,
+      currentSha256: sha2564,
       evaluatedAt
     })
   );
@@ -48383,9 +52079,20 @@ function describeFailingOracles(failingIndices, attribution) {
   return named.length === 0 ? "" : ` Failing oracle(s): ${named.join(", ")}.`;
 }
 function modelManifestForExecutor(executor) {
+  const model = (() => {
+    switch (executor) {
+      case "claude":
+        return { provider: "anthropic", id: "claude-code" };
+      case "codex":
+        return { provider: "openai", id: "codex-cli" };
+      case "manual":
+      case "fake":
+        return { provider: "legion", id: executor };
+    }
+  })();
   return {
-    provider: executor === "codex" ? "openai" : "legion",
-    id: executor === "codex" ? "codex-cli" : executor,
+    provider: model.provider,
+    id: model.id,
     policyVersion: LEGION_PROTOCOL_VERSION
   };
 }
@@ -48534,7 +52241,7 @@ function resolveApprover(input) {
 }
 
 // packages/cli/src/commands/workflow/review.ts
-var REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--domain <d>]... [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
+var REVIEW_HELP = `legion review [--executor claude|codex|manual|fake] [--dry-run] [--domain <d>]... [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
 
 Review collected build evidence. A submitted passing review still requires explicit human acceptance.
 
@@ -53244,8 +56951,8 @@ function blockedRelease(diagnostics, action, extras = {}) {
 }
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
-import { readFile as readFile23 } from "node:fs/promises";
-import path46 from "node:path";
+import { readFile as readFile24 } from "node:fs/promises";
+import path48 from "node:path";
 
 // packages/cli/src/workflow/ad-hoc-taskgraph.ts
 function narrowedToPolicy(derived, policy) {
@@ -53531,8 +57238,8 @@ function commandParts(parts) {
 }
 
 // packages/cli/src/commands/workflow/record.ts
-import { mkdir as mkdir13, writeFile as writeFile9 } from "node:fs/promises";
-import path45 from "node:path";
+import { mkdir as mkdir13, writeFile as writeFile10 } from "node:fs/promises";
+import path47 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -53541,7 +57248,7 @@ function positionalText(context) {
 // packages/cli/src/commands/workflow/ad-hoc.ts
 var HELP = {
   quick: "legion quick <task>\n\nCreate a typed ad-hoc taskgraph and route it through legion build.",
-  advise: "legion advise <topic> [--executor codex|manual|fake]\n\nRun read-only advisory analysis and write guidance artifacts.",
+  advise: "legion advise <topic> [--executor claude|codex|manual|fake]\n\nRun read-only advisory analysis and write guidance artifacts.",
   polish: "legion polish [target]\n\nCreate a typed polish taskgraph scoped to the target or current worktree.",
   learn: "legion learn <lesson>\n\nRecord project-specific operational learning and update the knowledge index."
 };
@@ -53850,9 +57557,9 @@ async function runLearnWorkflow(context) {
   );
 }
 async function readLessonIndex(repositoryRoot) {
-  const indexPath = path46.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path48.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
-    const parsed = JSON.parse(await readFile23(indexPath, "utf8"));
+    const parsed = JSON.parse(await readFile24(indexPath, "utf8"));
     if (parsed.kind === "lesson_index" && Array.isArray(parsed.lessons)) return parsed;
   } catch {
   }
@@ -53980,8 +57687,8 @@ function renderLessonLine(record2) {
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
-import { readFile as readFile24, rm as rm7 } from "node:fs/promises";
-import path47 from "node:path";
+import { readFile as readFile25, rm as rm8 } from "node:fs/promises";
+import path49 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
 var CONFIDENCE_VALUES = /* @__PURE__ */ new Set(["researched", "inferred", "assumed"]);
@@ -54221,11 +57928,11 @@ async function collectEscalations(input) {
 
 // packages/cli/src/commands/workflow/contextual.ts
 var HELP2 = {
-  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor codex|manual|fake]\n\nBrainstorm freely before the structured start interview. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Note: legion start does not read explorations yet \u2014 that handoff is not wired up.",
+  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor claude|codex|manual|fake]\n\nBrainstorm freely before structured intake preparation. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Bare legion start automatically selects a compatible completed exploration; use --from-exploration <id> to select one explicitly or --without-exploration to opt out.",
   map: "legion map [--refresh] [--scope <path>] | [--check] | [--query <text>]\n\nGenerate, check, or query deterministic codebase context.",
-  retro: "legion retro [--phase N|--milestone M] [--executor codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
+  retro: "legion retro [--phase N|--milestone M] [--executor claude|codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
   milestone: "legion milestone --status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>\n\nManage milestone status, summaries, and archives.",
-  council: "legion council <topic> [--executor codex|manual|fake]\n\nRun governance deliberation formerly exposed as /legion:board."
+  council: "legion council <topic> [--executor claude|codex|manual|fake]\n\nRun governance deliberation formerly exposed as /legion:board."
 };
 async function handleContextualWorkflow(context, command) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
@@ -54499,7 +58206,7 @@ function mapStatePayload(state, mode) {
     sourceFileCount: state.sourceFileCount,
     latestSourceFingerprint: state.latestSourceFingerprint,
     generatedAt: state.generatedAt,
-    diagnostics: []
+    diagnostics: state.diagnostics
   };
 }
 function mapStateAction(state) {
@@ -54535,7 +58242,8 @@ async function mapSummary(context, scope) {
 async function mapQuery(context, query) {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
-  const latest = await getLatestCodebaseMap(context.repositoryRoot);
+  const discovery = await discoverLatestCodebaseMap(context.repositoryRoot);
+  const latest = discovery.record?.map;
   if (latest === void 0) {
     const action2 = nextAction("legion map --refresh", "A query requires an existing codebase map.");
     return failure(
@@ -54544,7 +58252,10 @@ async function mapQuery(context, query) {
         status: "blocked",
         workflow: "map",
         mode: "query",
-        diagnostics: [{ code: "map_missing", message: "No codebase map exists. Run legion map --refresh first." }],
+        diagnostics: [
+          ...discovery.diagnostics,
+          { code: "map_missing", message: "No valid codebase map exists. Run legion map --refresh first." }
+        ],
         nextAction: action2
       },
       ["Map query is blocked.", renderNextAction(action2)].join("\n")
@@ -54566,7 +58277,7 @@ async function mapQuery(context, query) {
       query,
       matches,
       nextAction: action,
-      diagnostics: []
+      diagnostics: discovery.diagnostics
     },
     [
       `Map query returned ${matches.length} matches.`,
@@ -54677,7 +58388,7 @@ async function runRetroWorkflow(context) {
   });
   if ("exitCode" in executed) return executed;
   if (dryRun) {
-    await rm7(path47.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
+    await rm8(path49.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
       recursive: true,
       force: true,
       maxRetries: 10,
@@ -54965,9 +58676,9 @@ function optionalStringInput(context, key) {
   return value.trim();
 }
 async function readMilestoneIndex(repositoryRoot) {
-  const indexPath = path47.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const indexPath = path49.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
   try {
-    const parsed = JSON.parse(await readFile24(indexPath, "utf8"));
+    const parsed = JSON.parse(await readFile25(indexPath, "utf8"));
     if (parsed.kind === "milestone_index" && Array.isArray(parsed.milestones)) return parsed;
   } catch {
   }
@@ -55175,10 +58886,10 @@ function milestoneProgressPayload(state) {
 }
 async function saveStagedRetro(context, runId) {
   const runArtifactPath2 = artifactPathSchema.parse(`.legion/project/workflow/retro/${runId}/workflow-run.json`);
-  const runPath = path47.join(context.repositoryRoot, ...runArtifactPath2.split("/"));
+  const runPath = path49.join(context.repositoryRoot, ...runArtifactPath2.split("/"));
   let run;
   try {
-    run = JSON.parse(await readFile24(runPath, "utf8"));
+    run = JSON.parse(await readFile25(runPath, "utf8"));
   } catch {
     return usageError(
       `legion retro --save ${runId} found no such run. Run legion retro first; it reports the id to save.`
@@ -55198,7 +58909,7 @@ async function saveStagedRetro(context, runId) {
   }
   let entry;
   try {
-    entry = JSON.parse(await readFile24(path47.join(context.repositoryRoot, ...entryPath.split("/")), "utf8"));
+    entry = JSON.parse(await readFile25(path49.join(context.repositoryRoot, ...entryPath.split("/")), "utf8"));
   } catch (error51) {
     return usageError(
       `legion retro --save ${runId} could not read ${entryPath}: ${error51 instanceof Error ? error51.message : String(error51)}`
@@ -55298,16 +59009,16 @@ function renderDerivedMetrics(metrics) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat9 } from "node:fs/promises";
-import path49 from "node:path";
+import path51 from "node:path";
 
 // packages/cli/src/workflow/settings-check.ts
-import { readFile as readFile25 } from "node:fs/promises";
-import path48 from "node:path";
+import { readFile as readFile26 } from "node:fs/promises";
+import path50 from "node:path";
 var SETTINGS_FILE = "settings.json";
 async function checkSettings(repositoryRoot) {
   let text;
   try {
-    text = await readFile25(path48.join(repositoryRoot, SETTINGS_FILE), "utf8");
+    text = await readFile26(path50.join(repositoryRoot, SETTINGS_FILE), "utf8");
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
       return { status: "absent", path: SETTINGS_FILE, diagnostics: [], warnings: [] };
@@ -55472,7 +59183,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat9(path49.join(root, relativePath));
+    await stat9(path51.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -55510,17 +59221,23 @@ var GLOBAL_OPTIONS = /* @__PURE__ */ new Set([
 var DECLARED = Object.freeze({
   start: [
     "abort",
+    "accept-draft",
     "accept-proposal",
     "answer",
     "back",
+    "discard-draft",
+    "draft",
     "dry-run",
     "finalize",
     "force-roadmap",
     "from-exploration",
     "from-planning",
     "from-roadmap",
+    "goal",
     "intake",
+    "map-failed",
     "name",
+    "stage-draft",
     // Declared although no branch reads it: the default path IS "ask the next
     // question", so --next names that explicitly and is the documented way to
     // drive the interview. Refusing it would break the interface the host loop
@@ -55533,7 +59250,8 @@ var DECLARED = Object.freeze({
     "skip",
     "slug",
     "summary",
-    "allow-replace-existing-project"
+    "allow-replace-existing-project",
+    "without-exploration"
   ],
   status: [],
   plan: ["auto-refine", "dry-run", "from-roadmap"],
@@ -55724,7 +59442,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path50.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path52.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -55776,8 +59494,8 @@ function stringMapValue(map2, key) {
   const value = map2.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path50.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path50.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path52.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path52.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

@@ -1,13 +1,25 @@
 export interface NextAction {
   readonly command: string;
   readonly reason: string;
+  readonly type?: "human_decision";
+  readonly choices?: readonly { readonly id: string; readonly command: string }[];
 }
 
 export function nextAction(command: string, reason: string): NextAction {
   return { command, reason };
 }
 
+export function humanDecisionAction(
+  reason: string,
+  choices: readonly { readonly id: string; readonly command: string }[]
+): NextAction {
+  return { type: "human_decision", command: "", reason, choices };
+}
+
 export function renderNextAction(action: NextAction): string {
+  if (action.type === "human_decision") {
+    return `Next: human decision required\nReason: ${action.reason}`;
+  }
   return `Next: ${action.command}\nReason: ${action.reason}`;
 }
 

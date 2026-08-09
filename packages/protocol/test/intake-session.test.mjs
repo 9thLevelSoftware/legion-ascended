@@ -69,6 +69,35 @@ test("an accepted proposal must cite the exploration it came from", () => {
   assert.equal(parsed.answers[0].proposedFrom.anchor, "product-definition");
 });
 
+test("a draft-accepted answer cites the immutable draft answer it came from", () => {
+  const withoutCitation = session({
+    answers: [
+      {
+        nodeId: "project-name",
+        slot: "project.name",
+        value: "Asset Mapper",
+        answeredAt: FIXED_TIME,
+        source: "draft-accepted"
+      }
+    ]
+  });
+  assert.throws(() => intakeSessionSchema.parse(withoutCitation), /immutable accepted draft/);
+
+  const withCitation = session({
+    answers: [
+      {
+        nodeId: "project-name",
+        slot: "project.name",
+        value: "Asset Mapper",
+        answeredAt: FIXED_TIME,
+        source: "draft-accepted",
+        draftAcceptedFrom: { draftId: "itd_asset-mapper", answerAnchor: "project-name" }
+      }
+    ]
+  });
+  assert.equal(intakeSessionSchema.parse(withCitation).answers[0].draftAcceptedFrom.draftId, "itd_asset-mapper");
+});
+
 test("a finalized session cannot still have an open cursor", () => {
   const stillOpen = session({
     status: "finalized",

@@ -5,6 +5,103 @@ All notable Legion Next governance changes are documented here.
 ## [9.0.0] - GA-pending
 
 ### Added
+- `legion start` now exposes stable `preflight`, `draft_review`, `question`, and
+  `complete` JSON states. Draft review groups validated graph answers into
+  requirements, criteria and executable proofs, constraints, non-goals,
+  risk/budget/verification defaults, evidence/confidence, diagnostics, and
+  unresolved items, with explicit accept, revise, and discard actions.
+- `legion start --accept-draft` and `--discard-draft` act on the active staged
+  draft; supplied IDs remain compatible. Discard durably records `discarded`
+  without creating a session, while staging a new validated ID marks only the
+  prior open draft `invalidated` and never rewrites an accepted draft.
+- Draft decisions now use one CAS-managed active-review record bound to the exact
+  displayed draft digest. Replacement is serialized and journal-recoverable,
+  evidence drift invalidates content without rewriting it, and review returns a
+  typed `human_decision` pause with inspectable evidence details.
+- Start now rejects terminal-draft/action/selector combinations before recovery
+  while preserving stage-time goal, exploration, opt-out, and map-failure edits.
+- Start modes now use explicit option allowlists: preparation selectors are
+  limited to bare preparation and staging, while documented session-selected
+  interview forms remain compatible.
+- A `claude` execution adapter, so Claude Code can drive `legion build` and
+  `legion review` the way Codex already could. It runs `claude --print
+  --output-format json` with the prompt on stdin, reads the contract reply out
+  of the envelope's `result` field rather than out of the transcript — the
+  distinction `structuredOutput` exists for — and records the run's driver as
+  `anthropic`/`claude-code`.
+
+  Three things it does that a thinner wrapper would have missed. `claude` exits
+  0 and reports an API failure *in band* (`is_error: true`, `api_error_status`),
+  so a status taken from the exit code alone records a rate-limited run as a
+  success; the envelope's verdict outranks the exit code. A denied tool is how a
+  run reports success having been stopped from doing the work, so
+  `permission_denials` becomes a blocking finding rather than a line in a log
+  nobody reads. And the timeout is 15 minutes, not codex's 5
+  (`LEGION_CLAUDE_EXEC_TIMEOUT_MS` overrides): a task contract that builds and
+  verifies is one agentic session here, not one completion.
+
+  **Auto-selection deliberately skips it inside a Claude Code session.** The
+  installed `/legion` entry point runs `legion build` from within one, so
+  auto-selecting would spawn a second agent — permissions bypassed, billed
+  again — to do work the agent that asked for it is already sitting in the
+  repository to do. The `manual` executor's prompt artifact hands the task to
+  that session instead, which is what the entry point documents. An explicit
+  `--executor claude` is still honored: a nested run asked for by name is a
+  choice, not a surprise.
+
+  One guarantee is weaker than codex's and the code says so rather than implying
+  parity. Codex gets `--sandbox read-only` from the OS; Claude Code has no
+  sandbox flag, so a read-only run denies `Edit`, `Write`, and `NotebookEdit`
+  and leaves `Bash` — which a review pass needs for its test command, and which
+  codex's read-only sandbox also permits. What differs is that a `Bash` write is
+  refused there and is not refused here; the guarded-execution harness, which
+  snapshots the control plane across every dispatch, is what keeps such a write
+  from surviving as evidence.
+
+  `modelManifestForExecutor` is now exhaustive over `ExecutionAdapterKind` and
+  is the single producer of the manifest — the two hand-written ternaries it
+  replaces would have attributed a new driver to provider `legion`, which is the
+  field an auditor reads to learn who actually ran the task.
+
+### Changed
+- Bare `legion start` is the canonical preparation/resume entrance. Generated
+  first-class runtime guidance now displays the CLI's complete grouped review,
+  pauses for the human decision, and uses the active-draft action commands;
+  `--next` remains an interview compatibility form rather than an equivalent
+  description of bare start.
+- `legion install` no longer writes the v8 prompt bundle by default. A default
+  install writes the target runtime's own entry points — a `/legion` command or
+  skill, a thin alias per workflow command, and the manifest — and those entry
+  points dispatch to the `legion` CLI. For Claude Code that is 2 files and 12 KB
+  where it was 128 files and 2.4 MB. The 49 agent personas, 22 command prompts,
+  33 skills, and 13 dispatch adapters are `--legacy-prompts`, which also
+  repoints the entry points back at the markdown, and `legion update` preserves
+  whichever surface the install chose via a new `legacyPrompts` field in the
+  manifest.
+
+  The bundle was never wired into the v9 engine — `legacy/README.md` has said
+  since Milestone A that these are "compatibility assets for the legacy
+  installer path only" and that v9 packages must not read them — but the
+  installer shipped them to everyone and the generated `/legion` router pointed
+  the host at them, so a fresh install presented the v8 prompt surface as the
+  product and gave no indication the CLI existed. The router now describes the
+  CLI contract instead: run the command, read `nextAction`, do not work around a
+  `blocked` status, and execute the prompt artifact `legion build` writes when it
+  selects the manual executor.
+
+  `bin/runtime-metadata.js` gains `LEGION_CLI_COMMANDS`, the mapping the aliases
+  are generated from. It is deliberately not `LEGION_COMMANDS`: three of that
+  list's entries have no CLI verb behind them (`board` is `council`, `portfolio`
+  lives under `dev board`, and `agent` was a prompt-only authoring flow with no
+  CLI counterpart, so it is the one alias a default install does not create), and
+  four CLI verbs — `approve`, `attest`, `release`, `doctor` — had no v8 prompt and
+  so had no alias at all. A test drives `legion --help` and fails if any mapped
+  command stops being a real verb.
+
+  The install banner now names `legion status` as the terminal entry point
+  alongside the host's slash command.
+
+### Added
 - ADR-012 (`docs/next/adr/ADR-012-post-ga-governance.md`) scopes the phase
   ledger, evidence-index and independent-phase-review gates to the rewrite
   program, phases 0-13, and states the gates that govern work after the Phase 13
