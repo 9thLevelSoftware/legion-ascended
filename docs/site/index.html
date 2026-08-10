@@ -73,8 +73,8 @@
         <div class="stats-bar">
           <div class="stat"><div class="num">5</div><div class="label">Core Steps</div></div>
           <div class="stat"><div class="num">9</div><div class="label">Guidance Commands</div></div>
-          <div class="stat"><div class="num">3</div><div class="label">Executors</div></div>
-<div class="stat"><div class="num">6</div><div class="label">First-Class Targets</div></div>
+          <div class="stat"><div class="num">4</div><div class="label">Executors</div></div>
+          <div class="stat"><div class="num">6</div><div class="label">First-Class Targets</div></div>
           <div class="stat"><div class="num">1</div><div class="label">Command Surface</div></div>
         </div>
       </section>
@@ -83,21 +83,32 @@
         <h2>Summon The Legion</h2>
         <p>
           Install once, open any project, and use the same Legion words everywhere.
-          The command surface is always <em>legion</em>.
+          The command surface is always <em>legion</em>. Requires Node.js <em>&gt;=24 &lt;26</em>.
         </p>
         <div class="ritual-code">
-<pre><span class="comment"># See the recommended first-class hosts</span>
+<pre><span class="comment"># Put the command on PATH (or prefix every call with npx legion-ascended)</span>
+<span class="command">npm</span> i <span class="flag">-g</span> <span class="string">legion-ascended</span>
+
+<span class="comment"># See the recommended first-class hosts</span>
 <span class="command">legion</span> install <span class="flag">--list-targets</span>
 
 <span class="comment"># Preview before writing host files</span>
 <span class="command">legion</span> install <span class="flag">--target</span> <span class="string">codex</span> <span class="flag">--local</span> <span class="flag">--dry-run</span>
 
-<span class="comment"># The rite</span>
-<span class="command">legion</span> start
+<span class="comment"># The rite: intake is reviewed and accepted by a human, never assumed</span>
+<span class="command">legion</span> start <span class="flag">--goal</span> <span class="string">"&lt;what you are building&gt;"</span>
+<span class="command">legion</span> start <span class="flag">--accept-draft</span>
+<span class="command">legion</span> start <span class="flag">--answer</span> <span class="string">"&lt;node&gt;=&lt;value&gt;"</span>
+<span class="command">legion</span> start <span class="flag">--finalize</span>
+
+<span class="comment"># Plan, then approve the spec before the work runs, not after</span>
 <span class="command">legion</span> plan 1 <span class="flag">--from-roadmap</span> <span class="string">ROADMAP.md</span>
-<span class="command">legion</span> build <span class="flag">--executor</span> <span class="string">codex</span>
-<span class="command">legion</span> review <span class="flag">--executor</span> <span class="string">codex</span>
-<span class="command">legion</span> review <span class="flag">--accept</span>
+<span class="command">legion</span> approve spec <span class="flag">--approver</span> <span class="string">&lt;your-id&gt;</span>
+
+<span class="comment"># Build picks claude, then codex, else manual</span>
+<span class="command">legion</span> build
+<span class="command">legion</span> review
+<span class="command">legion</span> review <span class="flag">--accept</span> <span class="flag">--approver</span> <span class="string">&lt;your-id&gt;</span>
 <span class="command">legion</span> ship</pre>
         </div>
         <div class="grimoire-buttons">
@@ -110,27 +121,39 @@
 
       <section class="reveal-section">
         <h2>The Commands</h2>
-        <p class="intro-text">Nineteen commands. Each still spoken as Legion.</p>
+        <p class="intro-text">
+          Twenty commands: five in the core loop, three governance, nine guidance,
+          three diagnostics. Each still spoken as Legion.
+        </p>
         <table class="command-table">
           <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
           <tbody>
-            <tr><td>legion start</td><td>Initialize typed project state and route to the first planning action.</td></tr>
-            <tr><td>legion plan &lt;N&gt;</td><td>Turn a roadmap phase into specs, a change, an oracle, and task contracts.</td></tr>
-            <tr><td>legion build</td><td>Execute the latest taskgraph through codex, manual, or fake adapters and record evidence.</td></tr>
-            <tr><td>legion review</td><td>Submit structured review decisions and require explicit human acceptance.</td></tr>
-            <tr><td>legion ship</td><td>Report ship readiness only after accepted review and accepted evidence exist.</td></tr>
-            <tr><td>legion status</td><td>Show workflow stage, map freshness, guidance records, and next action.</td></tr>
+            <tr><td>legion start</td><td>Prepare an intake draft for human review, ask only the unresolved questions, then write requirements, constitution, and ROADMAP.md.</td></tr>
+            <tr><td>legion plan &lt;N&gt;</td><td>Turn a roadmap phase into delta specs, a change bundle, an oracle, and task contracts.</td></tr>
+            <tr><td>legion build</td><td>Execute the latest taskgraph through the claude, codex, manual, or fake adapter and record evidence.</td></tr>
+            <tr><td>legion review</td><td>Submit structured review decisions and require explicit human acceptance by a named approver.</td></tr>
+            <tr><td>legion ship</td><td>Derive the risk tier's gate set and report each gate satisfied, unsatisfied, or unevaluable. Publishes nothing.</td></tr>
+            <tr><td>legion approve</td><td>Record a human decision about delta specs, the oracle, the verification surface, or protected paths.</td></tr>
+            <tr><td>legion attest</td><td>Record that a named human asserts specific hash-pinned files are this change's evidence.</td></tr>
+            <tr><td>legion release</td><td>Record how the change's release is observed and taken back.</td></tr>
             <tr><td>legion explore</td><td>Create read-only design discovery and handoff notes.</td></tr>
             <tr><td>legion map</td><td>Refresh, check, and query deterministic codebase map artifacts.</td></tr>
             <tr><td>legion quick</td><td>Create a one-task ad-hoc change for the normal build/review loop.</td></tr>
             <tr><td>legion advise</td><td>Produce read-only advisory guidance.</td></tr>
+            <tr><td>legion polish</td><td>Create scoped polish work that still goes through build and review.</td></tr>
             <tr><td>legion learn</td><td>Record durable lessons consumed by later context packs.</td></tr>
             <tr><td>legion retro</td><td>Analyze recent evidence and write follow-up actions.</td></tr>
             <tr><td>legion milestone</td><td>Define, inspect, complete, and archive lifecycle milestones.</td></tr>
             <tr><td>legion council</td><td>Record structured governance decisions.</td></tr>
-            <tr><td>legion polish</td><td>Create scoped polish work that still goes through build and review.</td></tr>
+            <tr><td>legion status</td><td>Show workflow stage, map freshness, guidance records, and next action.</td></tr>
+            <tr><td>legion validate</td><td>Validate committed Legion project state.</td></tr>
+            <tr><td>legion doctor</td><td>Validate project state plus .legion/var and bundle-index path presence.</td></tr>
           </tbody>
         </table>
+        <p class="intro-text">
+          Every workflow command takes <em>--json</em> and <em>--repository-root</em>, and refuses
+          any flag it does not declare. Typed internals live under <em>legion dev</em>.
+        </p>
       </section>
 
       <div class="divider"><div class="divider-line"></div></div>
@@ -139,7 +162,7 @@
         <h2>The Rite Of Execution</h2>
         <p class="intro-text">
           The sacred cycle is explicit: <strong>legion start -&gt; legion plan -&gt; legion build -&gt; legion review -&gt; legion ship</strong>.
-          Guidance commands enrich the loop; they do not bypass it.
+          Guidance commands enrich the loop and governance commands gate it; neither bypasses it.
         </p>
         <div class="workflow-visual">
           <div class="workflow-step optional"><span class="step-cmd">legion explore</span><span class="step-desc">Research, constraints, approaches, handoff notes</span></div>
@@ -148,11 +171,15 @@
           <div class="workflow-arrow">&darr;</div>
           <div class="workflow-step"><span class="step-cmd">legion start</span><span class="step-desc">Project truth record</span></div>
           <div class="workflow-arrow">&darr;</div>
-          <div class="workflow-step"><span class="step-cmd">legion plan</span><span class="step-desc">Typed taskgraph and verification contracts</span></div>
+          <div class="workflow-step"><span class="step-cmd">legion plan</span><span class="step-desc">Delta specs, typed taskgraph, and verification contracts</span></div>
+          <div class="workflow-arrow">&darr;</div>
+          <div class="workflow-step"><span class="step-cmd">legion approve</span><span class="step-desc">Named human signs the spec before the work runs, not after</span></div>
           <div class="workflow-arrow">&darr;</div>
           <div class="workflow-step"><span class="step-cmd">legion build</span><span class="step-desc">Context pack, executor result, redacted logs, pending evidence</span></div>
           <div class="workflow-arrow">&darr;</div>
           <div class="workflow-step"><span class="step-cmd">legion review</span><span class="step-desc">Submitted decision, human accept or reject</span></div>
+          <div class="workflow-arrow">&darr;</div>
+          <div class="workflow-step optional"><span class="step-cmd">legion attest</span><span class="step-desc">Hash-pinned evidence, plus legion release for the observation plan, at R3</span></div>
           <div class="workflow-arrow">&darr;</div>
           <div class="workflow-step"><span class="step-cmd">legion ship</span><span class="step-desc">Readiness gate, not a deploy button</span></div>
         </div>
@@ -164,7 +191,9 @@
         <h2>The Sacred Powers</h2>
         <div class="features">
           <article class="feature-card"><h3>Fresh Context</h3><p>Maps, lessons, records, and guidance runs become focused context packs.</p></article>
-          <article class="feature-card"><h3>Typed Execution</h3><p>Taskgraphs flow through executor adapters and leave durable task-run artifacts.</p></article>
+          <article class="feature-card"><h3>Typed Execution</h3><p>Taskgraphs flow through the claude, codex, manual, or fake adapter and leave durable task-run artifacts.</p></article>
+          <article class="feature-card"><h3>Guarded Dispatch</h3><p>Control artifacts are snapshotted before a writable run and restored after; a run that edits them is blocked and told which paths it touched.</p></article>
+          <article class="feature-card"><h3>Risk-Tiered Gates</h3><p>Each tier from R0 to R3 names its own gate set. Ship reports every gate satisfied, unsatisfied, or unevaluable — absent evidence blocks.</p></article>
           <article class="feature-card"><h3>Evidence Trails</h3><p>Builds record prompts, outputs, redacted logs, hashes, and pending evidence.</p></article>
           <article class="feature-card"><h3>Human Review</h3><p>Review decisions are submitted before evidence can be accepted.</p></article>
           <article class="feature-card"><h3>Guided Memory</h3><p>Learn, retro, milestone, and council records feed future work.</p></article>
