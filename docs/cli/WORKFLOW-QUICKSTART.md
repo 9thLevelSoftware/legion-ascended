@@ -113,16 +113,10 @@ git status
 # Commit/stash generated workflow artifacts, or use --allow-dirty when the dirty state is intentional.
 legion build --executor codex
 legion review --executor codex
-legion review --accept
+legion review --accept --approver dasbl
 ```
 
-Executors:
-
-| Executor | Use |
-| --- | --- |
-| `codex` | Live implementation or review through `codex exec`. |
-| `manual` | Prepare prompts, context packs, and evidence placeholders without executing. |
-| `fake` | Deterministic test and dogfood runs. |
+`--executor` takes `claude`, `codex`, `manual`, or `fake`; see [Executors](#executors) above for what each one runs and what the default probes. Omitting `--approver` on the accept still exits 0 but records no human, which costs `whole_change_acceptance_evidence` at ship.
 
 `legion build` blocks on a dirty git worktree unless you pass `--allow-dirty`. Use that override only when the current uncommitted state is intentional.
 
