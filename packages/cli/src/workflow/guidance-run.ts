@@ -13,10 +13,12 @@ import {
 } from "@legion/protocol";
 
 import { budgetForWriteScope } from "./budget.js";
+import { resolveBaseGitSha } from "./change-input.js";
 import { createdAtOption, slugFromName } from "./input.js";
 import { nextAction, type NextAction } from "./render.js";
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionResult } from "./executor/index.js";
-import { prepareProjectTextFile } from "./executor/result.js";
+import { prepareProjectTextFile, writeProjectExecutionResult } from "./executor/result.js";
+import { blockedResultFromGuardedExecution, runGuardedExecution } from "./guarded-execution.js";
 import type { CliContext, CliResult } from "../runtime.js";
 import { usageError } from "../runtime.js";
 
@@ -275,32 +277,48 @@ export async function runGuidanceExecutor(input: {
       expectedArtifacts: [],
       requiredEvidence: ["guidance markdown artifact"],
       blockedConditions: ["The executor cannot produce guidance."],
-      // Guidance is advisory and writes only its own result artifact, so any
+      // Guidance is advisory and writes only its own executor artifacts, so any
       // source-tree change during a guidance run is out of scope by definition.
       diffReconciliation: { required: true, allowUnlistedReads: true }
     }
   });
 
-  const result = await adapterForKind(selected).run({
+  const guarded = await runGuardedExecution({
     repositoryRoot: input.context.repositoryRoot,
-    changeId,
-    runId: formatEntityId("run", guidanceEntitySuffix(input.workflow, input.paths.runId)),
     task,
-    mode: input.workflow === "retro" ? "review" : "build",
-    executor: selected,
-    readOnly: input.readOnly,
-    prompt: input.prompt,
-    contextPackArtifactPath,
-    contextPackAbsolutePath,
-    promptArtifactPath,
-    promptAbsolutePath,
-    resultArtifactPath,
-    resultAbsolutePath,
-    rawLogArtifactPath,
-    rawLogAbsolutePath,
-    redactedLogArtifactPath,
-    redactedLogAbsolutePath
+    baseGitSha: resolveBaseGitSha(input.context.repositoryRoot),
+    harnessPaths: [input.paths.artifactRoot],
+    acceptancePaths: [],
+    acceptanceBaseline: { status: "established", states: new Map() },
+    run: () => adapterForKind(selected).run({
+      repositoryRoot: input.context.repositoryRoot,
+      changeId,
+      runId: formatEntityId("run", guidanceEntitySuffix(input.workflow, input.paths.runId)),
+      task,
+      mode: input.workflow === "retro" ? "review" : "build",
+      executor: selected,
+      readOnly: input.readOnly,
+      prompt: input.prompt,
+      contextPackArtifactPath,
+      contextPackAbsolutePath,
+      promptArtifactPath,
+      promptAbsolutePath,
+      resultArtifactPath,
+      resultAbsolutePath,
+      rawLogArtifactPath,
+      rawLogAbsolutePath,
+      redactedLogArtifactPath,
+      redactedLogAbsolutePath
+    })
   });
+  const result = blockedResultFromGuardedExecution(guarded);
+  if (!guarded.inContract) {
+    await writeProjectExecutionResult({
+      repositoryRoot: input.context.repositoryRoot,
+      artifactPath: resultArtifactPath,
+      result
+    });
+  }
 
   return {
     executor: selected,

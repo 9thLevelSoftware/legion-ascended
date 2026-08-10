@@ -313,6 +313,21 @@ test("a non-git project is not_applicable and does not block", async (t) => {
   assert.ok(result.unavailableReason.length > 0);
 });
 
+test("an unborn git project is not_applicable and does not block", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "legion-diff-unborn-"));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+  git(root, ["init", "--initial-branch=main"]);
+
+  // An initialized repository with no HEAD cannot answer `git diff BASE`.
+  // That is an environmental limitation, equivalent to a non-git project,
+  // rather than evidence that the executor violated its contract.
+  const result = reconcileTaskDiff({ repositoryRoot: root, baseGitSha: "0".repeat(40), scope: scope() });
+
+  assert.equal(result.status, "not_applicable");
+  assert.equal(reconciliationBlocks(result), false);
+  assert.match(result.unavailableReason, /no commit|unborn/i);
+});
+
 test("an unreadable diff in a git repo blocks, unlike a non-git project", () => {
   // The check that should have run did not, so the run is not proven in
   // contract. This is the case that must never be collapsed into the one above.
