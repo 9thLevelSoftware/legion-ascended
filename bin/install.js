@@ -2384,7 +2384,9 @@ function uninstall(runtimeKey, scope) {
   // it is some process's cwd, so an unbounded prune deletes the project root
   // out from under the caller. (Windows refuses to remove a cwd, which is why
   // this never surfaced there.)
-  const pruneRoot = scope === 'local' ? normalizePath(process.cwd()) : home;
+  // path.resolve also strips any trailing separator a HOME/USERPROFILE value
+  // may carry, which would otherwise break the prefix comparison below.
+  const pruneRoot = normalizePath(path.resolve(scope === 'local' ? process.cwd() : home));
   for (const dir of dirsToTry) {
     if (!normalizePath(path.resolve(dir)).startsWith(`${pruneRoot}/`)) continue;
     try { fs.rmdirSync(dir); } catch { /* not empty or doesn't exist, that's fine */ }
