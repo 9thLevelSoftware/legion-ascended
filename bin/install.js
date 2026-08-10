@@ -2378,7 +2378,15 @@ function uninstall(runtimeKey, scope) {
     ...nativeDirs.map((dir) => dirnamePath(dir)),
     ...nativeDirs.map((dir) => dirnamePath(dirnamePath(dir))),
   ];
+  // Prune only strictly inside the install root. Surfaces like .codex/prompts
+  // sit two levels below it, so their grandparent IS the project (or home)
+  // directory — and on POSIX, rmdir() of an empty directory succeeds even while
+  // it is some process's cwd, so an unbounded prune deletes the project root
+  // out from under the caller. (Windows refuses to remove a cwd, which is why
+  // this never surfaced there.)
+  const pruneRoot = scope === 'local' ? normalizePath(process.cwd()) : home;
   for (const dir of dirsToTry) {
+    if (!normalizePath(path.resolve(dir)).startsWith(`${pruneRoot}/`)) continue;
     try { fs.rmdirSync(dir); } catch { /* not empty or doesn't exist, that's fine */ }
   }
 
