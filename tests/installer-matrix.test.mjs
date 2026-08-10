@@ -358,6 +358,25 @@ test("update preserves the surface the install chose", async () => {
   }
 });
 
+test("update preserves legacy prompts in a pre-v9 manifest without the flag", async () => {
+  await withTempProject(async ({ env, project }) => {
+    const run = (args) => execFileAsync(process.execPath, [LEGION_BIN, ...args], { ...EXEC_OPTIONS, cwd: project, env });
+    await run(["install", "--target", "claude", "--local", "--legacy-prompts"]);
+
+    const manifestPath = manifestPathFor(project, "claude");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.version = "8.9.9";
+    delete manifest.legacyPrompts;
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    await run(["update", "--target", "claude", "--local"]);
+
+    const updated = JSON.parse(readFileSync(manifestPath, "utf8"));
+    assert.equal(updated.legacyPrompts, true);
+    assert.equal(artifactExists(project, ".claude/agents"), true);
+  });
+});
+
 test("every mapped CLI command is a verb the CLI actually has", async () => {
   const help = await execFileAsync(process.execPath, [LEGION_BIN, "--help"], EXEC_OPTIONS);
   const verbs = new Set(

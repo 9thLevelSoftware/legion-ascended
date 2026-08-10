@@ -27,15 +27,11 @@ const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 300_000;
 const DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 900_000;
 
 // Claude Code has no OS-level sandbox flag, so a read-only run is enforced by
-// denying the file-mutating tools rather than by confining writes the way
-// codex's `--sandbox read-only` does. Bash is deliberately still allowed: a
-// review pass has to be able to run the test command, and codex's read-only
-// sandbox permits non-writing commands too. The difference that remains is
-// real and worth naming -- a `Bash` invocation that writes is refused by the
-// codex sandbox and is not refused here. What backstops it is the guarded
-// execution harness, which snapshots the control plane before dispatch and
-// restores it after, so an out-of-contract write cannot survive as evidence.
-const CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit"] as const;
+// denying every tool that can mutate the repository. The guarded execution
+// harness is the second line of defense for a tool that still writes despite
+// this list, but leaving Bash enabled would make the adapter's read-only claim
+// false by construction.
+const CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"] as const;
 
 export function claudeExecArgs(input: {
   readonly readOnly: boolean;

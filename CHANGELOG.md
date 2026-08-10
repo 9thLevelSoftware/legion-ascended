@@ -2,6 +2,21 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.0.1] - GA-pending
+
+### Added
+- A durable `legion start` draft-review lifecycle with explicit `preflight`,
+  `draft_review`, `question`, and `complete` states plus accept, revise, and
+  discard actions bound to the displayed draft digest.
+- A Claude execution adapter for `legion build` and `legion review`, including
+  envelope-aware API failure handling, permission-denial findings, and the
+  dedicated Claude timeout.
+
+### Changed
+- The default installer now writes the target runtime's thin CLI entry points;
+  the previous prompt bundle remains available through `--legacy-prompts`, and
+  updates preserve the selected install surface.
+
 ## [9.0.0] - GA-pending
 
 ### Added

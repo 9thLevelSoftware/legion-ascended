@@ -37912,7 +37912,7 @@ function isStableDefaultBranch(branch) {
 
 // packages/cli/src/workflow/intake/driver.ts
 import { lstat as lstat4, readFile as readFile19, readdir as readdir15, writeFile as writeFile9 } from "node:fs/promises";
-import path33 from "node:path";
+import path36 from "node:path";
 
 // packages/cli/src/workflow/authored-source.ts
 import path25 from "node:path";
@@ -39474,13 +39474,13 @@ function resolvedOpenQuestions(session) {
 }
 
 // packages/cli/src/workflow/intake/exploration-source.ts
-import { createHash as createHash18 } from "node:crypto";
+import { createHash as createHash20 } from "node:crypto";
 import { readFile as readFile15 } from "node:fs/promises";
 import "node:path";
 
 // packages/cli/src/workflow/guidance-run.ts
 import { mkdir as mkdir11, readdir as readdir11, readFile as readFile14 } from "node:fs/promises";
-import path28 from "node:path";
+import path31 from "node:path";
 
 // packages/cli/src/workflow/budget.ts
 var DEFAULT_LINES_PER_FILE = 200;
@@ -39716,7 +39716,7 @@ function parseReviewVerdict(value) {
 var execFileAsync2 = promisify4(execFile4);
 var DEFAULT_CODEX_EXEC_TIMEOUT_MS = 3e5;
 var DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 9e5;
-var CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit"];
+var CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"];
 function claudeExecArgs(input) {
   return [
     "--print",
@@ -40126,6 +40126,720 @@ function terminateProcessTree(pid) {
   }, 1e3).unref();
 }
 
+// packages/cli/src/workflow/guarded-execution.ts
+import { execFileSync as execFileSync5 } from "node:child_process";
+import { createHash as createHash19 } from "node:crypto";
+import { lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync2, readlinkSync, rmSync as rmSync3, statSync as statSync2, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import path30 from "node:path";
+
+// packages/cli/src/workflow/diff-reconciliation.ts
+import { execFileSync as execFileSync4 } from "node:child_process";
+import { createHash as createHash18 } from "node:crypto";
+import { readFileSync, rmSync as rmSync2, statSync } from "node:fs";
+import path28 from "node:path";
+function summarizeObservation(files, baseGitSha) {
+  const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
+  return {
+    files: ordered,
+    changedFiles: ordered.map((file2) => file2.path),
+    newFiles: ordered.filter((file2) => file2.isNew).map((file2) => file2.path),
+    linesChanged: ordered.reduce((total, file2) => total + file2.linesChanged, 0),
+    baseGitSha
+  };
+}
+var MAX_UNTRACKED_LINE_COUNT_BYTES = 2e6;
+var MAX_HASHED_BYTES = 64 * 1024 * 1024;
+function git(repositoryRoot, args) {
+  return execFileSync4("git", ["-C", repositoryRoot, ...args], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    maxBuffer: 32 * 1024 * 1024
+  });
+}
+function toPosix(value) {
+  return value.replace(/\\/g, "/");
+}
+function splitLines(value) {
+  return value.split(/\r?\n/u).filter((line) => line.length > 0);
+}
+function hashFileContent(absolutePath) {
+  try {
+    if (statSync(absolutePath).size > MAX_HASHED_BYTES) return void 0;
+    return createHash18("sha256").update(readFileSync(absolutePath)).digest("hex");
+  } catch {
+    return void 0;
+  }
+}
+function countUntrackedLines(absolutePath) {
+  try {
+    if (statSync(absolutePath).size > MAX_UNTRACKED_LINE_COUNT_BYTES) return 0;
+    const contents = readFileSync(absolutePath, "utf8");
+    if (contents.length === 0) return 0;
+    return contents.split(/\r?\n/u).length;
+  } catch {
+    return 0;
+  }
+}
+function observeWorkingTreeDiff(input) {
+  try {
+    git(input.repositoryRoot, ["rev-parse", "--is-inside-work-tree"]);
+  } catch {
+    return {
+      status: "not_applicable",
+      violations: [],
+      unavailableReason: "The project is not under git, so a working-tree diff cannot be observed."
+    };
+  }
+  if (/^0{40}$/u.test(input.baseGitSha)) {
+    return {
+      status: "not_applicable",
+      violations: [],
+      unavailableReason: "The repository has no commit yet, so a working-tree diff cannot be reconciled."
+    };
+  }
+  const lines = /* @__PURE__ */ new Map();
+  const created = /* @__PURE__ */ new Set();
+  try {
+    for (const line of splitLines(git(input.repositoryRoot, ["diff", "--numstat", input.baseGitSha, "--"]))) {
+      const [added, deleted, ...rest] = line.split("	");
+      const filePath = toPosix(rest.join("	"));
+      if (filePath.length === 0) continue;
+      const count = (Number.parseInt(added ?? "", 10) || 0) + (Number.parseInt(deleted ?? "", 10) || 0);
+      lines.set(filePath, (lines.get(filePath) ?? 0) + count);
+    }
+    for (const line of splitLines(git(input.repositoryRoot, ["diff", "--name-status", input.baseGitSha, "--"]))) {
+      const [status2, ...rest] = line.split("	");
+      const filePath = toPosix(rest[rest.length - 1] ?? "");
+      if (filePath.length === 0) continue;
+      if (!lines.has(filePath)) lines.set(filePath, 0);
+      if (status2?.startsWith("A")) created.add(filePath);
+    }
+    for (const line of splitLines(git(input.repositoryRoot, ["status", "--porcelain", "--untracked-files=all"]))) {
+      const code = line.slice(0, 2);
+      const filePath = toPosix(line.slice(3).trim());
+      if (filePath.length === 0) continue;
+      if (code === "??") {
+        created.add(filePath);
+        lines.set(filePath, countUntrackedLines(path28.join(input.repositoryRoot, filePath)));
+      } else if (!lines.has(filePath)) {
+        lines.set(filePath, 0);
+      }
+    }
+  } catch (error51) {
+    return {
+      status: "unavailable",
+      violations: [],
+      unavailableReason: `The working tree diff could not be read: ${error51 instanceof Error ? error51.message : String(error51)}`
+    };
+  }
+  const files = [...lines.entries()].map(([filePath, linesChanged]) => ({
+    path: filePath,
+    linesChanged,
+    isNew: created.has(filePath),
+    contentSha256: hashFileContent(path28.join(input.repositoryRoot, filePath))
+  }));
+  return {
+    status: "clean",
+    violations: [],
+    observation: summarizeObservation(files, input.baseGitSha)
+  };
+}
+function pathIsCoveredBy(filePath, scopeEntry) {
+  if (scopeEntry === ".") return true;
+  const normalized = toPosix(scopeEntry).replace(/\/+$/u, "");
+  if (normalized.length === 0) return true;
+  return filePath === normalized || filePath.startsWith(`${normalized}/`);
+}
+function coveredByAny(filePath, entries) {
+  return entries.some((entry) => pathIsCoveredBy(filePath, entry));
+}
+function reconcileDiff(input) {
+  const violations = [];
+  const harnessPaths = input.harnessPaths ?? [];
+  const attributable = summarizeObservation(
+    input.observation.files.filter((file2) => !coveredByAny(file2.path, harnessPaths)),
+    input.observation.baseGitSha
+  );
+  const { changedFiles, newFiles, linesChanged } = attributable;
+  const { write, budget } = input.scope;
+  const forbidden = [...input.scope.forbidden, ...input.alwaysForbidden ?? []];
+  const forbiddenHits = changedFiles.filter((filePath) => coveredByAny(filePath, forbidden));
+  if (forbiddenHits.length > 0) {
+    violations.push({
+      code: "forbidden_path_touched",
+      message: `The run modified ${forbiddenHits.length} path(s) the task contract forbids.`,
+      paths: forbiddenHits
+    });
+  }
+  const outOfScope = changedFiles.filter(
+    (filePath) => !coveredByAny(filePath, write) && !coveredByAny(filePath, forbidden)
+  );
+  if (outOfScope.length > 0) {
+    violations.push({
+      code: "out_of_scope_write",
+      message: `The run modified ${outOfScope.length} path(s) outside the task contract write scope.`,
+      paths: outOfScope
+    });
+  }
+  if (changedFiles.length > budget.maxFilesChanged) {
+    violations.push({
+      code: "budget_files_exceeded",
+      message: `The run changed ${changedFiles.length} files; the contract budget allows ${budget.maxFilesChanged}.`,
+      paths: []
+    });
+  }
+  if (linesChanged > budget.maxLinesChanged) {
+    violations.push({
+      code: "budget_lines_exceeded",
+      message: `The run changed ${linesChanged} lines; the contract budget allows ${budget.maxLinesChanged}.`,
+      paths: []
+    });
+  }
+  if (newFiles.length > budget.maxNewFiles) {
+    violations.push({
+      code: "budget_new_files_exceeded",
+      message: `The run created ${newFiles.length} files; the contract budget allows ${budget.maxNewFiles}.`,
+      paths: newFiles
+    });
+  }
+  return violations;
+}
+function diffDelta(before, after) {
+  const priorByPath = new Map(before.files.map((file2) => [file2.path, file2]));
+  const attributable = after.files.filter((file2) => {
+    const prior = priorByPath.get(file2.path);
+    if (prior === void 0) return true;
+    if (prior.contentSha256 === void 0 || file2.contentSha256 === void 0) return true;
+    return prior.contentSha256 !== file2.contentSha256;
+  });
+  return summarizeObservation(
+    attributable.map((file2) => {
+      const prior = priorByPath.get(file2.path);
+      if (prior === void 0) return file2;
+      const additional = file2.linesChanged - prior.linesChanged;
+      return {
+        ...file2,
+        linesChanged: additional > 0 ? additional : file2.linesChanged,
+        // A file that already existed as a pre-existing new file is not newly
+        // created by this run.
+        isNew: file2.isNew && !prior.isNew
+      };
+    }),
+    after.baseGitSha
+  );
+}
+function reconcileTaskDiff(input) {
+  const observed = observeWorkingTreeDiff(input);
+  if (observed.observation === void 0) return observed;
+  const delta = input.before === void 0 ? observed.observation : diffDelta(input.before, observed.observation);
+  const harnessPaths = input.harnessPaths ?? [];
+  const attributable = summarizeObservation(
+    delta.files.filter((file2) => !coveredByAny(file2.path, harnessPaths)),
+    delta.baseGitSha
+  );
+  const violations = reconcileDiff({
+    observation: attributable,
+    scope: input.scope,
+    ...input.alwaysForbidden === void 0 ? {} : { alwaysForbidden: input.alwaysForbidden }
+  });
+  return {
+    status: violations.length === 0 ? "clean" : "violated",
+    observation: attributable,
+    violations
+  };
+}
+
+// packages/cli/src/workflow/project-files.ts
+import { lstatSync, readdirSync } from "node:fs";
+import path29 from "node:path";
+function listProjectFiles(repositoryRoot, relativeRoot) {
+  const results = [];
+  try {
+    const rootStat = lstatSync(path29.join(repositoryRoot, relativeRoot));
+    if (rootStat.isSymbolicLink()) {
+      return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
+    }
+    if (!rootStat.isDirectory()) {
+      return [{ path: relativeRoot, kind: "file", size: rootStat.size }];
+    }
+  } catch {
+    return [];
+  }
+  const walk2 = (relative) => {
+    let entries;
+    try {
+      entries = readdirSync(path29.join(repositoryRoot, relative), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const child = `${relative}/${entry.name}`;
+      if (entry.isSymbolicLink()) {
+        results.push({ path: child, kind: "symlink", size: void 0 });
+        continue;
+      }
+      if (entry.isDirectory()) {
+        walk2(child);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      let size;
+      try {
+        size = lstatSync(path29.join(repositoryRoot, child)).size;
+      } catch {
+        size = void 0;
+      }
+      results.push({ path: child, kind: "file", size });
+    }
+  };
+  walk2(relativeRoot);
+  return results.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+// packages/cli/src/workflow/guarded-execution.ts
+function restoreFailureReason(error51, kind) {
+  const code = error51?.code;
+  const action = kind === void 0 ? "removing the path the run created" : `restoring the ${kind} entry`;
+  if (kind === "symlink" && (code === "EPERM" || code === "EACCES")) {
+    return process.platform === "win32" ? `recreating the symlink requires symlink-creation privilege (${code}); enable Developer Mode or run elevated` : `recreating the symlink was refused by the filesystem (${code})`;
+  }
+  if (code !== void 0) return `${code} while ${action}`;
+  return error51 instanceof Error ? `${error51.message} while ${action}` : `${action} failed`;
+}
+function blockedResultFromGuardedExecution(input) {
+  if (input.inContract) return input.result;
+  const reason = input.blockedReason ?? "The guarded execution did not remain within its contract.";
+  return {
+    ...input.result,
+    ok: false,
+    status: "blocked",
+    summary: reason,
+    filesChanged: [],
+    findings: [
+      ...input.result.findings,
+      {
+        id: "guarded-execution-blocked",
+        title: "Guarded execution blocked",
+        body: reason,
+        severity: "blocking"
+      }
+    ]
+  };
+}
+var MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
+function isHarnessPath(relative, harnessPaths) {
+  return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
+}
+function isInsideControlPlane(relative) {
+  const folded = relative.toLowerCase();
+  const root = LEGION_PROJECT_ROOT.toLowerCase();
+  return folded === root || folded.startsWith(`${root}/`);
+}
+function digestOf(absolute) {
+  try {
+    return createHash19("sha256").update(readFileSync2(absolute)).digest("hex");
+  } catch {
+    return void 0;
+  }
+}
+function readTarget(absolute) {
+  try {
+    return readlinkSync(absolute);
+  } catch {
+    return void 0;
+  }
+}
+function readTargetKind(linkPath, target) {
+  if (target === void 0) return void 0;
+  try {
+    const resolved = path30.isAbsolute(target) ? target : path30.resolve(path30.dirname(linkPath), target);
+    return statSync2(resolved).isDirectory() ? "dir" : "file";
+  } catch {
+    return void 0;
+  }
+}
+function stagedProtectedPaths(repositoryRoot) {
+  try {
+    const output = execFileSync5(
+      "git",
+      ["-C", repositoryRoot, "diff", "--cached", "--name-only", "--", LEGION_PROJECT_ROOT],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    );
+    return new Set(
+      output.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0)
+    );
+  } catch {
+    return /* @__PURE__ */ new Set();
+  }
+}
+function snapshotProtectedState(input) {
+  const entries = /* @__PURE__ */ new Map();
+  for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
+    if (isHarnessPath(entry.path, input.harnessPaths)) continue;
+    const absolute = path30.join(input.repositoryRoot, entry.path);
+    if (entry.kind === "symlink") {
+      const snapshotTarget = readTarget(absolute);
+      entries.set(entry.path, {
+        kind: "symlink",
+        target: snapshotTarget,
+        targetKind: readTargetKind(absolute, snapshotTarget)
+      });
+      continue;
+    }
+    if (entry.size !== void 0 && entry.size > MAX_SNAPSHOT_BYTES) {
+      entries.set(entry.path, { kind: "oversized", sha256: digestOf(absolute) });
+      continue;
+    }
+    try {
+      entries.set(entry.path, { kind: "file", bytes: readFileSync2(absolute) });
+    } catch {
+      entries.set(entry.path, { kind: "oversized", sha256: void 0 });
+    }
+  }
+  return { entries, staged: stagedProtectedPaths(input.repositoryRoot) };
+}
+function classifyAcceptancePath(repositoryRoot, relative, harnessPaths) {
+  if (!artifactPathSchema.safeParse(relative).success) {
+    return { kind: "unreadable", reason: "is not a repository-relative path" };
+  }
+  if (relative.includes(":")) {
+    return { kind: "unreadable", reason: "names a Windows alternate data stream" };
+  }
+  if (isInsideControlPlane(relative)) {
+    return { kind: "unreadable", reason: `is inside ${LEGION_PROJECT_ROOT}, which is restored rather than reported` };
+  }
+  if (isHarnessPath(relative, harnessPaths)) {
+    return { kind: "unreadable", reason: "is written by the harness for this run" };
+  }
+  const absolute = path30.join(repositoryRoot, relative);
+  const contained = path30.relative(repositoryRoot, absolute);
+  if (contained.startsWith("..") || path30.isAbsolute(contained)) {
+    return { kind: "unreadable", reason: "resolves outside the repository" };
+  }
+  let stat10;
+  try {
+    stat10 = lstatSync2(absolute);
+  } catch (error51) {
+    const code = error51.code;
+    if (code === "ENOENT" || code === "ENOTDIR") return { kind: "absent" };
+    return { kind: "unreadable", reason: `could not be inspected (${code ?? "unknown error"})` };
+  }
+  if (stat10.isSymbolicLink()) return { kind: "symlink", target: readTarget(absolute) };
+  if (stat10.isDirectory()) return { kind: "directory" };
+  if (!stat10.isFile()) return { kind: "unreadable", reason: "is not a regular file" };
+  const sha2564 = digestOf(absolute);
+  if (sha2564 === void 0) return { kind: "unreadable", reason: "could not be read" };
+  return { kind: "file", sha256: sha2564 };
+}
+function snapshotAcceptancePaths(input) {
+  const entries = /* @__PURE__ */ new Map();
+  for (const relative of input.paths) {
+    if (entries.has(relative)) continue;
+    const anchored = input.anchors.get(relative);
+    entries.set(
+      relative,
+      anchored ?? classifyAcceptancePath(input.repositoryRoot, relative, input.harnessPaths)
+    );
+  }
+  return entries;
+}
+function sameAcceptanceState(before, after) {
+  if (before.kind === "file" && after.kind === "file") return before.sha256 === after.sha256;
+  if (before.kind === "symlink" && after.kind === "symlink") {
+    return before.target !== void 0 && before.target === after.target;
+  }
+  return before.kind === "directory" && after.kind === "directory";
+}
+function acceptanceNote(before, after) {
+  if (before.kind === "absent") return "created";
+  if (after.kind === "absent") return "deleted";
+  if (before.kind !== after.kind) return "kind-changed";
+  if (before.kind === "symlink") return "retargeted";
+  return "modified";
+}
+function observeAcceptancePaths(input) {
+  const observations = [];
+  for (const [relative, before] of input.before) {
+    const after = classifyAcceptancePath(input.repositoryRoot, relative, input.harnessPaths);
+    if (before.kind === "absent" && after.kind === "absent") {
+      observations.push({ path: relative, before, after, verdict: "unknown" });
+      continue;
+    }
+    if (before.kind === "unreadable" || after.kind === "unreadable" || before.kind === "directory" || after.kind === "directory") {
+      observations.push({ path: relative, before, after, verdict: "unknown" });
+      continue;
+    }
+    if (sameAcceptanceState(before, after)) {
+      observations.push({ path: relative, before, after, verdict: "unchanged" });
+      continue;
+    }
+    const note = acceptanceNote(before, after);
+    observations.push({
+      path: relative,
+      before,
+      after,
+      verdict: "changed",
+      ...note === void 0 ? {} : { note }
+    });
+  }
+  return observations.sort((left, right) => left.path.localeCompare(right.path));
+}
+function protectedPathsTouched(input) {
+  const touched = /* @__PURE__ */ new Set();
+  const current = new Map(
+    listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT).filter((entry) => !isHarnessPath(entry.path, input.harnessPaths)).map((entry) => [entry.path, entry])
+  );
+  for (const [relative, before] of input.state.entries) {
+    const now = current.get(relative);
+    if (now === void 0) {
+      touched.add(relative);
+      continue;
+    }
+    const absolute = path30.join(input.repositoryRoot, relative);
+    const nowIsSymlink = now.kind === "symlink";
+    if (before.kind === "symlink" || nowIsSymlink) {
+      if (before.kind !== "symlink" || !nowIsSymlink) {
+        touched.add(relative);
+        continue;
+      }
+      if (readTarget(absolute) !== before.target) touched.add(relative);
+      continue;
+    }
+    if (before.kind === "oversized") {
+      if (digestOf(absolute) !== before.sha256) touched.add(relative);
+      continue;
+    }
+    try {
+      if (!before.bytes.equals(readFileSync2(absolute))) touched.add(relative);
+    } catch {
+      touched.add(relative);
+    }
+  }
+  for (const relative of current.keys()) {
+    if (!input.state.entries.has(relative)) touched.add(relative);
+  }
+  return [...touched].sort();
+}
+function restoreProtectedIndex(input) {
+  if (input.paths.length === 0) return [];
+  const run = (args) => {
+    try {
+      execFileSync5("git", ["-C", input.repositoryRoot, ...args], { stdio: "ignore" });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const failures = [];
+  if (!run(["reset", "--quiet", input.baseGitSha, "--", ...input.paths])) {
+    failures.push(...input.paths);
+  }
+  const restage = input.paths.filter((relative) => input.state.staged.has(relative));
+  if (restage.length > 0 && !run(["add", "--", ...restage])) {
+    failures.push(...restage);
+  }
+  return failures;
+}
+function protectedPathsCommittedSince(input) {
+  try {
+    const output = execFileSync5(
+      "git",
+      [
+        "-C",
+        input.repositoryRoot,
+        "diff",
+        "--name-only",
+        input.baseGitSha,
+        "HEAD",
+        "--",
+        LEGION_PROJECT_ROOT
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    );
+    return output.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
+  } catch {
+    return [];
+  }
+}
+function currentHead(repositoryRoot) {
+  try {
+    return execFileSync5("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    return void 0;
+  }
+}
+function restoreProtectedFiles(input) {
+  const restored = [];
+  const unrestored = [];
+  const rootTouched = input.paths.includes(LEGION_PROJECT_ROOT);
+  const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
+  const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
+  for (const relative of ordered) {
+    const absolute = path30.join(input.repositoryRoot, relative);
+    const before = input.state.entries.get(relative);
+    if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
+      restored.push(relative);
+      continue;
+    }
+    try {
+      if (before === void 0) {
+        rmSync3(absolute, { force: true, recursive: true });
+        restored.push(relative);
+        continue;
+      }
+      if (before.kind === "file") {
+        rmSync3(absolute, { force: true, recursive: true });
+        mkdirSync3(path30.dirname(absolute), { recursive: true });
+        writeFileSync2(absolute, before.bytes);
+        restored.push(relative);
+        continue;
+      }
+      if (before.kind === "symlink" && before.target !== void 0) {
+        rmSync3(absolute, { force: true, recursive: true });
+        mkdirSync3(path30.dirname(absolute), { recursive: true });
+        symlinkSync2(before.target, absolute, before.targetKind ?? "file");
+        restored.push(relative);
+        continue;
+      }
+      unrestored.push({
+        path: relative,
+        reason: before.kind === "symlink" ? "the pre-run symlink target could not be read, so the link cannot be recreated" : `no restore is defined for a snapshotted ${before.kind} entry`
+      });
+    } catch (error51) {
+      unrestored.push({ path: relative, reason: restoreFailureReason(error51, before?.kind) });
+    }
+  }
+  const indexFailures = restoreProtectedIndex({
+    repositoryRoot: input.repositoryRoot,
+    baseGitSha: input.baseGitSha,
+    state: input.state,
+    paths: restored
+  });
+  const stillStaged = new Set(indexFailures);
+  return {
+    restored: restored.filter((entry) => !stillStaged.has(entry)),
+    unrestored: [
+      ...unrestored,
+      ...indexFailures.map((entry) => ({
+        path: entry,
+        reason: "the working tree was restored but the index entry could not be reset"
+      }))
+    ]
+  };
+}
+function acceptanceUnestablishedReason(input) {
+  if (input.acceptancePaths === void 0 || input.acceptancePaths.length === 0) return void 0;
+  if (input.acceptanceBaseline.status === "established") return void 0;
+  return input.acceptanceBaseline.reason ?? "What this change's earlier runs recorded about its protected acceptance paths could not be read back, so this run has nothing established to compare against.";
+}
+async function runGuardedExecution(input) {
+  const before = observeWorkingTreeDiff({
+    repositoryRoot: input.repositoryRoot,
+    baseGitSha: input.baseGitSha
+  }).observation;
+  const state = snapshotProtectedState({
+    repositoryRoot: input.repositoryRoot,
+    harnessPaths: input.harnessPaths
+  });
+  const acceptanceUnestablished = acceptanceUnestablishedReason(input);
+  const acceptanceBefore = input.acceptancePaths === void 0 || acceptanceUnestablished !== void 0 ? void 0 : snapshotAcceptancePaths({
+    repositoryRoot: input.repositoryRoot,
+    paths: input.acceptancePaths,
+    harnessPaths: input.harnessPaths,
+    anchors: input.acceptanceBaseline.states
+  });
+  let result;
+  let thrown;
+  try {
+    result = await input.run();
+    if (input.afterRun !== void 0) await input.afterRun();
+  } catch (error51) {
+    thrown = error51;
+  }
+  const touchedProtected = protectedPathsTouched({
+    repositoryRoot: input.repositoryRoot,
+    state,
+    harnessPaths: input.harnessPaths
+  });
+  const containment = touchedProtected.length === 0 ? { restored: [], unrestored: [] } : restoreProtectedFiles({
+    repositoryRoot: input.repositoryRoot,
+    baseGitSha: input.baseGitSha,
+    state,
+    paths: touchedProtected
+  });
+  const reconciliation = input.task.completion.diffReconciliation.required ? reconcileTaskDiff({
+    repositoryRoot: input.repositoryRoot,
+    baseGitSha: input.baseGitSha,
+    scope: input.task.scope,
+    harnessPaths: input.harnessPaths,
+    alwaysForbidden: [LEGION_PROJECT_ROOT],
+    ...before === void 0 ? {} : { before }
+  }) : void 0;
+  const reasons = [];
+  if (thrown !== void 0) {
+    reasons.push(`The run failed: ${thrown instanceof Error ? thrown.message : String(thrown)}`);
+  }
+  if (touchedProtected.length > 0) {
+    const note = containment.unrestored.length === 0 ? `Restored ${containment.restored.length} protected path(s) to their pre-run state.` : `Could not restore ${containment.unrestored.map((entry) => `${entry.path} (${entry.reason})`).join(", ")}; inspect the worktree before rerunning.`;
+    reasons.push(
+      `The run modified ${touchedProtected.length} protected control artifact(s): ${touchedProtected.join(", ")}. ${note}`
+    );
+  }
+  const committedProtected = protectedPathsCommittedSince({
+    repositoryRoot: input.repositoryRoot,
+    baseGitSha: input.baseGitSha
+  });
+  const headAfter = currentHead(input.repositoryRoot);
+  if (committedProtected.length > 0 && headAfter !== void 0 && headAfter !== input.baseGitSha) {
+    reasons.push(
+      `The run committed changes to ${committedProtected.length} protected control artifact(s): ${committedProtected.join(", ")}. HEAD is now ${headAfter} rather than ${input.baseGitSha}; the working tree and index were restored, but that commit still contains the change.`
+    );
+  }
+  if (reconciliation?.status === "unavailable") {
+    reasons.push(
+      `The run could not be reconciled against its task contract, so it is not proven in contract. ${reconciliation.unavailableReason ?? ""}`.trim()
+    );
+  }
+  if (reconciliation?.status === "violated") {
+    reasons.push(...reconciliation.violations.map((violation) => violation.message));
+  }
+  const inContract = reasons.length === 0;
+  const acceptancePaths = acceptanceBefore === void 0 ? {
+    status: "unestablished",
+    observations: [],
+    reason: acceptanceUnestablished ?? "The oracles of this change would not read as a complete set, so which acceptance tests its runs must not weaken is unestablished."
+  } : {
+    status: "established",
+    observations: observeAcceptancePaths({
+      repositoryRoot: input.repositoryRoot,
+      harnessPaths: input.harnessPaths,
+      before: acceptanceBefore
+    })
+  };
+  if (result === void 0) {
+    result = {
+      ok: false,
+      status: "failed",
+      summary: reasons.join(" "),
+      filesChanged: [],
+      commandsRun: [],
+      findings: []
+    };
+  }
+  return {
+    result,
+    ...reconciliation === void 0 ? {} : { reconciliation },
+    inContract,
+    restored: containment.restored,
+    unrestored: containment.unrestored,
+    ...inContract ? {} : { blockedReason: reasons.join(" ") },
+    acceptancePaths
+  };
+}
+
 // packages/cli/src/workflow/guidance-run.ts
 function guidanceCreatedAt(context) {
   if (context.args.options.get("created-at") === true) {
@@ -40139,7 +40853,7 @@ function guidanceCreatedAt(context) {
   }
 }
 async function createGuidanceRunPaths(input) {
-  const workflowRoot = path28.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
+  const workflowRoot = path31.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
   await mkdir11(workflowRoot, { recursive: true });
   const safeTimestamp = input.createdAt.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+$/g, "");
   const slug = slugFromName(input.slugSource);
@@ -40147,7 +40861,7 @@ async function createGuidanceRunPaths(input) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const runId = `${safeTimestamp}-${slug}${suffix}`;
     const artifactRoot = artifactPathSchema.parse(`.legion/project/workflow/${input.workflow}/${runId}`);
-    const absoluteRunRoot = path28.join(input.repositoryRoot, ...artifactRoot.split("/"));
+    const absoluteRunRoot = path31.join(input.repositoryRoot, ...artifactRoot.split("/"));
     try {
       await mkdir11(absoluteRunRoot);
       return {
@@ -40288,31 +41002,47 @@ async function runGuidanceExecutor(input) {
       expectedArtifacts: [],
       requiredEvidence: ["guidance markdown artifact"],
       blockedConditions: ["The executor cannot produce guidance."],
-      // Guidance is advisory and writes only its own result artifact, so any
+      // Guidance is advisory and writes only its own executor artifacts, so any
       // source-tree change during a guidance run is out of scope by definition.
       diffReconciliation: { required: true, allowUnlistedReads: true }
     }
   });
-  const result = await adapterForKind(selected).run({
+  const guarded2 = await runGuardedExecution({
     repositoryRoot: input.context.repositoryRoot,
-    changeId,
-    runId: formatEntityId("run", guidanceEntitySuffix(input.workflow, input.paths.runId)),
     task,
-    mode: input.workflow === "retro" ? "review" : "build",
-    executor: selected,
-    readOnly: input.readOnly,
-    prompt: input.prompt,
-    contextPackArtifactPath,
-    contextPackAbsolutePath,
-    promptArtifactPath,
-    promptAbsolutePath,
-    resultArtifactPath,
-    resultAbsolutePath,
-    rawLogArtifactPath,
-    rawLogAbsolutePath,
-    redactedLogArtifactPath,
-    redactedLogAbsolutePath
+    baseGitSha: resolveBaseGitSha(input.context.repositoryRoot),
+    harnessPaths: [input.paths.artifactRoot],
+    acceptancePaths: [],
+    acceptanceBaseline: { status: "established", states: /* @__PURE__ */ new Map() },
+    run: () => adapterForKind(selected).run({
+      repositoryRoot: input.context.repositoryRoot,
+      changeId,
+      runId: formatEntityId("run", guidanceEntitySuffix(input.workflow, input.paths.runId)),
+      task,
+      mode: input.workflow === "retro" ? "review" : "build",
+      executor: selected,
+      readOnly: input.readOnly,
+      prompt: input.prompt,
+      contextPackArtifactPath,
+      contextPackAbsolutePath,
+      promptArtifactPath,
+      promptAbsolutePath,
+      resultArtifactPath,
+      resultAbsolutePath,
+      rawLogArtifactPath,
+      rawLogAbsolutePath,
+      redactedLogArtifactPath,
+      redactedLogAbsolutePath
+    })
   });
+  const result = blockedResultFromGuardedExecution(guarded2);
+  if (!guarded2.inContract) {
+    await writeProjectExecutionResult({
+      repositoryRoot: input.context.repositoryRoot,
+      artifactPath: resultArtifactPath,
+      result
+    });
+  }
   return {
     executor: selected,
     result,
@@ -40331,7 +41061,7 @@ async function discoverGuidanceRuns(input) {
   const runs = [];
   const diagnostics = [];
   for (const workflow of workflows) {
-    const workflowRoot = path28.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path31.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir11(workflowRoot, { withFileTypes: true });
@@ -40342,7 +41072,7 @@ async function discoverGuidanceRuns(input) {
     const workflowRuns = [];
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       if (!entry.isDirectory()) continue;
-      const runPath = path28.join(workflowRoot, entry.name, "workflow-run.json");
+      const runPath = path31.join(workflowRoot, entry.name, "workflow-run.json");
       try {
         const parsed = parseGuidanceRun(JSON.parse(await readFile14(runPath, "utf8")), workflow, entry.name);
         workflowRuns.push(parsed);
@@ -40510,7 +41240,7 @@ async function loadExploration(repositoryRoot, runId) {
       exploration: parsed.data,
       artifact: {
         path: candidate.artifactPath,
-        sha256: `sha256:${createHash18("sha256").update(raw, "utf8").digest("hex")}`
+        sha256: `sha256:${createHash20("sha256").update(raw, "utf8").digest("hex")}`
       },
       candidate
     }
@@ -40518,15 +41248,15 @@ async function loadExploration(repositoryRoot, runId) {
 }
 
 // packages/cli/src/workflow/intake/lifecycle.ts
-import { createHash as createHash20, randomUUID as randomUUID3 } from "node:crypto";
+import { createHash as createHash22, randomUUID as randomUUID3 } from "node:crypto";
 import { link, lstat as lstat3, open as open2, readFile as readFile18, readdir as readdir14, realpath as realpath4, rename as rename5, rm as rm7, rmdir as rmdir2, writeFile as writeFile8 } from "node:fs/promises";
-import path32 from "node:path";
+import path35 from "node:path";
 
 // packages/cli/src/workflow/codebase-map.ts
-import { createHash as createHash19 } from "node:crypto";
+import { createHash as createHash21 } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readdir as readdir12, readFile as readFile16, stat as stat6 } from "node:fs/promises";
-import path30 from "node:path";
+import path33 from "node:path";
 async function collectMapSource(input) {
   const scope = normalizeScope(input.repositoryRoot, input.scope);
   return { scope, files: await collectSourceFiles(input.repositoryRoot, scope) };
@@ -40609,12 +41339,12 @@ function exactObject(value, keys, label) {
   return record2;
 }
 function safeMapRelativePath(value, options = {}) {
-  if (typeof value !== "string" || value.length === 0 || value.includes("\\") || value.includes("\0") || value.startsWith("/") || path30.posix.isAbsolute(value) || path30.win32.isAbsolute(value)) {
+  if (typeof value !== "string" || value.length === 0 || value.includes("\\") || value.includes("\0") || value.startsWith("/") || path33.posix.isAbsolute(value) || path33.win32.isAbsolute(value)) {
     throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${String(value)}`);
   }
   if (options.allowDot === true && value === ".") return value;
   const segments = value.split("/");
-  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..") || path30.posix.normalize(value) !== value) {
+  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..") || path33.posix.normalize(value) !== value) {
     throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${value}`);
   }
   return value;
@@ -40789,21 +41519,21 @@ function queryCodebaseMap(map2, query, limit = 10) {
 }
 function normalizeScope(repositoryRoot, scope) {
   if (scope === void 0 || scope.trim().length === 0 || scope.trim() === ".") return ".";
-  const absolute = path30.resolve(repositoryRoot, scope);
-  const relative = path30.relative(repositoryRoot, absolute).replace(/\\/g, "/");
+  const absolute = path33.resolve(repositoryRoot, scope);
+  const relative = path33.relative(repositoryRoot, absolute).replace(/\\/g, "/");
   if (relative.length === 0) return ".";
-  if (relative.startsWith("../") || path30.isAbsolute(relative)) {
+  if (relative.startsWith("../") || path33.isAbsolute(relative)) {
     throw new Error(`Map scope must stay inside the repository: ${scope}`);
   }
   return relative;
 }
 async function collectSourceFiles(repositoryRoot, scope) {
-  const root = scope === "." ? repositoryRoot : path30.join(repositoryRoot, ...scope.split("/"));
+  const root = scope === "." ? repositoryRoot : path33.join(repositoryRoot, ...scope.split("/"));
   const rootStat = await stat6(root);
   const candidates = rootStat.isFile() ? [root] : await walk(root);
   const files = [];
   for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
-    const relative = path30.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
+    const relative = path33.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
     if (!isFullMapAuthoredFile(relative)) continue;
     const fileStat = await stat6(absolutePath);
     if (!fileStat.isFile()) continue;
@@ -40829,7 +41559,7 @@ async function walk(root) {
   const files = [];
   const entries = await readdir12(root, { withFileTypes: true });
   for (const entry of entries) {
-    const absolute = path30.join(root, entry.name);
+    const absolute = path33.join(root, entry.name);
     if (entry.isDirectory()) {
       if (!shouldTraverseAuthoredDirectory(entry.name)) continue;
       files.push(...await walk(absolute));
@@ -40874,7 +41604,7 @@ function fingerprintFiles(files) {
 function renderCodebaseMarkdown(map2) {
   const byExtension = /* @__PURE__ */ new Map();
   for (const file2 of map2.files) {
-    const extension = path30.extname(file2.path).toLowerCase() || "(none)";
+    const extension = path33.extname(file2.path).toLowerCase() || "(none)";
     byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
   }
   const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
@@ -40928,10 +41658,10 @@ function occurrences(value, term) {
   return count;
 }
 function sha256(bytes) {
-  return createHash19("sha256").update(bytes).digest("hex");
+  return createHash21("sha256").update(bytes).digest("hex");
 }
 async function sha256File2(absolutePath) {
-  const hash2 = createHash19("sha256");
+  const hash2 = createHash21("sha256");
   for await (const chunk of createReadStream(absolutePath)) hash2.update(chunk);
   return hash2.digest("hex");
 }
@@ -40990,11 +41720,11 @@ function ageInDays(generatedAt, now) {
 
 // packages/cli/src/workflow/intake/session.ts
 import { mkdir as mkdir12, readFile as readFile17, readdir as readdir13, rename as rename4, rm as rm6, rmdir, stat as stat7, writeFile as writeFile7 } from "node:fs/promises";
-import path31 from "node:path";
+import path34 from "node:path";
 var INTAKE_ROOT = ".legion/project/intake";
 var SESSION_FILE = "session.json";
 function intakeSessionDirectory(repositoryRoot, sessionId) {
-  return path31.join(repositoryRoot, ".legion", "project", "intake", sessionId);
+  return path34.join(repositoryRoot, ".legion", "project", "intake", sessionId);
 }
 function intakeSessionArtifactPath(sessionId) {
   return `${INTAKE_ROOT}/${sessionId}/${SESSION_FILE}`;
@@ -41003,7 +41733,7 @@ function isNodeErrorCode2(error51, code) {
   return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === code);
 }
 function sessionFilePath(repositoryRoot, sessionId) {
-  return path31.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
+  return path34.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
 }
 function nowTimestamp2() {
   return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
@@ -41190,9 +41920,9 @@ async function claimSessionDirectory(repositoryRoot, sessionId, beforeMutation) 
     repositoryRoot,
     artifactPath: intakeSessionArtifactPath(sessionId)
   });
-  const sessionDirectory = path31.dirname(resolved.absolutePath);
+  const sessionDirectory = path34.dirname(resolved.absolutePath);
   await beforeMutation?.();
-  await mkdir12(path31.dirname(sessionDirectory), { recursive: true });
+  await mkdir12(path34.dirname(sessionDirectory), { recursive: true });
   try {
     await beforeMutation?.();
     await mkdir12(sessionDirectory, { recursive: false });
@@ -41232,7 +41962,7 @@ async function rollbackSessionCreation(repositoryRoot, sessionId, beforeMutation
   }
 }
 async function listSessions(repositoryRoot) {
-  const root = path31.join(repositoryRoot, ".legion", "project", "intake");
+  const root = path34.join(repositoryRoot, ".legion", "project", "intake");
   let entries;
   try {
     entries = await readdir13(root, { withFileTypes: true });
@@ -41289,9 +42019,9 @@ async function repositoryFiles(root) {
     const entries = await readdir14(directory, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory() && !shouldTraverseAuthoredDirectory(entry.name)) continue;
-      const absolute = path32.join(directory, entry.name);
+      const absolute = path35.join(directory, entry.name);
       if (entry.isDirectory()) await visit(absolute);
-      else if (entry.isFile()) files.push(path32.relative(root, absolute).replace(/\\/gu, "/"));
+      else if (entry.isFile()) files.push(path35.relative(root, absolute).replace(/\\/gu, "/"));
     }
   }
   await visit(root);
@@ -41450,7 +42180,7 @@ function draftBytes(draft) {
 `;
 }
 function sha2562(bytes) {
-  return `sha256:${createHash20("sha256").update(bytes).digest("hex")}`;
+  return `sha256:${createHash22("sha256").update(bytes).digest("hex")}`;
 }
 function parseActiveDraftReview(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid active review");
@@ -41465,7 +42195,7 @@ async function readActiveDraftReview(repositoryRoot) {
   try {
     const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: ACTIVE_REVIEW_ARTIFACT_PATH });
     const bytes = await readFile18(resolved.absolutePath);
-    return { review: parseActiveDraftReview(JSON.parse(bytes.toString("utf8"))), hash: createHash20("sha256").update(bytes).digest("hex") };
+    return { review: parseActiveDraftReview(JSON.parse(bytes.toString("utf8"))), hash: createHash22("sha256").update(bytes).digest("hex") };
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") return {};
     throw error51;
@@ -41476,7 +42206,7 @@ async function writeActiveDraftReviewCas(repositoryRoot, review, lease, expected
   const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath: ACTIVE_REVIEW_ARTIFACT_PATH });
   if (expectedHash !== void 0) {
     const current = await readFile18(resolved.absolutePath);
-    if (createHash20("sha256").update(current).digest("hex") !== expectedHash) throw new Error("active review changed during transition");
+    if (createHash22("sha256").update(current).digest("hex") !== expectedHash) throw new Error("active review changed during transition");
   } else {
     try {
       await readFile18(resolved.absolutePath);
@@ -41515,7 +42245,7 @@ async function consumeActiveReviewForDraft(repositoryRoot, draftId, lease) {
   if (current.review?.draftId !== draftId) return;
   const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: ACTIVE_REVIEW_ARTIFACT_PATH });
   const bytes = await readFile18(resolved.absolutePath);
-  if (createHash20("sha256").update(bytes).digest("hex") !== current.hash) throw new Error("active review changed during transition");
+  if (createHash22("sha256").update(bytes).digest("hex") !== current.hash) throw new Error("active review changed during transition");
   await assertTransitionLeaseOwned(lease);
   await rm7(resolved.absolutePath);
 }
@@ -41546,12 +42276,12 @@ async function writeDraftExclusive(repositoryRoot, draft, lease, beforePublish, 
   return artifactPath;
 }
 async function removeDraftPublishTemps(finalPath, lease) {
-  const directory = path32.dirname(finalPath);
-  const prefix = `${path32.basename(finalPath)}.`;
+  const directory = path35.dirname(finalPath);
+  const prefix = `${path35.basename(finalPath)}.`;
   for (const name of await readdir14(directory)) {
     if (name.startsWith(prefix) && name.endsWith(".tmp")) {
       await assertTransitionLeaseOwned(lease);
-      await rm7(path32.join(directory, name), { force: true }).catch(() => void 0);
+      await rm7(path35.join(directory, name), { force: true }).catch(() => void 0);
     }
   }
 }
@@ -41560,7 +42290,7 @@ async function writeDraftCas(repositoryRoot, draft, expectedHash, lease) {
   await assertTransitionLeaseOwned(lease);
   const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath });
   const current = await readFile18(resolved.absolutePath);
-  const actualHash = createHash20("sha256").update(current).digest("hex");
+  const actualHash = createHash22("sha256").update(current).digest("hex");
   if (actualHash !== expectedHash) throw new Error("draft changed during acceptance");
   const temporary = `${resolved.absolutePath}.${process.pid}.${Date.now()}.tmp`;
   await assertTransitionLeaseOwned(lease);
@@ -41639,7 +42369,7 @@ async function recoverDraftReplacement(repositoryRoot, lease) {
       const replacementResolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: draftArtifactPath(replacement.id) });
       const replacementRaw = await readFile18(replacementResolved.absolutePath);
       await assertTransitionLeaseOwned(lease);
-      await writeDraftCas(repositoryRoot, intakeDraftSchema.parse({ ...replacement, status: "invalidated" }), createHash20("sha256").update(replacementRaw).digest("hex"), lease);
+      await writeDraftCas(repositoryRoot, intakeDraftSchema.parse({ ...replacement, status: "invalidated" }), createHash22("sha256").update(replacementRaw).digest("hex"), lease);
     }
     await assertTransitionLeaseOwned(lease);
     await removeReplacementJournal(repositoryRoot, lease);
@@ -41648,7 +42378,7 @@ async function recoverDraftReplacement(repositoryRoot, lease) {
   if (prior.status === "draft") {
     if (sha2562(priorRaw) !== journal.priorDraftSha256) throw new Error("prior draft changed during replacement recovery");
     await assertTransitionLeaseOwned(lease);
-    await writeDraftCas(repositoryRoot, intakeDraftSchema.parse({ ...prior, status: "invalidated" }), createHash20("sha256").update(priorRaw).digest("hex"), lease);
+    await writeDraftCas(repositoryRoot, intakeDraftSchema.parse({ ...prior, status: "invalidated" }), createHash22("sha256").update(priorRaw).digest("hex"), lease);
   } else if (prior.status !== "invalidated") {
     throw new Error(`prior draft ${prior.id} has unsupported replacement state ${prior.status}`);
   }
@@ -41820,20 +42550,20 @@ async function replayDraft(repositoryRoot, draft) {
   return { ok: true, previewSession: session };
 }
 async function stageIntakeDraft(input) {
-  const absoluteSource = path32.resolve(input.repositoryRoot, input.draftFile);
-  const relativeSource = path32.relative(input.repositoryRoot, absoluteSource);
-  if (relativeSource.startsWith("..") || path32.isAbsolute(relativeSource)) {
+  const absoluteSource = path35.resolve(input.repositoryRoot, input.draftFile);
+  const relativeSource = path35.relative(input.repositoryRoot, absoluteSource);
+  if (relativeSource.startsWith("..") || path35.isAbsolute(relativeSource)) {
     return { diagnostics: [{ code: "draft_path_outside_repository", message: "The intake draft file must stay inside the repository." }], ok: false };
   }
   let json2;
   try {
     if ((await lstat3(absoluteSource)).isSymbolicLink()) throw new Error("The intake draft file cannot be a symbolic link.");
     const [rootRealPath, sourceRealPath] = await Promise.all([
-      realpath4(path32.resolve(input.repositoryRoot)),
+      realpath4(path35.resolve(input.repositoryRoot)),
       realpath4(absoluteSource)
     ]);
-    const contained = path32.relative(rootRealPath, sourceRealPath);
-    if (contained.startsWith("..") || path32.isAbsolute(contained)) {
+    const contained = path35.relative(rootRealPath, sourceRealPath);
+    if (contained.startsWith("..") || path35.isAbsolute(contained)) {
       throw new Error("The intake draft file escapes the repository through a symbolic-link ancestor.");
     }
     json2 = JSON.parse(await readFile18(sourceRealPath, "utf8"));
@@ -41965,7 +42695,7 @@ async function stageIntakeDraft(input) {
           artifactPath: draftArtifactPath(previous.id)
         });
         const previousBytes = await readFile18(previousResolved.absolutePath);
-        const previousHash = createHash20("sha256").update(previousBytes).digest("hex");
+        const previousHash = createHash22("sha256").update(previousBytes).digest("hex");
         replacesDraft = intakeDraftSchema.parse({ ...previous, status: "invalidated" });
         try {
           const replacementResolved = await resolveProjectArtifactPath({ repositoryRoot: input.repositoryRoot, artifactPath: draftArtifactPath(draft.id) });
@@ -42067,7 +42797,7 @@ async function artifactMatches(repositoryRoot, artifact) {
   try {
     const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: artifact.path });
     const bytes = await readFile18(resolved.absolutePath);
-    return `sha256:${createHash20("sha256").update(bytes).digest("hex")}` === artifact.sha256;
+    return `sha256:${createHash22("sha256").update(bytes).digest("hex")}` === artifact.sha256;
   } catch {
     return false;
   }
@@ -42079,12 +42809,12 @@ async function evidenceMatches(repositoryRoot, evidence) {
   }
   if (evidence.kind === "repository-file") {
     try {
-      const absolute = path32.resolve(repositoryRoot, evidence.artifact.path);
-      const relative = path32.relative(path32.resolve(repositoryRoot), absolute);
-      if (relative.startsWith("..") || path32.isAbsolute(relative) || (await lstat3(absolute)).isSymbolicLink()) return false;
-      const [rootRealPath, evidenceRealPath] = await Promise.all([realpath4(path32.resolve(repositoryRoot)), realpath4(absolute)]);
-      const contained = path32.relative(rootRealPath, evidenceRealPath);
-      if (contained.startsWith("..") || path32.isAbsolute(contained)) return false;
+      const absolute = path35.resolve(repositoryRoot, evidence.artifact.path);
+      const relative = path35.relative(path35.resolve(repositoryRoot), absolute);
+      if (relative.startsWith("..") || path35.isAbsolute(relative) || (await lstat3(absolute)).isSymbolicLink()) return false;
+      const [rootRealPath, evidenceRealPath] = await Promise.all([realpath4(path35.resolve(repositoryRoot)), realpath4(absolute)]);
+      const contained = path35.relative(rootRealPath, evidenceRealPath);
+      if (contained.startsWith("..") || path35.isAbsolute(contained)) return false;
       return sha2562(await readFile18(evidenceRealPath)) === evidence.artifact.sha256;
     } catch {
       return false;
@@ -42159,8 +42889,8 @@ function parsePublishedLeaseClaim(input) {
   const createdAt = utcTimestampSchema.safeParse(record2["createdAt"]);
   const expiresAt = utcTimestampSchema.safeParse(record2["expiresAt"]);
   if (!createdAt.success || !expiresAt.success) throw new Error("malformed lease");
-  const filename = path32.basename(input.claimPath);
-  const prefix = `${path32.basename(input.journalPath)}.lock.`;
+  const filename = path35.basename(input.claimPath);
+  const prefix = `${path35.basename(input.journalPath)}.lock.`;
   if (!filename.startsWith(prefix)) throw new Error("malformed lease");
   const suffix = filename.slice(prefix.length);
   const filenameClaim = /^(\d{8,})\.([^.]+)\.json$/u.exec(suffix);
@@ -42187,12 +42917,12 @@ function parsePublishedLeaseClaim(input) {
   };
 }
 async function leaseClaims(journalAbsolutePath) {
-  const directory = path32.dirname(journalAbsolutePath);
-  const prefix = `${path32.basename(journalAbsolutePath)}.lock.`;
+  const directory = path35.dirname(journalAbsolutePath);
+  const prefix = `${path35.basename(journalAbsolutePath)}.lock.`;
   const claims = [];
   for (const name of await readdir14(directory)) {
     if (!name.startsWith(prefix) || !name.endsWith(".json")) continue;
-    const claimPath = path32.join(directory, name);
+    const claimPath = path35.join(directory, name);
     try {
       claims.push(parsePublishedLeaseClaim({
         bytes: await readFile18(claimPath, "utf8"),
@@ -42287,7 +43017,7 @@ async function acquireDraftAcceptanceLease(repositoryRoot, draftId) {
       throw error51;
     }
   }
-  const legacyGlobal = path32.join(path32.dirname(resolved.absolutePath), `${INTAKE_TRANSITION_KEY}.json`);
+  const legacyGlobal = path35.join(path35.dirname(resolved.absolutePath), `${INTAKE_TRANSITION_KEY}.json`);
   const legacyGlobalClaims = await leaseClaims(legacyGlobal);
   if (legacyGlobalClaims.some((claim) => claim.expiresAt > Date.now())) throw transitionBusyError();
   for (; ; ) {
@@ -42357,9 +43087,9 @@ async function releaseDraftAcceptanceLease(lease, beforeRemove, beforeRename) {
     if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
   }
   try {
-    const transactionsDirectory = path32.dirname(lease.path);
+    const transactionsDirectory = path35.dirname(lease.path);
     await rmdir2(transactionsDirectory);
-    let ancestor = path32.dirname(transactionsDirectory);
+    let ancestor = path35.dirname(transactionsDirectory);
     for (let index = 0; index < 3; index += 1) {
       try {
         await rmdir2(ancestor);
@@ -42367,7 +43097,7 @@ async function releaseDraftAcceptanceLease(lease, beforeRemove, beforeRename) {
         if (error51 && typeof error51 === "object" && "code" in error51 && ["ENOENT", "ENOTEMPTY", "EEXIST"].includes(String(error51.code))) break;
         throw error51;
       }
-      ancestor = path32.dirname(ancestor);
+      ancestor = path35.dirname(ancestor);
     }
   } catch (error51) {
     if (!(error51 && typeof error51 === "object" && "code" in error51 && ["ENOENT", "ENOTEMPTY", "EEXIST"].includes(String(error51.code)))) throw error51;
@@ -42443,7 +43173,7 @@ async function assertCommittedSessionDirectoryShape(sessionDirectoryPath, sessio
   const directoryInfo = await lstat3(sessionDirectoryPath);
   if (!directoryInfo.isDirectory()) throw new Error("committed session parent is not a regular directory");
   const entries = await readdir14(sessionDirectoryPath, { withFileTypes: true });
-  if (entries.length !== 1 || entries[0]?.name !== path32.basename(sessionPath) || !entries[0].isFile()) {
+  if (entries.length !== 1 || entries[0]?.name !== path35.basename(sessionPath) || !entries[0].isFile()) {
     throw new Error("committed session directory contains unexpected state");
   }
   const sessionInfo = await lstat3(sessionPath);
@@ -42496,7 +43226,7 @@ async function acceptanceTransactionsDirectory(repositoryRoot) {
     repositoryRoot,
     artifactPath: ".legion/project/intake/transactions/.acceptance-scan"
   });
-  return path32.dirname(sentinel.absolutePath);
+  return path35.dirname(sentinel.absolutePath);
 }
 async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
   await assertTransitionLeaseOwned(lease);
@@ -42522,7 +43252,7 @@ async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
     const ownership = legacyAcceptanceOwnershipName(entry.name);
     if (ownership !== void 0) {
-      const artifactPath = path32.join(transactions, entry.name);
+      const artifactPath = path35.join(transactions, entry.name);
       try {
         if (!entry.isFile()) throw new Error("ownership artifact is not a regular file");
         const info = await lstat3(artifactPath);
@@ -42536,14 +43266,14 @@ async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
           const claim = parsePublishedLeaseClaim({
             bytes: raw.toString("utf8"),
             claimPath: artifactPath,
-            journalPath: path32.join(transactions, ownership.journalName)
+            journalPath: path35.join(transactions, ownership.journalName)
           });
           if (claim.expiresAt > Date.now()) throw new Error("published lease still has a live owner");
         }
         ownershipArtifacts.push({
           kind: ownership.kind,
           artifactPath,
-          journalPath: path32.join(transactions, ownership.journalName),
+          journalPath: path35.join(transactions, ownership.journalName),
           raw,
           mtimeMs: info.mtimeMs
         });
@@ -42603,7 +43333,7 @@ async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
         repositoryRoot,
         artifactPath: intakeSessionArtifactPath(journal.sessionId)
       });
-      const reservationPath = path32.dirname(resolvedSession.absolutePath);
+      const reservationPath = path35.dirname(resolvedSession.absolutePath);
       if (draft.status === "draft") {
         const reservation = await inspectOpenAcceptanceReservation({
           repositoryRoot,
@@ -42714,7 +43444,7 @@ async function assertAcceptanceRecoveryCandidateUnchanged(repositoryRoot, candid
       if (candidate.reservationState === "empty") {
         if (entries.length !== 0) throw new Error("acceptance reservation changed during recovery");
       } else {
-        if (candidate.sessionArtifactPath === void 0 || candidate.sessionRaw === void 0 || entries.length !== 1 || !entries[0].isFile() || path32.join(candidate.reservationPath, entries[0].name) !== candidate.sessionArtifactPath || !(await readFile18(candidate.sessionArtifactPath)).equals(candidate.sessionRaw)) {
+        if (candidate.sessionArtifactPath === void 0 || candidate.sessionRaw === void 0 || entries.length !== 1 || !entries[0].isFile() || path35.join(candidate.reservationPath, entries[0].name) !== candidate.sessionArtifactPath || !(await readFile18(candidate.sessionArtifactPath)).equals(candidate.sessionRaw)) {
           throw new Error("journaled session publication changed during recovery");
         }
       }
@@ -42768,7 +43498,7 @@ async function reconcilePendingAcceptanceJournals(repositoryRoot, lease, hooks =
       const message = error51 instanceof Error ? error51.message : String(error51);
       return {
         ok: false,
-        diagnostics: [pendingAcceptanceBlocked(`Acceptance ownership artifact ${path32.basename(artifact.artifactPath)} changed before recovery: ${message}`)]
+        diagnostics: [pendingAcceptanceBlocked(`Acceptance ownership artifact ${path35.basename(artifact.artifactPath)} changed before recovery: ${message}`)]
       };
     }
   }
@@ -42888,14 +43618,14 @@ async function recoverIntakeLifecycleArtifactsWithLease(repositoryRoot, recovery
       }
     } catch {
     }
-    const drafts = path32.join(repositoryRoot, ".legion", "project", "intake", "drafts");
+    const drafts = path35.join(repositoryRoot, ".legion", "project", "intake", "drafts");
     try {
       const names = await readdir14(drafts);
       for (const name of names) {
         const match = /^(itd_[a-z0-9-]+\.json)\.[^.]+\.tmp$/u.exec(name);
         if (match === null || !names.includes(match[1])) continue;
         await assertTransitionLeaseOwned(recoveryLease);
-        await rm7(path32.join(drafts, name), { force: true });
+        await rm7(path35.join(drafts, name), { force: true });
       }
     } catch (error51) {
       if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
@@ -42956,7 +43686,7 @@ async function publishDraftReview(input) {
     if (drift.length > 0) {
       const invalidated = intakeDraftSchema.parse({ ...draft, status: "invalidated" });
       await assertTransitionLeaseOwned(lease);
-      await writeDraftCas(input.repositoryRoot, invalidated, createHash20("sha256").update(raw).digest("hex"), lease);
+      await writeDraftCas(input.repositoryRoot, invalidated, createHash22("sha256").update(raw).digest("hex"), lease);
       await assertTransitionLeaseOwned(lease);
       await markActiveReview(input.repositoryRoot, {
         state: "unreviewed",
@@ -43185,7 +43915,7 @@ async function discardStagedDraft(input) {
     });
     if (!finalStaged.ok) return { ok: false, status: "draft_review", diagnostics: finalStaged.diagnostics };
     const discarded = intakeDraftSchema.parse({ ...draft, status: "discarded" });
-    await writeDraftCas(input.repositoryRoot, discarded, createHash20("sha256").update(bytes).digest("hex"), lease);
+    await writeDraftCas(input.repositoryRoot, discarded, createHash22("sha256").update(bytes).digest("hex"), lease);
     if (await renewAndValidateLease(lease)) await consumeActiveReviewForDraft(input.repositoryRoot, draft.id, lease);
     return { ok: true, status: "discarded", draft: discarded };
   } finally {
@@ -43321,7 +44051,7 @@ async function acceptStagedDraft(input) {
       draft,
       now: input.createdAt
     }, lease);
-    const expectedDraftHash = createHash20("sha256").update(draftRaw).digest("hex");
+    const expectedDraftHash = createHash22("sha256").update(draftRaw).digest("hex");
     const evidenceDiagnostics = await validateDraftEvidence(input.repositoryRoot, draft);
     const driftDiagnostics = [...bindingDiagnostics, ...evidenceDiagnostics];
     if (driftDiagnostics.length > 0) {
@@ -43475,7 +44205,7 @@ async function writePreflight(repositoryRoot, state, lease, hooks = {}) {
   }
 }
 async function inspectActiveDraftCandidates(repositoryRoot) {
-  const directory = path32.join(repositoryRoot, ".legion", "project", "intake", "drafts");
+  const directory = path35.join(repositoryRoot, ".legion", "project", "intake", "drafts");
   let entries;
   try {
     entries = await readdir14(directory, { withFileTypes: true });
@@ -44008,13 +44738,13 @@ async function boundedReviewBounds(repositoryRoot) {
     for (const entry of entries) {
       if (entry.isDirectory() && AUTHORED_IGNORED_DIRECTORIES.has(entry.name.toLowerCase())) continue;
       if (entry.name.startsWith(".") && entry.name !== ".github") continue;
-      const absolute = path33.join(directory, entry.name);
+      const absolute = path36.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolute, depth + 1);
         continue;
       }
       if (!entry.isFile()) continue;
-      const relative = path33.relative(repositoryRoot, absolute).replace(/\\/gu, "/");
+      const relative = path36.relative(repositoryRoot, absolute).replace(/\\/gu, "/");
       const basename = entry.name.toLowerCase();
       const segments = relative.toLowerCase().split("/");
       let priority;
@@ -44702,7 +45432,7 @@ async function handleBatchIntake(context) {
   if (filePath === void 0) return usageError("Provide a file as --intake <file>.");
   let parsed;
   try {
-    const absolute = path33.isAbsolute(filePath) ? filePath : path33.resolve(context.repositoryRoot, filePath);
+    const absolute = path36.isAbsolute(filePath) ? filePath : path36.resolve(context.repositoryRoot, filePath);
     parsed = JSON.parse(await readFile19(absolute, "utf8"));
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
@@ -45006,7 +45736,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     resolvedQuestions: resolvedOpenQuestions(session),
     createdAt
   });
-  const roadmapPath = path33.join(context.repositoryRoot, ROADMAP_FILE);
+  const roadmapPath = path36.join(context.repositoryRoot, ROADMAP_FILE);
   const roadmap = renderRoadmap({
     projectName: name,
     answers: session.answers,
@@ -45338,7 +46068,7 @@ ${rendered}` : "Project initialization failed.";
 
 // packages/cli/src/workflow/traceability-check.ts
 import { readdir as readdir16 } from "node:fs/promises";
-import path34 from "node:path";
+import path37 from "node:path";
 var CHANGES_ROOT = ".legion/project/changes";
 var CURRENT_SPECS_ROOT = ".legion/project/specs";
 function taskgraphArtifactPath(changeId) {
@@ -45363,7 +46093,7 @@ async function guarded(artifactPath, code, read) {
 }
 async function changeIds(repositoryRoot) {
   return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
-    const entries = await readdir16(path34.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
+    const entries = await readdir16(path37.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   });
 }
@@ -45633,11 +46363,11 @@ function renderTraceabilityLine(traceability) {
 
 // packages/cli/src/workflow/state.ts
 import { readdir as readdir18 } from "node:fs/promises";
-import path38 from "node:path";
+import path41 from "node:path";
 
 // packages/cli/src/workflow/context.ts
 import { readdir as readdir17, stat as stat8 } from "node:fs/promises";
-import path35 from "node:path";
+import path38 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -45663,7 +46393,7 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path35.join(repositoryRoot, ".legion");
+  const legionRoot = path38.join(repositoryRoot, ".legion");
   if (!await pathExists6(legionRoot)) return [];
   const entries = await readdir17(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
@@ -45672,8 +46402,8 @@ async function detectPreInitCollision2(repositoryRoot) {
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path35.join(legionRoot, "project");
-  const manifestPath = path35.join(projectRoot, "project.json");
+  const projectRoot = path38.join(legionRoot, "project");
+  const manifestPath = path38.join(projectRoot, "project.json");
   if (await pathExists6(projectRoot) && !await pathExists6(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -45732,8 +46462,8 @@ function latestEvidenceEntries(entries) {
 }
 
 // packages/cli/src/workflow/run-artifacts.ts
-import { createHash as createHash21 } from "node:crypto";
-import path36 from "node:path";
+import { createHash as createHash23 } from "node:crypto";
+import path39 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -45749,7 +46479,7 @@ function reviewIdForChange(input) {
   return formatEntityId("review", derivedSuffix(input.changeId.slice("chg_".length), `-review-${input.sequence}`));
 }
 function approvalIdForSubject(input) {
-  const digest = createHash21("sha256").update(`${input.action}
+  const digest = createHash23("sha256").update(`${input.action}
 ${input.subject.kind}
 ${input.subject.id}`).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
   return formatEntityId(
@@ -45769,7 +46499,7 @@ function releaseIdForChange(input) {
 function derivedSuffix(baseSuffix, tail) {
   const full = `${baseSuffix}${tail}`;
   if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
-  const digest = createHash21("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  const digest = createHash23("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
   const reservedLength = tail.length + digest.length + 1;
   const prefixLength = ENTITY_SUFFIX_MAX_LENGTH - reservedLength;
   if (prefixLength < 1) {
@@ -45785,11 +46515,11 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path36.join(repositoryRoot, ...artifactPath.split("/"));
+  return path39.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/workflow/evidence-sources.ts
-import path37 from "node:path";
+import path40 from "node:path";
 function asObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
@@ -45860,7 +46590,7 @@ function subchecksClean(checks, blocksSubcheck) {
   return { clean: true, reason: "" };
 }
 function shippedRoot(repositoryRoot) {
-  return path37.isAbsolute(repositoryRoot) ? repositoryRoot : path37.resolve(repositoryRoot);
+  return path40.isAbsolute(repositoryRoot) ? repositoryRoot : path40.resolve(repositoryRoot);
 }
 function sameTree(declared, repositoryRoot) {
   const fold = (value) => value.replace(/[\\/]+/g, "/").replace(/\/+$/, "").replace(/^([A-Za-z]):/, (_match, drive) => `${drive.toLowerCase()}:`);
@@ -48803,7 +49533,7 @@ function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function listWorkflowChanges(repositoryRoot) {
-  const changesRoot = path38.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path41.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
     entries = await readdir18(changesRoot, { withFileTypes: true });
@@ -48859,7 +49589,7 @@ async function findLatestWorkflowChangeId(repositoryRoot) {
   const listed = await listWorkflowChanges(repositoryRoot);
   if (!listed.ok) return listed;
   const latest = listed.changes.at(-1);
-  if (latest === void 0) return noWorkflowChange(path38.join(repositoryRoot, ".legion", "project", "changes"));
+  if (latest === void 0) return noWorkflowChange(path41.join(repositoryRoot, ".legion", "project", "changes"));
   return { ok: true, changeId: latest.changeId };
 }
 async function isChangeComplete(input) {
@@ -49183,7 +49913,7 @@ function buildOracleArtifactInputs(options) {
 
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile20 } from "node:fs/promises";
-import path39 from "node:path";
+import path42 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -49231,13 +49961,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path39.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path39.join(context.repositoryRoot, "ROADMAP.md")
+    path42.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path42.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path39.isAbsolute(roadmapPath) ? roadmapPath : path39.resolve(repositoryRoot, roadmapPath);
+  return path42.isAbsolute(roadmapPath) ? roadmapPath : path42.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -49256,7 +49986,7 @@ function phaseChangeIdPrefix(phaseNumber) {
 
 // packages/cli/src/workflow/retro-index.ts
 import { readFile as readFile21 } from "node:fs/promises";
-import path40 from "node:path";
+import path43 from "node:path";
 var STAGED_ENTRY_FILE = "retro-entry.json";
 var RETRO_INDEX_ARTIFACT_PATH = ".legion/project/workflow/retro/retro-index.json";
 var EMPTY_INDEX = Object.freeze({
@@ -49279,7 +50009,7 @@ function isRetroIndexEntry(value) {
   return typeof entry["id"] === "string" && typeof entry["createdAt"] === "string" && typeof entry["artifactPath"] === "string" && typeof entry["summary"] === "string" && (entry["scopedChangeIds"] === void 0 || Array.isArray(entry["scopedChangeIds"]) && entry["scopedChangeIds"].every((id) => typeof id === "string")) && (entry["scopeLabel"] === void 0 || typeof entry["scopeLabel"] === "string") && Array.isArray(entry["actions"]) && entry["actions"].every(isRetroAction);
 }
 async function readRetroIndex(repositoryRoot) {
-  const indexPath = path40.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
+  const indexPath = path43.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
   try {
     const parsed = JSON.parse(await readFile21(indexPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null) return EMPTY_INDEX;
@@ -49814,7 +50544,7 @@ import { readFile as readFile23 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
 import { readdir as readdir19, readFile as readFile22 } from "node:fs/promises";
-import path41 from "node:path";
+import path44 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -49978,7 +50708,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path41.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path44.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir19(workflowRoot, { withFileTypes: true });
@@ -49987,7 +50717,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
       throw error51;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path41.join(workflowRoot, entry.name, "workflow-run.json") : path41.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path44.join(workflowRoot, entry.name, "workflow-run.json") : path44.join(workflowRoot, entry.name);
       let text = "";
       try {
         text = await readFile22(absolutePath, "utf8");
@@ -50006,7 +50736,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path41.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path44.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const text = await readFile22(indexPath, "utf8");
     return ["```json", truncate4(text.trim(), 4e3), "```"].join("\n");
@@ -50022,9 +50752,9 @@ function truncate4(text, maxLength) {
 
 // packages/cli/src/workflow/executor/verification-runner.ts
 import { spawn as spawn2 } from "node:child_process";
-import { createHash as createHash22 } from "node:crypto";
+import { createHash as createHash24 } from "node:crypto";
 import { existsSync as existsSync4 } from "node:fs";
-import path42 from "node:path";
+import path45 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
@@ -50033,12 +50763,12 @@ var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args) {
   if (command !== "legion") return { command, args };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path42.join(sourceRoot, ...LEGION_BIN.split("/"));
+  const binPath = path45.join(sourceRoot, ...LEGION_BIN.split("/"));
   if (!existsSync4(binPath)) return { command, args };
   return { command: process.execPath, args: [binPath, ...args] };
 }
 function sha2563(value) {
-  return `sha256:${createHash22("sha256").update(value, "utf8").digest("hex")}`;
+  return `sha256:${createHash24("sha256").update(value, "utf8").digest("hex")}`;
 }
 function terminateProcessTree2(pid) {
   if (pid === void 0) return;
@@ -50149,9 +50879,9 @@ function createVerificationRunner(options) {
 }
 
 // packages/cli/src/workflow/executor/worker-bundles.ts
-import { createHash as createHash23 } from "node:crypto";
-import { readFileSync } from "node:fs";
-import path43 from "node:path";
+import { createHash as createHash25 } from "node:crypto";
+import { readFileSync as readFileSync3 } from "node:fs";
+import path46 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
 var BUNDLE_INDEX = "bundles/index.json";
 var WorkerBundleIntegrityError = class extends Error {
@@ -50163,14 +50893,14 @@ var WorkerBundleIntegrityError = class extends Error {
   }
 };
 function sha256Hex5(value) {
-  return createHash23("sha256").update(value, "utf8").digest("hex");
+  return createHash25("sha256").update(value, "utf8").digest("hex");
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path43.join(root, ...BUNDLE_INDEX.split("/"));
+  const indexPath = path46.join(root, ...BUNDLE_INDEX.split("/"));
   let parsed;
   try {
-    parsed = JSON.parse(readFileSync(indexPath, "utf8"));
+    parsed = JSON.parse(readFileSync3(indexPath, "utf8"));
   } catch (error51) {
     throw new WorkerBundleIntegrityError(
       "index",
@@ -50194,10 +50924,10 @@ function loadWorkerBundles(sourceRoot) {
       );
     }
     {
-      const promptPath = path43.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      const promptPath = path46.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
-        promptBody = readFileSync(promptPath, "utf8");
+        promptBody = readFileSync3(promptPath, "utf8");
       } catch (error51) {
         throw new WorkerBundleIntegrityError(
           manifest.id,
@@ -50388,693 +51118,6 @@ async function acceptanceBaselineFromEvidence(input) {
     });
   }
   return { status: "established", states };
-}
-
-// packages/cli/src/workflow/guarded-execution.ts
-import { execFileSync as execFileSync5 } from "node:child_process";
-import { createHash as createHash25 } from "node:crypto";
-import { lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, statSync as statSync2, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import path46 from "node:path";
-
-// packages/cli/src/workflow/diff-reconciliation.ts
-import { execFileSync as execFileSync4 } from "node:child_process";
-import { createHash as createHash24 } from "node:crypto";
-import { readFileSync as readFileSync2, rmSync as rmSync2, statSync } from "node:fs";
-import path44 from "node:path";
-function summarizeObservation(files, baseGitSha) {
-  const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
-  return {
-    files: ordered,
-    changedFiles: ordered.map((file2) => file2.path),
-    newFiles: ordered.filter((file2) => file2.isNew).map((file2) => file2.path),
-    linesChanged: ordered.reduce((total, file2) => total + file2.linesChanged, 0),
-    baseGitSha
-  };
-}
-var MAX_UNTRACKED_LINE_COUNT_BYTES = 2e6;
-var MAX_HASHED_BYTES = 64 * 1024 * 1024;
-function git(repositoryRoot, args) {
-  return execFileSync4("git", ["-C", repositoryRoot, ...args], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-    maxBuffer: 32 * 1024 * 1024
-  });
-}
-function toPosix(value) {
-  return value.replace(/\\/g, "/");
-}
-function splitLines(value) {
-  return value.split(/\r?\n/u).filter((line) => line.length > 0);
-}
-function hashFileContent(absolutePath) {
-  try {
-    if (statSync(absolutePath).size > MAX_HASHED_BYTES) return void 0;
-    return createHash24("sha256").update(readFileSync2(absolutePath)).digest("hex");
-  } catch {
-    return void 0;
-  }
-}
-function countUntrackedLines(absolutePath) {
-  try {
-    if (statSync(absolutePath).size > MAX_UNTRACKED_LINE_COUNT_BYTES) return 0;
-    const contents = readFileSync2(absolutePath, "utf8");
-    if (contents.length === 0) return 0;
-    return contents.split(/\r?\n/u).length;
-  } catch {
-    return 0;
-  }
-}
-function observeWorkingTreeDiff(input) {
-  try {
-    git(input.repositoryRoot, ["rev-parse", "--is-inside-work-tree"]);
-  } catch {
-    return {
-      status: "not_applicable",
-      violations: [],
-      unavailableReason: "The project is not under git, so a working-tree diff cannot be observed."
-    };
-  }
-  const lines = /* @__PURE__ */ new Map();
-  const created = /* @__PURE__ */ new Set();
-  try {
-    for (const line of splitLines(git(input.repositoryRoot, ["diff", "--numstat", input.baseGitSha, "--"]))) {
-      const [added, deleted, ...rest] = line.split("	");
-      const filePath = toPosix(rest.join("	"));
-      if (filePath.length === 0) continue;
-      const count = (Number.parseInt(added ?? "", 10) || 0) + (Number.parseInt(deleted ?? "", 10) || 0);
-      lines.set(filePath, (lines.get(filePath) ?? 0) + count);
-    }
-    for (const line of splitLines(git(input.repositoryRoot, ["diff", "--name-status", input.baseGitSha, "--"]))) {
-      const [status2, ...rest] = line.split("	");
-      const filePath = toPosix(rest[rest.length - 1] ?? "");
-      if (filePath.length === 0) continue;
-      if (!lines.has(filePath)) lines.set(filePath, 0);
-      if (status2?.startsWith("A")) created.add(filePath);
-    }
-    for (const line of splitLines(git(input.repositoryRoot, ["status", "--porcelain", "--untracked-files=all"]))) {
-      const code = line.slice(0, 2);
-      const filePath = toPosix(line.slice(3).trim());
-      if (filePath.length === 0) continue;
-      if (code === "??") {
-        created.add(filePath);
-        lines.set(filePath, countUntrackedLines(path44.join(input.repositoryRoot, filePath)));
-      } else if (!lines.has(filePath)) {
-        lines.set(filePath, 0);
-      }
-    }
-  } catch (error51) {
-    return {
-      status: "unavailable",
-      violations: [],
-      unavailableReason: `The working tree diff could not be read: ${error51 instanceof Error ? error51.message : String(error51)}`
-    };
-  }
-  const files = [...lines.entries()].map(([filePath, linesChanged]) => ({
-    path: filePath,
-    linesChanged,
-    isNew: created.has(filePath),
-    contentSha256: hashFileContent(path44.join(input.repositoryRoot, filePath))
-  }));
-  return {
-    status: "clean",
-    violations: [],
-    observation: summarizeObservation(files, input.baseGitSha)
-  };
-}
-function pathIsCoveredBy(filePath, scopeEntry) {
-  if (scopeEntry === ".") return true;
-  const normalized = toPosix(scopeEntry).replace(/\/+$/u, "");
-  if (normalized.length === 0) return true;
-  return filePath === normalized || filePath.startsWith(`${normalized}/`);
-}
-function coveredByAny(filePath, entries) {
-  return entries.some((entry) => pathIsCoveredBy(filePath, entry));
-}
-function reconcileDiff(input) {
-  const violations = [];
-  const harnessPaths = input.harnessPaths ?? [];
-  const attributable = summarizeObservation(
-    input.observation.files.filter((file2) => !coveredByAny(file2.path, harnessPaths)),
-    input.observation.baseGitSha
-  );
-  const { changedFiles, newFiles, linesChanged } = attributable;
-  const { write, budget } = input.scope;
-  const forbidden = [...input.scope.forbidden, ...input.alwaysForbidden ?? []];
-  const forbiddenHits = changedFiles.filter((filePath) => coveredByAny(filePath, forbidden));
-  if (forbiddenHits.length > 0) {
-    violations.push({
-      code: "forbidden_path_touched",
-      message: `The run modified ${forbiddenHits.length} path(s) the task contract forbids.`,
-      paths: forbiddenHits
-    });
-  }
-  const outOfScope = changedFiles.filter(
-    (filePath) => !coveredByAny(filePath, write) && !coveredByAny(filePath, forbidden)
-  );
-  if (outOfScope.length > 0) {
-    violations.push({
-      code: "out_of_scope_write",
-      message: `The run modified ${outOfScope.length} path(s) outside the task contract write scope.`,
-      paths: outOfScope
-    });
-  }
-  if (changedFiles.length > budget.maxFilesChanged) {
-    violations.push({
-      code: "budget_files_exceeded",
-      message: `The run changed ${changedFiles.length} files; the contract budget allows ${budget.maxFilesChanged}.`,
-      paths: []
-    });
-  }
-  if (linesChanged > budget.maxLinesChanged) {
-    violations.push({
-      code: "budget_lines_exceeded",
-      message: `The run changed ${linesChanged} lines; the contract budget allows ${budget.maxLinesChanged}.`,
-      paths: []
-    });
-  }
-  if (newFiles.length > budget.maxNewFiles) {
-    violations.push({
-      code: "budget_new_files_exceeded",
-      message: `The run created ${newFiles.length} files; the contract budget allows ${budget.maxNewFiles}.`,
-      paths: newFiles
-    });
-  }
-  return violations;
-}
-function diffDelta(before, after) {
-  const priorByPath = new Map(before.files.map((file2) => [file2.path, file2]));
-  const attributable = after.files.filter((file2) => {
-    const prior = priorByPath.get(file2.path);
-    if (prior === void 0) return true;
-    if (prior.contentSha256 === void 0 || file2.contentSha256 === void 0) return true;
-    return prior.contentSha256 !== file2.contentSha256;
-  });
-  return summarizeObservation(
-    attributable.map((file2) => {
-      const prior = priorByPath.get(file2.path);
-      if (prior === void 0) return file2;
-      const additional = file2.linesChanged - prior.linesChanged;
-      return {
-        ...file2,
-        linesChanged: additional > 0 ? additional : file2.linesChanged,
-        // A file that already existed as a pre-existing new file is not newly
-        // created by this run.
-        isNew: file2.isNew && !prior.isNew
-      };
-    }),
-    after.baseGitSha
-  );
-}
-function reconcileTaskDiff(input) {
-  const observed = observeWorkingTreeDiff(input);
-  if (observed.observation === void 0) return observed;
-  const delta = input.before === void 0 ? observed.observation : diffDelta(input.before, observed.observation);
-  const harnessPaths = input.harnessPaths ?? [];
-  const attributable = summarizeObservation(
-    delta.files.filter((file2) => !coveredByAny(file2.path, harnessPaths)),
-    delta.baseGitSha
-  );
-  const violations = reconcileDiff({
-    observation: attributable,
-    scope: input.scope,
-    ...input.alwaysForbidden === void 0 ? {} : { alwaysForbidden: input.alwaysForbidden }
-  });
-  return {
-    status: violations.length === 0 ? "clean" : "violated",
-    observation: attributable,
-    violations
-  };
-}
-
-// packages/cli/src/workflow/project-files.ts
-import { lstatSync, readdirSync } from "node:fs";
-import path45 from "node:path";
-function listProjectFiles(repositoryRoot, relativeRoot) {
-  const results = [];
-  try {
-    const rootStat = lstatSync(path45.join(repositoryRoot, relativeRoot));
-    if (rootStat.isSymbolicLink()) {
-      return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
-    }
-    if (!rootStat.isDirectory()) {
-      return [{ path: relativeRoot, kind: "file", size: rootStat.size }];
-    }
-  } catch {
-    return [];
-  }
-  const walk2 = (relative) => {
-    let entries;
-    try {
-      entries = readdirSync(path45.join(repositoryRoot, relative), { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const child = `${relative}/${entry.name}`;
-      if (entry.isSymbolicLink()) {
-        results.push({ path: child, kind: "symlink", size: void 0 });
-        continue;
-      }
-      if (entry.isDirectory()) {
-        walk2(child);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      let size;
-      try {
-        size = lstatSync(path45.join(repositoryRoot, child)).size;
-      } catch {
-        size = void 0;
-      }
-      results.push({ path: child, kind: "file", size });
-    }
-  };
-  walk2(relativeRoot);
-  return results.sort((left, right) => left.path.localeCompare(right.path));
-}
-
-// packages/cli/src/workflow/guarded-execution.ts
-function restoreFailureReason(error51, kind) {
-  const code = error51?.code;
-  const action = kind === void 0 ? "removing the path the run created" : `restoring the ${kind} entry`;
-  if (kind === "symlink" && (code === "EPERM" || code === "EACCES")) {
-    return process.platform === "win32" ? `recreating the symlink requires symlink-creation privilege (${code}); enable Developer Mode or run elevated` : `recreating the symlink was refused by the filesystem (${code})`;
-  }
-  if (code !== void 0) return `${code} while ${action}`;
-  return error51 instanceof Error ? `${error51.message} while ${action}` : `${action} failed`;
-}
-var MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
-function isHarnessPath(relative, harnessPaths) {
-  return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
-}
-function isInsideControlPlane(relative) {
-  const folded = relative.toLowerCase();
-  const root = LEGION_PROJECT_ROOT.toLowerCase();
-  return folded === root || folded.startsWith(`${root}/`);
-}
-function digestOf(absolute) {
-  try {
-    return createHash25("sha256").update(readFileSync3(absolute)).digest("hex");
-  } catch {
-    return void 0;
-  }
-}
-function readTarget(absolute) {
-  try {
-    return readlinkSync(absolute);
-  } catch {
-    return void 0;
-  }
-}
-function readTargetKind(linkPath, target) {
-  if (target === void 0) return void 0;
-  try {
-    const resolved = path46.isAbsolute(target) ? target : path46.resolve(path46.dirname(linkPath), target);
-    return statSync2(resolved).isDirectory() ? "dir" : "file";
-  } catch {
-    return void 0;
-  }
-}
-function stagedProtectedPaths(repositoryRoot) {
-  try {
-    const output = execFileSync5(
-      "git",
-      ["-C", repositoryRoot, "diff", "--cached", "--name-only", "--", LEGION_PROJECT_ROOT],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
-    );
-    return new Set(
-      output.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0)
-    );
-  } catch {
-    return /* @__PURE__ */ new Set();
-  }
-}
-function snapshotProtectedState(input) {
-  const entries = /* @__PURE__ */ new Map();
-  for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
-    if (isHarnessPath(entry.path, input.harnessPaths)) continue;
-    const absolute = path46.join(input.repositoryRoot, entry.path);
-    if (entry.kind === "symlink") {
-      const snapshotTarget = readTarget(absolute);
-      entries.set(entry.path, {
-        kind: "symlink",
-        target: snapshotTarget,
-        targetKind: readTargetKind(absolute, snapshotTarget)
-      });
-      continue;
-    }
-    if (entry.size !== void 0 && entry.size > MAX_SNAPSHOT_BYTES) {
-      entries.set(entry.path, { kind: "oversized", sha256: digestOf(absolute) });
-      continue;
-    }
-    try {
-      entries.set(entry.path, { kind: "file", bytes: readFileSync3(absolute) });
-    } catch {
-      entries.set(entry.path, { kind: "oversized", sha256: void 0 });
-    }
-  }
-  return { entries, staged: stagedProtectedPaths(input.repositoryRoot) };
-}
-function classifyAcceptancePath(repositoryRoot, relative, harnessPaths) {
-  if (!artifactPathSchema.safeParse(relative).success) {
-    return { kind: "unreadable", reason: "is not a repository-relative path" };
-  }
-  if (relative.includes(":")) {
-    return { kind: "unreadable", reason: "names a Windows alternate data stream" };
-  }
-  if (isInsideControlPlane(relative)) {
-    return { kind: "unreadable", reason: `is inside ${LEGION_PROJECT_ROOT}, which is restored rather than reported` };
-  }
-  if (isHarnessPath(relative, harnessPaths)) {
-    return { kind: "unreadable", reason: "is written by the harness for this run" };
-  }
-  const absolute = path46.join(repositoryRoot, relative);
-  const contained = path46.relative(repositoryRoot, absolute);
-  if (contained.startsWith("..") || path46.isAbsolute(contained)) {
-    return { kind: "unreadable", reason: "resolves outside the repository" };
-  }
-  let stat10;
-  try {
-    stat10 = lstatSync2(absolute);
-  } catch (error51) {
-    const code = error51.code;
-    if (code === "ENOENT" || code === "ENOTDIR") return { kind: "absent" };
-    return { kind: "unreadable", reason: `could not be inspected (${code ?? "unknown error"})` };
-  }
-  if (stat10.isSymbolicLink()) return { kind: "symlink", target: readTarget(absolute) };
-  if (stat10.isDirectory()) return { kind: "directory" };
-  if (!stat10.isFile()) return { kind: "unreadable", reason: "is not a regular file" };
-  const sha2564 = digestOf(absolute);
-  if (sha2564 === void 0) return { kind: "unreadable", reason: "could not be read" };
-  return { kind: "file", sha256: sha2564 };
-}
-function snapshotAcceptancePaths(input) {
-  const entries = /* @__PURE__ */ new Map();
-  for (const relative of input.paths) {
-    if (entries.has(relative)) continue;
-    const anchored = input.anchors.get(relative);
-    entries.set(
-      relative,
-      anchored ?? classifyAcceptancePath(input.repositoryRoot, relative, input.harnessPaths)
-    );
-  }
-  return entries;
-}
-function sameAcceptanceState(before, after) {
-  if (before.kind === "file" && after.kind === "file") return before.sha256 === after.sha256;
-  if (before.kind === "symlink" && after.kind === "symlink") {
-    return before.target !== void 0 && before.target === after.target;
-  }
-  return before.kind === "directory" && after.kind === "directory";
-}
-function acceptanceNote(before, after) {
-  if (before.kind === "absent") return "created";
-  if (after.kind === "absent") return "deleted";
-  if (before.kind !== after.kind) return "kind-changed";
-  if (before.kind === "symlink") return "retargeted";
-  return "modified";
-}
-function observeAcceptancePaths(input) {
-  const observations = [];
-  for (const [relative, before] of input.before) {
-    const after = classifyAcceptancePath(input.repositoryRoot, relative, input.harnessPaths);
-    if (before.kind === "absent" && after.kind === "absent") {
-      observations.push({ path: relative, before, after, verdict: "unknown" });
-      continue;
-    }
-    if (before.kind === "unreadable" || after.kind === "unreadable" || before.kind === "directory" || after.kind === "directory") {
-      observations.push({ path: relative, before, after, verdict: "unknown" });
-      continue;
-    }
-    if (sameAcceptanceState(before, after)) {
-      observations.push({ path: relative, before, after, verdict: "unchanged" });
-      continue;
-    }
-    const note = acceptanceNote(before, after);
-    observations.push({
-      path: relative,
-      before,
-      after,
-      verdict: "changed",
-      ...note === void 0 ? {} : { note }
-    });
-  }
-  return observations.sort((left, right) => left.path.localeCompare(right.path));
-}
-function protectedPathsTouched(input) {
-  const touched = /* @__PURE__ */ new Set();
-  const current = new Map(
-    listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT).filter((entry) => !isHarnessPath(entry.path, input.harnessPaths)).map((entry) => [entry.path, entry])
-  );
-  for (const [relative, before] of input.state.entries) {
-    const now = current.get(relative);
-    if (now === void 0) {
-      touched.add(relative);
-      continue;
-    }
-    const absolute = path46.join(input.repositoryRoot, relative);
-    const nowIsSymlink = now.kind === "symlink";
-    if (before.kind === "symlink" || nowIsSymlink) {
-      if (before.kind !== "symlink" || !nowIsSymlink) {
-        touched.add(relative);
-        continue;
-      }
-      if (readTarget(absolute) !== before.target) touched.add(relative);
-      continue;
-    }
-    if (before.kind === "oversized") {
-      if (digestOf(absolute) !== before.sha256) touched.add(relative);
-      continue;
-    }
-    try {
-      if (!before.bytes.equals(readFileSync3(absolute))) touched.add(relative);
-    } catch {
-      touched.add(relative);
-    }
-  }
-  for (const relative of current.keys()) {
-    if (!input.state.entries.has(relative)) touched.add(relative);
-  }
-  return [...touched].sort();
-}
-function restoreProtectedIndex(input) {
-  if (input.paths.length === 0) return [];
-  const run = (args) => {
-    try {
-      execFileSync5("git", ["-C", input.repositoryRoot, ...args], { stdio: "ignore" });
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  const failures = [];
-  if (!run(["reset", "--quiet", input.baseGitSha, "--", ...input.paths])) {
-    failures.push(...input.paths);
-  }
-  const restage = input.paths.filter((relative) => input.state.staged.has(relative));
-  if (restage.length > 0 && !run(["add", "--", ...restage])) {
-    failures.push(...restage);
-  }
-  return failures;
-}
-function protectedPathsCommittedSince(input) {
-  try {
-    const output = execFileSync5(
-      "git",
-      [
-        "-C",
-        input.repositoryRoot,
-        "diff",
-        "--name-only",
-        input.baseGitSha,
-        "HEAD",
-        "--",
-        LEGION_PROJECT_ROOT
-      ],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
-    );
-    return output.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
-  } catch {
-    return [];
-  }
-}
-function currentHead(repositoryRoot) {
-  try {
-    return execFileSync5("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim();
-  } catch {
-    return void 0;
-  }
-}
-function restoreProtectedFiles(input) {
-  const restored = [];
-  const unrestored = [];
-  const rootTouched = input.paths.includes(LEGION_PROJECT_ROOT);
-  const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
-  const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
-  for (const relative of ordered) {
-    const absolute = path46.join(input.repositoryRoot, relative);
-    const before = input.state.entries.get(relative);
-    if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
-      restored.push(relative);
-      continue;
-    }
-    try {
-      if (before === void 0) {
-        rmSync3(absolute, { force: true, recursive: true });
-        restored.push(relative);
-        continue;
-      }
-      if (before.kind === "file") {
-        rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path46.dirname(absolute), { recursive: true });
-        writeFileSync2(absolute, before.bytes);
-        restored.push(relative);
-        continue;
-      }
-      if (before.kind === "symlink" && before.target !== void 0) {
-        rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path46.dirname(absolute), { recursive: true });
-        symlinkSync2(before.target, absolute, before.targetKind ?? "file");
-        restored.push(relative);
-        continue;
-      }
-      unrestored.push({
-        path: relative,
-        reason: before.kind === "symlink" ? "the pre-run symlink target could not be read, so the link cannot be recreated" : `no restore is defined for a snapshotted ${before.kind} entry`
-      });
-    } catch (error51) {
-      unrestored.push({ path: relative, reason: restoreFailureReason(error51, before?.kind) });
-    }
-  }
-  const indexFailures = restoreProtectedIndex({
-    repositoryRoot: input.repositoryRoot,
-    baseGitSha: input.baseGitSha,
-    state: input.state,
-    paths: restored
-  });
-  const stillStaged = new Set(indexFailures);
-  return {
-    restored: restored.filter((entry) => !stillStaged.has(entry)),
-    unrestored: [
-      ...unrestored,
-      ...indexFailures.map((entry) => ({
-        path: entry,
-        reason: "the working tree was restored but the index entry could not be reset"
-      }))
-    ]
-  };
-}
-function acceptanceUnestablishedReason(input) {
-  if (input.acceptancePaths === void 0 || input.acceptancePaths.length === 0) return void 0;
-  if (input.acceptanceBaseline.status === "established") return void 0;
-  return input.acceptanceBaseline.reason ?? "What this change's earlier runs recorded about its protected acceptance paths could not be read back, so this run has nothing established to compare against.";
-}
-async function runGuardedExecution(input) {
-  const before = observeWorkingTreeDiff({
-    repositoryRoot: input.repositoryRoot,
-    baseGitSha: input.baseGitSha
-  }).observation;
-  const state = snapshotProtectedState({
-    repositoryRoot: input.repositoryRoot,
-    harnessPaths: input.harnessPaths
-  });
-  const acceptanceUnestablished = acceptanceUnestablishedReason(input);
-  const acceptanceBefore = input.acceptancePaths === void 0 || acceptanceUnestablished !== void 0 ? void 0 : snapshotAcceptancePaths({
-    repositoryRoot: input.repositoryRoot,
-    paths: input.acceptancePaths,
-    harnessPaths: input.harnessPaths,
-    anchors: input.acceptanceBaseline.states
-  });
-  let result;
-  let thrown;
-  try {
-    result = await input.run();
-    if (input.afterRun !== void 0) await input.afterRun();
-  } catch (error51) {
-    thrown = error51;
-  }
-  const touchedProtected = protectedPathsTouched({
-    repositoryRoot: input.repositoryRoot,
-    state,
-    harnessPaths: input.harnessPaths
-  });
-  const containment = touchedProtected.length === 0 ? { restored: [], unrestored: [] } : restoreProtectedFiles({
-    repositoryRoot: input.repositoryRoot,
-    baseGitSha: input.baseGitSha,
-    state,
-    paths: touchedProtected
-  });
-  const reconciliation = input.task.completion.diffReconciliation.required ? reconcileTaskDiff({
-    repositoryRoot: input.repositoryRoot,
-    baseGitSha: input.baseGitSha,
-    scope: input.task.scope,
-    harnessPaths: input.harnessPaths,
-    alwaysForbidden: [LEGION_PROJECT_ROOT],
-    ...before === void 0 ? {} : { before }
-  }) : void 0;
-  const reasons = [];
-  if (thrown !== void 0) {
-    reasons.push(`The run failed: ${thrown instanceof Error ? thrown.message : String(thrown)}`);
-  }
-  if (touchedProtected.length > 0) {
-    const note = containment.unrestored.length === 0 ? `Restored ${containment.restored.length} protected path(s) to their pre-run state.` : `Could not restore ${containment.unrestored.map((entry) => `${entry.path} (${entry.reason})`).join(", ")}; inspect the worktree before rerunning.`;
-    reasons.push(
-      `The run modified ${touchedProtected.length} protected control artifact(s): ${touchedProtected.join(", ")}. ${note}`
-    );
-  }
-  const committedProtected = protectedPathsCommittedSince({
-    repositoryRoot: input.repositoryRoot,
-    baseGitSha: input.baseGitSha
-  });
-  const headAfter = currentHead(input.repositoryRoot);
-  if (committedProtected.length > 0 && headAfter !== void 0 && headAfter !== input.baseGitSha) {
-    reasons.push(
-      `The run committed changes to ${committedProtected.length} protected control artifact(s): ${committedProtected.join(", ")}. HEAD is now ${headAfter} rather than ${input.baseGitSha}; the working tree and index were restored, but that commit still contains the change.`
-    );
-  }
-  if (reconciliation?.status === "unavailable") {
-    reasons.push(
-      `The run could not be reconciled against its task contract, so it is not proven in contract. ${reconciliation.unavailableReason ?? ""}`.trim()
-    );
-  }
-  if (reconciliation?.status === "violated") {
-    reasons.push(...reconciliation.violations.map((violation) => violation.message));
-  }
-  const inContract = reasons.length === 0;
-  const acceptancePaths = acceptanceBefore === void 0 ? {
-    status: "unestablished",
-    observations: [],
-    reason: acceptanceUnestablished ?? "The oracles of this change would not read as a complete set, so which acceptance tests its runs must not weaken is unestablished."
-  } : {
-    status: "established",
-    observations: observeAcceptancePaths({
-      repositoryRoot: input.repositoryRoot,
-      harnessPaths: input.harnessPaths,
-      before: acceptanceBefore
-    })
-  };
-  if (result === void 0) {
-    result = {
-      ok: false,
-      status: "failed",
-      summary: reasons.join(" "),
-      filesChanged: [],
-      commandsRun: [],
-      findings: []
-    };
-  }
-  return {
-    result,
-    ...reconciliation === void 0 ? {} : { reconciliation },
-    inContract,
-    restored: containment.restored,
-    unrestored: containment.unrestored,
-    ...inContract ? {} : { blockedReason: reasons.join(" ") },
-    acceptancePaths
-  };
 }
 
 // packages/cli/src/commands/workflow/build.ts
@@ -52606,26 +52649,42 @@ async function submitReview(context, input) {
       artifactPath: promptArtifactPath,
       text: prompt
     });
-    const result = await adapterForKind(input.executor).run({
+    const guarded2 = await runGuardedExecution({
       repositoryRoot: context.repositoryRoot,
-      changeId: input.taskgraph.document.changeId,
-      runId,
       task,
-      mode: "review",
-      executor: input.executor,
-      readOnly: true,
-      prompt,
-      contextPackArtifactPath,
-      contextPackAbsolutePath,
-      promptArtifactPath,
-      promptAbsolutePath,
-      resultArtifactPath,
-      resultAbsolutePath,
-      rawLogArtifactPath,
-      rawLogAbsolutePath,
-      redactedLogArtifactPath,
-      redactedLogAbsolutePath
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      harnessPaths: [`.legion/project/changes/${input.taskgraph.document.changeId}/reviews/${reviewId}`],
+      acceptancePaths: [],
+      acceptanceBaseline: { status: "established", states: /* @__PURE__ */ new Map() },
+      run: () => adapterForKind(input.executor).run({
+        repositoryRoot: context.repositoryRoot,
+        changeId: input.taskgraph.document.changeId,
+        runId,
+        task,
+        mode: "review",
+        executor: input.executor,
+        readOnly: true,
+        prompt,
+        contextPackArtifactPath,
+        contextPackAbsolutePath,
+        promptArtifactPath,
+        promptAbsolutePath,
+        resultArtifactPath,
+        resultAbsolutePath,
+        rawLogArtifactPath,
+        rawLogAbsolutePath,
+        redactedLogArtifactPath,
+        redactedLogAbsolutePath
+      })
     });
+    const result = blockedResultFromGuardedExecution(guarded2);
+    if (!guarded2.inContract) {
+      await writeProjectExecutionResult({
+        repositoryRoot: context.repositoryRoot,
+        artifactPath: resultArtifactPath,
+        result
+      });
+    }
     const createdAt = currentUtcTimestamp();
     const review = reviewDecisionForExecution({
       reviewId,

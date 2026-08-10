@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -418,7 +419,7 @@ test("workflow codex executor times out with a blocked result", async () => {
 // Installs a fake `claude` on PATH whose stdout is `stdout` verbatim. The shim
 // is a node script behind a platform launcher so the fixture JSON never has to
 // survive batch-file quoting.
-async function installClaudeShim(root, { stdout = "", exitCode = 0, sleepMs = 0 } = {}) {
+async function installClaudeShim(root, { stdout = "", exitCode = 0, sleepMs = 0, writePath, writeContent = "" } = {}) {
   const binDir = path.join(root, "bin");
   await mkdir(binDir, { recursive: true });
   const implPath = path.join(binDir, "claude-impl.mjs");
@@ -427,6 +428,9 @@ async function installClaudeShim(root, { stdout = "", exitCode = 0, sleepMs = 0 
     [
       "const sleepMs = " + String(sleepMs) + ";",
       "const stdout = " + JSON.stringify(stdout) + ";",
+      "const writePath = " + JSON.stringify(writePath) + ";",
+      "const writeContent = " + JSON.stringify(writeContent) + ";",
+      "if (writePath !== undefined) { const { writeFile } = await import(\"node:fs/promises\"); await writeFile(writePath, writeContent, \"utf8\"); }",
       "await new Promise((resolve) => { setTimeout(resolve, sleepMs); });",
       "if (stdout.length > 0) process.stdout.write(stdout);",
       "process.exit(" + String(exitCode) + ");"
@@ -520,7 +524,7 @@ test("workflow claude executor args match the claude print surface", async () =>
     "--permission-mode",
     "bypassPermissions",
     "--disallowedTools",
-    "Edit Write NotebookEdit"
+    "Edit Write NotebookEdit Bash"
   ]);
 
   const writeArgs = adapters.claudeExecArgs({ readOnly: false });
@@ -2627,6 +2631,63 @@ test("legion start reports friendly usage and supports dry-run", async () => {
     assert.equal(statusPayload.workflowState.stage, "uninitialized");
     assert.equal(statusPayload.nextAction.command, "legion start");
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("read-only guidance runs contain Claude writes outside the artifact scope", async (t) => {
+  const guidance = await importWorkflowModule("guidance-run");
+  const root = await tempRepo();
+  const previousPath = process.env.PATH;
+  const unauthorizedPath = path.join(root, "unauthorized.txt");
+  try {
+    git(root, ["init", "--initial-branch=main"]);
+    git(root, ["config", "user.email", "test@example.com"]);
+    git(root, ["config", "user.name", "Test"]);
+    await writeFile(path.join(root, "README.md"), "before\n", "utf8");
+    git(root, ["add", "README.md"]);
+    git(root, ["commit", "-m", "initial"]);
+
+    const binDir = await installClaudeShim(root, {
+      stdout: claudeEnvelope({ result: JSON.stringify({ status: "succeeded", summary: "Done." }) }),
+      writePath: unauthorizedPath,
+      writeContent: "must not survive\n"
+    });
+    process.env.PATH = `${binDir}${path.delimiter}${previousPath ?? ""}`;
+
+    const paths = await guidance.createGuidanceRunPaths({
+      repositoryRoot: root,
+      workflow: "advise",
+      slugSource: "unsafe guidance",
+      createdAt: "2026-06-22T12:00:00.000Z"
+    });
+    const executed = await guidance.runGuidanceExecutor({
+      context: {
+        args: { options: new Map() },
+        repositoryRoot: root,
+        json: true,
+        noColor: true,
+        cwd: root
+      },
+      paths,
+      workflow: "advise",
+      topic: "unsafe guidance",
+      prompt: "Review the repository.",
+      readOnly: true,
+      explicitExecutor: "claude"
+    });
+
+    assert.equal("exitCode" in executed, false);
+    assert.equal(executed.result.ok, false);
+    assert.equal(executed.result.status, "blocked");
+    assert.match(executed.result.summary, /protected|contract|reconciliation/i);
+    // The guarded harness blocks the result and leaves ordinary worktree
+    // changes for the operator to inspect; its automatic restoration boundary
+    // is the Legion control plane, not arbitrary source files.
+    assert.equal(existsSync(unauthorizedPath), true);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
     await rm(root, { recursive: true, force: true });
   }
 });

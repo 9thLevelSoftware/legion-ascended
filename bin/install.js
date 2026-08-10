@@ -2462,7 +2462,10 @@ async function update(runtimeKey, scope, verify = false, legacyPrompts = null) {
     console.log('\nRe-installing...\n');
     // An update keeps whatever surface the user installed, unless this run
     // explicitly asked for the prompt bundle.
-    const keepLegacy = legacyPrompts === true ? true : manifest.legacyPrompts === true;
+    // Manifests written before the v9 prompt-bundle flag always represented the
+    // legacy surface. Preserve that historical default; only an explicit false
+    // opts an installation into the CLI-only surface.
+    const keepLegacy = legacyPrompts === true || manifest.legacyPrompts !== false;
     install(runtimeKey, scope, verify, false, keepLegacy);
   } catch (err) {
     throw new Error(`Update check failed: ${err.message}\nYour installed version is still functional.`);

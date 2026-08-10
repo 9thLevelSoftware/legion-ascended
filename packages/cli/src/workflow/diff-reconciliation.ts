@@ -181,6 +181,18 @@ export function observeWorkingTreeDiff(input: {
     };
   }
 
+  // `git init` creates a work tree before the first commit exists. In that
+  // state the resolver supplies the all-zero SHA, but `git diff BASE` cannot
+  // read it. Treat this like a non-git project: there is no baseline to
+  // reconcile against, but that environmental limitation is not a violation.
+  if (/^0{40}$/u.test(input.baseGitSha)) {
+    return {
+      status: "not_applicable",
+      violations: [],
+      unavailableReason: "The repository has no commit yet, so a working-tree diff cannot be reconciled."
+    };
+  }
+
   const lines = new Map<string, number>();
   const created = new Set<string>();
 

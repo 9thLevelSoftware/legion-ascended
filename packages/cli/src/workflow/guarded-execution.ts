@@ -231,6 +231,32 @@ export interface GuardedExecutionOutcome {
   readonly acceptancePaths: AcceptancePathReport;
 }
 
+/**
+ * Turn a containment or reconciliation failure into the result the caller must
+ * persist and expose. Returning the adapter's success result after the harness
+ * blocked a run would let a read-only caller publish a green workflow record.
+ */
+export function blockedResultFromGuardedExecution(input: GuardedExecutionOutcome): ExecutionResult {
+  if (input.inContract) return input.result;
+  const reason = input.blockedReason ?? "The guarded execution did not remain within its contract.";
+  return {
+    ...input.result,
+    ok: false,
+    status: "blocked",
+    summary: reason,
+    filesChanged: [],
+    findings: [
+      ...input.result.findings,
+      {
+        id: "guarded-execution-blocked",
+        title: "Guarded execution blocked",
+        body: reason,
+        severity: "blocking"
+      }
+    ]
+  };
+}
+
 const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 
 /**

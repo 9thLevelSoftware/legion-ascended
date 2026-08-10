@@ -59,7 +59,7 @@ import { DOMAIN_REVIEW_GATE_DOMAINS, isDomainReviewSatisfying } from "../../work
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
 import { loadWorkflowProject } from "../../workflow/context.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
-import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionFinding, type ExecutionResult, type ExecutionReviewVerdicts } from "../../workflow/executor/index.js";
+import { adapterForKind, selectExecutionAdapterKind, writeProjectExecutionResult, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionFinding, type ExecutionResult, type ExecutionReviewVerdicts } from "../../workflow/executor/index.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import {
   absoluteArtifactPath,
@@ -73,7 +73,7 @@ import {
 import { latestEvidenceEntries } from "../../workflow/evidence-selection.js";
 import { acceptanceBaselineFromEvidence } from "../../workflow/acceptance-baseline.js";
 import { loadOracleFacts } from "../../workflow/change-planes.js";
-import { runGuardedExecution } from "../../workflow/guarded-execution.js";
+import { blockedResultFromGuardedExecution, runGuardedExecution } from "../../workflow/guarded-execution.js";
 import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
 import { findLatestWorkflowChangeId, listWorkflowChanges } from "../../workflow/state.js";
 import { handleBuildWorkflow } from "./build.js";
@@ -692,26 +692,42 @@ async function submitReview(context: CliContext, input: SubmitReviewInput): Prom
       text: prompt
     });
 
-    const result = await adapterForKind(input.executor).run({
+    const guarded = await runGuardedExecution({
       repositoryRoot: context.repositoryRoot,
-      changeId: input.taskgraph.document.changeId,
-      runId,
       task,
-      mode: "review",
-      executor: input.executor,
-      readOnly: true,
-      prompt,
-      contextPackArtifactPath,
-      contextPackAbsolutePath,
-      promptArtifactPath,
-      promptAbsolutePath,
-      resultArtifactPath,
-      resultAbsolutePath,
-      rawLogArtifactPath,
-      rawLogAbsolutePath,
-      redactedLogArtifactPath,
-      redactedLogAbsolutePath
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      harnessPaths: [`.legion/project/changes/${input.taskgraph.document.changeId}/reviews/${reviewId}`],
+      acceptancePaths: [],
+      acceptanceBaseline: { status: "established", states: new Map() },
+      run: () => adapterForKind(input.executor).run({
+        repositoryRoot: context.repositoryRoot,
+        changeId: input.taskgraph.document.changeId,
+        runId,
+        task,
+        mode: "review",
+        executor: input.executor,
+        readOnly: true,
+        prompt,
+        contextPackArtifactPath,
+        contextPackAbsolutePath,
+        promptArtifactPath,
+        promptAbsolutePath,
+        resultArtifactPath,
+        resultAbsolutePath,
+        rawLogArtifactPath,
+        rawLogAbsolutePath,
+        redactedLogArtifactPath,
+        redactedLogAbsolutePath
+      })
     });
+    const result = blockedResultFromGuardedExecution(guarded);
+    if (!guarded.inContract) {
+      await writeProjectExecutionResult({
+        repositoryRoot: context.repositoryRoot,
+        artifactPath: resultArtifactPath,
+        result
+      });
+    }
 
     const createdAt = currentUtcTimestamp();
     const review = reviewDecisionForExecution({
