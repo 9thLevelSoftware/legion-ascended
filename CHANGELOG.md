@@ -2,6 +2,12 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.0.2] - GA-pending
+
+### Fixed
+- Include the v9 worker bundles and their prompt manifests in the published
+  npm package so the installed CLI can load its default worker registry.
+
 ## [9.0.1] - GA-pending
 
 ### Added
