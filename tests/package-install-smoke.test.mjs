@@ -32,6 +32,8 @@ test("npm package dry-run includes workflow CLI and packaged quickstart", async 
   assert.equal(files.has("docs/site/main.js"), true);
   assert.equal(files.has("docs/site/assets/legion-ascended-mark.svg"), true);
   assert.equal(files.has("adapters/codex-cli.md"), true);
+  assert.equal(files.has("bundles/index.json"), true);
+  assert.equal(files.has("bundles/explorer.md"), true);
 });
 
 test("package entrypoint exposes workflow-first help", async () => {

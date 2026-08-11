@@ -49,6 +49,7 @@ export const CLI_RUNTIME_PACKAGE_FILES = Object.freeze([
 ]);
 
 export const CLI_RUNTIME_PACKAGE_PREFIXES = Object.freeze([
+  "bundles/",
   "evals/baseline/scenarios/",
   "evals/baseline/schema/",
   "evals/fixtures/public/",
