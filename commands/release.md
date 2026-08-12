@@ -29,9 +29,11 @@ Three things in this repository carry the words "release observation", and it is
 
 <context>
 Change state comes from the CLI, not from files read directly.
+Run via Bash — `legion` is the npm binary, not a Cargo crate:
 
     legion status --json
 
+If `legion` is not found, run `npx @9thlevelsoftware/legion` instead.
 </context>
 
 <process>

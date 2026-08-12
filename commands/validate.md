@@ -15,9 +15,12 @@ skills/workflow-common-core/SKILL.md
 
 <context>
 Validation comes from the CLI, not from files read directly.
+Run via Bash — `legion` is the npm binary, not a Cargo crate:
 
     legion validate --json
     legion doctor --json
+
+If `legion` is not found, run `npx @9thlevelsoftware/legion` instead.
 
 `legion doctor` is the superset: the same checks plus the shallow operational
 paths. Neither writes anything.

@@ -16,8 +16,12 @@ skills/codebase-mapper/SKILL.md
 
 <context>
 The CLI owns the artifact set and reports where it wrote them.
+Run this command via Bash — it is the npm `legion` binary, not a Cargo crate:
 
     legion map --json
+
+If the command is not found, run `npx @9thlevelsoftware/legion map --json`.
+Do NOT skip this step or assume the verb is missing without executing it.
 
 `legion map --refresh --json` returns `mapArtifactPath`; the run directory beside
 it holds `codebase.md`, `index.jsonl`, `symbols.json`, `search.md` and

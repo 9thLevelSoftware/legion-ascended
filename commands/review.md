@@ -22,9 +22,11 @@ skills/code-polish/SKILL.md
 
 <context>
 Project state comes from the CLI, not from files read directly.
+Run via Bash — `legion` is the npm binary, not a Cargo crate:
 
     legion status --json
 
+If `legion` is not found, run `npx @9thlevelsoftware/legion` instead.
 </context>
 
 <authority>

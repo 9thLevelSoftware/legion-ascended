@@ -22,9 +22,12 @@ skills/phase-decomposer/SKILL.md
 
 <context>
 Project state comes from the CLI, not from files read directly.
+Run via Bash — `legion` is the npm binary, not a Cargo crate:
 
     legion status --json
     legion validate --json
+
+If `legion` is not found, run `npx @9thlevelsoftware/legion` instead.
 
 `workflowState`, `requirements` and `traceability` carry what planning needs to
 know. Reading project files yourself reintroduces a second source of truth.

@@ -22,8 +22,11 @@ skills/workflow-common-github/SKILL.md
 
 <context>
 Project state comes from the CLI, not from files read directly.
+Run via Bash — `legion` is the npm binary, not a Cargo crate:
 
     legion status --json
+
+If `legion` is not found, run `npx @9thlevelsoftware/legion` instead.
 
 `workflowState.projectId` and `workflowState.stage` are what a quick task needs
 to know about the project. Reading project files yourself reintroduces a second
