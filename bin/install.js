@@ -1532,12 +1532,12 @@ function hasLegionFrontmatter(content) {
 // SECTION 6: Manifest Read/Write
 // ─────────────────────────────────────────────────────────────────────────────
 
-function writeManifest(paths, runtimeKey, agentFiles, scope, source, verified, promptFiles = [], nativeArtifacts = []) {
+function writeManifest(paths, runtimeKey, agentFiles, scope, source, verified, promptFiles = [], nativeArtifacts = [], versionOverride = null) {
   const pkg = readPackageJson();
   const runtime = RUNTIME_METADATA[runtimeKey];
   const manifest = {
     name: pkg.name,
-    version: pkg.version,
+    version: versionOverride || pkg.version,
     installedAt: new Date().toISOString(),
     runtime: runtimeKey,
     scope,
@@ -1629,13 +1629,14 @@ function printInstallPlan(runtimeKey, scope, verify, paths) {
   console.log('\nDry run only. No files were written.\n');
 }
 
-function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompts = false) {
+function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompts = false, versionOverride = null) {
   const home = resolveHome();
   const paths = resolvePaths(runtimeKey, scope, home, legacyPrompts);
   const src = resolveSourceRoot();
   const rt = RUNTIME_METADATA[runtimeKey];
   const sourceInfo = detectSourceProvenance(src.root);
   const pkg = readPackageJson();
+  const effectiveVersion = versionOverride || pkg.version;
 
   assertInstallSupported(runtimeKey, scope);
   printTierWarning(runtimeKey);
@@ -2118,7 +2119,7 @@ function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompt
 
   // ── Manifest ──
   console.log('\n=== Manifest ===');
-  writeManifest(paths, runtimeKey, installedAgents, scope, sourceInfo.source, verify, installedPromptFiles, nativeArtifacts);
+  writeManifest(paths, runtimeKey, installedAgents, scope, sourceInfo.source, verify, installedPromptFiles, nativeArtifacts, versionOverride);
   console.log(`  Written to ${paths.manifestFile}`);
 
   // ── Summary ──
@@ -2134,7 +2135,7 @@ function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompt
   console.log([
     '',
     '='.repeat(48),
-    `  Legion v${pkg.version} installed successfully!`,
+    `  Legion v${effectiveVersion} installed successfully!`,
     '',
     `  Runtime:  ${rt.label}`,
     ...bundleLines,
@@ -2476,7 +2477,7 @@ async function update(runtimeKey, scope, verify = false, legacyPrompts = null) {
     // legacy surface. Preserve that historical default; only an explicit false
     // opts an installation into the CLI-only surface.
     const keepLegacy = legacyPrompts === true || manifest.legacyPrompts !== false;
-    install(runtimeKey, scope, verify, false, keepLegacy);
+    install(runtimeKey, scope, verify, false, keepLegacy, targetVersion);
   } catch (err) {
     throw new Error(`Update check failed: ${err.message}\nYour installed version is still functional.`);
   }
