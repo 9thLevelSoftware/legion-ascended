@@ -2,6 +2,11 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.0.4] - GA-pending
+
+### Fixed
+- Report the correct version in the update banner and installer manifest.
+
 ## [9.0.3] - GA-pending
 
 ### Fixed
