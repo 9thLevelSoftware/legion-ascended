@@ -1,6 +1,6 @@
 {
   "name": "legion-ascended",
-  "version": "9.0.4",
+  "version": "9.0.5",
   "description": "Guided execution layer for AI-assisted software work.",
   "packageManager": "pnpm@11.4.0",
   "publishConfig": {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -81,6 +81,50 @@ async function withTempProject(run) {
 
 function artifactExists(project, relativePath) {
   return existsSync(path.join(project, ...relativePath.split("/")));
+}
+
+async function createFakePackageManagers(root, repositoryRoot) {
+  const managerDir = path.join(root, "package-managers");
+  const recordFile = path.join(managerDir, "invocations.jsonl");
+  const fakeManager = path.join(managerDir, "fake-package-manager.cjs");
+  await mkdir(managerDir, { recursive: true });
+  await writeFile(recordFile, "");
+  await writeFile(fakeManager, `
+const { appendFileSync } = require("node:fs");
+const { spawnSync } = require("node:child_process");
+
+const tool = process.argv[2];
+const args = process.argv.slice(3);
+appendFileSync(${JSON.stringify(recordFile)}, JSON.stringify({ tool, args }) + "\\n");
+
+if (tool === "npx") {
+  const installIndex = args.indexOf("install");
+  const result = spawnSync(
+    process.execPath,
+    [${JSON.stringify(path.join(repositoryRoot, "bin", "legion.js"))}, ...args.slice(installIndex)],
+    { stdio: "inherit", env: process.env }
+  );
+  process.exit(result.status ?? 1);
+}
+
+if (tool === "npm" && args[0] === "root" && args[1] === "--global") {
+  process.stdout.write(process.env.LEGION_TEST_NPM_ROOT ?? "");
+}
+`);
+
+  if (process.platform === "win32") {
+    const wrapper = `@echo off\n"${process.execPath}" "%~dp0fake-package-manager.cjs" %~n0 %*\nexit /b %errorlevel%\n`;
+    await writeFile(path.join(managerDir, "npm.cmd"), wrapper);
+    await writeFile(path.join(managerDir, "npx.cmd"), wrapper);
+  } else {
+    const wrapper = `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(fakeManager)} "$(basename "$0")" "$@"\n`;
+    await writeFile(path.join(managerDir, "npm"), wrapper);
+    await writeFile(path.join(managerDir, "npx"), wrapper);
+    await chmod(path.join(managerDir, "npm"), 0o755);
+    await chmod(path.join(managerDir, "npx"), 0o755);
+  }
+
+  return { managerDir, recordFile };
 }
 
 test("runtime registry uses explicit product support tiers", () => {
@@ -356,6 +400,48 @@ test("update preserves the surface the install chose", async () => {
       assert.equal(artifactExists(project, ".claude/agents"), expected);
     });
   }
+});
+
+test("update hands installation to the registry target package", async () => {
+  await withTempProject(async ({ env, home, project }) => {
+    const root = path.dirname(home);
+    const packageManagers = await createFakePackageManagers(root, ROOT);
+    const globalRoot = path.join(root, "global", "node_modules");
+    const globalPackage = path.join(globalRoot, "legion-ascended");
+    await mkdir(path.join(globalPackage, "bin"), { recursive: true });
+    for (const file of ["install.js", "legion.js", "runtime-metadata.js"]) {
+      await writeFile(
+        path.join(globalPackage, "bin", file),
+        await readFile(path.join(ROOT, "bin", file), "utf8")
+      );
+    }
+    await writeFile(
+      path.join(globalPackage, "package.json"),
+      JSON.stringify({ name: "legion-ascended", version: PACKAGE_VERSION })
+    );
+    const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
+    env[pathKey] = [packageManagers.managerDir, env[pathKey]].filter(Boolean).join(path.delimiter);
+    env.LEGION_TEST_NPM_LATEST = "9.0.6";
+    env.LEGION_TEST_NPM_ROOT = globalRoot;
+
+    const run = (args) => execFileAsync(process.execPath, [LEGION_BIN, ...args], { ...EXEC_OPTIONS, cwd: project, env });
+    await run(["install", "--target", "claude", "--local"]);
+    await execFileAsync(
+      process.execPath,
+      [path.join(globalPackage, "bin", "legion.js"), "update", "--target", "claude", "--local"],
+      { ...EXEC_OPTIONS, cwd: project, env }
+    );
+
+    const invocations = await readFile(packageManagers.recordFile, "utf8");
+    const records = invocations.trim() === ""
+      ? []
+      : invocations.trim().split(/\r?\n/).map((line) => JSON.parse(line));
+    assert.deepEqual(records, [
+      { tool: "npm", args: ["root", "--global"] },
+      { tool: "npm", args: ["install", "--global", "legion-ascended@9.0.6"] },
+      { tool: "npx", args: ["--yes", "legion-ascended@9.0.6", "install", "--target", "claude", "--local"] }
+    ]);
+  });
 });
 
 test("update preserves legacy prompts in a pre-v9 manifest without the flag", async () => {
