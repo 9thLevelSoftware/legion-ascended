@@ -9,7 +9,7 @@ All notable Legion Next governance changes are documented here.
   context sections so the AI host always executes `legion <verb> --json`
   before concluding a CLI verb is missing, with npx fallback guidance.
 
-## [9.0.2]
+## [9.0.2] - GA-pending
 
 ### Fixed
 - Include the v9 worker bundles and their prompt manifests in the published

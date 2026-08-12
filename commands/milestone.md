@@ -18,6 +18,7 @@ skills/execution-tracker/SKILL.md
 </execution_context>
 
 <context>
+If `legion` is not found, use `npx legion-ascended` instead.
 </context>
 
 <authority>

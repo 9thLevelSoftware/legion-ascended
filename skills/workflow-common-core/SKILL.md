@@ -61,7 +61,7 @@ report confidence without proof.
 
 ## CLI Availability Contract (Core)
 
-**CRITICAL**: The `legion` CLI is a Node.js binary installed via npm (`npx @9thlevelsoftware/legion` or `npm i -g legion-ascended`). It is NOT the Rust `legion-cli` crate. When a command's `<context>` section shows a `legion <verb> --json` invocation, you MUST run that exact command via Bash before concluding the verb does not exist. Do NOT infer verb availability from codebase analysis, Cargo crate inspection, or any source other than actually executing the command. If the command fails, include the exact error output in your report.
+**CRITICAL**: The `legion` CLI is a Node.js binary installed via npm (`npm i -g legion-ascended`). When a command's `<context>` section shows a `legion <verb> --json` invocation, you MUST run that exact command via Bash before concluding the verb does not exist. Do NOT infer verb availability from codebase analysis or any source other than actually executing the command. If the command fails, include the exact error output in your report. Fallback when the bare `legion` binary is absent: `npx legion-ascended <verb> --json`.
 
 ## Adapter Detection (Core)
 

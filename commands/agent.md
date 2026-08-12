@@ -24,6 +24,8 @@ skills/agent-creator/SKILL.md
 @agents/engineering-senior-developer.md
 @agents/testing-qa-verification-specialist.md
 @agents/design-ui-designer.md
+
+If `legion` is not found, use `npx legion-ascended` instead.
 </context>
 
 <authority>
