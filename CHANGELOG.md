@@ -2,6 +2,13 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.0.5] - GA-pending
+
+### Fixed
+- Make `legion update` upgrade the global npm package and reinstall managed
+  runtime artifacts from the registry target package instead of the stale
+  package that launched the updater.
+
 ## [9.0.4] - GA-pending
 
 ### Fixed

@@ -2436,6 +2436,77 @@ async function fetchNpmLatest(packageName) {
   });
 }
 
+function packageManagerExecutable(name) {
+  return process.platform === 'win32' ? `${name}.cmd` : name;
+}
+
+function quoteWindowsCommandArg(value) {
+  const text = String(value);
+  if (/^[A-Za-z0-9_@%+.,:/=-]+$/.test(text)) return text;
+  return `"${text.replace(/(["^&|<>])/g, '^$1')}"`;
+}
+
+function spawnPackageManager(name, args, options) {
+  const executable = packageManagerExecutable(name);
+  if (process.platform === 'win32') {
+    return spawnSync(
+      [executable, ...args].map(quoteWindowsCommandArg).join(' '),
+      [],
+      { ...options, shell: true }
+    );
+  }
+  return spawnSync(executable, args, options);
+}
+
+function runPackageManager(name, args, description) {
+  const result = spawnPackageManager(name, args, {
+    encoding: 'utf8',
+    stdio: 'inherit',
+    windowsHide: true,
+  });
+
+  if (result.error) {
+    throw new Error(`${description} failed: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(`${description} failed with exit code ${result.status ?? 'unknown'}`);
+  }
+}
+
+function samePath(left, right) {
+  const normalize = (value) => normalizePath(path.resolve(value)).replace(/\/$/, '').toLowerCase();
+  return normalize(left) === normalize(right);
+}
+
+function isGlobalPackageInvocation(packageName) {
+  if (isNpxInvocation()) return false;
+
+  const result = spawnPackageManager('npm', ['root', '--global'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    windowsHide: true,
+  });
+  if (result.error || result.status !== 0) return false;
+
+  const globalRoot = result.stdout.trim().split(/\r?\n/).filter(Boolean).at(-1);
+  if (!globalRoot) return false;
+  return samePath(resolveSourceRoot().root, path.join(globalRoot, packageName));
+}
+
+function installFromTargetPackage(packageName, targetVersion, runtimeKey, scope, verify, legacyPrompts) {
+  const args = [
+    '--yes',
+    `${packageName}@${targetVersion}`,
+    'install',
+    '--target',
+    runtimeKey,
+    `--${scope}`,
+  ];
+  if (verify) args.push('--verify');
+  if (legacyPrompts) args.push('--legacy-prompts');
+  runPackageManager('npx', args, `Installing Legion v${targetVersion} from npm`);
+}
+
 async function update(runtimeKey, scope, verify = false, legacyPrompts = null) {
   const home = resolveHome();
   const paths = resolvePaths(runtimeKey, scope, home);
@@ -2468,16 +2539,29 @@ async function update(runtimeKey, scope, verify = false, legacyPrompts = null) {
     }
 
     console.log(`Update available: v${installedVersion} -> v${targetVersion}`);
-    console.log('Cleaning previous managed installation...\n');
-    uninstall(runtimeKey, scope);
-    console.log('\nRe-installing...\n');
     // An update keeps whatever surface the user installed, unless this run
     // explicitly asked for the prompt bundle.
     // Manifests written before the v9 prompt-bundle flag always represented the
     // legacy surface. Preserve that historical default; only an explicit false
     // opts an installation into the CLI-only surface.
     const keepLegacy = legacyPrompts === true || manifest.legacyPrompts !== false;
-    install(runtimeKey, scope, verify, false, keepLegacy, targetVersion);
+    if (isGlobalPackageInvocation(pkg.name)) {
+      console.log(`Updating the global Legion package to v${targetVersion}...\n`);
+      runPackageManager(
+        'npm',
+        ['install', '--global', `${pkg.name}@${targetVersion}`],
+        `Updating the global Legion package to v${targetVersion}`
+      );
+      console.log('Cleaning previous managed installation...\n');
+      uninstall(runtimeKey, scope);
+      console.log('\nRe-installing from the updated package...\n');
+      installFromTargetPackage(pkg.name, targetVersion, runtimeKey, scope, verify, keepLegacy);
+    } else {
+      console.log('Cleaning previous managed installation...\n');
+      uninstall(runtimeKey, scope);
+      console.log('\nRe-installing...\n');
+      install(runtimeKey, scope, verify, false, keepLegacy, targetVersion);
+    }
   } catch (err) {
     throw new Error(`Update check failed: ${err.message}\nYour installed version is still functional.`);
   }
