@@ -26,6 +26,8 @@ Project state comes from the CLI, not from files read directly.
     legion status --json
     legion validate --json
 
+If `legion` is not found, use `npx legion-ascended` instead.
+
 `workflowState`, `requirements` and `traceability` carry what planning needs to
 know. Reading project files yourself reintroduces a second source of truth.
 </context>

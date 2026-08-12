@@ -2,6 +2,13 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.0.3] - GA-pending
+
+### Fixed
+- Add CLI availability contract to workflow-common-core and all command
+  context sections so the AI host always executes `legion <verb> --json`
+  before concluding a CLI verb is missing, with npx fallback guidance.
+
 ## [9.0.2] - GA-pending
 
 ### Fixed

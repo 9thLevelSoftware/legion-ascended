@@ -23,7 +23,7 @@ function runChecklist() {
     return JSON.parse(
       execFileSync(
         process.execPath,
-        ["scripts/release/release-checklist.mjs", "--release-version", "9.0.2", "--repository-root", "."],
+        ["scripts/release/release-checklist.mjs", "--release-version", "9.0.3", "--repository-root", "."],
         { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
       )
     );
@@ -56,7 +56,7 @@ test("the checklist reports ready, and every condition it names is genuinely clo
   // ship-gate series gave whole-change acceptance a producer and
   // `scripts/dogfood-workflow.mjs` now asserts `ready`; and
   // `package_version_mismatch` went when `package.json` was reconciled to the
-  // 9.0.2 release identity.
+  // 9.0.3 release identity.
   //
   // The list is empty, so what is left to assert is the whole verdict. It is
   // asserted as a whole deliberately: `deepEqual([], [])` would also pass

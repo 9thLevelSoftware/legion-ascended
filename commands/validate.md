@@ -19,6 +19,8 @@ Validation comes from the CLI, not from files read directly.
     legion validate --json
     legion doctor --json
 
+If `legion` is not found, use `npx legion-ascended` instead.
+
 `legion doctor` is the superset: the same checks plus the shallow operational
 paths. Neither writes anything.
 </context>

@@ -25,6 +25,8 @@ Project state comes from the CLI, not from files read directly.
 
     legion status --json
 
+If `legion` is not found, use `npx legion-ascended` instead.
+
 `workflowState.projectId` and `workflowState.stage` are what a quick task needs
 to know about the project. Reading project files yourself reintroduces a second
 source of truth that can disagree with the one the CLI derives.

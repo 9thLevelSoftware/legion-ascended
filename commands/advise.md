@@ -2,7 +2,7 @@
 name: legion:advise
 description: Get read-only expert consultation from Legion's agent personalities
 argument-hint: <topic> (e.g., architecture, UX, marketing, testing)
-allowed-tools: [Read, Grep, Glob, Agent, AskUserQuestion]
+allowed-tools: [Read, Bash, Grep, Glob, Agent, AskUserQuestion]
 ---
 
 <objective>
@@ -23,6 +23,7 @@ Project state comes from the CLI, not from files read directly.
 
     legion status --json
 
+If `legion` is not found, use `npx legion-ascended` instead.
 </context>
 
 <authority>

@@ -28,6 +28,7 @@ Project state comes from the CLI, not from files read directly.
 
     legion status --json
 
+If `legion` is not found, use `npx legion-ascended` instead.
 </context>
 
 ## Two-Wave Execution Mode

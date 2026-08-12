@@ -59,6 +59,10 @@ or success cannot be verified, the agent must report `BLOCKED` with evidence and
 the narrow missing decision. It must not infer the design, broaden scope, or
 report confidence without proof.
 
+## CLI Availability Contract (Core)
+
+**CRITICAL**: The `legion` CLI is a Node.js binary installed via npm (`npm i -g legion-ascended`). When a command's `<context>` section shows a `legion <verb> --json` invocation, you MUST run that exact command via Bash before concluding the verb does not exist. Do NOT infer verb availability from codebase analysis or any source other than actually executing the command. If the command fails, include the exact error output in your report. Fallback when the bare `legion` binary is absent: `npx legion-ascended <verb> --json`.
+
 ## Adapter Detection (Core)
 
 1. Check `.legion-cli` override in project root.

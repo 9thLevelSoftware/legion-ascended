@@ -19,6 +19,8 @@ The CLI owns the artifact set and reports where it wrote them.
 
     legion map --json
 
+If `legion` is not found, use `npx legion-ascended` instead.
+
 `legion map --refresh --json` returns `mapArtifactPath`; the run directory beside
 it holds `codebase.md`, `index.jsonl`, `symbols.json`, `search.md` and
 `map.json`.

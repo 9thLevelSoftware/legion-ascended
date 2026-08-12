@@ -20,6 +20,8 @@ skills/agent-registry/SKILL.md
 <context>
 Portfolio registry: {adapter.global_config_dir}/portfolio.md
 Studio Producer: {AGENTS_DIR}/project-management-studio-producer.md (resolve AGENTS_DIR via workflow-common Agent Path Resolution Protocol)
+
+If `legion` is not found, use `npx legion-ascended` instead.
 </context>
 
 <authority>

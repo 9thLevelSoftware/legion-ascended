@@ -22,7 +22,9 @@ skills/execution-tracker/SKILL.md
 Project state comes from the CLI, not from files read directly.
 
     legion status --json
+    legion ship --json
 
+If `legion` is not found, use `npx legion-ascended` instead.
 </context>
 
 <process>
