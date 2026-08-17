@@ -11,6 +11,7 @@ Claude Code remains the control runtime. Every other runtime below was re-audite
 | GitHub Copilot CLI | First-class | Skills and custom agent | Yes | Yes | `.github/skills/legion/`, `.github/agents/legion.agent.md`, `~/.copilot/skills/legion/`, `~/.config/copilot/agents/legion.agent.md` | `/legion` |
 | Antigravity CLI | First-class | Native plugins | Yes | Yes | `.agents/plugins/legion/` plus `~/.gemini/config/plugins/legion/` | `/legion` |
 | OpenCode | First-class | Commands and subagent | Yes | Yes | `.opencode/commands/`, `.opencode/agent/`, `~/.config/opencode/commands/`, `~/.config/opencode/agent/` | `/legion` |
+| Hermes Agent | First-class | Native skill with delegation | Yes | Yes | `.hermes/skills/workflow/legion/SKILL.md`, `~/.hermes/skills/workflow/legion/SKILL.md` | `/legion` |
 | Kilo Code Plugin | First-class | Mode, workflows, and Agent Skills | Yes | Yes | `.kilocode/workflows/`, `.kilocode/skills/<name>/`, `.kilo/commands/`, `.kilo/skills/<name>/`, `.kilocodemodes`, `~/.kilocode/workflows/`, `~/.kilocode/skills/<name>/`, `~/.config/kilo/commands/`, `~/.kilo/skills/<name>/`, `~/.kilocode/globalStorage/kilo code.kilo-code/settings/custom_modes.yaml` | Select `Legion` mode or run `/legion` |
 | Cursor | Compatible | Rules-only | Yes | No | `.cursor/rules/legion.mdc` | Plain-language Legion requests |
 | Kiro CLI (formerly Amazon Q Developer CLI) | Compatible | Custom agent and steering | Yes | Yes | `.kiro/agents/legion.md`, `.kiro/steering/legion.md`, `~/.kiro/agents/legion.md`, `~/.kiro/steering/AGENTS.md` | `@legion` |
@@ -80,6 +81,13 @@ Claude Code remains the control runtime. Every other runtime below was re-audite
 - [Custom agents](https://opencode.ai/docs/agents/)
 - [Task tool and subagents](https://opencode.ai/docs/agents/task)
 - [Configuration](https://opencode.ai/docs/config)
+
+### Hermes Agent
+
+- [Skills System](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills)
+- [Delegation](https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation)
+- [Kanban](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban)
+- [CLI Reference](https://hermes-agent.nousresearch.com/docs/reference/cli-commands)
 
 ### Kilo CLI
 

@@ -26,6 +26,7 @@ const START_GUIDANCE_SURFACES = {
   copilot: [".github/skills/legion/SKILL.md", ".github/skills/legion-start/SKILL.md", ".github/agents/legion.agent.md"],
   antigravity: [".agents/plugins/legion/commands/legion.md", ".agents/plugins/legion/commands/start.md"],
   opencode: [".opencode/commands/legion.md", ".opencode/commands/legion-start.md", ".opencode/agent/legion.md"],
+  hermes: [".hermes/skills/workflow/legion/SKILL.md"],
   kilocode: [
     ".kilocode/workflows/legion.md", ".kilocode/workflows/legion-start.md", ".kilocode/skills/legion/SKILL.md",
     ".kilo/commands/legion.md", ".kilo/commands/legion-start.md", ".kilo/skills/legion/SKILL.md", ".kilocodemodes"
@@ -49,11 +50,13 @@ const FIRST_CLASS_ARTIFACTS = {
   copilot: [".github/skills/legion/SKILL.md", ".github/agents/legion.agent.md"],
   antigravity: [".agents/plugins/legion/plugin.json", ".agents/plugins/legion/commands/legion.md"],
   opencode: [".opencode/commands/legion.md", ".opencode/agent/legion.md"],
+  hermes: [".hermes/skills/workflow/legion/SKILL.md"],
   kilocode: [".kilocode/workflows/legion.md", ".kilocode/skills/legion/SKILL.md", ".kilocodemodes"]
 };
 
 function manifestPathFor(project, runtimeKey) {
   if (runtimeKey === "claude") return path.join(project, ".claude", "legion", "manifest.json");
+  if (runtimeKey === "hermes") return path.join(project, ".hermes", "skills", "workflow", "legion", "manifest.json");
   return path.join(project, ".legion", "manifest.json");
 }
 
@@ -129,7 +132,7 @@ if (tool === "npm" && args[0] === "root" && args[1] === "--global") {
 
 test("runtime registry uses explicit product support tiers", () => {
   assert.deepEqual(SUPPORT_TIERS, ["first-class", "compatible", "legacy", "manual-only", "unsupported"]);
-  assert.deepEqual(recommendedRuntimeKeys(), ["claude", "codex", "copilot", "antigravity", "opencode", "kilocode"]);
+  assert.deepEqual(recommendedRuntimeKeys(), ["claude", "codex", "copilot", "antigravity", "opencode", "hermes", "kilocode"]);
 
   for (const runtimeKey of Object.keys(RUNTIME_METADATA)) {
     const runtime = RUNTIME_METADATA[runtimeKey];

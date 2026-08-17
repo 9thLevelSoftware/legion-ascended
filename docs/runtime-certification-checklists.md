@@ -75,6 +75,14 @@ Use these checklists for manual verification when CI cannot prove runtime-native
 - Confirm the installed `legion` agent can execute the authoritative workflow file in `.legion/commands/legion/start.md`.
 - Verify `/legion-start` remains a compatibility alias when installed.
 
+## Hermes Agent
+
+- Confirm `.hermes/skills/workflow/legion/SKILL.md` or `~/.hermes/skills/workflow/legion/SKILL.md` exists.
+- Confirm `.hermes/skills/workflow/legion/manifest.json` exists and contains the correct runtime key.
+- Run `hermes skills list` and verify `legion` appears in the output.
+- Restart Hermes and verify the `legion` skill loads (test with `/skill legion` or `hermes -s legion`).
+- Verify `delegate_task` can be used for parallel plan execution.
+
 ## Kilo CLI
 
 - Confirm `.kilo/commands/legion.md` or `~/.config/kilo/commands/legion.md` exists.

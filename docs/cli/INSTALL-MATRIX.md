@@ -44,6 +44,7 @@ these entry points at those files.
 | `copilot` | GitHub Copilot CLI | `/legion` | Yes | Yes | Legion skill plus custom agent profile |
 | `antigravity` | Antigravity CLI | `/legion` | Yes | Yes | Native plugin with command aliases |
 | `opencode` | OpenCode | `/legion` | Yes | Yes | Single Legion command plus compatibility command aliases and a subagent |
+| `hermes` | Hermes Agent | `/legion` | Yes | Yes | Native Legion skill with parallel delegation, kanban tracking, and gateway delivery |
 | `kilocode` | Kilo Code Plugin | Legion mode or `/legion` | Yes | Yes | Legion mode, workflow, compatibility workflows, and the Legion skill |
 
 ## Compatibility And Legacy Targets

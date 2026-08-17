@@ -69,6 +69,10 @@ function expectedManifestPath(runtimeKey, scope, projectDir, homeDir) {
     return path.join(rootDir, '.claude', 'legion', 'manifest.json');
   }
 
+  if (runtime.storageLayout === 'hermes') {
+    return path.join(rootDir, '.hermes', 'skills', 'workflow', 'legion', 'manifest.json');
+  }
+
   return path.join(rootDir, '.legion', 'manifest.json');
 }
 
@@ -153,6 +157,9 @@ function expectedNativeFiles(runtimeKey, scope, projectDir, homeDir) {
         expected.push(path.join(surfacePath, 'skills', 'board-of-directors', 'SKILL.md'));
         expected.push(path.join(surfacePath, 'skills', 'wave-executor', 'SKILL.md'));
         expected.push(path.join(surfacePath, 'commands', 'legion.md'));
+        break;
+      case 'hermes-skill':
+        expected.push(surfacePath);
         break;
       default:
         throw new Error(`Unhandled native surface type in tests: ${surface.type}`);

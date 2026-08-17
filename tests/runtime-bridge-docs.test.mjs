@@ -26,7 +26,7 @@ test("runtime bridge docs stay aligned with the runtime metadata matrix", async 
 
   assert.deepEqual(
     recommendedRuntimeKeys(),
-    ["claude", "codex", "copilot", "antigravity", "opencode", "kilocode"],
+    ["claude", "codex", "copilot", "antigravity", "opencode", "hermes", "kilocode"],
     "recommended runtime metadata should expose only first-class targets"
   );
 

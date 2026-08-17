@@ -2,6 +2,18 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.1.0] - GA-pending
+
+### Added
+- Hermes Agent as a first-class install target (`legion install --target hermes`).
+  Hermes is the first Legion runtime to support parallel plan execution via
+  `delegate_task` (up to 3 concurrent children). The installer writes a native
+  Legion skill to `~/.hermes/skills/workflow/legion/SKILL.md` (global) or
+  `.hermes/skills/workflow/legion/SKILL.md` (local). The adapter documents
+  delegation-based wave dispatch, kanban task tracking, cron-scheduled ship
+  gates, gateway delivery to 20+ messaging platforms, and profile isolation
+  for concurrent changes.
+
 ## [9.0.5] - GA-pending
 
 ### Fixed
