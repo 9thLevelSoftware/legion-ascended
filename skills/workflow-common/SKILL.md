@@ -44,6 +44,7 @@ Step 1: Tool probe (primary detection)
     - Kiro CLI: `.kiro/agents/legion-orchestrator.md`, `~/.kiro/agents/legion-orchestrator.md`, `.kiro/steering/legion.md`, or `~/.kiro/steering/AGENTS.md` exists
     - Windsurf: `.windsurf/rules/legion.md` exists
     - OpenCode: `.opencode/command/legion-start.md`, `~/.config/opencode/command/legion-start.md`, `.opencode/agent/legion-orchestrator.md`, or `~/.config/opencode/agent/legion-orchestrator.md` exists
+    - Hermes Agent: `~/.hermes/skills/workflow/legion/SKILL.md` or `.hermes/skills/workflow/legion/SKILL.md` exists, or `hermes skills list` returns a `legion` skill
     - Kilo Code Plugin: `.kilocodemodes` contains `slug: legion` or `~/.kilocode/globalStorage/kilo code.kilo-code/settings/custom_modes.yaml` contains `slug: legion`
     - Kilo CLI: `.kilo/commands/legion-start.md`, `~/.config/kilo/commands/legion-start.md`, `.kilo/agents/legion-orchestrator.md`, `~/.config/kilo/agents/legion-orchestrator.md`, `.kilo/skills/code-polish/SKILL.md`, or `~/.kilo/skills/code-polish/SKILL.md` exists
     - Aider: `.aider.conf.yml`, `AGENTS.md`, or `CONVENTIONS.md` exists

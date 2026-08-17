@@ -147,6 +147,7 @@ Runtime (first-class targets are shown by default):
   --copilot     GitHub Copilot CLI
   --antigravity Antigravity CLI
   --opencode    OpenCode
+  --hermes      Hermes Agent
   --kilo-code   Kilo Code Plugin
   --kilocode    Alias for --kilo-code
 
@@ -281,6 +282,7 @@ function commandForRuntime(runtimeKey) {
     kiro: 'kiro-cli',
     windsurf: 'windsurf',
     opencode: 'opencode',
+    hermes: 'hermes',
     kilo: 'kilo',
     kilocode: 'code',
     aider: 'aider'
@@ -412,6 +414,15 @@ function resolvePaths(runtime, scope, home, legacyPrompts = false) {
     adaptersDir = joinPath(root, 'legion/adapters');
     manifestDir = joinPath(root, 'legion');
     manifestFile = joinPath(manifestDir, 'manifest.json');
+  } else if (rt.storageLayout === 'hermes') {
+    const root = scope === 'local' ? joinPath(base, '.hermes') : joinPath(home, '.hermes');
+    const legionSkillDir = joinPath(root, 'skills/workflow/legion');
+    agentsDir = joinPath(legionSkillDir, 'agents');
+    commandsDir = joinPath(legionSkillDir, 'commands');
+    skillsDir = joinPath(legionSkillDir, 'skills');
+    adaptersDir = joinPath(legionSkillDir, 'adapters');
+    manifestDir = legionSkillDir;
+    manifestFile = joinPath(legionSkillDir, 'manifest.json');
   } else {
     const root = scope === 'local' ? joinPath(base, '.legion') : joinPath(home, '.legion');
     agentsDir = joinPath(root, 'agents');
@@ -2109,6 +2120,21 @@ function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompt
           console.log(`  ${surface.key}: backed up ${path.basename(surface.path)}.bak`);
         }
         console.log(`  ${surface.key}: ${surface.path}`);
+        break;
+      }
+
+      case 'hermes-skill': {
+        const backedUp = writeManagedFile(surface.path, generateLegionSkill(paths, 'Hermes Agent'), nativeArtifacts);
+        if (backedUp) {
+          console.log(`  ${surface.key}: backed up ${path.basename(surface.path)}.bak`);
+        }
+        console.log(`  ${surface.key}: ${surface.path}`);
+        break;
+      }
+
+      case 'hermes-commands': {
+        ensureDirs([surface.path]);
+        console.log(`  ${surface.key}: ${surface.path}/ (directory created)`);
         break;
       }
 

@@ -86,6 +86,7 @@ Recommended first-class targets:
 | `copilot` | GitHub Copilot CLI | `/legion` |
 | `antigravity` | Antigravity CLI | `/legion` |
 | `opencode` | OpenCode | `/legion` |
+| `hermes` | Hermes Agent | `/legion` |
 | `kilocode` | Kilo Code Plugin | Legion mode or `/legion` |
 
 Compatibility, legacy, and manual-only targets are documented too, but they are not the default happy
