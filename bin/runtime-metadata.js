@@ -581,13 +581,6 @@ const RUNTIME_METADATA = {
         localPath: '$PROJECT/.hermes/skills/workflow/legion/SKILL.md',
         globalPath: '$HOME/.hermes/skills/workflow/legion/SKILL.md',
       },
-      {
-        key: 'hermes-commands',
-        type: 'hermes-commands',
-        pathKind: 'dir',
-        localPath: '$PROJECT/.hermes/skills/workflow/legion/commands',
-        globalPath: '$HOME/.hermes/skills/workflow/legion/commands',
-      },
     ],
     entrypoints: {
       local: '/legion',

@@ -46,8 +46,7 @@ export const CLI_RUNTIME_PACKAGE_FILES = Object.freeze([
   "evals/baseline/corpus-manifest.yaml",
   "evals/baseline/fixture-hashes.sha256",
   "evals/baseline/manifest.yaml",
-  "scripts/dogfood-workflow.mjs",
-  "skills/hermes-agent/SKILL.md"
+  "scripts/dogfood-workflow.mjs"
 ]);
 
 export const CLI_RUNTIME_PACKAGE_PREFIXES = Object.freeze([

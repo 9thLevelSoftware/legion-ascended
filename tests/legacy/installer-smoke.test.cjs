@@ -161,9 +161,6 @@ function expectedNativeFiles(runtimeKey, scope, projectDir, homeDir) {
       case 'hermes-skill':
         expected.push(surfacePath);
         break;
-      case 'hermes-commands':
-        // Directory-only surface, no specific files expected
-        break;
       default:
         throw new Error(`Unhandled native surface type in tests: ${surface.type}`);
     }

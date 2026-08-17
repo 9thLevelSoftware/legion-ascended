@@ -192,7 +192,6 @@ invoke_command: "hermes"
 invoke_flags:
   - "chat"
   - "-q"
-  - "--quiet"
   - "--source"
   - "legion"
 prompt_delivery: stdin

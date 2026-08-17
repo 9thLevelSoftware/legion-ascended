@@ -2132,12 +2132,6 @@ function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompt
         break;
       }
 
-      case 'hermes-commands': {
-        ensureDirs([surface.path]);
-        console.log(`  ${surface.key}: ${surface.path}/ (directory created)`);
-        break;
-      }
-
       default:
         throw new Error(`Unsupported native surface type: ${surface.type}`);
     }
