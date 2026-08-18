@@ -1785,6 +1785,8 @@ function modelManifestForExecutor(executor: ExecutionAdapterKind): ModelManifest
         return { provider: "anthropic", id: "claude-code" };
       case "codex":
         return { provider: "openai", id: "codex-cli" };
+      case "hermes":
+        return { provider: "nous", id: "hermes-agent" };
       case "manual":
       case "fake":
         return { provider: "legion", id: executor };

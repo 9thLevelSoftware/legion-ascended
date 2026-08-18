@@ -39716,6 +39716,7 @@ function parseReviewVerdict(value) {
 var execFileAsync2 = promisify4(execFile4);
 var DEFAULT_CODEX_EXEC_TIMEOUT_MS = 3e5;
 var DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 9e5;
+var DEFAULT_HERMES_EXEC_TIMEOUT_MS = 6e5;
 var CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"];
 function claudeExecArgs(input) {
   return [
@@ -39746,17 +39747,18 @@ function codexExecArgs(input) {
 }
 async function selectExecutionAdapterKind(explicit) {
   if (explicit !== void 0) {
-    if (explicit === "claude" || explicit === "codex" || explicit === "manual" || explicit === "fake") return explicit;
+    if (explicit === "claude" || explicit === "codex" || explicit === "hermes" || explicit === "manual" || explicit === "fake") return explicit;
     return {
       ok: false,
       diagnostic: {
         code: "invalid_executor",
-        message: `Unsupported executor "${explicit}". Use claude, codex, manual, or fake.`
+        message: `Unsupported executor "${explicit}". Use claude, codex, hermes, manual, or fake.`
       }
     };
   }
   if (!runningInsideClaudeCode() && await claudeAvailable()) return "claude";
   if (await codexAvailable()) return "codex";
+  if (await hermesAvailable()) return "hermes";
   return "manual";
 }
 function runningInsideClaudeCode() {
@@ -39769,6 +39771,8 @@ function adapterForKind(kind) {
       return claudeAdapter;
     case "codex":
       return codexAdapter;
+    case "hermes":
+      return hermesAdapter;
     case "manual":
       return manualAdapter;
     case "fake":
@@ -39799,6 +39803,80 @@ async function claudeAvailable() {
     return false;
   }
 }
+async function hermesAvailable() {
+  try {
+    await execFileAsync2("hermes", ["--version"], {
+      timeout: 5e3,
+      windowsHide: true
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function hermesInvocation(args) {
+  if (process.platform !== "win32") {
+    return { command: "hermes", args };
+  }
+  return {
+    command: "cmd.exe",
+    args: ["/d", "/s", "/c", "hermes", ...args]
+  };
+}
+function hermesExecTimeoutMs() {
+  const configured = process.env["LEGION_HERMES_EXEC_TIMEOUT_MS"];
+  if (configured === void 0) return DEFAULT_HERMES_EXEC_TIMEOUT_MS;
+  const parsed = Number.parseInt(configured, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_HERMES_EXEC_TIMEOUT_MS;
+}
+var hermesAdapter = {
+  kind: "hermes",
+  async run(request) {
+    const args = ["chat", "-q", request.prompt, "--source", "legion", "-Q", "--in", request.repositoryRoot];
+    const invocation = hermesInvocation(args);
+    const processResult = await spawnWithInput(
+      invocation.command,
+      invocation.args,
+      request.prompt,
+      request.repositoryRoot,
+      hermesExecTimeoutMs()
+    );
+    const rawOutput = [
+      processResult.stdout,
+      processResult.stderr
+    ].filter((entry) => entry.length > 0).join("\n");
+    const parsed = parseResultFromText(rawOutput);
+    const status2 = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 ? "failed" : "succeeded";
+    const normalized = normalizeExecutionResult(parsed, {
+      status: status2,
+      summary: processResult.exitCode === 0 ? "Hermes Agent executor completed." : "Hermes Agent executor failed.",
+      rawOutput,
+      exitCode: processResult.exitCode
+    });
+    const blockingFindings = [];
+    if (processResult.timedOut) {
+      blockingFindings.push({
+        id: "hermes-executor-timeout",
+        title: "Hermes executor timed out",
+        body: `Hermes did not complete within ${processResult.timeoutMs}ms. Check Hermes auth/configuration, raise LEGION_HERMES_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    }
+    const result = blockingFindings.length === 0 ? normalized : {
+      ...normalized,
+      ok: false,
+      status: processResult.timedOut ? "blocked" : "failed",
+      findings: [...normalized.findings, ...blockingFindings]
+    };
+    const redacted = redactTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
+` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    return result;
+  }
+};
 var fakeAdapter = {
   kind: "fake",
   async run(request) {
@@ -52128,6 +52206,8 @@ function modelManifestForExecutor(executor) {
         return { provider: "anthropic", id: "claude-code" };
       case "codex":
         return { provider: "openai", id: "codex-cli" };
+      case "hermes":
+        return { provider: "nous", id: "hermes-agent" };
       case "manual":
       case "fake":
         return { provider: "legion", id: executor };
