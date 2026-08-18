@@ -2,6 +2,15 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.2.0] - GA-pending
+
+### Added
+- Hermes Agent as a first-class build executor (`--executor hermes`). When
+  `hermes` CLI is installed, Legion dispatches build/review tasks through
+  `hermes chat -q --source legion` and collects structured results. Auto-
+  detection probes hermes after claude and codex, falling back to manual.
+  Timeout configurable via `LEGION_HERMES_EXEC_TIMEOUT_MS` (default 600s).
+
 ## [9.1.0] - GA-pending
 
 ### Added

@@ -623,7 +623,14 @@ test("workflow executor selection accepts claude and names it when rejecting", a
   const rejected = await adapters.selectExecutionAdapterKind("bogus");
   assert.equal(typeof rejected, "object");
   assert.equal(rejected.diagnostic.code, "invalid_executor");
-  assert.match(rejected.diagnostic.message, /claude, codex, manual, or fake/u);
+  assert.match(rejected.diagnostic.message, /claude, codex, hermes, manual, or fake/u);
+});
+
+test("workflow executor selection accepts hermes and adapter returns correct kind", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+
+  assert.equal(await adapters.selectExecutionAdapterKind("hermes"), "hermes");
+  assert.equal(adapters.adapterForKind("hermes").kind, "hermes");
 });
 
 test("workflow executor auto-selection does not nest a claude run inside Claude Code", async () => {

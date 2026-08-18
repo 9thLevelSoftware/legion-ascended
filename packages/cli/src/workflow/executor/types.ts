@@ -1,6 +1,6 @@
 import type { ArtifactPath, ChangeId, RunId, TaskContract } from "@legion/protocol";
 
-export type ExecutionAdapterKind = "claude" | "codex" | "manual" | "fake";
+export type ExecutionAdapterKind = "claude" | "codex" | "hermes" | "manual" | "fake";
 export type ExecutionMode = "build" | "review" | "fix";
 export type ExecutionStatus = "succeeded" | "failed" | "blocked";
 

@@ -25,6 +25,7 @@ import {
 const execFileAsync = promisify(execFile);
 const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 300_000;
 const DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 900_000;
+const DEFAULT_HERMES_EXEC_TIMEOUT_MS = 600_000;
 
 // Claude Code has no OS-level sandbox flag, so a read-only run is enforced by
 // denying every tool that can mutate the repository. The guarded execution
@@ -73,12 +74,12 @@ export async function selectExecutionAdapterKind(explicit: string | undefined): 
   readonly diagnostic: { readonly code: string; readonly message: string };
 }> {
   if (explicit !== undefined) {
-    if (explicit === "claude" || explicit === "codex" || explicit === "manual" || explicit === "fake") return explicit;
+    if (explicit === "claude" || explicit === "codex" || explicit === "hermes" || explicit === "manual" || explicit === "fake") return explicit;
     return {
       ok: false,
       diagnostic: {
         code: "invalid_executor",
-        message: `Unsupported executor "${explicit}". Use claude, codex, manual, or fake.`
+        message: `Unsupported executor "${explicit}". Use claude, codex, hermes, manual, or fake.`
       }
     };
   }
@@ -87,6 +88,7 @@ export async function selectExecutionAdapterKind(explicit: string | undefined): 
   // rather than a silent no-op.
   if (!runningInsideClaudeCode() && await claudeAvailable()) return "claude";
   if (await codexAvailable()) return "codex";
+  if (await hermesAvailable()) return "hermes";
   return "manual";
 }
 
@@ -115,6 +117,8 @@ export function adapterForKind(kind: ExecutionAdapterKind): ExecutionAdapter {
       return claudeAdapter;
     case "codex":
       return codexAdapter;
+    case "hermes":
+      return hermesAdapter;
     case "manual":
       return manualAdapter;
     case "fake":
@@ -149,6 +153,94 @@ async function claudeAvailable(): Promise<boolean> {
     return false;
   }
 }
+
+async function hermesAvailable(): Promise<boolean> {
+  try {
+    const invocation = hermesInvocation(["--version"]);
+    await execFileAsync(invocation.command, invocation.args, {
+      timeout: 5_000,
+      windowsHide: true
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hermesInvocation(args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
+  if (process.platform !== "win32") {
+    return { command: "hermes", args };
+  }
+  return {
+    command: "cmd.exe",
+    args: ["/d", "/s", "/c", "hermes", ...args]
+  };
+}
+
+function hermesExecTimeoutMs(): number {
+  const configured = process.env["LEGION_HERMES_EXEC_TIMEOUT_MS"];
+  if (configured === undefined) return DEFAULT_HERMES_EXEC_TIMEOUT_MS;
+  const parsed = Number.parseInt(configured, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_HERMES_EXEC_TIMEOUT_MS;
+}
+
+const hermesAdapter: ExecutionAdapter = {
+  kind: "hermes",
+  async run(request) {
+    // hermes chat -q takes the query as an argv argument (no stdin support).
+    // The prompt is a task description, not a secret — argv exposure via `ps`
+    // is acceptable here, matching how claude passes --print prompts.
+    const args = ["chat", "-q", request.prompt, "--source", "legion", "-Q", "--in", request.repositoryRoot];
+    const invocation = hermesInvocation(args);
+    const processResult = await spawnWithInput(
+      invocation.command,
+      invocation.args,
+      "",  // stdin unused — hermes reads from -q arg
+      request.repositoryRoot,
+      hermesExecTimeoutMs()
+    );
+    const rawOutput = [
+      processResult.stdout,
+      processResult.stderr
+    ].filter((entry) => entry.length > 0).join("\n");
+    const parsed = parseResultFromText(rawOutput);
+    const status: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : processResult.exitCode !== 0
+        ? "failed"
+        : "succeeded";
+    const normalized = normalizeExecutionResult(parsed, {
+      status,
+      summary: processResult.exitCode === 0
+        ? "Hermes Agent executor completed."
+        : "Hermes Agent executor failed.",
+      rawOutput,
+      exitCode: processResult.exitCode
+    });
+    const blockingFindings: ExecutionFinding[] = [];
+    if (processResult.timedOut) {
+      blockingFindings.push({
+        id: "hermes-executor-timeout",
+        title: "Hermes executor timed out",
+        body: `Hermes did not complete within ${processResult.timeoutMs}ms. Check Hermes auth/configuration, raise LEGION_HERMES_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    }
+    const result: ExecutionResult = blockingFindings.length === 0
+      ? normalized
+      : {
+          ...normalized,
+          ok: false,
+          status: processResult.timedOut ? "blocked" : "failed",
+          findings: [...normalized.findings, ...blockingFindings]
+        };
+    const redacted = redactTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    return result;
+  }
+};
 
 const fakeAdapter: ExecutionAdapter = {
   kind: "fake",
