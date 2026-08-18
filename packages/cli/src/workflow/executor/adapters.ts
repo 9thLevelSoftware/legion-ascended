@@ -156,7 +156,8 @@ async function claudeAvailable(): Promise<boolean> {
 
 async function hermesAvailable(): Promise<boolean> {
   try {
-    await execFileAsync("hermes", ["--version"], {
+    const invocation = hermesInvocation(["--version"]);
+    await execFileAsync(invocation.command, invocation.args, {
       timeout: 5_000,
       windowsHide: true
     });
@@ -186,12 +187,15 @@ function hermesExecTimeoutMs(): number {
 const hermesAdapter: ExecutionAdapter = {
   kind: "hermes",
   async run(request) {
+    // hermes chat -q takes the query as an argv argument (no stdin support).
+    // The prompt is a task description, not a secret — argv exposure via `ps`
+    // is acceptable here, matching how claude passes --print prompts.
     const args = ["chat", "-q", request.prompt, "--source", "legion", "-Q", "--in", request.repositoryRoot];
     const invocation = hermesInvocation(args);
     const processResult = await spawnWithInput(
       invocation.command,
       invocation.args,
-      request.prompt,
+      "",  // stdin unused — hermes reads from -q arg
       request.repositoryRoot,
       hermesExecTimeoutMs()
     );

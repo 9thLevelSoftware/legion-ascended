@@ -39805,7 +39805,8 @@ async function claudeAvailable() {
 }
 async function hermesAvailable() {
   try {
-    await execFileAsync2("hermes", ["--version"], {
+    const invocation = hermesInvocation(["--version"]);
+    await execFileAsync2(invocation.command, invocation.args, {
       timeout: 5e3,
       windowsHide: true
     });
@@ -39837,7 +39838,8 @@ var hermesAdapter = {
     const processResult = await spawnWithInput(
       invocation.command,
       invocation.args,
-      request.prompt,
+      "",
+      // stdin unused — hermes reads from -q arg
       request.repositoryRoot,
       hermesExecTimeoutMs()
     );
