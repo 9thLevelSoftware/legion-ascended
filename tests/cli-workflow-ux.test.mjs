@@ -447,6 +447,228 @@ async function installClaudeShim(root, { stdout = "", exitCode = 0, sleepMs = 0,
   return binDir;
 }
 
+// Installs a fake `grok` whose argv, stdin state, and output are deterministic.
+// The executable is only placed on PATH for the duration of an individual test.
+async function installGrokShim(root, {
+  stdout = "",
+  exitCode = 0,
+  sleepMs = 0,
+  version = "grok 1.0.10",
+  recordPath
+} = {}) {
+  const binDir = path.join(root, "bin");
+  await mkdir(binDir, { recursive: true });
+  const implPath = path.join(binDir, "grok-impl.mjs");
+  await writeFile(
+    implPath,
+    [
+      "const args = process.argv.slice(2);",
+      "const version = " + JSON.stringify(version) + ";",
+      "const stdout = " + JSON.stringify(stdout) + ";",
+      "const exitCode = " + String(exitCode) + ";",
+      "const sleepMs = " + String(sleepMs) + ";",
+      "const recordPath = " + JSON.stringify(recordPath) + ";",
+      "if (recordPath !== undefined) { const { writeFile } = await import(\"node:fs/promises\"); await writeFile(recordPath, JSON.stringify({ args, stdinReadable: process.stdin.readable, stdinLength: process.stdin.readableLength }) + \"\\n\", \"utf8\"); }",
+      "await new Promise((resolve) => { setTimeout(resolve, sleepMs); });",
+      "if (args[0] === \"--version\") process.stdout.write(version); else if (stdout.length > 0) process.stdout.write(stdout);",
+      "process.exit(exitCode);"
+    ].join("\n"),
+    "utf8"
+  );
+  if (process.platform === "win32") {
+    await writeFile(path.join(binDir, "grok.cmd"), `@echo off\r\n"${process.execPath}" "%~dp0grok-impl.mjs" %*\r\n`, "utf8");
+  } else {
+    const shim = path.join(binDir, "grok");
+    await writeFile(shim, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} "${binDir}/grok-impl.mjs" "$@"\n`, "utf8");
+    await chmod(shim, 0o755);
+  }
+  return binDir;
+}
+
+function grokRunRequest(root, { readOnly = false, base = "chg_grok", run = "run_grok" } = {}) {
+  const baseArtifactPath = `.legion/project/changes/${base}/runs/${run}`;
+  const absolute = (name) => path.join(root, ".legion", "project", "changes", base, "runs", run, name);
+  return {
+    repositoryRoot: root,
+    changeId: base,
+    runId: run,
+    task: { id: "ctr_grok" },
+    mode: "build",
+    executor: "grok",
+    readOnly,
+    prompt: "Return a Legion executor result.\nWith quotes: \"$`",
+    contextPackArtifactPath: `${baseArtifactPath}/context-pack.md`,
+    contextPackAbsolutePath: absolute("context-pack.md"),
+    promptArtifactPath: `${baseArtifactPath}/executor-prompt.md`,
+    promptAbsolutePath: absolute("executor-prompt.md"),
+    resultArtifactPath: `${baseArtifactPath}/executor-result.json`,
+    resultAbsolutePath: absolute("executor-result.json"),
+    rawLogArtifactPath: `${baseArtifactPath}/executor-raw.log`,
+    rawLogAbsolutePath: absolute("executor-raw.log"),
+    redactedLogArtifactPath: `${baseArtifactPath}/executor-redacted.log`,
+    redactedLogAbsolutePath: absolute("executor-redacted.log")
+  };
+}
+
+function grokEnvelope(text, overrides = {}) {
+  return JSON.stringify({
+    text,
+    stopReason: "completed",
+    sessionId: "sess_grok_test",
+    requestId: "req_grok_test",
+    ...overrides
+  });
+}
+
+async function withGrokShim(options, run) {
+  const root = await tempRepo();
+  const previousPath = process.env.PATH;
+  const previousTimeout = process.env.LEGION_GROK_EXEC_TIMEOUT_MS;
+  const previousAgent = process.env.GROK_AGENT;
+  const previousSession = process.env.GROK_SESSION_ID;
+  try {
+    const binDir = await installGrokShim(root, options);
+    process.env.PATH = process.platform === "win32"
+      ? `${binDir}${path.delimiter}${previousPath ?? ""}`
+      : binDir;
+    if (options.timeoutMs !== undefined) process.env.LEGION_GROK_EXEC_TIMEOUT_MS = String(options.timeoutMs);
+    return await run(root, binDir);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    if (previousTimeout === undefined) delete process.env.LEGION_GROK_EXEC_TIMEOUT_MS;
+    else process.env.LEGION_GROK_EXEC_TIMEOUT_MS = previousTimeout;
+    if (previousAgent === undefined) delete process.env.GROK_AGENT;
+    else process.env.GROK_AGENT = previousAgent;
+    if (previousSession === undefined) delete process.env.GROK_SESSION_ID;
+    else process.env.GROK_SESSION_ID = previousSession;
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+test("workflow grok executor args are argv-safe and add read-only sandboxing", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+  const promptPath = "/tmp/prompt with \"quotes\"/$value/line\nnext.md";
+  assert.deepEqual(adapters.grokExecArgs({ repositoryRoot: "/repo with spaces", prompt: promptPath }), [
+    "--prompt-file",
+    promptPath,
+    "--cwd",
+    "/repo with spaces",
+    "--output-format",
+    "json",
+    "--permission-mode",
+    "bypassPermissions"
+  ]);
+  assert.deepEqual(adapters.grokExecArgs({ repositoryRoot: "/repo", prompt: promptPath, readOnly: true }), [
+    "--prompt-file",
+    promptPath,
+    "--cwd",
+    "/repo",
+    "--output-format",
+    "json",
+    "--permission-mode",
+    "bypassPermissions",
+    "--sandbox",
+    "read-only"
+  ]);
+});
+
+test("workflow grok executor normalizes the JSON envelope and never sends prompt stdin", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+  const contract = JSON.stringify({
+    status: "succeeded",
+    summary: "Implemented the resolver.",
+    filesChanged: ["src/resolve-asset.ts"],
+    commandsRun: [{ command: "pnpm", args: ["test"], exitCode: 0 }],
+    findings: [],
+    reviewVerdicts: { specification: "pass", integration: "pass", evidence: "pass" }
+  });
+  await withGrokShim({ stdout: grokEnvelope(contract) }, async (root) => {
+    const recordPath = path.join(root, "grok-record.json");
+    // Install a second shim with a fixture-local record destination; this keeps
+    // the invocation evidence inside the temporary repository.
+    const binDir = await installGrokShim(root, { stdout: grokEnvelope(contract), recordPath });
+    process.env.PATH = process.platform === "win32" ? `${binDir}${path.delimiter}${process.env.PATH ?? ""}` : binDir;
+    const result = await adapters.adapterForKind("grok").run(grokRunRequest(root));
+
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.status, "succeeded");
+    assert.equal(result.summary, "Implemented the resolver.");
+    assert.deepEqual(result.filesChanged, ["src/resolve-asset.ts"]);
+    assert.deepEqual(result.commandsRun, [{ command: "pnpm", args: ["test"], exitCode: 0 }]);
+    assert.equal(result.structuredOutput, contract);
+    const invocation = JSON.parse(await readFile(recordPath, "utf8"));
+    assert.deepEqual(invocation.args, [
+      "--prompt-file",
+      grokRunRequest(root).promptAbsolutePath,
+      "--cwd",
+      root,
+      "--output-format",
+      "json",
+      "--permission-mode",
+      "bypassPermissions"
+    ]);
+    assert.equal(invocation.stdinLength, 0);
+    const written = await readJsonArtifact(root, ".legion/project/changes/chg_grok/runs/run_grok/executor-result.json");
+    assert.equal(written.parsed.summary, "Implemented the resolver.");
+  });
+});
+
+test("workflow grok executor fails closed for error, malformed, empty, and partial envelopes", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+  const cases = [
+    { name: "error", stdout: grokEnvelope("", { type: "error", error: "rate limited" }) },
+    { name: "malformed", stdout: "{\"text\":\"unterminated" },
+    { name: "empty", stdout: "" },
+    { name: "partial-envelope", stdout: JSON.stringify({ text: "{}", stopReason: "completed" }) },
+    { name: "partial-result", stdout: grokEnvelope(JSON.stringify({ status: "succeeded", summary: "partial" })) }
+  ];
+  for (const [index, entry] of cases.entries()) {
+    await withGrokShim({ stdout: entry.stdout }, async (root) => {
+      const result = await adapters.adapterForKind("grok").run(grokRunRequest(root, { base: `chg_grok_${index}`, run: `run_grok_${index}` }));
+      assert.equal(result.ok, false, entry.name);
+      assert.equal(result.status === "failed" || result.status === "blocked", true, entry.name);
+      assert.equal(result.findings.some((finding) => finding.severity === "blocking"), true, entry.name);
+    });
+  }
+});
+
+test("workflow grok executor fails nonzero and timeout runs closed", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+  await withGrokShim({ stdout: grokEnvelope(JSON.stringify({ status: "succeeded", summary: "Done.", filesChanged: [], commandsRun: [], findings: [] })), exitCode: 7 }, async (root) => {
+    const result = await adapters.adapterForKind("grok").run(grokRunRequest(root, { base: "chg_grok_nonzero", run: "run_grok_nonzero" }));
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "failed");
+    assert.equal(result.exitCode, 7);
+    assert.equal(result.findings.some((finding) => finding.id === "grok-executor-failed"), true);
+  });
+  await withGrokShim({ sleepMs: 5_000, timeoutMs: 50 }, async (root) => {
+    const result = await adapters.adapterForKind("grok").run(grokRunRequest(root, { base: "chg_grok_timeout", run: "run_grok_timeout" }));
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "blocked");
+    assert.equal(result.exitCode, 124);
+    assert.equal(result.findings.some((finding) => finding.id === "grok-executor-timeout"), true);
+  });
+});
+
+test("workflow grok availability validates semver and nested auto-selection guard", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+  await withGrokShim({ version: "grok 1.0.10" }, async () => {
+    assert.equal(await adapters.grokAvailable(), true);
+    assert.equal(await adapters.selectExecutionAdapterKind(undefined), "grok");
+    process.env.GROK_AGENT = "1";
+    assert.equal(await adapters.selectExecutionAdapterKind(undefined), "manual");
+    assert.equal(await adapters.selectExecutionAdapterKind("grok"), "grok");
+    delete process.env.GROK_AGENT;
+    process.env.GROK_SESSION_ID = "session-1";
+    assert.equal(await adapters.selectExecutionAdapterKind(undefined), "manual");
+    assert.equal(await adapters.selectExecutionAdapterKind("grok"), "grok");
+  });
+  await withGrokShim({ version: "grok unknown" }, async () => {
+    assert.equal(await adapters.grokAvailable(), false);
+  });
+});
+
 function claudeRunRequest(root, { readOnly = false, base = "chg_claude", run = "run_claude" } = {}) {
   const baseArtifactPath = `.legion/project/changes/${base}/runs/${run}`;
   const absolute = (name) => path.join(root, ".legion", "project", "changes", base, "runs", run, name);
@@ -623,7 +845,7 @@ test("workflow executor selection accepts claude and names it when rejecting", a
   const rejected = await adapters.selectExecutionAdapterKind("bogus");
   assert.equal(typeof rejected, "object");
   assert.equal(rejected.diagnostic.code, "invalid_executor");
-  assert.match(rejected.diagnostic.message, /claude, codex, hermes, manual, or fake/u);
+  assert.match(rejected.diagnostic.message, /claude, codex, hermes, grok, manual, or fake/u);
 });
 
 test("workflow executor selection accepts hermes and adapter returns correct kind", async () => {
@@ -669,8 +891,8 @@ test("core workflow commands expose command-specific help", async () => {
   const cases = [
     ["start", /legion start --name <name>/],
     ["plan", /legion plan <phase-number>/],
-    ["build", /legion build \[--executor claude\|codex\|manual\|fake\]/],
-    ["review", /legion review \[--executor claude\|codex\|manual\|fake\]/],
+    ["build", /legion build \[--executor claude\|codex\|hermes\|grok\|manual\|fake\]/],
+    ["review", /legion review \[--executor claude\|codex\|hermes\|grok\|manual\|fake\]/],
     ["approve", /legion approve <subject>/],
     ["status", /legion status/],
     ["validate", /legion validate/],

@@ -40035,6 +40035,8 @@ var execFileAsync2 = promisify4(execFile4);
 var DEFAULT_CODEX_EXEC_TIMEOUT_MS = 3e5;
 var DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 9e5;
 var DEFAULT_HERMES_EXEC_TIMEOUT_MS = 6e5;
+var DEFAULT_GROK_EXEC_TIMEOUT_MS = 6e5;
+var GROK_VERSION_RE = /(?:^|[^\d])\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:$|[^\d])/u;
 var CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"];
 function claudeExecArgs(input) {
   return [
@@ -40063,25 +40065,47 @@ function codexExecArgs(input) {
     "-"
   ];
 }
+function grokExecArgs(input) {
+  return [
+    "--prompt-file",
+    input.prompt,
+    "--cwd",
+    input.repositoryRoot,
+    "--output-format",
+    "json",
+    "--permission-mode",
+    "bypassPermissions",
+    ...input.readOnly ? ["--sandbox", "read-only"] : []
+  ];
+}
 async function selectExecutionAdapterKind(explicit) {
   if (explicit !== void 0) {
-    if (explicit === "claude" || explicit === "codex" || explicit === "hermes" || explicit === "manual" || explicit === "fake") return explicit;
+    if (explicit === "claude" || explicit === "codex" || explicit === "hermes" || explicit === "grok" || explicit === "manual" || explicit === "fake") return explicit;
     return {
       ok: false,
       diagnostic: {
         code: "invalid_executor",
-        message: `Unsupported executor "${explicit}". Use claude, codex, hermes, manual, or fake.`
+        message: `Unsupported executor "${explicit}". Use claude, codex, hermes, grok, manual, or fake.`
       }
     };
   }
   if (!runningInsideClaudeCode() && await claudeAvailable()) return "claude";
   if (await codexAvailable()) return "codex";
   if (await hermesAvailable()) return "hermes";
+  if (!runningInsideGrokBuild() && await grokAvailable()) return "grok";
   return "manual";
 }
 function runningInsideClaudeCode() {
   const marker = process.env["CLAUDECODE"];
   return marker !== void 0 && marker.length > 0 && marker !== "0";
+}
+function runningInsideGrokBuild() {
+  return activeSessionMarker(process.env["GROK_AGENT"]) || activeSessionMarker(process.env["GROK_SESSION_ID"]);
+}
+function activeSessionMarker(marker) {
+  if (marker === void 0) return false;
+  const normalized = marker.trim().toLowerCase();
+  return normalized.length > 0 && normalized !== "0" && normalized !== "false" && normalized !== "no";
 }
 function adapterForKind(kind) {
   switch (kind) {
@@ -40091,6 +40115,8 @@ function adapterForKind(kind) {
       return codexAdapter;
     case "hermes":
       return hermesAdapter;
+    case "grok":
+      return grokAdapter;
     case "manual":
       return manualAdapter;
     case "fake":
@@ -40133,6 +40159,19 @@ async function hermesAvailable() {
     return false;
   }
 }
+async function grokAvailable() {
+  try {
+    const invocation = grokInvocation(["--version"]);
+    const result = await execFileAsync2(invocation.command, invocation.args, {
+      timeout: 5e3,
+      windowsHide: true
+    });
+    const versionOutput = [String(result.stdout), String(result.stderr)].join("\n");
+    return GROK_VERSION_RE.test(versionOutput);
+  } catch {
+    return false;
+  }
+}
 function hermesInvocation(args2) {
   if (process.platform !== "win32") {
     return { command: "hermes", args: args2 };
@@ -40142,11 +40181,26 @@ function hermesInvocation(args2) {
     args: ["/d", "/s", "/c", "hermes", ...args2]
   };
 }
+function grokInvocation(args2) {
+  if (process.platform !== "win32") {
+    return { command: "grok", args: args2 };
+  }
+  return {
+    command: "cmd.exe",
+    args: ["/d", "/s", "/c", "grok", ...args2]
+  };
+}
 function hermesExecTimeoutMs() {
   const configured = process.env["LEGION_HERMES_EXEC_TIMEOUT_MS"];
   if (configured === void 0) return DEFAULT_HERMES_EXEC_TIMEOUT_MS;
   const parsed = Number.parseInt(configured, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_HERMES_EXEC_TIMEOUT_MS;
+}
+function grokExecTimeoutMs() {
+  const configured = process.env["LEGION_GROK_EXEC_TIMEOUT_MS"];
+  if (configured === void 0) return DEFAULT_GROK_EXEC_TIMEOUT_MS;
+  const parsed = Number.parseInt(configured, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GROK_EXEC_TIMEOUT_MS;
 }
 var hermesAdapter = {
   kind: "hermes",
@@ -40197,6 +40251,138 @@ var hermesAdapter = {
     return result;
   }
 };
+var grokAdapter = {
+  kind: "grok",
+  async run(request) {
+    const timeoutMs = grokExecTimeoutMs();
+    const args2 = grokExecArgs({
+      repositoryRoot: request.repositoryRoot,
+      prompt: request.promptAbsolutePath,
+      readOnly: request.readOnly
+    });
+    const invocation = grokInvocation(args2);
+    let processResult;
+    try {
+      processResult = await spawnWithoutInput(
+        invocation.command,
+        invocation.args,
+        request.repositoryRoot,
+        timeoutMs
+      );
+    } catch {
+      processResult = {
+        exitCode: 127,
+        stdout: "",
+        stderr: "Grok Build executable could not be started.",
+        timedOut: false,
+        timeoutMs
+      };
+    }
+    const rawOutput = [processResult.stdout, processResult.stderr].filter((entry) => entry.length > 0).join("\n");
+    const envelope = parseGrokEnvelope(processResult.stdout);
+    const processStatus = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 ? "failed" : envelope.ok ? "succeeded" : "failed";
+    const parsed = envelope.ok ? envelope.result : void 0;
+    const normalized = normalizeExecutionResult(parsed, {
+      status: processStatus,
+      summary: processResult.timedOut ? `Grok Build executor timed out after ${timeoutMs}ms.` : processResult.exitCode !== 0 ? "Grok Build executor failed." : envelope.ok ? "Grok Build executor completed." : "Grok Build executor returned an invalid result envelope.",
+      rawOutput,
+      exitCode: processResult.exitCode
+    });
+    const resultStatus = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 || !envelope.ok ? "failed" : normalized.status;
+    const findings = [];
+    if (!envelope.ok) {
+      findings.push({
+        id: "grok-executor-invalid-output",
+        title: "Grok Build returned an invalid result",
+        body: envelope.message,
+        severity: "blocking"
+      });
+    }
+    if (processResult.timedOut) {
+      findings.push({
+        id: "grok-executor-timeout",
+        title: "Grok Build executor timed out",
+        body: `Grok Build did not complete within ${timeoutMs}ms. Check Grok auth/configuration, raise LEGION_GROK_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    } else if (processResult.exitCode !== 0) {
+      findings.push({
+        id: "grok-executor-failed",
+        title: "Grok Build executor exited unsuccessfully",
+        body: `Grok Build exited with code ${processResult.exitCode}. Check the raw and redacted executor logs before retrying.`,
+        severity: "blocking"
+      });
+    }
+    const withEnvelope = envelope.ok ? { ...normalized, structuredOutput: envelope.text } : normalized;
+    const result = {
+      ...withEnvelope,
+      ok: resultStatus === "succeeded",
+      status: resultStatus,
+      findings: [...withEnvelope.findings, ...findings]
+    };
+    const redacted = redactTranscript(rawOutput);
+    await writeProjectTextFile({
+      repositoryRoot: request.repositoryRoot,
+      artifactPath: request.rawLogArtifactPath,
+      text: rawOutput.length > 0 ? rawOutput : `${result.summary}
+`
+    });
+    await writeProjectTextFile({
+      repositoryRoot: request.repositoryRoot,
+      artifactPath: request.redactedLogArtifactPath,
+      text: redacted.length > 0 ? redacted : `${result.summary}
+`
+    });
+    await writeProjectExecutionResult({
+      repositoryRoot: request.repositoryRoot,
+      artifactPath: request.resultArtifactPath,
+      result
+    });
+    return result;
+  }
+};
+function parseGrokEnvelope(stdout) {
+  const trimmed = stdout.trim();
+  if (trimmed.length === 0) return { ok: false, message: "Grok Build produced no JSON output." };
+  let value;
+  try {
+    value = JSON.parse(trimmed);
+  } catch {
+    return { ok: false, message: "Grok Build output was not one complete JSON envelope." };
+  }
+  if (!isRecordValue(value)) return { ok: false, message: "Grok Build output was not a JSON object envelope." };
+  if (value["type"] === "error") return { ok: false, message: "Grok Build reported an error envelope." };
+  const text = value["text"];
+  if (typeof text !== "string" || text.trim().length === 0) {
+    return { ok: false, message: "Grok Build result envelope is missing non-empty text." };
+  }
+  if (typeof value["stopReason"] !== "string" || value["stopReason"].length === 0) {
+    return { ok: false, message: "Grok Build result envelope is missing stopReason." };
+  }
+  if (typeof value["sessionId"] !== "string" || value["sessionId"].length === 0) {
+    return { ok: false, message: "Grok Build result envelope is missing sessionId." };
+  }
+  if (typeof value["requestId"] !== "string" || value["requestId"].length === 0) {
+    return { ok: false, message: "Grok Build result envelope is missing requestId." };
+  }
+  let result;
+  try {
+    result = JSON.parse(text.trim());
+  } catch {
+    return { ok: false, message: "Grok Build envelope text was not one complete JSON result." };
+  }
+  if (!isCompleteGrokResult(result)) {
+    return { ok: false, message: "Grok Build envelope text was an incomplete ExecutionResult." };
+  }
+  return { ok: true, text, result };
+}
+function isCompleteGrokResult(value) {
+  if (!isRecordValue(value)) return false;
+  return (value["status"] === "succeeded" || value["status"] === "failed" || value["status"] === "blocked") && typeof value["summary"] === "string" && value["summary"].length > 0 && Array.isArray(value["filesChanged"]) && Array.isArray(value["commandsRun"]) && Array.isArray(value["findings"]);
+}
+function isRecordValue(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 var fakeAdapter = {
   kind: "fake",
   async run(request) {
@@ -40499,6 +40685,51 @@ async function spawnWithInput(command, args2, input, cwd, timeoutMs) {
       settle(timedOut ? 124 : code ?? 1);
     });
     child.stdin.end(input);
+  });
+}
+async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args2, {
+      cwd,
+      windowsHide: true,
+      // Grok consumes the prompt from --prompt-file. `ignore` is deliberate:
+      // Legion neither writes a prompt to stdin nor leaves a pipe for a child
+      // to mistake for an interactive session.
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timedOut = false;
+    const settle = (exitCode) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({ exitCode, stdout, stderr, timedOut, timeoutMs });
+    };
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      stderr += `${stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`;
+      terminateProcessTree(child.pid);
+      setTimeout(() => settle(124), 1e3).unref();
+    }, timeoutMs);
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error51) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error51);
+    });
+    child.on("close", (code) => {
+      settle(timedOut ? 124 : code ?? 1);
+    });
   });
 }
 function terminateProcessTree(pid) {
@@ -56813,18 +57044,18 @@ async function acceptanceBaselineFromEvidence(input) {
 }
 
 // packages/cli/src/commands/workflow/build.ts
-var BUILD_HELP = `legion build [--executor claude|codex|manual|fake] [--allow-dirty] [--dry-run]
+var BUILD_HELP = `legion build [--executor claude|codex|hermes|grok|manual|fake] [--allow-dirty] [--dry-run]
 
 Execute the latest typed taskgraph through a workflow executor and collect pending build evidence.
 
 With no --executor, the first installed driver runs the work: claude, then
-codex, then manual. The manual executor writes an instruction prompt and blocks
+codex, hermes, grok, then manual. The manual executor writes an instruction prompt and blocks
 rather than doing nothing quietly.
 
 Examples:
   legion build --dry-run --json
   legion build --executor fake --allow-dirty
-  legion build --executor claude --allow-dirty`;
+  legion build --executor grok --allow-dirty`;
 async function handleBuildWorkflow(context, changeId) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(BUILD_HELP);
@@ -57822,6 +58053,8 @@ function modelManifestForExecutor(executor) {
         return { provider: "openai", id: "codex-cli" };
       case "hermes":
         return { provider: "nous", id: "hermes-agent" };
+      case "grok":
+        return { provider: "xai", id: "grok-build" };
       case "manual":
       case "fake":
         return { provider: "legion", id: executor };
@@ -57978,7 +58211,7 @@ function resolveApprover(input) {
 }
 
 // packages/cli/src/commands/workflow/review.ts
-var REVIEW_HELP = `legion review [--executor claude|codex|manual|fake] [--dry-run] [--domain <d>]... [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
+var REVIEW_HELP = `legion review [--executor claude|codex|hermes|grok|manual|fake] [--dry-run] [--domain <d>]... [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
 
 Review collected build evidence. A submitted passing review still requires explicit human acceptance.
 
