@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -26,6 +27,18 @@ async function initProject(root) {
 
 async function readJson(root, artifactPath) {
   return JSON.parse(await readFile(path.join(root, ...artifactPath.split("/")), "utf8"));
+}
+
+function sortStable(value) {
+  if (Array.isArray(value)) return value.map((entry) => sortStable(entry));
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, entry]) => [key, sortStable(entry)]));
+  }
+  return value;
+}
+
+function sha256Hex(value) {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 async function assertFile(root, artifactPath) {
@@ -389,6 +402,82 @@ test("structural discovery requires both workflow run profile markers", async ()
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  }
+});
+
+test("structural discovery requires complete workflow source provenance", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
+    const payload = parseJsonOutput(refresh);
+    const runPath = path.join(root, ...payload.artifactPath.split("/"));
+    const run = await readJson(root, payload.artifactPath);
+    delete run.outputs.sourceFingerprint;
+    delete run.outputs.sourceFileCount;
+    await writeFile(runPath, `${JSON.stringify(run)}\n`, "utf8");
+
+    const check = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(check.exitCode, 0, check.stderr);
+    const checkPayload = parseJsonOutput(check);
+    assert.equal(checkPayload.status, "absent");
+    assert.ok(checkPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+
+    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(query.exitCode, 1);
+    const queryPayload = parseJsonOutput(query);
+    assert.equal(queryPayload.status, "blocked");
+    assert.ok(queryPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("structural discovery rejects forged snapshot and run mapRunId metadata after hash repair", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
+    const payload = parseJsonOutput(refresh);
+    const runPath = path.join(root, ...payload.artifactPath.split("/"));
+    const snapshotPath = path.join(root, ...payload.semanticIndexArtifactPath.split("/"));
+    const run = await readJson(root, payload.artifactPath);
+    const snapshot = await readJson(root, payload.semanticIndexArtifactPath);
+    const forgedMapRunId = `run_map-${"f".repeat(32)}`;
+    snapshot.mapRunId = forgedMapRunId;
+    run.outputs.mapRunId = forgedMapRunId;
+    const snapshotText = `${JSON.stringify(sortStable(snapshot))}\n`;
+    run.outputs.semanticIndexSha256 = sha256Hex(snapshotText);
+    await writeFile(snapshotPath, snapshotText, "utf8");
+    await writeFile(runPath, `${JSON.stringify(run)}\n`, "utf8");
+
+    const check = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(check.exitCode, 0, check.stderr);
+    const checkPayload = parseJsonOutput(check);
+    assert.equal(checkPayload.status, "absent");
+    assert.ok(checkPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+
+    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(query.exitCode, 1);
+    const queryPayload = parseJsonOutput(query);
+    assert.equal(queryPayload.status, "blocked");
+    assert.ok(queryPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 

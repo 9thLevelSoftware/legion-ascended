@@ -340,31 +340,28 @@ export async function discoverLatestStructuralCodeIndex(repositoryRoot: string):
     );
   }
   const sourceFingerprint = run.outputs["sourceFingerprint"];
-  if (sourceFingerprint !== undefined &&
-      (typeof sourceFingerprint !== "string" || !/^[0-9a-f]{64}$/u.test(sourceFingerprint) ||
-        snapshot.sourceFingerprint !== sourceFingerprint)) {
+  if (typeof sourceFingerprint !== "string" || !/^[0-9a-f]{64}$/u.test(sourceFingerprint) ||
+      snapshot.sourceFingerprint !== sourceFingerprint) {
     return rejectLatest(
       "map_semantic_snapshot_invalid",
-      "semantic snapshot source fingerprint does not match the workflow output"
+      "semantic snapshot source fingerprint is missing, malformed, or does not match the workflow output"
     );
   }
   const sourceFileCount = run.outputs["sourceFileCount"];
-  if (sourceFileCount !== undefined &&
-      (!Number.isSafeInteger(sourceFileCount) || Number(sourceFileCount) < 0 ||
-        snapshot.coverage.length !== Number(sourceFileCount))) {
+  if (!Number.isSafeInteger(sourceFileCount) || Number(sourceFileCount) < 0 ||
+      snapshot.coverage.length !== Number(sourceFileCount)) {
     return rejectLatest(
       "map_semantic_snapshot_invalid",
-      "semantic snapshot coverage count does not match the workflow output"
+      "semantic snapshot coverage count is missing, malformed, or does not match the workflow output"
     );
   }
+  const expectedMapRunId = structuralMapRunId(run.runId);
   const recordedMapRunId = run.outputs["mapRunId"];
-  const expectedMapRunId = recordedMapRunId === undefined
-    ? structuralMapRunId(run.runId)
-    : recordedMapRunId;
-  if (typeof expectedMapRunId !== "string" || snapshot.mapRunId !== expectedMapRunId) {
+  if ((recordedMapRunId !== undefined && recordedMapRunId !== expectedMapRunId) ||
+      snapshot.mapRunId !== expectedMapRunId) {
     return rejectLatest(
       "map_semantic_snapshot_invalid",
-      "semantic snapshot mapRunId is not derived from or recorded by the declaring run"
+      "semantic snapshot or workflow output mapRunId is not derived from the declaring run"
     );
   }
   if (snapshot.sqlite.path !== expectedSqlitePath) {
@@ -395,8 +392,8 @@ export async function discoverLatestStructuralCodeIndex(repositoryRoot: string):
   const map = mapResult.record.map;
   if (map.scope !== snapshot.scope || map.sourceFingerprint !== snapshot.sourceFingerprint ||
       map.sourceFileCount !== snapshot.coverage.length ||
-      (sourceFingerprint !== undefined && map.sourceFingerprint !== sourceFingerprint) ||
-      (sourceFileCount !== undefined && map.sourceFileCount !== sourceFileCount)) {
+      map.sourceFingerprint !== sourceFingerprint ||
+      map.sourceFileCount !== sourceFileCount) {
     return rejectLatest(
       "map_artifact_fingerprint_mismatch",
       "v1 map scope, source fingerprint, or source file count does not match the structural snapshot and workflow output"
