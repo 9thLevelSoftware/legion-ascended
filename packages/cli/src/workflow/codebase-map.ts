@@ -1,11 +1,34 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { resolveProjectArtifactPath, stableProtocolJson } from "@legion/artifacts";
-import { utcTimestampSchema, type ArtifactPath, type ArtifactReference, type UtcTimestamp } from "@legion/protocol";
+import {
+  hashContent,
+  readCodeIndexSnapshot,
+  resolveProjectArtifactPath,
+  stableProtocolJson,
+  verifyCodeIndexSqlite
+} from "@legion/artifacts";
+import {
+  artifactPathSchema,
+  codeIndexFactIdSchema,
+  codeIndexSha256Schema,
+  codeIndexSnapshotIdSchema,
+  formatEntityId,
+  utcTimestampSchema,
+  type ArtifactPath,
+  type ArtifactReference,
+  type CodeIndexFact,
+  type CodeIndexSnapshot,
+  type CodeIndexSnapshotId,
+  type CodeIndexSha256,
+  type RunId,
+  type UtcTimestamp
+} from "@legion/protocol";
+import { findCodeIndexFact, queryCodeIndexStore, writeCodeIndexStore, type CodeIndexSearchHit } from "@legion/index-store";
 
+import { buildStructuralCodeIndex, type CodeIndexSnapshotDraft } from "./code-index.js";
 import { writeProjectTextFile } from "./executor/result.js";
 import { guidanceArtifactPath, latestGuidanceRuns, type GuidanceRunPaths } from "./guidance-run.js";
 import { isFullMapAuthoredFile, shouldTraverseAuthoredDirectory } from "./authored-source.js";
@@ -18,6 +41,13 @@ export interface CodebaseMapFile {
   readonly symbols: readonly string[];
   readonly headings: readonly string[];
   readonly summary: string;
+}
+
+export type MapProfile = "inventory" | "structural";
+
+export interface MapSourceFile extends CodebaseMapFile {
+  /** Text from the same source walk, when it was safe to analyze. */
+  readonly text?: string;
 }
 
 export interface CodebaseMapDocument {
@@ -67,9 +97,18 @@ export interface CodebaseMapQueryMatch {
 export async function collectMapSource(input: {
   readonly repositoryRoot: string;
   readonly scope?: string;
-}): Promise<{ readonly scope: string; readonly files: readonly CodebaseMapFile[] }> {
+}): Promise<{
+  readonly scope: string;
+  readonly files: readonly CodebaseMapFile[];
+  readonly sourceFiles: readonly MapSourceFile[];
+}> {
   const scope = normalizeScope(input.repositoryRoot, input.scope);
-  return { scope, files: await collectSourceFiles(input.repositoryRoot, scope) };
+  const sourceFiles = await collectSourceFiles(input.repositoryRoot, scope);
+  return {
+    scope,
+    sourceFiles,
+    files: sourceFiles.map(({ text: _text, ...file }) => file)
+  };
 }
 
 export async function refreshCodebaseMap(input: {
@@ -136,6 +175,182 @@ export async function refreshCodebaseMap(input: {
   };
 }
 
+export interface StructuralCodeIndexArtifacts {
+  readonly snapshot: CodeIndexSnapshot;
+  readonly semanticIndexArtifactPath: ArtifactPath;
+  readonly semanticSqliteArtifactPath: ArtifactPath;
+  readonly parserDiagnostics: readonly string[];
+  readonly factCount: number;
+}
+
+/**
+ * Parse and materialize the structural index from the exact source walk used by
+ * the v1 map. The SQLite bytes are written before the JSON snapshot is built so
+ * the snapshot pins the materialization that readers will query.
+ */
+export async function refreshStructuralCodeIndex(input: {
+  readonly repositoryRoot: string;
+  readonly paths: GuidanceRunPaths;
+  readonly scope: string;
+  readonly sourceFingerprint: string;
+  readonly files: readonly MapSourceFile[];
+}): Promise<StructuralCodeIndexArtifacts> {
+  const snapshotId = structuralSnapshotId(input.paths.runId, input.sourceFingerprint);
+  const mapRunId = formatEntityId("run", `map-${sha256(Buffer.from(input.paths.runId, "utf8")).slice(0, 32)}`) as RunId;
+  const draft: CodeIndexSnapshotDraft = await buildStructuralCodeIndex({
+    snapshotId,
+    mapRunId,
+    generatedAt: input.paths.createdAt,
+    scope: input.scope,
+    sourceFingerprint: codeIndexSha256Schema.parse(input.sourceFingerprint),
+    files: input.files.map((file) => ({
+      path: artifactPathSchema.parse(file.path),
+      sha256: codeIndexSha256Schema.parse(file.sha256),
+      ...(file.text === undefined ? {} : { text: file.text })
+    }))
+  });
+
+  const semanticIndexArtifactPath = guidanceArtifactPath(input.paths, "semantic-index.json");
+  const semanticSqliteArtifactPath = guidanceArtifactPath(input.paths, "semantic-index.sqlite");
+  const databasePath = path.join(input.repositoryRoot, ...semanticSqliteArtifactPath.split("/"));
+  const provisional: CodeIndexSnapshot = {
+    schemaVersion: 1,
+    kind: "code_index_snapshot",
+    ...draft,
+    scope: draft.scope === "." ? "." : artifactPathSchema.parse(draft.scope),
+    coverage: [...draft.coverage],
+    symbols: [...draft.symbols],
+    imports: [...draft.imports],
+    exports: [...draft.exports],
+    sqlite: {
+      path: semanticSqliteArtifactPath,
+      sha256: codeIndexSha256Schema.parse("0".repeat(64))
+    }
+  };
+
+  const store = writeCodeIndexStore({ databasePath, snapshot: provisional });
+  const sqliteBytes = await readFile(databasePath);
+  const sqliteSha256 = codeIndexSha256Schema.parse(hashContent(sqliteBytes).slice("sha256:".length));
+  const snapshot: CodeIndexSnapshot = {
+    ...provisional,
+    sqlite: { path: semanticSqliteArtifactPath, sha256: sqliteSha256 }
+  };
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: semanticIndexArtifactPath,
+    text: stableProtocolJson(snapshot)
+  });
+
+  const parserDiagnostics = draft.coverage.flatMap((coverage) => {
+    if (coverage.status !== "parser-error") return [];
+    const diagnostics = coverage.diagnostics ?? ["parser error"];
+    return diagnostics.map((message) => `${coverage.path}: ${message}`);
+  });
+  return {
+    snapshot,
+    semanticIndexArtifactPath,
+    semanticSqliteArtifactPath,
+    parserDiagnostics,
+    factCount: store.factCount
+  };
+}
+
+export interface LatestStructuralCodeIndex {
+  readonly snapshot: CodeIndexSnapshot;
+  readonly snapshotArtifact: ArtifactReference;
+  readonly sqliteArtifact: ArtifactReference;
+  readonly runId: string;
+  readonly semanticIndexArtifactPath: ArtifactPath;
+  readonly semanticSqliteArtifactPath: ArtifactPath;
+}
+
+export interface StructuralCodeIndexDiscovery {
+  readonly record?: LatestStructuralCodeIndex;
+  readonly diagnostics: readonly MapCandidateDiagnostic[];
+}
+
+export async function discoverLatestStructuralCodeIndex(repositoryRoot: string): Promise<StructuralCodeIndexDiscovery> {
+  const runs = await latestGuidanceRuns({ repositoryRoot, workflows: ["map"], limitPerWorkflow: 20 });
+  const diagnostics: MapCandidateDiagnostic[] = [];
+  for (const run of runs) {
+    if (run.status !== "completed" || run.outputs["indexProfile"] !== "structural") continue;
+    const snapshotPath = run.outputs["semanticIndexArtifactPath"];
+    if (typeof snapshotPath !== "string") continue;
+    const expectedRoot = `.legion/project/workflow/map/${run.runId}/`;
+    if (snapshotPath !== `${expectedRoot}semantic-index.json`) {
+      diagnostics.push(structuralCandidateDiagnostic(run.runId, "map_semantic_artifact_path_invalid", "semantic snapshot path does not belong to its declaring run"));
+      continue;
+    }
+    const snapshotResult = await readCodeIndexSnapshot({ repositoryRoot, artifactPath: snapshotPath });
+    if (!snapshotResult.ok) {
+      diagnostics.push(structuralCandidateDiagnostic(run.runId, "map_semantic_snapshot_invalid", formatArtifactDiagnostics(snapshotResult.diagnostics)));
+      continue;
+    }
+    if (snapshotResult.snapshot.profile !== "structural" || snapshotResult.snapshot.snapshotId !== run.outputs["snapshotId"]) {
+      diagnostics.push(structuralCandidateDiagnostic(run.runId, "map_semantic_snapshot_invalid", "semantic snapshot identity or profile does not match the workflow output"));
+      continue;
+    }
+    const sqlitePath = snapshotResult.snapshot.sqlite.path;
+    if (sqlitePath !== `${expectedRoot}semantic-index.sqlite`) {
+      diagnostics.push(structuralCandidateDiagnostic(run.runId, "map_semantic_artifact_path_invalid", "SQLite path does not belong to its declaring run"));
+      continue;
+    }
+    const sqliteResult = await verifyCodeIndexSqlite({ repositoryRoot, snapshot: snapshotResult.snapshot });
+    if (!sqliteResult.ok) {
+      diagnostics.push(structuralCandidateDiagnostic(run.runId, "map_semantic_sqlite_invalid", formatArtifactDiagnostics(sqliteResult.diagnostics)));
+      continue;
+    }
+    return {
+      record: {
+        snapshot: snapshotResult.snapshot,
+        snapshotArtifact: snapshotResult.reference,
+        sqliteArtifact: sqliteResult.reference,
+        runId: run.runId,
+        semanticIndexArtifactPath: snapshotPath as ArtifactPath,
+        semanticSqliteArtifactPath: sqlitePath
+      },
+      diagnostics
+    };
+  }
+  return { diagnostics };
+}
+
+export function queryStructuralCodeIndex(input: {
+  readonly repositoryRoot: string;
+  readonly record: LatestStructuralCodeIndex;
+  readonly query: string;
+  readonly limit?: number;
+}): readonly CodeIndexSearchHit[] {
+  const databasePath = path.join(input.repositoryRoot, ...input.record.semanticSqliteArtifactPath.split("/"));
+  return queryCodeIndexStore({ databasePath, query: input.query, limit: input.limit ?? 10 });
+}
+
+export function findStructuralCodeIndexFact(input: {
+  readonly repositoryRoot: string;
+  readonly record: LatestStructuralCodeIndex;
+  readonly id: string;
+}): CodeIndexFact | undefined {
+  const factId = codeIndexFactIdSchema.parse(input.id);
+  const databasePath = path.join(input.repositoryRoot, ...input.record.semanticSqliteArtifactPath.split("/"));
+  return findCodeIndexFact({ databasePath, id: factId });
+}
+
+function structuralCandidateDiagnostic(
+  runId: string,
+  code: MapCandidateDiagnostic["code"],
+  message: string
+): MapCandidateDiagnostic {
+  return { runId, code, message: `Ignored structural map run ${runId}: ${message}.` };
+}
+
+function formatArtifactDiagnostics(diagnostics: readonly { readonly code: string; readonly message: string }[]): string {
+  return diagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`).join("; ");
+}
+
+export function structuralSnapshotId(runId: string, sourceFingerprint: string): CodeIndexSnapshotId {
+  return codeIndexSnapshotIdSchema.parse(`idx_${sha256(Buffer.from(`${runId}\0${sourceFingerprint}`, "utf8")).slice(0, 24)}`);
+}
+
 export interface MapCandidateDiagnostic {
   readonly runId: string;
   readonly code:
@@ -146,7 +361,10 @@ export interface MapCandidateDiagnostic {
     | "map_artifact_duplicate_path"
     | "map_artifact_unsafe_path"
     | "map_artifact_count_mismatch"
-    | "map_artifact_fingerprint_mismatch";
+    | "map_artifact_fingerprint_mismatch"
+    | "map_semantic_artifact_path_invalid"
+    | "map_semantic_snapshot_invalid"
+    | "map_semantic_sqlite_invalid";
   readonly message: string;
 }
 
@@ -396,7 +614,7 @@ function normalizeScope(repositoryRoot: string, scope: string | undefined): stri
   return relative;
 }
 
-async function collectSourceFiles(repositoryRoot: string, scope: string): Promise<readonly CodebaseMapFile[]> {
+async function collectSourceFiles(repositoryRoot: string, scope: string): Promise<readonly MapSourceFile[]> {
   const root = scope === "." ? repositoryRoot : path.join(repositoryRoot, ...scope.split("/"));
   const rootStat = await stat(root);
   const candidates = rootStat.isFile() ? [root] : await walk(root);
@@ -421,7 +639,8 @@ async function collectSourceFiles(repositoryRoot: string, scope: string): Promis
       headings,
       summary: analyzable
         ? summarizeFile(relative, lines, symbols, headings)
-        : `${relative} is fingerprinted but omitted from textual analysis (${fileStat.size > 512 * 1024 ? "size limit" : "opaque content"})`
+        : `${relative} is fingerprinted but omitted from textual analysis (${fileStat.size > 512 * 1024 ? "size limit" : "opaque content"})`,
+      ...(analyzable ? { text } : {})
     });
   }
   return files;
@@ -476,6 +695,10 @@ function summarizeFile(relative: string, lines: readonly string[], symbols: read
   if (headings.length > 0) parts.push(`headings: ${headings.slice(0, 3).join(", ")}`);
   if (firstContent !== undefined) parts.push(`first content: ${firstContent.slice(0, 120)}`);
   return parts.join("; ");
+}
+
+export function fingerprintSourceFiles(files: readonly CodebaseMapFile[]): string {
+  return fingerprintFiles(files);
 }
 
 function fingerprintFiles(files: readonly CodebaseMapFile[]): string {
@@ -575,6 +798,8 @@ export interface MapState {
   readonly generatedAt: string | null;
   readonly ageDays: number | null;
   readonly mapArtifact: ArtifactReference | null;
+  readonly indexProfile: MapProfile;
+  readonly snapshotId: string | null;
   readonly diagnostics: readonly MapCandidateDiagnostic[];
 }
 
@@ -590,11 +815,15 @@ export interface MapState {
 export async function resolveMapState(
   repositoryRoot: string,
   scope: string | undefined,
-  now: string
+  now: string,
+  profile: MapProfile = "inventory"
 ): Promise<MapState | { readonly error: string }> {
-  const discovery = await discoverLatestCodebaseMap(repositoryRoot);
-  const latestRecord = discovery.record;
-  const latest = latestRecord?.map;
+  const discovery = profile === "structural"
+    ? await discoverLatestStructuralCodeIndex(repositoryRoot)
+    : await discoverLatestCodebaseMap(repositoryRoot);
+  const structuralRecord = profile === "structural" ? (discovery as StructuralCodeIndexDiscovery).record : undefined;
+  const inventoryRecord = profile === "inventory" ? (discovery as LatestCodebaseMapDiscovery).record : undefined;
+  const latest = profile === "structural" ? structuralRecord?.snapshot : inventoryRecord?.map;
   let current: Awaited<ReturnType<typeof currentCodebaseFingerprint>>;
   try {
     current = await currentCodebaseFingerprint({ repositoryRoot, ...(scope === undefined ? {} : { scope }) });
@@ -609,12 +838,21 @@ export async function resolveMapState(
     sourceFileCount: current.sourceFileCount,
     latestSourceFingerprint: latest?.sourceFingerprint ?? null,
     generatedAt: latest?.generatedAt ?? null,
-    mapArtifact: latestRecord?.artifact ?? null,
+    mapArtifact: profile === "structural"
+      ? (structuralRecord?.snapshotArtifact ?? null)
+      : (inventoryRecord?.artifact ?? null),
+    indexProfile: profile,
+    snapshotId: structuralRecord?.snapshot.snapshotId ?? null,
     diagnostics: discovery.diagnostics
   };
 
   if (latest === undefined) {
-    return { ...base, freshness: "absent", reason: "No codebase map has been generated.", ageDays: null };
+    return {
+      ...base,
+      freshness: "absent",
+      reason: profile === "structural" ? "No structural code index has been generated." : "No codebase map has been generated.",
+      ageDays: null
+    };
   }
 
   const ageDays = ageInDays(latest.generatedAt, now);
@@ -630,9 +868,6 @@ export async function resolveMapState(
     return { ...base, freshness: "stale", reason: "Source files have changed since the map was generated.", ageDays };
   }
   if (ageDays !== null && ageDays > MAP_MAX_AGE_DAYS) {
-    // The fingerprint can match while the map is still worth regenerating: the
-    // schema moves, and a map old enough to predate it describes the repository
-    // in a vocabulary the current reader no longer uses.
     return {
       ...base,
       freshness: "stale",

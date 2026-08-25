@@ -2,7 +2,7 @@ import { readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { listReviewDecisionsForChange, loadProject, readTaskGraph, stableProtocolJson } from "@legion/artifacts";
-import { LEGION_PROTOCOL_VERSION, artifactPathSchema, formatEntityId, type ArtifactPath } from "@legion/protocol";
+import { LEGION_PROTOCOL_VERSION, artifactPathSchema, codeIndexFactIdSchema, formatEntityId, type ArtifactPath } from "@legion/protocol";
 
 import {
   failure,
@@ -17,11 +17,17 @@ import {
 import {
   currentCodebaseFingerprint,
   discoverLatestCodebaseMap,
+  discoverLatestStructuralCodeIndex,
+  findStructuralCodeIndexFact,
+  fingerprintSourceFiles,
+  queryStructuralCodeIndex,
   queryCodebaseMap,
   collectMapSource,
   queryTerms,
   refreshCodebaseMap,
+  refreshStructuralCodeIndex,
   resolveMapState,
+  type MapProfile,
   type MapState
 } from "../../workflow/codebase-map.js";
 import { writeProjectTextFile } from "../../workflow/executor/index.js";
@@ -55,7 +61,7 @@ import { positionalText } from "./record.js";
 
 const HELP = {
   explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor claude|codex|manual|fake]\n\nBrainstorm freely before structured intake preparation. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Bare legion start automatically selects a compatible completed exploration; use --from-exploration <id> to select one explicitly or --without-exploration to opt out.",
-  map: "legion map [--refresh] [--scope <path>] | [--check] | [--query <text>]\n\nGenerate, check, or query deterministic codebase context.",
+  map: "legion map [--refresh] [--profile inventory|structural] [--scope <path>] | [--check] [--profile inventory|structural] | [--query <text>] | [--why <fact-id>]\n\nGenerate, check, query, or explain deterministic codebase context.",
   retro: "legion retro [--phase N|--milestone M] [--executor claude|codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
   milestone: "legion milestone --status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>\n\nManage milestone status, summaries, and archives.",
   council: "legion council <topic> [--executor claude|codex|manual|fake]\n\nRun governance deliberation formerly exposed as /legion:board."
@@ -276,34 +282,42 @@ async function handleMapWorkflow(context: CliContext): Promise<CliResult> {
   const check = hasFlag(context, "check");
   const refresh = hasFlag(context, "refresh");
   const query = stringOption(context, "query")?.trim();
+  const why = stringOption(context, "why")?.trim();
   const scope = stringOption(context, "scope")?.trim();
-  const modes = [check, refresh, query !== undefined].filter(Boolean).length;
-  if (modes > 1) return usageError("legion map accepts one mode at a time: --refresh, --check, or --query <text>.");
+  const rawProfile = stringOption(context, "profile")?.trim();
+  if (context.args.options.get("profile") === true || rawProfile === "") {
+    return usageError("Missing required value for --profile. Use inventory or structural.");
+  }
+  let explicitProfile: MapProfile | undefined;
+  if (rawProfile !== undefined) {
+    if (rawProfile !== "inventory" && rawProfile !== "structural") {
+      return usageError(`Invalid map profile ${JSON.stringify(rawProfile)}. Use inventory or structural.`);
+    }
+    explicitProfile = rawProfile;
+  }
   if (context.args.options.get("query") === true || query === "") return usageError("Missing required value for --query. Example: legion map --query taskgraph.");
+  if (context.args.options.get("why") === true || why === "") return usageError("Missing required value for --why. Example: legion map --why sym_<fact-id>.");
   if (context.args.options.get("scope") === true || scope === "") return usageError("Missing required value for --scope. Example: legion map --refresh --scope packages/cli.");
-  // `--scope` reaches `mapCheck` and `mapRefresh` but never `mapQuery`, and the
-  // mode guard above cannot catch the pair because scope is not a mode. So
-  // `legion map --query x --scope packages/cli` ran unscoped and reported
-  // success — an answer drawn from the whole repository, presented as one drawn
-  // from the path the caller named. Refusing is the honest reading: the query
-  // runs over the stored map, whose scope was fixed when it was generated.
+  const modes = [check, refresh, query !== undefined, why !== undefined].filter(Boolean).length;
+  if (modes > 1) return usageError("legion map accepts one mode at a time: --refresh, --check, --query <text>, or --why <fact-id>.");
   if (query !== undefined && scope !== undefined) {
     return usageError(
       "legion map --query does not accept --scope. The query runs over the stored map, whose scope was set when it was generated. Refresh with legion map --refresh --scope <path> to change it."
     );
   }
+  if (why !== undefined && scope !== undefined) return usageError("legion map --why does not accept --scope.");
+  if ((query !== undefined || why !== undefined) && explicitProfile === "inventory") {
+    return usageError("legion map --profile inventory is only valid for --refresh and inventory freshness checks; structural query/why selection is explicit.");
+  }
 
-  if (check) return mapCheck(context, scope);
-  if (query !== undefined) return mapQuery(context, query);
-  if (refresh) return mapRefresh(context, scope);
-  // A bare `legion map` walked the repository and overwrote the artifact set
-  // with no prompt and no confirmation. The command it backs summarizes the
-  // current dataset and offers a refresh, so the destructive path now requires
-  // asking for it by name.
-  return mapSummary(context, scope);
+  if (why !== undefined) return mapWhy(context, why);
+  if (check) return mapCheck(context, scope, explicitProfile ?? "inventory");
+  if (query !== undefined) return mapQuery(context, query, explicitProfile);
+  if (refresh) return mapRefresh(context, scope, explicitProfile ?? "structural");
+  return mapSummary(context, scope, explicitProfile ?? "inventory");
 }
 
-async function mapRefresh(context: CliContext, scope: string | undefined): Promise<CliResult> {
+async function mapRefresh(context: CliContext, scope: string | undefined, profile: MapProfile): Promise<CliResult> {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
 
@@ -337,59 +351,184 @@ async function mapRefresh(context: CliContext, scope: string | undefined): Promi
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "map",
-    slugSource: scope === undefined ? "refresh" : `refresh ${scope}`,
+    slugSource: profile === "structural" ? `refresh structural ${scope ?? ""}` : `refresh inventory ${scope ?? ""}`,
     createdAt
   });
   try {
+    const semantic = profile === "structural"
+      ? await refreshStructuralCodeIndex({
+          repositoryRoot: context.repositoryRoot,
+          paths,
+          scope: source.scope,
+          sourceFingerprint: fingerprintSourceFiles(source.files),
+          files: source.sourceFiles
+        })
+      : undefined;
     const artifacts = await refreshCodebaseMap({
       repositoryRoot: context.repositoryRoot,
       paths,
       scope: source.scope,
       files: source.files
     });
-    const action = nextAction("legion plan 1", "Use refreshed map context when planning the next change.");
+    const parserDiagnostics = semantic?.parserDiagnostics ?? [];
+    const status = parserDiagnostics.length === 0 ? "completed" : "blocked";
+    const action = status === "completed"
+      ? nextAction("legion plan 1", "Use refreshed map context when planning the next change.")
+      : nextAction("legion map --refresh", "The structural parser reported errors; inspect snapshot coverage diagnostics before relying on this index.");
+    const diagnostics = parserDiagnostics.map((message) => ({ code: "map_parser_error", message }));
+    const outputs = {
+      codebaseArtifactPath: artifacts.codebaseArtifactPath,
+      indexArtifactPath: artifacts.indexArtifactPath,
+      symbolsArtifactPath: artifacts.symbolsArtifactPath,
+      searchArtifactPath: artifacts.searchArtifactPath,
+      mapArtifactPath: artifacts.mapArtifactPath,
+      sourceFingerprint: artifacts.map.sourceFingerprint,
+      sourceFileCount: artifacts.map.sourceFileCount,
+      ...(semantic === undefined
+        ? {}
+        : {
+            semanticIndexArtifactPath: semantic.semanticIndexArtifactPath,
+            semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
+            indexProfile: "structural",
+            snapshotId: semantic.snapshot.snapshotId
+          })
+    };
     await writeGuidanceRun({
       repositoryRoot: context.repositoryRoot,
       paths,
-      status: "completed",
-      runInput: { mode: "refresh", scope: artifacts.map.scope },
-      outputs: {
-        codebaseArtifactPath: artifacts.codebaseArtifactPath,
-        indexArtifactPath: artifacts.indexArtifactPath,
-        symbolsArtifactPath: artifacts.symbolsArtifactPath,
-        searchArtifactPath: artifacts.searchArtifactPath,
-        mapArtifactPath: artifacts.mapArtifactPath,
-        sourceFingerprint: artifacts.map.sourceFingerprint,
-        sourceFileCount: artifacts.map.sourceFileCount
-      },
-      nextAction: action
+      status,
+      runInput: { mode: "refresh", scope: artifacts.map.scope, profile },
+      outputs,
+      nextAction: action,
+      diagnostics
     });
-    return success(
-      {
-        ok: true,
-        status: "completed",
-        workflow: "map",
-        mode: "refresh",
-        runId: paths.runId,
-        artifactPath: paths.workflowRunArtifactPath,
-        mapArtifactPath: artifacts.mapArtifactPath,
-        sourceFingerprint: artifacts.map.sourceFingerprint,
-        sourceFileCount: artifacts.map.sourceFileCount,
-        nextAction: action,
-        diagnostics: []
-      },
-      [
-        `Codebase map refreshed for ${artifacts.map.sourceFileCount} source files.`,
-        `Artifact: ${artifacts.codebaseArtifactPath}`,
-        renderNextAction(action)
-      ].join("\n")
-    );
+    const payload = {
+      ok: status === "completed",
+      status,
+      workflow: "map",
+      mode: "refresh",
+      runId: paths.runId,
+      artifactPath: paths.workflowRunArtifactPath,
+      mapArtifactPath: artifacts.mapArtifactPath,
+      sourceFingerprint: artifacts.map.sourceFingerprint,
+      sourceFileCount: artifacts.map.sourceFileCount,
+      ...(semantic === undefined
+        ? {}
+        : {
+            semanticIndexArtifactPath: semantic.semanticIndexArtifactPath,
+            semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
+            indexProfile: "structural",
+            snapshotId: semantic.snapshot.snapshotId
+          }),
+      nextAction: action,
+      diagnostics
+    };
+    const human = [
+      status === "completed"
+        ? `Codebase map refreshed for ${artifacts.map.sourceFileCount} source files.`
+        : `Structural codebase map blocked by ${parserDiagnostics.length} parser diagnostic(s).`,
+      `Artifact: ${artifacts.codebaseArtifactPath}`,
+      ...(semantic === undefined ? [] : [`Semantic index: ${semantic.semanticIndexArtifactPath}`]),
+      renderNextAction(action)
+    ].join("\n");
+    return status === "completed" ? success(payload, human) : failure(payload, human);
   } catch (error) {
+    await discardMapRun(context.repositoryRoot, paths);
     const message = error instanceof Error ? error.message : String(error);
     return usageError(`Unable to refresh codebase map. ${message}`);
   }
 }
 
+
+async function discardMapRun(repositoryRoot: string, paths: { readonly artifactRoot: string }): Promise<void> {
+  await rm(path.join(repositoryRoot, ...paths.artifactRoot.split("/")), {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 50
+  });
+}
+
+async function mapWhy(context: CliContext, factId: string): Promise<CliResult> {
+  if (factId.startsWith("idx_")) return usageError("legion map --why accepts a fact ID, not a structural snapshot ID.");
+  const parsedId = codeIndexFactIdSchema.safeParse(factId);
+  if (!parsedId.success) return usageError(`Invalid structural fact ID ${JSON.stringify(factId)}. Use a symbol, import, or export fact ID.`);
+  const discovery = await discoverLatestStructuralCodeIndex(context.repositoryRoot);
+  const action = nextAction("legion map --refresh --profile structural", "A valid structural snapshot is required before explaining a fact.");
+  if (discovery.record === undefined) {
+    return failure(
+      {
+        ok: false,
+        status: "blocked",
+        workflow: "map",
+        mode: "why",
+        diagnostics: [
+          ...discovery.diagnostics,
+          { code: "map_structural_missing", message: "No valid structural code index exists. Run legion map --refresh --profile structural first." }
+        ],
+        nextAction: action
+      },
+      ["Map why is blocked.", renderNextAction(action)].join("\n")
+    );
+  }
+  let fact: ReturnType<typeof findStructuralCodeIndexFact>;
+  try {
+    fact = findStructuralCodeIndexFact({
+      repositoryRoot: context.repositoryRoot,
+      record: discovery.record,
+      id: parsedId.data
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return failure(
+      {
+        ok: false,
+        status: "blocked",
+        workflow: "map",
+        mode: "why",
+        snapshotId: discovery.record.snapshot.snapshotId,
+        indexProfile: "structural",
+        diagnostics: [...discovery.diagnostics, { code: "map_structural_unreadable", message }],
+        nextAction: action
+      },
+      ["Map why is blocked.", renderNextAction(action)].join("\n")
+    );
+  }
+  if (fact === undefined) {
+    return failure(
+      {
+        ok: false,
+        status: "blocked",
+        workflow: "map",
+        mode: "why",
+        snapshotId: discovery.record.snapshot.snapshotId,
+        indexProfile: "structural",
+        diagnostics: [...discovery.diagnostics, { code: "map_fact_not_found", message: `No structural fact exists with ID ${factId}.` }],
+        nextAction: action
+      },
+      [`Map why could not find fact ${factId}.`, renderNextAction(action)].join("\n")
+    );
+  }
+  return success(
+    {
+      ok: true,
+      status: "completed",
+      workflow: "map",
+      mode: "why",
+      fact,
+      snapshotId: discovery.record.snapshot.snapshotId,
+      indexProfile: "structural",
+      diagnostics: discovery.diagnostics,
+      nextAction: nextAction("legion status", "Use the fact provenance to guide the next workflow action.")
+    },
+    [
+      `Structural fact: ${fact.id}.`,
+      `Source: ${fact.path}.`,
+      `Range: ${fact.range.startByte}-${fact.range.endByte}.`,
+      renderNextAction(nextAction("legion status", "Use the fact provenance to guide the next workflow action."))
+    ].join("\n")
+  );
+}
 
 function mapStatePayload(state: MapState, mode: "check" | "summary") {
   return {
@@ -402,6 +541,9 @@ function mapStatePayload(state: MapState, mode: "check" | "summary") {
     sourceFileCount: state.sourceFileCount,
     latestSourceFingerprint: state.latestSourceFingerprint,
     generatedAt: state.generatedAt,
+    ...(state.indexProfile === "structural"
+      ? { indexProfile: "structural", snapshotId: state.snapshotId }
+      : {}),
     diagnostics: state.diagnostics
   };
 }
@@ -412,30 +554,24 @@ function mapStateAction(state: MapState) {
     : nextAction("legion map --refresh", state.reason);
 }
 
-async function mapCheck(context: CliContext, scope: string | undefined): Promise<CliResult> {
+async function mapCheck(context: CliContext, scope: string | undefined, profile: MapProfile): Promise<CliResult> {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
-  const state = await resolveMapState(context.repositoryRoot, scope, createdAt);
+  const state = await resolveMapState(context.repositoryRoot, scope, createdAt, profile);
   if ("error" in state) return usageError(state.error);
 
-  // No guidance run. `--check` compares two fingerprints and writes nothing the
-  // caller asked to change, and recording it did active harm:
-  // `getLatestCodebaseMap` finds the current map by scanning only the newest 20
-  // map runs, so twenty checks evicted the refresh that produced the map and the
-  // CLI then reported that none existed. Reads destroyed the ability to find
-  // what they read.
   const action = mapStateAction(state);
   return success(
     { ...mapStatePayload(state, "check"), nextAction: action },
-    [`Codebase map: ${state.freshness}. ${state.reason}`, renderNextAction(action)].join("\n")
+    [`Codebase map (${profile}): ${state.freshness}. ${state.reason}`, renderNextAction(action)].join("\n")
   );
 }
 
 /** A read-only summary, which is what a bare `legion map` now does. */
-async function mapSummary(context: CliContext, scope: string | undefined): Promise<CliResult> {
+async function mapSummary(context: CliContext, scope: string | undefined, profile: MapProfile): Promise<CliResult> {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
-  const state = await resolveMapState(context.repositoryRoot, scope, createdAt);
+  const state = await resolveMapState(context.repositoryRoot, scope, createdAt, profile);
   if ("error" in state) return usageError(state.error);
 
   const action = mapStateAction(state);
@@ -450,9 +586,85 @@ async function mapSummary(context: CliContext, scope: string | undefined): Promi
   );
 }
 
-async function mapQuery(context: CliContext, query: string): Promise<CliResult> {
+async function mapQuery(context: CliContext, query: string, profile: MapProfile | undefined): Promise<CliResult> {
+  if (queryTerms(query).length === 0) {
+    return usageError(
+      `legion map --query ${JSON.stringify(query)} has no searchable terms. Terms are at least two characters of letters, digits, underscore, hyphen or slash.`
+    );
+  }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
+
+  const structuralDiscovery = profile === "structural" || profile === undefined
+    ? await discoverLatestStructuralCodeIndex(context.repositoryRoot)
+    : undefined;
+  if (structuralDiscovery?.record !== undefined) {
+    let matches;
+    try {
+      matches = queryStructuralCodeIndex({
+        repositoryRoot: context.repositoryRoot,
+        record: structuralDiscovery.record,
+        query
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const action = nextAction("legion map --refresh --profile structural", "The structural SQLite index could not answer this query.");
+      return failure(
+        {
+          ok: false,
+          status: "blocked",
+          workflow: "map",
+          mode: "query",
+          query,
+          snapshotId: structuralDiscovery.record.snapshot.snapshotId,
+          indexProfile: "structural",
+          diagnostics: [...structuralDiscovery.diagnostics, { code: "map_structural_unreadable", message }],
+          nextAction: action
+        },
+        ["Map query is blocked.", renderNextAction(action)].join("\n")
+      );
+    }
+    const action = nextAction("legion status", "Use the structural query result as context for the next workflow action.");
+    return success(
+      {
+        ok: true,
+        status: "completed",
+        workflow: "map",
+        mode: "query",
+        query,
+        matches,
+        snapshotId: structuralDiscovery.record.snapshot.snapshotId,
+        indexProfile: "structural",
+        nextAction: action,
+        diagnostics: structuralDiscovery.diagnostics
+      },
+      [
+        `Structural map query returned ${matches.length} matches.`,
+        ...matches.slice(0, 5).map((match) => `- ${match.path}: ${match.name ?? match.specifier ?? match.kind}`),
+        renderNextAction(action)
+      ].join("\n")
+    );
+  }
+  if (profile === "structural") {
+    const action = nextAction("legion map --refresh --profile structural", "A structural query requires a valid structural snapshot.");
+    return failure(
+      {
+        ok: false,
+        status: "blocked",
+        workflow: "map",
+        mode: "query",
+        query,
+        indexProfile: "structural",
+        diagnostics: [
+          ...(structuralDiscovery?.diagnostics ?? []),
+          { code: "map_structural_missing", message: "No valid structural code index exists. Run legion map --refresh --profile structural first." }
+        ],
+        nextAction: action
+      },
+      ["Map query is blocked.", renderNextAction(action)].join("\n")
+    );
+  }
+
   const discovery = await discoverLatestCodebaseMap(context.repositoryRoot);
   const latest = discovery.record?.map;
   if (latest === undefined) {
@@ -472,21 +684,9 @@ async function mapQuery(context: CliContext, query: string): Promise<CliResult> 
       ["Map query is blocked.", renderNextAction(action)].join("\n")
     );
   }
-  // An empty query is refused, and a query whose every token the tokenizer
-  // discards is the same input in a different costume: `legion map --query "!!"`
-  // reported a successful search with zero results, which reads as "nothing in
-  // this repository matches" rather than "nothing was searched for".
-  if (queryTerms(query).length === 0) {
-    return usageError(
-      `legion map --query ${JSON.stringify(query)} has no searchable terms. Terms are at least two characters of letters, digits, underscore, hyphen or slash.`
-    );
-  }
 
   const matches = queryCodebaseMap(latest, query);
   const action = nextAction("legion status", "Use the query result as context for the next workflow action.");
-  // A search over a stored map, writing nothing. Like `--check`, recording it
-  // pushed the run that produced the map out of the twenty-run window that
-  // `getLatestCodebaseMap` scans.
   return success(
     {
       ok: true,
@@ -496,13 +696,11 @@ async function mapQuery(context: CliContext, query: string): Promise<CliResult> 
       query,
       matches,
       nextAction: action,
-      diagnostics: discovery.diagnostics
+      diagnostics: [...(structuralDiscovery?.diagnostics ?? []), ...discovery.diagnostics]
     },
     [
       `Map query returned ${matches.length} matches.`,
       ...matches.slice(0, 5).map((match) => `- ${match.path}: ${match.summary}`),
-      // The index is a lexical score over generated summaries, so acting on it
-      // without opening the file is how a caller edits the wrong one.
       matches.length === 0 ? "" : "Read the matched files before acting on them; the index ranks, it does not confirm.",
       renderNextAction(action)
     ].filter((line) => line.length > 0).join("\n")

@@ -130,17 +130,131 @@ test("map refresh, check, and query produce deterministic codebase artifacts", a
   }
 });
 
+test("structural map refresh persists a semantic snapshot, supports query and why, and has profile-aware freshness", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "README.md"), "# Structural Map\n", "utf8");
+    await writeFile(
+      path.join(root, "src", "asset-service.ts"),
+      "export interface AssetRecord { id: string }\nexport function resolveAsset(input: AssetRecord) { return input.id; }\n",
+      "utf8"
+    );
+
+    const absent = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--json"]);
+    assert.equal(absent.exitCode, 0, absent.stderr);
+    assert.equal(parseJsonOutput(absent).status, "absent");
+
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
+    const refreshPayload = parseJsonOutput(refresh);
+    assert.equal(refreshPayload.status, "completed");
+    assert.equal(refreshPayload.indexProfile, "structural");
+    assert.match(refreshPayload.snapshotId, /^idx_[0-9a-f]{24}$/);
+    assert.match(refreshPayload.semanticIndexArtifactPath, /semantic-index\.json$/);
+    assert.match(refreshPayload.semanticSqliteArtifactPath, /semantic-index\.sqlite$/);
+    await assertFile(root, refreshPayload.semanticIndexArtifactPath);
+    await assertFile(root, refreshPayload.semanticSqliteArtifactPath);
+
+    const map = await readJson(root, refreshPayload.mapArtifactPath);
+    assert.equal(map.kind, "codebase_map");
+    const snapshot = await readJson(root, refreshPayload.semanticIndexArtifactPath);
+    assert.equal(snapshot.kind, "code_index_snapshot");
+    assert.equal(snapshot.profile, "structural");
+    assert.equal(snapshot.snapshotId, refreshPayload.snapshotId);
+    assert.equal(snapshot.sqlite.path, refreshPayload.semanticSqliteArtifactPath);
+    assert.equal(snapshot.symbols.some((symbol) => symbol.name === "resolveAsset"), true);
+
+    const checkFresh = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(checkFresh.exitCode, 0, checkFresh.stderr);
+    assert.equal(parseJsonOutput(checkFresh).status, "fresh");
+
+    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--json"]);
+    assert.equal(query.exitCode, 0, query.stderr);
+    const queryPayload = parseJsonOutput(query);
+    assert.equal(queryPayload.indexProfile, "structural");
+    assert.equal(queryPayload.snapshotId, refreshPayload.snapshotId);
+    assert.equal(queryPayload.matches[0].path, "src/asset-service.ts");
+    assert.equal(queryPayload.matches[0].name, "resolveAsset");
+    assert.ok(["symbol", "export"].includes(queryPayload.matches[0].factKind));
+    assert.equal(typeof queryPayload.matches[0].id, "string");
+    assert.equal(typeof queryPayload.matches[0].range.startByte, "number");
+    assert.equal(queryPayload.matches[0].sourceSha256.length, 64);
+    assert.equal(queryPayload.matches[0].extractorVersion, "0.26.13");
+
+    const why = await runCliCapture(["--repository-root", root, "map", "--why", queryPayload.matches[0].id, "--json"]);
+    assert.equal(why.exitCode, 0, why.stderr);
+    const whyPayload = parseJsonOutput(why);
+    assert.equal(whyPayload.mode, "why");
+    assert.equal(whyPayload.indexProfile, "structural");
+    assert.equal(whyPayload.snapshotId, refreshPayload.snapshotId);
+    assert.equal(whyPayload.fact.name, "resolveAsset");
+    assert.equal(whyPayload.fact.path, "src/asset-service.ts");
+    assert.equal(typeof whyPayload.fact.range.startByte, "number");
+    assert.equal(whyPayload.fact.sourceSha256.length, 64);
+    assert.equal(whyPayload.fact.extractorVersion, "0.26.13");
+
+    const unknown = await runCliCapture(["--repository-root", root, "map", "--why", "sym_ffffffffffffffffffffffff", "--json"]);
+    assert.equal(unknown.exitCode, 1);
+    assert.equal(parseJsonOutput(unknown).status, "blocked");
+    const snapshotWhy = await runCliCapture(["--repository-root", root, "map", "--why", refreshPayload.snapshotId, "--json"]);
+    assert.equal(snapshotWhy.exitCode, 1);
+    assert.equal(parseJsonOutput(snapshotWhy).status, "usage_error");
+
+    await writeFile(path.join(root, "src", "asset-service.ts"), "export function resolveAssetChanged() { return 2; }\n", "utf8");
+    const stale = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(stale.exitCode, 0, stale.stderr);
+    assert.equal(parseJsonOutput(stale).status, "stale");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("inventory profile refresh keeps the v1-only map surface", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "README.md"), "# Inventory\n", "utf8");
+    await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "inventory",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
+    const payload = parseJsonOutput(refresh);
+    assert.equal(payload.status, "completed");
+    assert.equal(Object.hasOwn(payload, "semanticIndexArtifactPath"), false);
+    assert.equal(Object.hasOwn(payload, "semanticSqliteArtifactPath"), false);
+    assert.equal(Object.hasOwn(payload, "snapshotId"), false);
+    assert.equal(Object.hasOwn(payload, "indexProfile"), false);
+    const run = await readJson(root, payload.artifactPath);
+    assert.equal(Object.hasOwn(run.outputs, "semanticIndexArtifactPath"), false);
+    assert.equal(Object.hasOwn(run.outputs, "semanticSqliteArtifactPath"), false);
+    assert.equal(Object.hasOwn(run.outputs, "snapshotId"), false);
+    assert.equal(Object.hasOwn(run.outputs, "indexProfile"), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("map query falls back from a corrupt latest artifact and reports its validation diagnostic", async () => {
   const root = await tempRepo();
   try {
     await initProject(root);
     await writeFile(path.join(root, "README.md"), "# Asset Mapper\n\nMetadata authoring.\n", "utf8");
     const first = await runCliCapture([
-      "--repository-root", root, "map", "--refresh", "--created-at", "2026-06-23T12:02:00.000Z", "--json"
+      "--repository-root", root, "map", "--refresh", "--profile", "inventory", "--created-at", "2026-06-23T12:02:00.000Z", "--json"
     ]);
     assert.equal(first.exitCode, 0, first.stderr);
     const second = await runCliCapture([
-      "--repository-root", root, "map", "--refresh", "--created-at", "2026-06-23T12:03:00.000Z", "--json"
+      "--repository-root", root, "map", "--refresh", "--profile", "inventory", "--created-at", "2026-06-23T12:03:00.000Z", "--json"
     ]);
     assert.equal(second.exitCode, 0, second.stderr);
     const secondPayload = parseJsonOutput(second);

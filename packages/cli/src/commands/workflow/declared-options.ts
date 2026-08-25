@@ -110,7 +110,7 @@ const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   advise: ["executor"],
   learn: ["list", "recall", "summary", "tags", "type"],
   explore: ["entry", "executor"],
-  map: ["check", "query", "refresh", "scope"],
+  map: ["check", "profile", "query", "refresh", "scope", "why"],
   // phase and milestone are declared so the handler's own refusal is what the
   // caller sees: it explains that a scoped retrospective is not implemented,
   // which is more use than "this command does not read --phase".
