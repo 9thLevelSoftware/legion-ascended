@@ -96,6 +96,12 @@ importers:
       '@legion/store-sqlite':
         specifier: workspace:*
         version: link:../store-sqlite
+      tree-sitter-wasms:
+        specifier: 0.1.13
+        version: 0.1.13
+      web-tree-sitter:
+        specifier: 0.26.13
+        version: 0.26.13
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -674,6 +680,9 @@ packages:
     engines: {node: '>=20.16.0'}
     hasBin: true
 
+  tree-sitter-wasms@0.1.13:
+    resolution: {integrity: sha512-wT+cR6DwaIz80/vho3AvSF0N4txuNx/5bcRKoXouOfClpxh/qqrF4URNLQXbbt8MaAxeksZcZd1j8gcGjc+QxQ==}
+
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
@@ -761,6 +770,9 @@ packages:
         optional: true
       uploadthing:
         optional: true
+
+  web-tree-sitter@0.26.13:
+    resolution: {integrity: sha512-5bUZ7vbQ1kcondet96wzP974+JfCZDeQ7bTpacICm2nnvHpa5cO0ByRsoMcAhUP+743vpkb4m0BFlVSm+Ye9VA==}
 
   yaml@2.9.0:
     resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
@@ -1156,6 +1168,8 @@ snapshots:
 
   srvx@0.11.17: {}
 
+  tree-sitter-wasms@0.1.13: {}
+
   tslib@2.8.1:
     optional: true
 
@@ -1171,6 +1185,8 @@ snapshots:
     optionalDependencies:
       db0: 0.3.4
       ofetch: 2.0.0-alpha.3
+
+  web-tree-sitter@0.26.13: {}
 
   yaml@2.9.0: {}
 

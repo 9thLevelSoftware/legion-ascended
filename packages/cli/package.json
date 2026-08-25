@@ -24,7 +24,9 @@
     "@legion/legacy-bridge": "workspace:*",
     "@legion/protocol": "workspace:*",
     "@legion/index-store": "workspace:*",
-    "@legion/store-sqlite": "workspace:*"
+    "@legion/store-sqlite": "workspace:*",
+    "tree-sitter-wasms": "0.1.13",
+    "web-tree-sitter": "0.26.13"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"
