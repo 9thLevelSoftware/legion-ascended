@@ -302,6 +302,8 @@ test("structural refresh covers the code-index fixture matrix within the scoped 
       if (expected.status === "parser-error") assert.ok(coverage.diagnostics?.length > 0);
     }
     assert.equal(snapshot.symbols.some(({ path: factPath, name }) => factPath === "fixture/polyglot/src/asset.ts" && name === "resolveAsset"), true);
+    assert.equal(snapshot.imports.some(({ path: factPath, specifier }) => factPath === "fixture/polyglot/src/asset.ts" && specifier === "node:path"), true);
+    assert.equal(snapshot.exports.some(({ path: factPath, name, kind }) => factPath === "fixture/polyglot/src/asset.ts" && name === "resolveAsset" && kind === "variable"), true);
     assert.equal(snapshot.symbols.some(({ path: factPath, name }) => factPath === "fixture/polyglot/src/worker.py" && name === "resolve_asset"), true);
     assert.equal(snapshot.symbols.some(({ path: factPath, name }) => factPath === "fixture/generated/generated.ts" && name === "generatedValue"), true);
 
