@@ -1,6 +1,7 @@
 ---
 name: legion:agent
 description: Create a new agent personality through a guided workflow
+argument-hint: "<specialty> (interactive guided workflow)"
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 

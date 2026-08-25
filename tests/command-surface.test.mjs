@@ -1,13 +1,50 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
+import { WORKFLOW_COMMANDS } from "../packages/cli/dist/commands/registry.js";
+import { runCliCapture } from "./helpers/cli-runner.mjs";
 import { PLANNING_ALLOWLIST, scanCommandSurface } from "../scripts/scan-command-surface.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+function parseFrontmatter(source, fileName) {
+  const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+  assert.ok(match, `${fileName} must start with YAML frontmatter`);
+  const fields = new Map();
+  for (const line of match[1].split(/\r?\n/)) {
+    const field = line.match(/^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/);
+    if (field !== null) fields.set(field[1], field[2].trim());
+  }
+  return fields;
+}
+
+test("every slash command has syntax metadata and every CLI workflow exposes help", async () => {
+  const commandFiles = (await readdir(path.join(ROOT, "commands")))
+    .filter((entry) => entry.endsWith(".md"))
+    .sort();
+
+  assert.ok(commandFiles.length > 0, "commands/ must contain slash-command documents");
+  for (const fileName of commandFiles) {
+    const fields = parseFrontmatter(await readFile(path.join(ROOT, "commands", fileName), "utf8"), fileName);
+    for (const fieldName of ["name", "description", "argument-hint"]) {
+      assert.ok(fields.has(fieldName), `${fileName} frontmatter must declare ${fieldName}`);
+      assert.ok(fields.get(fieldName), `${fileName} frontmatter ${fieldName} must be non-empty`);
+    }
+  }
+
+  const mapHint = parseFrontmatter(await readFile(path.join(ROOT, "commands", "map.md"), "utf8"), "map.md").get("argument-hint");
+  assert.match(mapHint, /--why/, "map syntax guidance must expose the --why option");
+
+  for (const { name } of WORKFLOW_COMMANDS) {
+    const result = await runCliCapture([name, "--help"]);
+    assert.equal(result.exitCode, 0, `legion ${name} --help should succeed: ${result.stderr}`);
+    assert.match(result.stdout, new RegExp(`legion ${name}\\b`), `legion ${name} help should name the command`);
+  }
+});
 
 /**
  * The ratchet that retires `.planning/` from the installed command surface.

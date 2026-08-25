@@ -1,6 +1,7 @@
 ---
 name: legion:portfolio
 description: Multi-project portfolio dashboard with cross-project dependency tracking
+argument-hint: "[interactive dashboard]"
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion]
 ---
 

@@ -3,6 +3,7 @@ name: legion:explore
 description: Research and clarify a product idea, then produce a design document before project initialization
 mode: inline-persona
 inline_persona: polymath
+argument-hint: "<topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor claude|codex|manual|fake]"
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
