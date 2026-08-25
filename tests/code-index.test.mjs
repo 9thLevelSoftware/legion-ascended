@@ -123,6 +123,7 @@ test('preserves UTF-8 offsets after supplementary Unicode characters', async () 
   const functionStart = text.indexOf('function');
   assert.equal(symbol.range.startByte, Buffer.byteLength(text.slice(0, functionStart), 'utf8'));
   assert.equal(symbol.range.endByte, Buffer.byteLength(text.slice(0, text.indexOf('}', functionStart) + 1), 'utf8'));
+  assert.equal(symbol.id, expectedFactId('sym', symbol));
 });
 
 test('extracts Python function declarations', async () => {
