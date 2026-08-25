@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import { buildStructuralCodeIndex } from '../packages/cli/dist/workflow/code-index.js';
@@ -26,6 +27,16 @@ function file(path, text, sha256 = FILE_SHA256) {
 
 function factNames(facts) {
   return facts.map(({ path, name, kind }) => ({ path, name, kind }));
+}
+
+function expectedFactId(prefix, fact) {
+  const kind = prefix === 'imp' ? 'import' : fact.kind;
+  const name = fact.name ?? fact.specifier;
+  const digest = createHash('sha256')
+    .update(`${fact.path}\0${fact.range.startByte}\0${kind}\0${name}`)
+    .digest('hex')
+    .slice(0, 24);
+  return `${prefix}_${digest}`;
 }
 
 test('extracts TypeScript imports, symbols, direct exports, and exact source ranges', async () => {
@@ -99,6 +110,19 @@ test('converts Tree-sitter UTF-16 offsets to UTF-8 byte ranges', async () => {
   assert.notEqual(expectedFunctionStart, rawFunctionStart);
   assert.notEqual(expectedFunctionEnd, rawFunctionEnd);
   assert.notEqual(expectedExportStart, rawExportStart);
+  assert.equal(result.imports[0].id, expectedFactId('imp', result.imports[0]));
+  assert.equal(result.symbols[0].id, expectedFactId('sym', result.symbols[0]));
+  assert.equal(result.exports[0].id, expectedFactId('exp', result.exports[0]));
+});
+
+test('preserves UTF-8 offsets after supplementary Unicode characters', async () => {
+  const text = '// 😀\nexport function greet() {}\n';
+  const result = await buildStructuralCodeIndex(input([file('src/emoji.ts', text)]));
+
+  const symbol = result.symbols[0];
+  const functionStart = text.indexOf('function');
+  assert.equal(symbol.range.startByte, Buffer.byteLength(text.slice(0, functionStart), 'utf8'));
+  assert.equal(symbol.range.endByte, Buffer.byteLength(text.slice(0, text.indexOf('}', functionStart) + 1), 'utf8'));
 });
 
 test('extracts Python function declarations', async () => {
@@ -115,6 +139,22 @@ test('extracts Python import and from-import module specifiers', async () => {
   const result = await buildStructuralCodeIndex(input([file('src/imports.py', 'import os\nfrom pathlib import Path\n')]));
 
   assert.deepEqual(result.imports.map(({ specifier }) => specifier), ['os', 'pathlib']);
+});
+
+test('deduplicates repeated Python import specifiers', async () => {
+  const result = await buildStructuralCodeIndex(input([file('src/repeated-imports.py', 'import os, os\n')]));
+
+  assert.deepEqual(result.imports.map(({ specifier }) => specifier), ['os']);
+  assert.equal(new Set(result.imports.map(({ id }) => id)).size, result.imports.length);
+});
+
+test('class-nested Python functions are emitted as methods', async () => {
+  const result = await buildStructuralCodeIndex(input([file('src/service.py', 'class Service:\n    def start(self):\n        return True\n')]));
+
+  assert.deepEqual(factNames(result.symbols), [
+    { path: 'src/service.py', name: 'Service', kind: 'class' },
+    { path: 'src/service.py', name: 'start', kind: 'method' }
+  ]);
 });
 
 test('marks named exports and their referenced symbols, including aliases', async () => {
@@ -135,6 +175,14 @@ test('marks named exports and their referenced symbols, including aliases', asyn
       { name: 'value', exported: true }
     ]
   );
+});
+
+test('emits default export facts with the default name for named declarations', async () => {
+  const result = await buildStructuralCodeIndex(input([file('src/default-export.js', 'export default function named() {}\n')]));
+
+  assert.deepEqual(factNames(result.symbols), [{ path: 'src/default-export.js', name: 'named', kind: 'function' }]);
+  assert.equal(result.symbols[0].exported, true);
+  assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'default', kind: 'function' }]);
 });
 
 test('resolves named exports by lexical scope and nearest preceding binding', async () => {
@@ -179,7 +227,8 @@ test('reports JSON and YAML as parsed coverage without fabricated declaration fa
       file('config/app.json', '{"name":"legion"}\n'),
       file('config/app.yaml', 'name: legion\n'),
       file('config/other.yml', 'enabled: true\n'),
-      file('config/not-yaml.yaml', 'totally arbitrary\n')
+      file('config/scalar.yaml', 'totally arbitrary\n'),
+      file('config/not-yaml.yaml', 'totally arbitrary: [\n')
     ])
   );
 
@@ -187,6 +236,7 @@ test('reports JSON and YAML as parsed coverage without fabricated declaration fa
   assert.deepEqual(coverageByPath.get('config/app.json'), { path: 'config/app.json', status: 'parsed', language: 'json' });
   assert.deepEqual(coverageByPath.get('config/app.yaml'), { path: 'config/app.yaml', status: 'parsed', language: 'yaml' });
   assert.deepEqual(coverageByPath.get('config/other.yml'), { path: 'config/other.yml', status: 'parsed', language: 'yaml' });
+  assert.deepEqual(coverageByPath.get('config/scalar.yaml'), { path: 'config/scalar.yaml', status: 'parsed', language: 'yaml' });
   const invalidYaml = coverageByPath.get('config/not-yaml.yaml');
   assert.equal(invalidYaml.status, 'parser-error');
   assert.ok(invalidYaml.diagnostics?.length > 0);
@@ -247,6 +297,15 @@ test('sorts facts and coverage deterministically and is repeat-run stable', asyn
   for (const facts of [first.symbols, first.imports, first.exports]) {
     assert.deepEqual(facts, [...facts].sort((left, right) => left.path.localeCompare(right.path) || left.range.startByte - right.range.startByte || left.id.localeCompare(right.id)));
   }
+});
+
+test('rejects input file lists above the extraction bound', async () => {
+  const files = Array.from({ length: 100_001 }, (_, index) => file(`file-${index}.txt`, 'plain text'));
+
+  await assert.rejects(
+    () => buildStructuralCodeIndex(input(files)),
+    { name: 'RangeError', message: 'input.files exceeds maximum of 100000 files.' }
+  );
 });
 
 test('uses protocol lexical ordering for paths rather than locale collation', async () => {

@@ -31,7 +31,7 @@ import {
   type RunId,
   type UtcTimestamp
 } from "@legion/protocol";
-import { isMap, isSeq, parseDocument } from "yaml";
+import { parseDocument } from "yaml";
 import { Language, Node, Parser } from "web-tree-sitter";
 
 declare global {
@@ -44,6 +44,7 @@ declare global {
 const require = createRequire(import.meta.url);
 const TREE_SITTER_VERSION = "0.26.13" as const;
 const MAX_SOURCE_BYTES = 1 * 1024 * 1024;
+const MAX_FILES = 100_000;
 const MAX_DIAGNOSTICS = 32;
 const MAX_DIAGNOSTIC_LENGTH = 512;
 
@@ -192,14 +193,40 @@ function loadLanguage(grammar: GrammarName): Promise<Language> {
     return Language.load(bytes);
   });
   languagePromises.set(grammar, promise);
+  void promise.catch(() => {
+    if (languagePromises.get(grammar) === promise) languagePromises.delete(grammar);
+  });
   return promise;
 }
 
-function sourceRange(node: Node, text: string): CodeIndexSourceRange {
-  const byteOffset = (offset: number): number => Buffer.byteLength(text.slice(0, offset), "utf8");
+function utf8ByteLengthForCodeUnit(codeUnit: number): number {
+  if (codeUnit <= 0x7f) return 1;
+  if (codeUnit <= 0x7ff) return 2;
+  return 3;
+}
+
+function utf8OffsetTable(text: string): Uint32Array {
+  const offsets = new Uint32Array(text.length + 1);
+  for (let index = 0; index < text.length; index += 1) {
+    const codeUnit = text.charCodeAt(index);
+    const nextCodeUnit = text.charCodeAt(index + 1);
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff && nextCodeUnit >= 0xdc00 && nextCodeUnit <= 0xdfff) {
+      // Buffer.byteLength(text.slice(0, offset), "utf8") encodes a lone
+      // high surrogate as U+FFFD, while the complete pair is four bytes.
+      offsets[index + 1] = (offsets[index] ?? 0) + 3;
+      offsets[index + 2] = (offsets[index] ?? 0) + 4;
+      index += 1;
+      continue;
+    }
+    offsets[index + 1] = (offsets[index] ?? 0) + utf8ByteLengthForCodeUnit(codeUnit);
+  }
+  return offsets;
+}
+
+function sourceRange(node: Node, offsets: Uint32Array): CodeIndexSourceRange {
   return {
-    startByte: byteOffset(node.startIndex),
-    endByte: byteOffset(node.endIndex),
+    startByte: offsets[node.startIndex] ?? 0,
+    endByte: offsets[node.endIndex] ?? 0,
     startLine: node.startPosition.row,
     startColumn: node.startPosition.column,
     endLine: node.endPosition.row,
@@ -308,18 +335,20 @@ function addSymbol(
   seen: Set<number>,
   node: Node,
   file: FileInput,
+  offsets: Uint32Array,
   kind: string,
   name: string,
   exported: boolean
 ): number | undefined {
   if (seen.has(node.id)) return undefined;
   seen.add(node.id);
-  const id = hashId("sym", file.path, node.startIndex, kind, name) as CodeIndexSymbolId;
+  const range = sourceRange(node, offsets);
+  const id = hashId("sym", file.path, range.startByte, kind, name) as CodeIndexSymbolId;
   symbols.push({
     id,
     path: file.path,
     sourceSha256: file.sha256,
-    range: sourceRange(node, file.text ?? ""),
+    range,
     extractorVersion: TREE_SITTER_VERSION,
     name,
     kind,
@@ -344,16 +373,26 @@ function stringContents(text: string): string {
   return trimmed;
 }
 
-function addImport(imports: CodeIndexImport[], file: FileInput, node: Node, specifier: string): void {
+function addImport(
+  imports: CodeIndexImport[],
+  file: FileInput,
+  node: Node,
+  offsets: Uint32Array,
+  specifier: string,
+  seenIds: Set<string>
+): void {
   const normalizedSpecifier = stringContents(specifier);
   if (normalizedSpecifier.length === 0) return;
   const kind = "import";
-  const id = hashId("imp", file.path, node.startIndex, kind, normalizedSpecifier) as CodeIndexImportId;
+  const range = sourceRange(node, offsets);
+  const id = hashId("imp", file.path, range.startByte, kind, normalizedSpecifier) as CodeIndexImportId;
+  if (seenIds.has(id)) return;
+  seenIds.add(id);
   imports.push({
     id,
     path: file.path,
     sourceSha256: file.sha256,
-    range: sourceRange(node, file.text ?? ""),
+    range,
     extractorVersion: TREE_SITTER_VERSION,
     specifier: normalizedSpecifier
   });
@@ -363,16 +402,18 @@ function addExport(
   exports: CodeIndexExport[],
   file: FileInput,
   node: Node,
+  offsets: Uint32Array,
   name: string,
   kind: string
 ): void {
   if (name.length === 0) return;
-  const id = hashId("exp", file.path, node.startIndex, kind, name) as CodeIndexExportId;
+  const range = sourceRange(node, offsets);
+  const id = hashId("exp", file.path, range.startByte, kind, name) as CodeIndexExportId;
   exports.push({
     id,
     path: file.path,
     sourceSha256: file.sha256,
-    range: sourceRange(node, file.text ?? ""),
+    range,
     extractorVersion: TREE_SITTER_VERSION,
     name,
     kind
@@ -398,15 +439,21 @@ function exportDeclarationNodes(node: Node): Node[] {
   return [declaration];
 }
 
+function isDefaultExport(node: Node): boolean {
+  return node.children.some((child) => child.type === "default") || /^export\s+default(?:\s|$)/.test(node.text);
+}
+
 function collectTreeFacts(
   treeRoot: Node,
   file: FileInput,
-  grammar: GrammarName
+  grammar: GrammarName,
+  offsets: Uint32Array
 ): { readonly symbols: CodeIndexSymbol[]; readonly imports: CodeIndexImport[]; readonly exports: CodeIndexExport[] } {
   const symbols: CodeIndexSymbol[] = [];
   const imports: CodeIndexImport[] = [];
   const exports: CodeIndexExport[] = [];
   const seenSymbols = new Set<number>();
+  const seenImportIds = new Set<string>();
   const declarationBindings: Array<{
     readonly symbolIndex: number;
     readonly declaration: Node;
@@ -421,7 +468,7 @@ function collectTreeFacts(
     const key = `${name}\u0000${kind}`;
     if (emittedExports.has(key)) return;
     emittedExports.add(key);
-    addExport(exports, file, node, name, kind);
+    addExport(exports, file, node, offsets, name, kind);
   }
 
   function resolveNamedExport(name: string, exportNode: Node): (typeof declarationBindings)[number] | undefined {
@@ -435,12 +482,12 @@ function collectTreeFacts(
   }
 
   function visit(node: Node): void {
-    const kind = declarationKind(node.type);
+    const kind = symbolKind(node);
     if (kind !== undefined) {
       const name = nodeName(node);
       if (name !== undefined) {
         const symbolNode = kind === "variable" && node.type === "assignment" ? node : node;
-        const symbolIndex = addSymbol(symbols, seenSymbols, symbolNode, file, kind, name, isDirectlyExported(node));
+        const symbolIndex = addSymbol(symbols, seenSymbols, symbolNode, file, offsets, kind, name, isDirectlyExported(node));
         if (symbolIndex !== undefined) {
           declarationBindings.push({ symbolIndex, declaration: symbolNode, scope: lexicalScope(symbolNode, treeRoot), name, kind });
         }
@@ -449,17 +496,18 @@ function collectTreeFacts(
 
     if (node.type === "import_statement") {
       if (grammar === "python") {
-        for (const specifier of pythonImportSpecifiers(node)) addImport(imports, file, node, specifier);
+        for (const specifier of pythonImportSpecifiers(node)) addImport(imports, file, node, offsets, specifier, seenImportIds);
       } else {
         const source = node.childForFieldName("source");
-        if (source !== null) addImport(imports, file, node, source.text);
+        if (source !== null) addImport(imports, file, node, offsets, source.text, seenImportIds);
       }
     } else if (node.type === "import_from_statement") {
-      for (const specifier of pythonImportSpecifiers(node)) addImport(imports, file, node, specifier);
+      for (const specifier of pythonImportSpecifiers(node)) addImport(imports, file, node, offsets, specifier, seenImportIds);
     }
 
     if (node.type === "export_statement") {
       const declarations = exportDeclarationNodes(node);
+      const defaultExport = isDefaultExport(node);
       for (const declaration of declarations) {
         const declarationType = declarationKind(declaration.type) ?? (declaration.type === "lexical_declaration" ? "variable" : "export");
         if (declaration.type === "lexical_declaration" || declaration.type === "variable_declaration") {
@@ -470,7 +518,7 @@ function collectTreeFacts(
             if (variable.type === "variable_declarator" && variableName !== undefined) emitExport(node, variableName, "variable");
           }
         } else {
-          const name = nodeName(declaration) ?? "default";
+          const name = defaultExport ? "default" : (nodeName(declaration) ?? "default");
           emitExport(node, name, declarationType);
         }
       }
@@ -519,19 +567,6 @@ function parserDiagnostics(root: Node): string[] {
   return diagnostics.slice(0, MAX_DIAGNOSTICS);
 }
 
-function hasYamlCollection(root: Node): boolean {
-  let found = false;
-  function visit(node: Node): void {
-    if (node.type === "block_mapping" || node.type === "flow_mapping" || node.type === "block_sequence" || node.type === "flow_sequence") {
-      found = true;
-      return;
-    }
-    for (const child of node.namedChildren) visit(child);
-  }
-  visit(root);
-  return found;
-}
-
 /**
  * YAML parser messages may include source fragments. Keep diagnostics bounded and
  * provenance-safe by exposing only a stable error type and optional line.
@@ -576,18 +611,6 @@ function parseYamlCompatibilityFallback(
           diagnostics: document.errors
             .slice(0, MAX_DIAGNOSTICS)
             .map((error) => yamlParserDiagnostic(error))
-        },
-        symbols: [],
-        imports: [],
-        exports: []
-      };
-    }
-    if (!isMap(document.contents) && !isSeq(document.contents)) {
-      return {
-        coverage: {
-          ...baseCoverage,
-          status: "parser-error",
-          diagnostics: ["parser error: YAML document must contain a mapping or sequence"]
         },
         symbols: [],
         imports: [],
@@ -663,12 +686,13 @@ async function extractFile(
     return { coverage: { ...baseCoverage, status: "size-limited" }, symbols: [], imports: [], exports: [] };
   }
 
+  const offsets = utf8OffsetTable(file.text);
   try {
     const loadedLanguage = await loadLanguage(mapping.grammar);
     const parser = new Parser();
-    parser.setLanguage(loadedLanguage);
     let tree = null;
     try {
+      parser.setLanguage(loadedLanguage);
       tree = parser.parse(file.text);
       if (tree === null) throw new Error("Tree-sitter returned no syntax tree.");
       if (tree.rootNode.hasError) {
@@ -679,15 +703,7 @@ async function extractFile(
           exports: []
         };
       }
-      if (mapping.grammar === "yaml" && !hasYamlCollection(tree.rootNode)) {
-        return {
-          coverage: { ...baseCoverage, status: "parser-error", diagnostics: ["parser error: YAML document has no mapping or sequence structure"] },
-          symbols: [],
-          imports: [],
-          exports: []
-        };
-      }
-      const facts = collectTreeFacts(tree.rootNode, file, mapping.grammar);
+      const facts = collectTreeFacts(tree.rootNode, file, mapping.grammar, offsets);
       return { coverage: { ...baseCoverage, status: "parsed" }, ...facts };
     } finally {
       tree?.delete();
@@ -710,6 +726,8 @@ async function extractFile(
 }
 
 export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput): Promise<CodeIndexSnapshotDraft> {
+  if (input.files.length > MAX_FILES) throw new RangeError(`input.files exceeds maximum of ${MAX_FILES} files.`);
+
   const coverage: CodeIndexFileCoverage[] = [];
   const symbols: CodeIndexSymbol[] = [];
   const imports: CodeIndexImport[] = [];
