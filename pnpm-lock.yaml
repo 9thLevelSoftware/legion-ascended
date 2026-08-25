@@ -84,6 +84,9 @@ importers:
       '@legion/core':
         specifier: workspace:*
         version: link:../core
+      '@legion/index-store':
+        specifier: workspace:*
+        version: link:../index-store
       '@legion/legacy-bridge':
         specifier: workspace:*
         version: link:../legacy-bridge
@@ -106,6 +109,16 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.2
+
+  packages/index-store:
+    dependencies:
+      '@legion/protocol':
+        specifier: workspace:*
+        version: link:../protocol
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

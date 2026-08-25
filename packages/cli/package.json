@@ -23,6 +23,7 @@
     "@legion/core": "workspace:*",
     "@legion/legacy-bridge": "workspace:*",
     "@legion/protocol": "workspace:*",
+    "@legion/index-store": "workspace:*",
     "@legion/store-sqlite": "workspace:*"
   },
   "devDependencies": {

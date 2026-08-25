@@ -7,13 +7,7 @@
     "types": ["node"]
   },
   "references": [
-    { "path": "../protocol" },
-    { "path": "../index-store" },
-    { "path": "../artifacts" },
-    { "path": "../board" },
-    { "path": "../board-store" },
-    { "path": "../core" },
-    { "path": "../legacy-bridge" }
+    { "path": "../protocol" }
   ],
   "include": ["src/**/*.ts"]
 }
