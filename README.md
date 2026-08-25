@@ -229,7 +229,7 @@ These enrich the core loop without bypassing it. Runs write artifacts under
 | Command | Purpose |
 | --- | --- |
 | `legion explore <topic>` | Write a design discovery artifact; can seed an intake session |
-| `legion map --refresh \| --check \| --query <text>` | Generate, verify, and search deterministic codebase context |
+| `legion map --refresh \| --check \| --query <text> \| --why <fact-id> [--profile inventory|structural]` | Generate, verify, search, and explain deterministic codebase context |
 | `legion quick <task>` | One ad-hoc task with a task record and risk classification |
 | `legion advise <topic>` | Read-only advisory analysis |
 | `legion polish [target]` | Scoped cleanup as an ad-hoc workflow |

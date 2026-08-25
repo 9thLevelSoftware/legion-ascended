@@ -1,0 +1,2 @@
+service: fixture-service
+entrypoint: src/asset.ts

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
+import { buildStructuralCodeIndex } from "../packages/cli/dist/workflow/code-index.js";
 import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
 
 async function tempRepo() {
@@ -247,6 +249,82 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
     assert.equal(staleWhyPayload.status, "blocked");
     assert.equal(staleWhyPayload.nextAction.command, "legion map --refresh --profile structural");
     assert.ok(staleWhyPayload.diagnostics.some(({ code }) => code === "map_structural_stale"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("structural refresh covers the code-index fixture matrix within the scoped fixture root", async () => {
+  const root = await tempRepo();
+  const fixtureRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "code-index");
+  try {
+    const copiedFixtureRoot = path.join(root, "fixture");
+    await cp(fixtureRoot, copiedFixtureRoot, { recursive: true });
+    const oversizedText = `export const oversized = ${JSON.stringify("x".repeat(1024 * 1024))};\n`;
+    await writeFile(
+      path.join(copiedFixtureRoot, "oversized", "large.ts"),
+      oversizedText,
+      "utf8"
+    );
+
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural", "--scope", "fixture",
+      "--created-at", "2026-06-23T12:06:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 1, refresh.stderr);
+    const payload = parseJsonOutput(refresh);
+    assert.equal(payload.status, "blocked");
+    assert.ok(payload.diagnostics.some(({ code }) => code === "map_parser_error"));
+    const snapshot = await readJson(root, payload.semanticIndexArtifactPath);
+    const coverageByPath = new Map(snapshot.coverage.map((coverage) => [coverage.path, coverage]));
+    const expectedCoverage = {
+      "fixture/polyglot/src/asset.ts": { status: "parsed", language: "typescript" },
+      "fixture/polyglot/src/worker.py": { status: "parsed", language: "python" },
+      "fixture/polyglot/config/service.yaml": { status: "parsed", language: "yaml" },
+      "fixture/polyglot/package.json": { status: "parsed", language: "json" },
+      "fixture/malformed/broken.ts": { status: "parser-error", language: "typescript" },
+      "fixture/generated/generated.ts": { status: "parsed", language: "typescript" },
+      // The workflow's authored-source collector omits text above 512 KiB, so
+      // the refresh records this file as opaque. The parser-level assertion
+      // below covers its own >1 MiB size-limited boundary.
+      "fixture/oversized/large.ts": { status: "opaque", language: "typescript" }
+    };
+
+    for (const [fixturePath, expected] of Object.entries(expectedCoverage)) {
+      const coverage = coverageByPath.get(fixturePath);
+      assert.ok(coverage, `missing coverage for ${fixturePath}`);
+      assert.deepEqual(
+        { path: coverage.path, status: coverage.status, language: coverage.language },
+        { path: fixturePath, ...expected }
+      );
+      if (expected.status === "parser-error") assert.ok(coverage.diagnostics?.length > 0);
+    }
+    assert.equal(snapshot.symbols.some(({ path: factPath, name }) => factPath === "fixture/polyglot/src/asset.ts" && name === "resolveAsset"), true);
+    assert.equal(snapshot.symbols.some(({ path: factPath, name }) => factPath === "fixture/polyglot/src/worker.py" && name === "resolve_asset"), true);
+    assert.equal(snapshot.symbols.some(({ path: factPath, name }) => factPath === "fixture/generated/generated.ts" && name === "generatedValue"), true);
+
+    const parserSnapshot = await buildStructuralCodeIndex({
+      snapshotId: "idx_0123456789abcdef01234567",
+      mapRunId: "run_semantic-map-v2",
+      generatedAt: "2026-06-23T12:06:00.000Z",
+      scope: "fixture",
+      sourceFingerprint: "a".repeat(64),
+      files: [{ path: "fixture/oversized/large.ts", sha256: sha256Hex(Buffer.from(oversizedText, "utf8")), text: oversizedText }]
+    });
+    assert.deepEqual(parserSnapshot.coverage, [{ path: "fixture/oversized/large.ts", status: "size-limited", language: "typescript" }]);
+
+    const returnedPaths = [
+      ...snapshot.coverage.map(({ path: returnedPath }) => returnedPath),
+      ...snapshot.symbols.map(({ path: returnedPath }) => returnedPath),
+      ...snapshot.imports.map(({ path: returnedPath }) => returnedPath),
+      ...snapshot.exports.map(({ path: returnedPath }) => returnedPath)
+    ];
+    assert.ok(returnedPaths.length > 0);
+    for (const returnedPath of returnedPaths) {
+      assert.equal(returnedPath === "fixture" || returnedPath.startsWith("fixture/"), true, returnedPath);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }
