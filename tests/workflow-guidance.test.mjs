@@ -263,6 +263,60 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
   }
 });
 
+test("scoped structural readback uses the stored scope while mismatched explicit scope is blocked", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(
+      path.join(root, "src", "asset-service.ts"),
+      "export function resolveAsset() { return 1; }\n",
+      "utf8"
+    );
+
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural", "--scope", "src",
+      "--created-at", "2026-06-23T12:06:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
+    const refreshPayload = parseJsonOutput(refresh);
+
+    const query = await runCliCapture([
+      "--repository-root", root,
+      "map", "--query", "resolveAsset", "--profile", "structural",
+      "--created-at", "2026-06-23T12:07:00.000Z",
+      "--json"
+    ]);
+    assert.equal(query.exitCode, 0, query.stderr);
+    const queryPayload = parseJsonOutput(query);
+    assert.equal(queryPayload.status, "completed");
+    assert.equal(queryPayload.matches[0].path, "src/asset-service.ts");
+
+    const why = await runCliCapture([
+      "--repository-root", root,
+      "map", "--why", queryPayload.matches[0].id,
+      "--created-at", "2026-06-23T12:07:00.000Z",
+      "--json"
+    ]);
+    assert.equal(why.exitCode, 0, why.stderr);
+    const whyPayload = parseJsonOutput(why);
+    assert.equal(whyPayload.status, "completed");
+    assert.equal(whyPayload.fact.path, "src/asset-service.ts");
+
+    const mismatchedScope = await runCliCapture([
+      "--repository-root", root,
+      "map", "--query", "resolveAsset", "--profile", "structural", "--scope", ".",
+      "--json"
+    ]);
+    assert.notEqual(mismatchedScope.exitCode, 0);
+    assert.match(`${mismatchedScope.stdout}${mismatchedScope.stderr}`, /--scope/);
+    assert.match(refreshPayload.semanticIndexArtifactPath, /semantic-index\.json$/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("structural refresh covers the code-index fixture matrix within the scoped fixture root", async () => {
   const root = await tempRepo();
   const fixtureRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "code-index");

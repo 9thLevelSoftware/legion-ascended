@@ -481,7 +481,7 @@ async function mapWhy(context: CliContext, factId: string): Promise<CliResult> {
   }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
-  const state = await resolveMapState(context.repositoryRoot, undefined, createdAt, "structural");
+  const state = await resolveMapState(context.repositoryRoot, discovery.record.snapshot.scope, createdAt, "structural");
   if ("error" in state) {
     return failure(
       {
@@ -663,7 +663,7 @@ async function mapQuery(context: CliContext, query: string, profile: MapProfile 
     );
   }
   if (structuralDiscovery?.record !== undefined) {
-    const state = await resolveMapState(context.repositoryRoot, undefined, createdAt, "structural");
+    const state = await resolveMapState(context.repositoryRoot, structuralDiscovery.record.snapshot.scope, createdAt, "structural");
     const refreshAction = nextAction("legion map --refresh --profile structural", "A fresh structural snapshot is required before querying the index.");
     if ("error" in state) {
       return failure(

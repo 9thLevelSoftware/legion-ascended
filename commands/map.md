@@ -124,10 +124,12 @@ analysis; the run directory is the CLI's.
 5. WHY MODE
    - `legion map --why <fact-id> --json` looks up a symbol, import, or export fact in
      the newest fresh structural snapshot. It does not accept `--scope`, query, check,
-     refresh, or an inventory profile, and it does not read source text.
+     refresh, or an inventory profile.
    - The response identifies the snapshot, fact, source hash, extractor version, and
-     exact range. An unknown or stale fact blocks with a refresh action. Treat the
-     result as provenance only, never as behavioral proof.
+     exact range; the returned fact contains no raw source text, although freshness
+     validation reads current source metadata and fingerprints before serving it.
+     An unknown or stale fact blocks with a refresh action. Treat the result as
+     provenance only, never as behavioral proof.
 
 6. FULL MAP OR REFRESH MODE
    - `legion map --refresh --profile structural --json` creates the run directory,
