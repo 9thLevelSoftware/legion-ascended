@@ -6,7 +6,7 @@ allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
 <objective>
-Create and maintain Legion's canonical codebase documentation and retrieval index. Produce the architecture document this command's analysis is for, and let the CLI own the file dataset underneath it. `legion map --refresh` defaults to `--profile structural`: it preserves the v1 `codebase.md`, `index.jsonl`, `symbols.json`, `search.md` and `map.json` artifacts and adds a hash-pinned `semantic-index.json` plus `semantic-index.sqlite` under the reported run directory. `--profile inventory` writes the v1 artifacts only. The architecture analysis is written separately, because the two are different documents that have historically been confused for each other.
+Create and maintain Legion's canonical codebase documentation and retrieval index. Produce the architecture document this command's analysis is for, and let the CLI own the file dataset underneath it. `legion map --refresh` defaults to `--profile structural`: it preserves the v1 `codebase.md`, `index.jsonl`, `symbols.json`, `search.md` and `map.json` artifacts and adds a hash-pinned `semantic-index.json` plus `semantic-index.sqlite` under the reported run directory. `--profile inventory` writes only the v1 artifacts. The architecture analysis is written separately, because the two are different documents that have historically been confused for each other.
 </objective>
 
 <execution_context>
@@ -60,8 +60,8 @@ validated `semantic-index.json` and its hash-matched SQLite materialization only
 after discovery validates the bound v1 `map.json`. Overwriting any of these with
 the codebase-mapper's formats makes the stored map unreadable to the verb that
 owns it; not writing anywhere leaves the analysis unpersisted.
-`CODEBASE.md` at the repository root is the analysis; the run directory is the
-CLI's.
+The repository's `.planning` directory contains `CODEBASE.md`, the architecture
+analysis; the run directory is the CLI's.
 </authority>
 
 <process>
@@ -105,10 +105,10 @@ CLI's.
 4. QUERY MODE
    - `legion map --query <text> --json` discovers and validates the newest structural
      snapshot and its bound v1 `map.json`, then queries the snapshot's local SQLite
-     FTS5 index. Use `--profile structural` to require that
-     behavior; if no structural snapshot exists and no profile was specified, the CLI
-     falls back to the legacy v1 `map.json` lexical query. `--profile inventory` is
-     not a structural query mode.
+     FTS5 index. Use `--profile structural` to require structural query behavior; if
+     no structural snapshot exists and no profile was specified, the CLI falls back
+     to the legacy v1 `map.json` lexical query. `--profile inventory` is valid only
+     for inventory refreshes and freshness checks, not structural query mode.
    - Structural matches include the fact ID, fact kind/name or import specifier,
      source path, source hash, snapshot ID, extractor version, and exact byte/line
      range. Inventory matches retain the v1 `path`, `score`, `symbols`, and `summary`.
@@ -136,8 +136,8 @@ CLI's.
    - `legion map --refresh --profile inventory --json` creates the same v1 artifact
      set without structural snapshot or SQLite fields.
    - Structural coverage reports one status per collected file. The statuses are:
-     `parsed` (supported grammar parsed), `metadata-only` (all collected Markdown/MDX
-     coverage, including README and docs files, with no AST facts), `size-limited` (source exceeds the parser limit), `opaque`
+     `parsed` (supported grammar parsed), `metadata-only` (files with the `.md` or
+     `.mdx` Markdown extensions are collected without AST facts), `size-limited` (source exceeds the parser limit), `opaque`
      (source text was unavailable), `parser-error` (the grammar rejected the source),
      and `unsupported` (the extension has no structural grammar). Parser errors are
      retained in the snapshot and make the refresh report blocked; they are not silently
@@ -154,7 +154,7 @@ CLI's.
      - Setup/runbook.
      - Pattern library and conventions.
      - Monorepo package map, if applicable.
-   - Write the analysis to `CODEBASE.md` at the repository root — the architecture
+   - Write the analysis to `CODEBASE.md` in the repository's `.planning` directory — the architecture
      narrative, dependency graph, API surface, coverage map and risk hotspots. It is a
      separate document from the CLI's generated `codebase.md`, and conflating the two is
      how the analysis gets silently replaced by a file histogram.
@@ -188,7 +188,7 @@ CLI's.
 
 <completion_gate>
 - `legion map --check --profile <profile>` reports a status other than `absent` for the requested profile.
-- The architecture analysis was written to `CODEBASE.md`, not over the CLI's artifacts.
+- The architecture analysis was written to `CODEBASE.md` in the repository's `.planning` directory, not over the CLI's artifacts.
 - The CLI's run directory still parses: `legion map --check --profile structural --json` succeeds after a structural run.
 - A structural run has both `semantic-index.json` and `semantic-index.sqlite`, and the final report names every artifact written and any degraded sections.
 </completion_gate>
