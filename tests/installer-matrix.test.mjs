@@ -132,6 +132,36 @@ if (tool === "npm" && args[0] === "root" && args[1] === "--global") {
   return { managerDir, recordFile };
 }
 
+async function createFakeGrokExecutable(root) {
+  const binDir = path.join(root, "grok-bin");
+  const recordFile = path.join(binDir, "invocations.jsonl");
+  const implementation = path.join(binDir, "grok.cjs");
+  await mkdir(binDir, { recursive: true });
+  await writeFile(recordFile, "");
+  await writeFile(implementation, `
+const { appendFileSync } = require("node:fs");
+appendFileSync(${JSON.stringify(recordFile)}, JSON.stringify(process.argv.slice(2)) + "\\n");
+if (process.env.GROK_TEST_MODE === "invalid") {
+  process.stdout.write("grok unknown\\n");
+  process.exit(0);
+}
+if (process.env.GROK_TEST_MODE === "failing") {
+  process.stderr.write("fake grok failure\\n");
+  process.exit(7);
+}
+process.stdout.write("grok 1.2.3 (fake)\\n");
+`);
+
+  const executable = path.join(binDir, process.platform === "win32" ? "grok.cmd" : "grok");
+  if (process.platform === "win32") {
+    await writeFile(executable, `@echo off\r\n"${process.execPath}" "${implementation}" %*\r\nexit /b %errorlevel%\r\n`);
+  } else {
+    await writeFile(executable, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(implementation)} "$@"\n`);
+    await chmod(executable, 0o755);
+  }
+  return { binDir, recordFile };
+}
+
 test("runtime registry uses explicit product support tiers", () => {
   assert.deepEqual(SUPPORT_TIERS, ["first-class", "compatible", "legacy", "manual-only", "unsupported"]);
   assert.deepEqual(recommendedRuntimeKeys(), ["claude", "codex", "copilot", "antigravity", "opencode", "hermes", "kilocode"]);
@@ -244,6 +274,53 @@ test("installer detect is read-only and includes first-class targets by default"
   });
 });
 
+test("claude dry-run ignores an invalid relative GROK_HOME", async () => {
+  await withTempProject(async ({ env, project }) => {
+    env.GROK_HOME = "relative-grok-home";
+    const result = await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "claude", "--local", "--dry-run"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+
+    assert.match(result.stdout, /Claude Code/);
+    assert.match(result.stdout, /Dry run only\. No files were written\./);
+    assert.equal(existsSync(path.join(project, ".claude", "skills", "legion", "SKILL.md")), false);
+  });
+});
+
+test("Grok detection executes a bounded --version probe and rejects invalid output", async () => {
+  await withTempProject(async ({ env, home }) => {
+    const { binDir, recordFile } = await createFakeGrokExecutable(path.dirname(home));
+    const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
+    env[pathKey] = [binDir, env[pathKey]].filter(Boolean).join(path.delimiter);
+
+    const detected = await execFileAsync(process.execPath, [LEGION_BIN, "install", "--detect", "--all-targets"], {
+      ...EXEC_OPTIONS,
+      env
+    });
+    assert.match(detected.stdout, /grok\s+detected\s+grok/);
+    assert.deepEqual(
+      (await readFile(recordFile, "utf8")).trim().split(/\r?\n/).map((line) => JSON.parse(line)),
+      [["--version"]]
+    );
+
+    env.GROK_TEST_MODE = "invalid";
+    const invalid = await execFileAsync(process.execPath, [LEGION_BIN, "install", "--detect", "--all-targets"], {
+      ...EXEC_OPTIONS,
+      env
+    });
+    assert.match(invalid.stdout, /grok\s+missing\s+grok/);
+
+    env.GROK_TEST_MODE = "failing";
+    const failing = await execFileAsync(process.execPath, [LEGION_BIN, "install", "--detect", "--all-targets"], {
+      ...EXEC_OPTIONS,
+      env
+    });
+    assert.match(failing.stdout, /grok\s+missing\s+grok/);
+  });
+});
+
 test("installer dry-run writes no project artifacts and warns for compatibility targets", async () => {
   await withTempProject(async ({ env, project }) => {
     const result = await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "cursor", "--local", "--dry-run"], {
@@ -301,6 +378,8 @@ test("Grok Build dry-run and native skill lifecycle are safe and managed", async
     assert.match(installed, /^name: legion$/m);
     assert.match(installed, /Grok Build/);
     assert.match(installed, /legion status --json/);
+    assert.match(installed, /legion install --target grok --local/);
+    assert.doesNotMatch(installed, /legion install --legacy-prompts/);
     assert.equal(readFileSync(`${skillPath}.bak`, "utf8"), originalSkill);
     assert.equal(existsSync(path.join(project, ".grok", "commands")), false);
     assert.equal(existsSync(path.join(project, ".grok", "plugins")), false);
@@ -312,7 +391,24 @@ test("Grok Build dry-run and native skill lifecycle are safe and managed", async
     assert.equal(manifest.paths.native["grok-skill"], resolvedSkillPath.replaceAll("\\", "/"));
     assert.ok(manifest.nativeArtifacts.some((artifact) => artifact.path === resolvedSkillPath.replaceAll("\\", "/") && artifact.backupCreated === true));
 
+    const nativeSkillBeforeInvalidUpdate = readFileSync(skillPath, "utf8");
+    const manifestBeforeInvalidUpdate = readFileSync(manifestPathFor(project, "grok"), "utf8");
     env.LEGION_TEST_NPM_LATEST = "999.0.0";
+    await assert.rejects(
+      execFileAsync(process.execPath, [LEGION_BIN, "update", "--target", "grok", "--local", "--legacy-prompts"], {
+        ...EXEC_OPTIONS,
+        cwd: project,
+        env
+      }),
+      (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stderr, /native skill surface.*legacy-prompts.*out of scope/i);
+        return true;
+      }
+    );
+    assert.equal(readFileSync(skillPath, "utf8"), nativeSkillBeforeInvalidUpdate);
+    assert.equal(readFileSync(manifestPathFor(project, "grok"), "utf8"), manifestBeforeInvalidUpdate);
+
     await execFileAsync(process.execPath, [LEGION_BIN, "update", "--target", "grok", "--local"], {
       ...EXEC_OPTIONS,
       cwd: project,
