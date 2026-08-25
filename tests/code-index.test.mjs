@@ -62,20 +62,50 @@ test('extracts Python function declarations', async () => {
   assert.equal(result.exports.length, 0);
 });
 
+test('extracts Python import and from-import module specifiers', async () => {
+  const result = await buildStructuralCodeIndex(input([file('src/imports.py', 'import os\nfrom pathlib import Path\n')]));
+
+  assert.deepEqual(result.imports.map(({ specifier }) => specifier), ['os', 'pathlib']);
+});
+
+test('marks named exports and their referenced symbols, including aliases', async () => {
+  const text = 'function f() {}\nconst value = 1;\nexport { f, value as alias };\n';
+  const result = await buildStructuralCodeIndex(input([file('src/named-exports.js', text)]));
+
+  assert.deepEqual(
+    result.exports.map(({ name, kind }) => ({ name, kind })).sort((left, right) => left.name.localeCompare(right.name)),
+    [
+      { name: 'alias', kind: 'variable' },
+      { name: 'f', kind: 'function' }
+    ]
+  );
+  assert.deepEqual(
+    result.symbols.map(({ name, exported }) => ({ name, exported })).sort((left, right) => left.name.localeCompare(right.name)),
+    [
+      { name: 'f', exported: true },
+      { name: 'value', exported: true }
+    ]
+  );
+});
+
 test('reports JSON and YAML as parsed coverage without fabricated declaration facts', async () => {
   const result = await buildStructuralCodeIndex(
     input([
       file('config/app.json', '{"name":"legion"}\n'),
       file('config/app.yaml', 'name: legion\n'),
-      file('config/other.yml', 'enabled: true\n')
+      file('config/other.yml', 'enabled: true\n'),
+      file('config/not-yaml.yaml', 'totally arbitrary\n')
     ])
   );
 
-  assert.deepEqual(result.coverage, [
-    { path: 'config/app.json', status: 'parsed', language: 'json' },
-    { path: 'config/app.yaml', status: 'parsed', language: 'yaml' },
-    { path: 'config/other.yml', status: 'parsed', language: 'yaml' }
-  ]);
+  const coverageByPath = new Map(result.coverage.map((coverage) => [coverage.path, coverage]));
+  assert.deepEqual(coverageByPath.get('config/app.json'), { path: 'config/app.json', status: 'parsed', language: 'json' });
+  assert.deepEqual(coverageByPath.get('config/app.yaml'), { path: 'config/app.yaml', status: 'parsed', language: 'yaml' });
+  assert.deepEqual(coverageByPath.get('config/other.yml'), { path: 'config/other.yml', status: 'parsed', language: 'yaml' });
+  const invalidYaml = coverageByPath.get('config/not-yaml.yaml');
+  assert.equal(invalidYaml.status, 'parser-error');
+  assert.ok(invalidYaml.diagnostics?.length > 0);
+  assert.ok(invalidYaml.diagnostics?.every((diagnostic) => diagnostic.length <= 512));
   assert.deepEqual(result.symbols, []);
   assert.deepEqual(result.imports, []);
   assert.deepEqual(result.exports, []);

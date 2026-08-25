@@ -31,6 +31,7 @@ import {
   type RunId,
   type UtcTimestamp
 } from "@legion/protocol";
+import { isMap, isSeq, parseDocument } from "yaml";
 import { Language, Node, Parser } from "web-tree-sitter";
 
 declare global {
@@ -369,13 +370,30 @@ function exportDeclarationNodes(node: Node): Node[] {
 
 function collectTreeFacts(
   treeRoot: Node,
-  file: FileInput
+  file: FileInput,
+  grammar: GrammarName
 ): { readonly symbols: CodeIndexSymbol[]; readonly imports: CodeIndexImport[]; readonly exports: CodeIndexExport[] } {
   const symbols: CodeIndexSymbol[] = [];
   const imports: CodeIndexImport[] = [];
   const exports: CodeIndexExport[] = [];
   const seenSymbols = new Set<number>();
   const knownKinds = new Map<string, string>();
+  const namedExports: Array<{ readonly node: Node; readonly original: string; readonly exported: string }> = [];
+  const emittedExports = new Set<string>();
+
+  function emitExport(node: Node, name: string, kind: string): void {
+    const key = `${name}\u0000${kind}`;
+    if (emittedExports.has(key)) return;
+    emittedExports.add(key);
+    addExport(exports, file, node, name, kind);
+  }
+
+  function markSymbolExported(name: string): void {
+    for (let index = 0; index < symbols.length; index += 1) {
+      const symbol = symbols[index];
+      if (symbol?.name === name && !symbol.exported) symbols[index] = { ...symbol, exported: true };
+    }
+  }
 
   function visit(node: Node): void {
     const kind = declarationKind(node.type);
@@ -389,8 +407,12 @@ function collectTreeFacts(
     }
 
     if (node.type === "import_statement") {
-      const source = node.childForFieldName("source");
-      if (source !== null) addImport(imports, file, node, source.text);
+      if (grammar === "python") {
+        for (const specifier of pythonImportSpecifiers(node)) addImport(imports, file, node, specifier);
+      } else {
+        const source = node.childForFieldName("source");
+        if (source !== null) addImport(imports, file, node, source.text);
+      }
     } else if (node.type === "import_from_statement") {
       for (const specifier of pythonImportSpecifiers(node)) addImport(imports, file, node, specifier);
     }
@@ -401,23 +423,23 @@ function collectTreeFacts(
         const declarationType = declarationKind(declaration.type) ?? (declaration.type === "lexical_declaration" ? "variable" : "export");
         if (declaration.type === "lexical_declaration" || declaration.type === "variable_declaration") {
           const variableName = nodeName(declaration);
-          if (variableName !== undefined) addExport(exports, file, node, variableName, "variable");
+          if (variableName !== undefined) emitExport(node, variableName, "variable");
           for (const variable of declaration.namedChildren) {
             const variableName = nodeName(variable);
-            if (variable.type === "variable_declarator" && variableName !== undefined) addExport(exports, file, node, variableName, "variable");
+            if (variable.type === "variable_declarator" && variableName !== undefined) emitExport(node, variableName, "variable");
           }
         } else {
           const name = nodeName(declaration) ?? "default";
-          addExport(exports, file, node, name, declarationType);
+          emitExport(node, name, declarationType);
         }
       }
 
-      const exportClause = node.childForFieldName("export_clause");
-      if (exportClause !== null) {
+      const exportClause = node.namedChildren.find((child) => child.type === "export_clause");
+      if (exportClause !== undefined) {
         for (const specifier of exportClause.namedChildren.filter((child) => child.type === "export_specifier")) {
           const exported = specifier.childForFieldName("alias") ?? specifier.childForFieldName("name");
           const original = specifier.childForFieldName("name");
-          if (exported !== null) addExport(exports, file, node, exported.text, knownKinds.get(original?.text ?? "") ?? "export");
+          if (original !== null && exported !== null) namedExports.push({ node, original: original.text, exported: exported.text });
         }
       }
     }
@@ -426,6 +448,10 @@ function collectTreeFacts(
   }
 
   visit(treeRoot);
+  for (const namedExport of namedExports) {
+    markSymbolExported(namedExport.original);
+    emitExport(namedExport.node, namedExport.exported, knownKinds.get(namedExport.original) ?? "export");
+  }
   return { symbols, imports, exports };
 }
 
@@ -448,15 +474,76 @@ function parserDiagnostics(root: Node): string[] {
   return diagnostics.slice(0, MAX_DIAGNOSTICS);
 }
 
-function looksLikeYaml(text: string): boolean {
-  for (const line of text.split(/\r?\n/u)) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0 || trimmed.startsWith("#") || trimmed === "---" || trimmed === "...") continue;
-    if (line.includes("\t")) return false;
-    if (trimmed.startsWith("-") || trimmed.includes(":")) continue;
-    if (/^[|>][+-]?[0-9]?$/u.test(trimmed)) continue;
+function hasYamlCollection(root: Node): boolean {
+  let found = false;
+  function visit(node: Node): void {
+    if (node.type === "block_mapping" || node.type === "flow_mapping" || node.type === "block_sequence" || node.type === "flow_sequence") {
+      found = true;
+      return;
+    }
+    for (const child of node.namedChildren) visit(child);
   }
-  return true;
+  visit(root);
+  return found;
+}
+
+/**
+ * Keep Tree-sitter as the first YAML parser attempt. The pinned
+ * tree-sitter-wasms@0.1.13 YAML grammar uses an external-scanner ABI that
+ * throws under web-tree-sitter@0.26.13, so this compatibility path uses the
+ * real `yaml` parser rather than a heuristic success check.
+ */
+function parseYamlCompatibilityFallback(
+  file: FileInput,
+  baseCoverage: { readonly path: CodeIndexFileCoverage["path"]; readonly language: CoverageLanguage }
+): {
+  readonly coverage: CodeIndexFileCoverage;
+  readonly symbols: readonly CodeIndexSymbol[];
+  readonly imports: readonly CodeIndexImport[];
+  readonly exports: readonly CodeIndexExport[];
+} {
+  try {
+    const document = parseDocument(file.text ?? "");
+    if (document.errors.length > 0) {
+      return {
+        coverage: {
+          ...baseCoverage,
+          status: "parser-error",
+          diagnostics: document.errors
+            .slice(0, MAX_DIAGNOSTICS)
+            .map((error) => `parser error: YAML ${error.message}`.slice(0, MAX_DIAGNOSTIC_LENGTH))
+        },
+        symbols: [],
+        imports: [],
+        exports: []
+      };
+    }
+    if (!isMap(document.contents) && !isSeq(document.contents)) {
+      return {
+        coverage: {
+          ...baseCoverage,
+          status: "parser-error",
+          diagnostics: ["parser error: YAML document must contain a mapping or sequence"]
+        },
+        symbols: [],
+        imports: [],
+        exports: []
+      };
+    }
+    return { coverage: { ...baseCoverage, status: "parsed" }, symbols: [], imports: [], exports: [] };
+  } catch (error: unknown) {
+    const message = error instanceof Error && error.message.length > 0 ? error.message : "YAML parser failed.";
+    return {
+      coverage: {
+        ...baseCoverage,
+        status: "parser-error",
+        diagnostics: [`parser error: YAML ${message}`.slice(0, MAX_DIAGNOSTIC_LENGTH)]
+      },
+      symbols: [],
+      imports: [],
+      exports: []
+    };
+  }
 }
 
 function validateDraft(draft: CodeIndexSnapshotDraft): CodeIndexSnapshotDraft {
@@ -529,19 +616,22 @@ async function extractFile(
           exports: []
         };
       }
-      const facts = collectTreeFacts(tree.rootNode, file);
+      if (mapping.grammar === "yaml" && !hasYamlCollection(tree.rootNode)) {
+        return {
+          coverage: { ...baseCoverage, status: "parser-error", diagnostics: ["parser error: YAML document has no mapping or sequence structure"] },
+          symbols: [],
+          imports: [],
+          exports: []
+        };
+      }
+      const facts = collectTreeFacts(tree.rootNode, file, mapping.grammar);
       return { coverage: { ...baseCoverage, status: "parsed" }, ...facts };
     } finally {
       tree?.delete();
       parser.delete();
     }
   } catch (error: unknown) {
-    // The YAML grammar in the locked WASM bundle uses an older external scanner
-    // ABI. Preserve deterministic coverage for ordinary YAML while still
-    // reporting clearly malformed text as a parser error.
-    if (mapping.grammar === "yaml" && looksLikeYaml(file.text)) {
-      return { coverage: { ...baseCoverage, status: "parsed" }, symbols: [], imports: [], exports: [] };
-    }
+    if (mapping.grammar === "yaml") return parseYamlCompatibilityFallback(file, baseCoverage);
     const message = error instanceof Error && error.message.length > 0 ? error.message : "Tree-sitter parser failed.";
     return {
       coverage: {
