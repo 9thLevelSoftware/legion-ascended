@@ -220,6 +220,10 @@ test('emits one default export fact for expression and identifier default export
     ]
   );
   assert.equal(result.exports.filter(({ name }) => name === 'default').length, 2);
+  assert.deepEqual(
+    result.symbols.filter(({ path }) => path === 'src/default-identifier.js').map(({ name, kind, exported }) => ({ name, kind, exported })),
+    [{ name: 'value', kind: 'variable', exported: true }]
+  );
 });
 
 test('resolves named exports by lexical scope and nearest preceding binding', async () => {
@@ -252,6 +256,16 @@ test('resolves named exports to a same-scope declaration after the export', asyn
     { name: 'f', kind: 'variable', exported: true }
   ]);
   assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'f', kind: 'variable' }]);
+});
+
+test('resolves var named exports to the nearest function or program scope across blocks', async () => {
+  const text = ['{', '  var f = 1;', '}', 'export { f as alias };', ''].join('\n');
+  const result = await buildStructuralCodeIndex(input([file('src/var-export.js', text)]));
+
+  assert.deepEqual(result.symbols.map(({ name, kind, exported }) => ({ name, kind, exported })), [
+    { name: 'f', kind: 'variable', exported: true }
+  ]);
+  assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'alias', kind: 'variable' }]);
 });
 
 test('sanitizes malformed YAML diagnostics without echoing source text', async () => {
@@ -338,6 +352,20 @@ test('reports unsupported, opaque, and size-limited coverage states', async () =
     { path: 'missing.ts', status: 'opaque', language: 'typescript' },
     { path: 'notes.txt', status: 'unsupported' }
   ]);
+});
+
+test('rejects non-string file.text before extension dispatch with a uniform TypeError', async () => {
+  for (const path of ['src/invalid.ts', 'notes.txt', 'README.md', 'data.unknown']) {
+    await assert.rejects(
+      () => buildStructuralCodeIndex(input([{ path, sha256: FILE_SHA256, text: 42 }])),
+      { name: 'TypeError', message: 'input.files[0].text must be a string when provided.' }
+    );
+  }
+
+  await assert.rejects(
+    () => buildStructuralCodeIndex({ ...input([]), files: null }),
+    { name: 'TypeError', message: 'input.files must be an array.' }
+  );
 });
 
 test('sorts facts and coverage deterministically and is repeat-run stable', async () => {

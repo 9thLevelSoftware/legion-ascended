@@ -297,10 +297,38 @@ function isLexicalScopeBoundary(nodeType: string): boolean {
   );
 }
 
+function isVarScopeBoundary(nodeType: string): boolean {
+  return (
+    nodeType === "program" ||
+    nodeType === "module" ||
+    nodeType === "module_declaration" ||
+    nodeType === "internal_module" ||
+    nodeType === "function_declaration" ||
+    nodeType === "function_definition" ||
+    nodeType === "function_expression" ||
+    nodeType === "generator_function_declaration" ||
+    nodeType === "method_definition" ||
+    nodeType === "arrow_function"
+  );
+}
+
+function isVarBinding(node: Node): boolean {
+  let current: Node | null = node;
+  while (current !== null) {
+    if (current.type === "variable_declaration") {
+      const kind = current.childForFieldName("kind");
+      return kind?.text === "var" || current.text.trim().startsWith("var");
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
 function lexicalScope(node: Node, root: Node): Node {
+  const varBinding = isVarBinding(node);
   let current = node.parent;
   while (current !== null) {
-    if (isLexicalScopeBoundary(current.type)) return current;
+    if ((varBinding ? isVarScopeBoundary(current.type) : isLexicalScopeBoundary(current.type))) return current;
     current = current.parent;
   }
   return root;
@@ -465,15 +493,31 @@ function collectTreeFacts(
   const exports: CodeIndexExport[] = [];
   const seenSymbols = new Set<number>();
   const seenImportIds = new Set<string>();
-  const declarationBindings: Array<{
+  type DeclarationBinding = {
     readonly symbolIndex: number;
     readonly declaration: Node;
     readonly scope: Node;
     readonly name: string;
     readonly kind: string;
-  }> = [];
+  };
+  const declarationBindingsByScopeAndName = new Map<string, DeclarationBinding[]>();
   const namedExports: Array<{ readonly node: Node; readonly original: string; readonly exported: string }> = [];
+  const defaultBindings: Array<{ readonly node: Node; readonly name: string }> = [];
   const emittedExports = new Set<string>();
+
+  function declarationBindingKey(scope: Node, name: string): string {
+    return `${scope.id}\u0000${name}`;
+  }
+
+  function addDeclarationBinding(binding: DeclarationBinding): void {
+    const key = declarationBindingKey(binding.scope, binding.name);
+    const bindings = declarationBindingsByScopeAndName.get(key);
+    if (bindings === undefined) {
+      declarationBindingsByScopeAndName.set(key, [binding]);
+    } else {
+      bindings.push(binding);
+    }
+  }
 
   function emitExport(node: Node, name: string, kind: string): void {
     const key = `${name}\u0000${kind}`;
@@ -482,12 +526,12 @@ function collectTreeFacts(
     addExport(exports, file, node, offsets, name, kind);
   }
 
-  function resolveNamedExport(name: string, exportNode: Node): (typeof declarationBindings)[number] | undefined {
+  function resolveNamedExport(name: string, exportNode: Node): DeclarationBinding | undefined {
     const exportScope = lexicalScope(exportNode, treeRoot);
-    let preceding: (typeof declarationBindings)[number] | undefined;
-    let following: (typeof declarationBindings)[number] | undefined;
-    for (const binding of declarationBindings) {
-      if (binding.name !== name || binding.scope.id !== exportScope.id) continue;
+    const bindings = declarationBindingsByScopeAndName.get(declarationBindingKey(exportScope, name)) ?? [];
+    let preceding: DeclarationBinding | undefined;
+    let following: DeclarationBinding | undefined;
+    for (const binding of bindings) {
       if (binding.declaration.endIndex <= exportNode.startIndex) {
         if (preceding === undefined || binding.declaration.endIndex > preceding.declaration.endIndex) preceding = binding;
       } else if (binding.declaration.startIndex >= exportNode.endIndex) {
@@ -497,6 +541,12 @@ function collectTreeFacts(
     return preceding ?? following;
   }
 
+  function markBindingExported(binding: DeclarationBinding | undefined): void {
+    if (binding === undefined) return;
+    const symbol = symbols[binding.symbolIndex];
+    if (symbol !== undefined) symbols[binding.symbolIndex] = { ...symbol, exported: true };
+  }
+
   function visit(node: Node): void {
     const kind = symbolKind(node);
     if (kind !== undefined) {
@@ -504,7 +554,7 @@ function collectTreeFacts(
       if (name !== undefined) {
         const symbolIndex = addSymbol(symbols, seenSymbols, node, file, offsets, kind, name, isDirectlyExported(node));
         if (symbolIndex !== undefined) {
-          declarationBindings.push({ symbolIndex, declaration: node, scope: lexicalScope(node, treeRoot), name, kind });
+          addDeclarationBinding({ symbolIndex, declaration: node, scope: lexicalScope(node, treeRoot), name, kind });
         }
       }
     }
@@ -525,17 +575,12 @@ function collectTreeFacts(
       const declarations = exportDeclarationNodes(node, defaultExport);
       for (const declaration of declarations) {
         const declarationType = exportDeclarationKind(declaration);
-        if (declaration.type === "lexical_declaration" || declaration.type === "variable_declaration") {
-          const variableName = nodeName(declaration);
-          if (variableName !== undefined) emitExport(node, variableName, "variable");
-          for (const variable of declaration.namedChildren) {
-            const variableName = nodeName(variable);
-            if (variable.type === "variable_declarator" && variableName !== undefined) emitExport(node, variableName, "variable");
-          }
-        } else {
-          const name = defaultExport ? "default" : (nodeName(declaration) ?? "default");
-          emitExport(node, name, declarationType);
-        }
+        const name = defaultExport ? "default" : (nodeName(declaration) ?? "default");
+        emitExport(node, name, declarationType);
+      }
+      const defaultDeclaration = declarations[0];
+      if (defaultExport && declarations.length === 1 && defaultDeclaration?.type === "identifier") {
+        defaultBindings.push({ node, name: defaultDeclaration.text });
       }
 
       const exportClause = node.namedChildren.find((child) => child.type === "export_clause");
@@ -552,12 +597,12 @@ function collectTreeFacts(
   }
 
   visit(treeRoot);
+  for (const defaultBinding of defaultBindings) {
+    markBindingExported(resolveNamedExport(defaultBinding.name, defaultBinding.node));
+  }
   for (const namedExport of namedExports) {
     const binding = resolveNamedExport(namedExport.original, namedExport.node);
-    if (binding !== undefined) {
-      const symbol = symbols[binding.symbolIndex];
-      if (symbol !== undefined) symbols[binding.symbolIndex] = { ...symbol, exported: true };
-    }
+    markBindingExported(binding);
     emitExport(namedExport.node, namedExport.exported, binding?.kind ?? "export");
   }
   return { symbols, imports, exports };
@@ -742,7 +787,15 @@ async function extractFile(
 }
 
 export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput): Promise<CodeIndexSnapshotDraft> {
+  if (!Array.isArray(input.files)) throw new TypeError("input.files must be an array.");
   if (input.files.length > MAX_FILES) throw new RangeError(`input.files exceeds maximum of ${MAX_FILES} files.`);
+  for (let index = 0; index < input.files.length; index += 1) {
+    const file = input.files[index];
+    if (typeof file !== "object" || file === null) throw new TypeError(`input.files[${index}] must be an object.`);
+    if (file.text !== undefined && typeof file.text !== "string") {
+      throw new TypeError(`input.files[${index}].text must be a string when provided.`);
+    }
+  }
 
   const coverage: CodeIndexFileCoverage[] = [];
   const symbols: CodeIndexSymbol[] = [];
