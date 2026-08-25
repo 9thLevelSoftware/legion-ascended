@@ -52,6 +52,7 @@ export const POST_V8_COMMAND_PATHS = Object.freeze([
 ]);
 
 export const CLI_RUNTIME_PACKAGE_FILES = Object.freeze([
+  "adapters/grok-build.md",
   "adapters/hermes-agent.md",
   "evals/baseline/corpus-manifest.yaml",
   "evals/baseline/fixture-hashes.sha256",
