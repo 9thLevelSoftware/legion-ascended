@@ -88,6 +88,42 @@ test('marks named exports and their referenced symbols, including aliases', asyn
   );
 });
 
+test('resolves named exports by lexical scope and nearest preceding binding', async () => {
+  const text = [
+    'function f() {}',
+    'function outer() {',
+    '  {',
+    '    const f = 1;',
+    '  }',
+    '}',
+    'export { f as alias };',
+    ''
+  ].join('\n');
+  const result = await buildStructuralCodeIndex(input([file('src/shadowed-exports.js', text)]));
+
+  assert.deepEqual(
+    result.symbols.filter(({ name }) => name === 'f').map(({ kind, exported }) => ({ kind, exported })),
+    [
+      { kind: 'function', exported: true },
+      { kind: 'variable', exported: false }
+    ]
+  );
+  assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'alias', kind: 'function' }]);
+});
+
+test('sanitizes malformed YAML diagnostics without echoing source text', async () => {
+  const secret = 'SECRET_TOKEN_123';
+  const result = await buildStructuralCodeIndex(input([file('config/secret.yaml', `${secret}: [\n`)]));
+  const coverage = result.coverage.find(({ path }) => path === 'config/secret.yaml');
+  const diagnostic = coverage.diagnostics?.[0];
+
+  assert.equal(coverage.status, 'parser-error');
+  assert.ok(diagnostic);
+  assert.equal(diagnostic.includes(secret), false);
+  assert.ok(diagnostic.length <= 512);
+  assert.match(diagnostic, /^yaml parser error at line \d+: document rejected$/);
+});
+
 test('reports JSON and YAML as parsed coverage without fabricated declaration facts', async () => {
   const result = await buildStructuralCodeIndex(
     input([

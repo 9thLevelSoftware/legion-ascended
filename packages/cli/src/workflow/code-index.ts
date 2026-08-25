@@ -250,6 +250,34 @@ function isDeclarationBoundary(nodeType: string): boolean {
   );
 }
 
+function isLexicalScopeBoundary(nodeType: string): boolean {
+  return (
+    nodeType === "program" ||
+    nodeType === "statement_block" ||
+    nodeType === "switch_statement" ||
+    nodeType === "switch_body" ||
+    nodeType === "for_statement" ||
+    nodeType === "for_in_statement" ||
+    nodeType === "for_of_statement" ||
+    nodeType === "catch_clause" ||
+    nodeType === "class_body" ||
+    nodeType === "function_declaration" ||
+    nodeType === "function_definition" ||
+    nodeType === "generator_function_declaration" ||
+    nodeType === "method_definition" ||
+    nodeType === "arrow_function"
+  );
+}
+
+function lexicalScope(node: Node, root: Node): Node {
+  let current = node.parent;
+  while (current !== null) {
+    if (isLexicalScopeBoundary(current.type)) return current;
+    current = current.parent;
+  }
+  return root;
+}
+
 function isDirectlyExported(node: Node): boolean {
   let current = node.parent;
   while (current !== null) {
@@ -282,8 +310,8 @@ function addSymbol(
   kind: string,
   name: string,
   exported: boolean
-): void {
-  if (seen.has(node.id)) return;
+): number | undefined {
+  if (seen.has(node.id)) return undefined;
   seen.add(node.id);
   const id = hashId("sym", file.path, node.startIndex, kind, name) as CodeIndexSymbolId;
   symbols.push({
@@ -296,6 +324,7 @@ function addSymbol(
     kind,
     exported
   });
+  return symbols.length - 1;
 }
 
 function stringContents(text: string): string {
@@ -377,7 +406,13 @@ function collectTreeFacts(
   const imports: CodeIndexImport[] = [];
   const exports: CodeIndexExport[] = [];
   const seenSymbols = new Set<number>();
-  const knownKinds = new Map<string, string>();
+  const declarationBindings: Array<{
+    readonly symbolIndex: number;
+    readonly declaration: Node;
+    readonly scope: Node;
+    readonly name: string;
+    readonly kind: string;
+  }> = [];
   const namedExports: Array<{ readonly node: Node; readonly original: string; readonly exported: string }> = [];
   const emittedExports = new Set<string>();
 
@@ -388,11 +423,14 @@ function collectTreeFacts(
     addExport(exports, file, node, name, kind);
   }
 
-  function markSymbolExported(name: string): void {
-    for (let index = 0; index < symbols.length; index += 1) {
-      const symbol = symbols[index];
-      if (symbol?.name === name && !symbol.exported) symbols[index] = { ...symbol, exported: true };
+  function resolveNamedExport(name: string, exportNode: Node): (typeof declarationBindings)[number] | undefined {
+    const exportScope = lexicalScope(exportNode, treeRoot);
+    let nearest: (typeof declarationBindings)[number] | undefined;
+    for (const binding of declarationBindings) {
+      if (binding.name !== name || binding.scope.id !== exportScope.id || binding.declaration.endIndex > exportNode.startIndex) continue;
+      if (nearest === undefined || binding.declaration.endIndex > nearest.declaration.endIndex) nearest = binding;
     }
+    return nearest;
   }
 
   function visit(node: Node): void {
@@ -401,8 +439,10 @@ function collectTreeFacts(
       const name = nodeName(node);
       if (name !== undefined) {
         const symbolNode = kind === "variable" && node.type === "assignment" ? node : node;
-        addSymbol(symbols, seenSymbols, symbolNode, file, kind, name, isDirectlyExported(node));
-        knownKinds.set(name, kind);
+        const symbolIndex = addSymbol(symbols, seenSymbols, symbolNode, file, kind, name, isDirectlyExported(node));
+        if (symbolIndex !== undefined) {
+          declarationBindings.push({ symbolIndex, declaration: symbolNode, scope: lexicalScope(symbolNode, treeRoot), name, kind });
+        }
       }
     }
 
@@ -449,8 +489,12 @@ function collectTreeFacts(
 
   visit(treeRoot);
   for (const namedExport of namedExports) {
-    markSymbolExported(namedExport.original);
-    emitExport(namedExport.node, namedExport.exported, knownKinds.get(namedExport.original) ?? "export");
+    const binding = resolveNamedExport(namedExport.original, namedExport.node);
+    if (binding !== undefined) {
+      const symbol = symbols[binding.symbolIndex];
+      if (symbol !== undefined) symbols[binding.symbolIndex] = { ...symbol, exported: true };
+    }
+    emitExport(namedExport.node, namedExport.exported, binding?.kind ?? "export");
   }
   return { symbols, imports, exports };
 }
@@ -488,6 +532,25 @@ function hasYamlCollection(root: Node): boolean {
 }
 
 /**
+ * YAML parser messages may include source fragments. Keep diagnostics bounded and
+ * provenance-safe by exposing only a stable error type and optional line.
+ */
+function yamlParserDiagnostic(error: unknown): string {
+  let line = 1;
+  if (typeof error === "object" && error !== null && "linePos" in error) {
+    const linePos = (error as { readonly linePos?: unknown }).linePos;
+    if (Array.isArray(linePos)) {
+      const first = linePos[0];
+      if (typeof first === "object" && first !== null && "line" in first) {
+        const candidate = (first as { readonly line?: unknown }).line;
+        if (typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate > 0) line = Math.min(candidate, 1_000_000);
+      }
+    }
+  }
+  return `yaml parser error at line ${line}: document rejected`;
+}
+
+/**
  * Keep Tree-sitter as the first YAML parser attempt. The pinned
  * tree-sitter-wasms@0.1.13 YAML grammar uses an external-scanner ABI that
  * throws under web-tree-sitter@0.26.13, so this compatibility path uses the
@@ -511,7 +574,7 @@ function parseYamlCompatibilityFallback(
           status: "parser-error",
           diagnostics: document.errors
             .slice(0, MAX_DIAGNOSTICS)
-            .map((error) => `parser error: YAML ${error.message}`.slice(0, MAX_DIAGNOSTIC_LENGTH))
+            .map((error) => yamlParserDiagnostic(error))
         },
         symbols: [],
         imports: [],
@@ -532,12 +595,11 @@ function parseYamlCompatibilityFallback(
     }
     return { coverage: { ...baseCoverage, status: "parsed" }, symbols: [], imports: [], exports: [] };
   } catch (error: unknown) {
-    const message = error instanceof Error && error.message.length > 0 ? error.message : "YAML parser failed.";
     return {
       coverage: {
         ...baseCoverage,
         status: "parser-error",
-        diagnostics: [`parser error: YAML ${message}`.slice(0, MAX_DIAGNOSTIC_LENGTH)]
+        diagnostics: [yamlParserDiagnostic(error)]
       },
       symbols: [],
       imports: [],
