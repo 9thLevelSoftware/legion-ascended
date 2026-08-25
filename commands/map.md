@@ -35,25 +35,31 @@ and `map.json`. An inventory refresh returns only the v1 paths.
 The CLI owns the derivable state. `legion map --check` and the bare command report
 freshness — `fresh`, `stale`, `partial` or `absent` — and write nothing;
 `--refresh` regenerates the artifacts. Refresh defaults to the structural profile;
-the inventory profile is the v1-only compatibility path. A structural check looks
-only for a valid structural snapshot, while an inventory check looks for the v1
-map. `--query` reads an existing index and `--why <fact-id>` reads one structural
-fact; neither read mode writes a workflow run.
+the inventory profile is the v1-only compatibility path. A structural check validates
+the newest structural snapshot, its SQLite materialization, and the bound v1 `map.json`
+before serving status, while an inventory check validates the v1 map. `--query` reads
+an existing index and `--why <fact-id>` reads one structural fact; neither read mode
+writes a workflow run.
 
-The structural snapshot is the durable authority for parsed coverage and facts;
-the SQLite file is a local FTS5 acceleration of that snapshot, not a second
-source of truth. Structural query results carry the fact ID, source path, source
-hash, extractor version, and exact range. What stays here is the analysis: the
-architecture narrative, the dependency graph, the API surface, the coverage map,
-and the ranked risk hotspots. The verb's v1 artifact is a file inventory, so
-rendering either payload would replace an architecture document with a histogram.
+The structural `semantic-index.json` is the durable authority for parsed coverage
+and facts; `semantic-index.sqlite` is a local FTS5 acceleration of that snapshot,
+not a second source of truth. Before a structural check, query, or why read serves
+those artifacts, discovery validates the bound v1 `map.json`: its scope, source
+fingerprint, source-file count, and exact path set match the snapshot and run;
+generatedAt timestamps match the run and snapshot; and its exact content hash
+(`mapArtifactSha256`) matches the run. Structural query results carry the fact ID,
+source path, source hash, extractor version, and exact range. What stays here is the
+analysis: the architecture narrative, the dependency graph, the API surface, the
+coverage map, and the ranked risk hotspots. The verb's v1 artifact is a file inventory,
+so rendering either payload would replace an architecture document with a histogram.
 
 **Write the analysis to its own file — never over the CLI's artifact set.** The
-CLI's `codebase.md` is a generated file inventory. Inventory checks and fallback
-queries read `map.json`; structural checks and queries read the validated
-`semantic-index.json` and its hash-matched SQLite materialization. Overwriting
-any of these with the codebase-mapper's formats makes the stored map unreadable
-to the verb that owns it; not writing anywhere leaves the analysis unpersisted.
+`codebase.md` is a generated file inventory. Inventory checks and fallback
+queries read `map.json`; structural checks, queries, and why reads consume the
+validated `semantic-index.json` and its hash-matched SQLite materialization only
+after discovery validates the bound v1 `map.json`. Overwriting any of these with
+the codebase-mapper's formats makes the stored map unreadable to the verb that
+owns it; not writing anywhere leaves the analysis unpersisted.
 `CODEBASE.md` at the repository root is the analysis; the run directory is the
 CLI's.
 </authority>
@@ -84,8 +90,8 @@ CLI's.
 3. CHECK MODE
    - `legion map --check --profile <profile> --json` is the freshness answer. An
      inventory check reads the newest valid v1 map's `map.json`; a structural check
-     validates the newest structural snapshot and its SQLite hash. The other artifacts
-     are outputs, not inputs to the selected check.
+     validates the newest structural snapshot, its SQLite hash, and the bound v1
+     `map.json` integrity before serving the structural status.
    - Report from its payload:
      - `status`, `scope`, `sourceFileCount`, `sourceFingerprint`, `generatedAt`
    - The CLI's four states, as it defines them:
@@ -97,8 +103,9 @@ CLI's.
    - Do not write files in `--check`.
 
 4. QUERY MODE
-   - `legion map --query <text> --json` prefers the newest valid structural snapshot and
-     queries its local SQLite FTS5 index. Use `--profile structural` to require that
+   - `legion map --query <text> --json` discovers and validates the newest structural
+     snapshot and its bound v1 `map.json`, then queries the snapshot's local SQLite
+     FTS5 index. Use `--profile structural` to require that
      behavior; if no structural snapshot exists and no profile was specified, the CLI
      falls back to the legacy v1 `map.json` lexical query. `--profile inventory` is
      not a structural query mode.
@@ -129,8 +136,8 @@ CLI's.
    - `legion map --refresh --profile inventory --json` creates the same v1 artifact
      set without structural snapshot or SQLite fields.
    - Structural coverage reports one status per collected file. The statuses are:
-     `parsed` (supported grammar parsed), `metadata-only` (documentation headings,
-     with no AST facts), `size-limited` (source exceeds the parser limit), `opaque`
+     `parsed` (supported grammar parsed), `metadata-only` (all collected Markdown/MDX
+     coverage, including README and docs files, with no AST facts), `size-limited` (source exceeds the parser limit), `opaque`
      (source text was unavailable), `parser-error` (the grammar rejected the source),
      and `unsupported` (the extension has no structural grammar). Parser errors are
      retained in the snapshot and make the refresh report blocked; they are not silently

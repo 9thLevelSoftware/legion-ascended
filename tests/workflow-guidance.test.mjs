@@ -43,6 +43,15 @@ function sha256Hex(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function isPosixPathWithin(rootPath, candidatePath) {
+  const relativePath = path.posix.relative(rootPath, candidatePath);
+  return relativePath === "" || (
+    relativePath !== ".." &&
+    !relativePath.startsWith("../") &&
+    !path.posix.isAbsolute(relativePath)
+  );
+}
+
 async function assertFile(root, artifactPath) {
   const fileStat = await stat(path.join(root, ...artifactPath.split("/")));
   assert.equal(fileStat.isFile(), true, `${artifactPath} should exist`);
@@ -292,6 +301,13 @@ test("structural refresh covers the code-index fixture matrix within the scoped 
       "fixture/oversized/large.ts": { status: "opaque", language: "typescript" }
     };
 
+    const expectedCoveragePaths = Object.keys(expectedCoverage).sort((left, right) => left.localeCompare(right));
+    assert.equal(snapshot.coverage.length, Object.keys(expectedCoverage).length);
+    assert.deepEqual(
+      snapshot.coverage.map(({ path: coveragePath }) => coveragePath).sort((left, right) => left.localeCompare(right)),
+      expectedCoveragePaths
+    );
+
     for (const [fixturePath, expected] of Object.entries(expectedCoverage)) {
       const coverage = coverageByPath.get(fixturePath);
       assert.ok(coverage, `missing coverage for ${fixturePath}`);
@@ -324,8 +340,9 @@ test("structural refresh covers the code-index fixture matrix within the scoped 
       ...snapshot.exports.map(({ path: returnedPath }) => returnedPath)
     ];
     assert.ok(returnedPaths.length > 0);
+    assert.equal(isPosixPathWithin("fixture", "fixture/../outside"), false);
     for (const returnedPath of returnedPaths) {
-      assert.equal(returnedPath === "fixture" || returnedPath.startsWith("fixture/"), true, returnedPath);
+      assert.equal(isPosixPathWithin("fixture", returnedPath), true, returnedPath);
     }
   } finally {
     await rm(root, { recursive: true, force: true });
