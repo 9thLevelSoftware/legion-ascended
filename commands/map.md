@@ -81,7 +81,7 @@ analysis; the run directory is the CLI's.
 
 2. SOURCE CODE DETECTION
    - Follow codebase-mapper Section 1 Source Code Detection Heuristic.
-   - Exclude Legion state/runtime folders: `.legion/`, `.claude/`, `.codex/`, `.cursor/`, `.windsurf/`, `.gemini/`, `.opencode/`, `.aider/`, `.kilo/`, `.kilocode/`, `.legion/`, `.git/`, dependency/build output directories.
+   - Exclude Legion state/runtime folders: `.legion/`, `.claude/`, `.codex/`, `.cursor/`, `.windsurf/`, `.gemini/`, `.opencode/`, `.aider/`, `.kilo/`, `.kilocode/`, `.git/`, dependency/build output directories.
    - If no source code is detected:
      - In `--query`: continue to Query Mode; query reads an existing map dataset and does not require current source detection.
      - In `--check`: report `status: absent`, `reason: no source files detected`, and exit 0.
