@@ -274,9 +274,13 @@ export interface StructuralCodeIndexDiscovery {
 }
 
 export async function discoverLatestStructuralCodeIndex(repositoryRoot: string): Promise<StructuralCodeIndexDiscovery> {
-  const runs = await latestGuidanceRuns({ repositoryRoot, workflows: ["map"], limitPerWorkflow: 20 });
   const diagnostics: MapCandidateDiagnostic[] = [];
-  const run = runs.find(isStructuralMapRun);
+  const candidate = await latestStructuralMapRun(repositoryRoot);
+  if (candidate === undefined) return { diagnostics };
+  if (candidate.failure !== undefined) {
+    return { diagnostics: [structuralLatestFailureDiagnostic(candidate.runId, candidate.failure)] };
+  }
+  const run = candidate.run;
   if (run === undefined) return { diagnostics };
 
   const rejectLatest = (
@@ -288,24 +292,30 @@ export async function discoverLatestStructuralCodeIndex(repositoryRoot: string):
     return { diagnostics };
   };
 
+  if (!isStructuralMapRun(run)) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      "workflow run profile markers do not identify a structural map refresh"
+    );
+  }
   if (run.status !== "completed") {
-    return {
-      diagnostics: [structuralLatestFailureDiagnostic(
-        run.runId,
-        `latest structural map refresh has status ${run.status}`
-      )]
-    };
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      `latest structural map refresh has status ${run.status}`
+    );
   }
 
   const snapshotPath = run.outputs["semanticIndexArtifactPath"];
   const expectedRoot = `.legion/project/workflow/map/${run.runId}/`;
   const expectedSnapshotPath = `${expectedRoot}semantic-index.json`;
   const expectedSqlitePath = `${expectedRoot}semantic-index.sqlite`;
+  const expectedMapPath = `${expectedRoot}map.json`;
   if (typeof snapshotPath !== "string" || snapshotPath !== expectedSnapshotPath ||
-      run.outputs["semanticSqliteArtifactPath"] !== expectedSqlitePath) {
+    run.outputs["semanticSqliteArtifactPath"] !== expectedSqlitePath ||
+    run.outputs["mapArtifactPath"] !== expectedMapPath) {
     return rejectLatest(
       "map_semantic_artifact_path_invalid",
-      "semantic index paths do not belong to the declaring run"
+      "semantic or v1 map artifact paths do not belong to the declaring run"
     );
   }
 
@@ -330,25 +340,31 @@ export async function discoverLatestStructuralCodeIndex(repositoryRoot: string):
     );
   }
   const sourceFingerprint = run.outputs["sourceFingerprint"];
-  if (typeof sourceFingerprint !== "string" || !/^[0-9a-f]{64}$/u.test(sourceFingerprint) ||
-      snapshot.sourceFingerprint !== sourceFingerprint) {
+  if (sourceFingerprint !== undefined &&
+      (typeof sourceFingerprint !== "string" || !/^[0-9a-f]{64}$/u.test(sourceFingerprint) ||
+        snapshot.sourceFingerprint !== sourceFingerprint)) {
     return rejectLatest(
       "map_semantic_snapshot_invalid",
       "semantic snapshot source fingerprint does not match the workflow output"
     );
   }
   const sourceFileCount = run.outputs["sourceFileCount"];
-  if (!Number.isSafeInteger(sourceFileCount) || Number(sourceFileCount) < 0 ||
-      snapshot.coverage.length !== Number(sourceFileCount)) {
+  if (sourceFileCount !== undefined &&
+      (!Number.isSafeInteger(sourceFileCount) || Number(sourceFileCount) < 0 ||
+        snapshot.coverage.length !== Number(sourceFileCount))) {
     return rejectLatest(
       "map_semantic_snapshot_invalid",
       "semantic snapshot coverage count does not match the workflow output"
     );
   }
-  if (snapshot.mapRunId !== structuralMapRunId(run.runId)) {
+  const recordedMapRunId = run.outputs["mapRunId"];
+  const expectedMapRunId = recordedMapRunId === undefined
+    ? structuralMapRunId(run.runId)
+    : recordedMapRunId;
+  if (typeof expectedMapRunId !== "string" || snapshot.mapRunId !== expectedMapRunId) {
     return rejectLatest(
       "map_semantic_snapshot_invalid",
-      "semantic snapshot mapRunId is not derived from the declaring run"
+      "semantic snapshot mapRunId is not derived from or recorded by the declaring run"
     );
   }
   if (snapshot.sqlite.path !== expectedSqlitePath) {
@@ -370,6 +386,20 @@ export async function discoverLatestStructuralCodeIndex(repositoryRoot: string):
     return rejectLatest(
       "map_semantic_sqlite_invalid",
       formatArtifactDiagnostics(sqliteResult.diagnostics)
+    );
+  }
+  const mapResult = await readMapArtifactForRun(repositoryRoot, run);
+  if (!mapResult.ok) {
+    return rejectLatest(mapResult.error.code, mapResult.error.message);
+  }
+  const map = mapResult.record.map;
+  if (map.scope !== snapshot.scope || map.sourceFingerprint !== snapshot.sourceFingerprint ||
+      map.sourceFileCount !== snapshot.coverage.length ||
+      (sourceFingerprint !== undefined && map.sourceFingerprint !== sourceFingerprint) ||
+      (sourceFileCount !== undefined && map.sourceFileCount !== sourceFileCount)) {
+    return rejectLatest(
+      "map_artifact_fingerprint_mismatch",
+      "v1 map scope, source fingerprint, or source file count does not match the structural snapshot and workflow output"
     );
   }
   return {
@@ -417,10 +447,124 @@ function formatArtifactDiagnostics(diagnostics: readonly { readonly code: string
   return diagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`).join("; ");
 }
 
+interface StructuralMapRunCandidate {
+  readonly runId: string;
+  readonly run?: GuidanceRunDocument;
+  readonly failure?: string;
+  readonly sortKey: number;
+}
+
+async function latestStructuralMapRun(repositoryRoot: string): Promise<StructuralMapRunCandidate | undefined> {
+  const workflowRoot = path.join(repositoryRoot, ".legion", "project", "workflow", "map");
+  let entries;
+  try {
+    entries = await readdir(workflowRoot, { withFileTypes: true });
+  } catch (error) {
+    if (isNodeErrorCode(error, "ENOENT")) return undefined;
+    throw error;
+  }
+
+  const candidates: StructuralMapRunCandidate[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const runRoot = path.join(workflowRoot, entry.name);
+    let hasStructuralArtifacts = false;
+    try {
+      const artifacts = await readdir(runRoot, { withFileTypes: true });
+      hasStructuralArtifacts = artifacts.some((artifact) =>
+        artifact.name === "semantic-index.json" || artifact.name === "semantic-index.sqlite"
+      );
+    } catch {
+      // Reading workflow-run.json below supplies the useful failure diagnostic.
+    }
+
+    let value: unknown;
+    try {
+      value = JSON.parse(await readFile(path.join(runRoot, "workflow-run.json"), "utf8"));
+    } catch (error) {
+      if (!hasStructuralArtifacts) continue;
+      candidates.push({
+        runId: entry.name,
+        failure: `cannot read workflow run: ${error instanceof Error ? error.message : String(error)}`,
+        sortKey: structuralRunSortKey(undefined, entry.name)
+      });
+      continue;
+    }
+
+    const record = isRecord(value) ? value : undefined;
+    const structuralEvidence = hasStructuralArtifacts ||
+      (record !== undefined && hasStructuralRunEvidence(record));
+    if (!structuralEvidence) continue;
+    if (record === undefined || !isGuidanceRunRecord(record, entry.name)) {
+      candidates.push({
+        runId: entry.name,
+        failure: "workflow run has malformed required fields",
+        sortKey: structuralRunSortKey(undefined, entry.name)
+      });
+      continue;
+    }
+    candidates.push({
+      runId: entry.name,
+      run: record as unknown as GuidanceRunDocument,
+      sortKey: structuralRunSortKey(record["createdAt"], entry.name)
+    });
+  }
+
+  candidates.sort((left, right) => right.sortKey - left.sortKey || right.runId.localeCompare(left.runId));
+  return candidates[0];
+}
+
+function structuralRunSortKey(createdAt: unknown, runId: string): number {
+  const encodedTimestamp = /^(\d{4}-\d{2}-\d{2})t(\d{2})-(\d{2})-(\d{2})-(\d{3})z(?:-|$)/iu.exec(runId);
+  if (encodedTimestamp !== null) {
+    const parsed = Date.parse(`${encodedTimestamp[1]}T${encodedTimestamp[2]}:${encodedTimestamp[3]}:${encodedTimestamp[4]}.${encodedTimestamp[5]}Z`);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  if (typeof createdAt === "string") {
+    const parsed = Date.parse(createdAt);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return Number.NEGATIVE_INFINITY;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasStructuralRunEvidence(record: Record<string, unknown>): boolean {
+  const input = isRecord(record["input"]) ? record["input"] : undefined;
+  const outputs = isRecord(record["outputs"]) ? record["outputs"] : undefined;
+  return input?.["profile"] === "structural" ||
+    outputs?.["indexProfile"] === "structural" ||
+    typeof outputs?.["semanticIndexArtifactPath"] === "string";
+}
+
+function isGuidanceRunRecord(record: Record<string, unknown>, directoryRunId: string): boolean {
+  const input = record["input"];
+  const outputs = record["outputs"];
+  const nextAction = record["nextAction"];
+  return record["schemaVersion"] === 1 &&
+    record["kind"] === "workflow_run" &&
+    record["workflow"] === "map" &&
+    record["runId"] === directoryRunId &&
+    typeof record["createdAt"] === "string" &&
+    typeof record["status"] === "string" &&
+    isRecord(input) &&
+    isRecord(outputs) &&
+    isRecord(nextAction) &&
+    typeof nextAction["command"] === "string" &&
+    nextAction["command"].length > 0 &&
+    typeof nextAction["reason"] === "string" &&
+    Array.isArray(record["diagnostics"]);
+}
+
+function isNodeErrorCode(error: unknown, code: string): boolean {
+  return isRecord(error) && error["code"] === code;
+}
+
 function isStructuralMapRun(run: GuidanceRunDocument): boolean {
-  return run.input["profile"] === "structural" ||
-    run.outputs["indexProfile"] === "structural" ||
-    typeof run.outputs["semanticIndexArtifactPath"] === "string";
+  return run.input["profile"] === "structural" &&
+    run.outputs["indexProfile"] === "structural";
 }
 
 function structuralMapRunId(runId: string): RunId {
@@ -584,64 +728,96 @@ function mapCandidateDiagnostic(runId: string, error: MapCandidateValidationErro
   return { runId, code: error.code, message: `Ignored map run ${runId}: ${error.message}.` };
 }
 
+interface MapArtifactReadResult {
+  readonly ok: true;
+  readonly record: LatestCodebaseMap;
+}
+
+interface InvalidMapArtifactReadResult {
+  readonly ok: false;
+  readonly error: MapCandidateValidationError;
+}
+
+async function readMapArtifactForRun(
+  repositoryRoot: string,
+  run: GuidanceRunDocument
+): Promise<MapArtifactReadResult | InvalidMapArtifactReadResult> {
+  const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : undefined;
+  const expectedArtifactPath = `.legion/project/workflow/map/${run.runId}/map.json`;
+  if (artifactPath === undefined) {
+    return {
+      ok: false,
+      error: new MapCandidateValidationError("map_artifact_path_invalid", "map artifact path is missing")
+    };
+  }
+  let resolved;
+  try {
+    resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath });
+    if (resolved.repositoryPath !== expectedArtifactPath) {
+      throw new Error("map output does not belong to its declaring run");
+    }
+  } catch {
+    return {
+      ok: false,
+      error: new MapCandidateValidationError(
+        "map_artifact_path_invalid",
+        "map artifact path is unsafe or does not belong to its declaring run"
+      )
+    };
+  }
+
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(resolved.absolutePath);
+  } catch {
+    return {
+      ok: false,
+      error: new MapCandidateValidationError("map_artifact_unreadable", "map artifact cannot be read")
+    };
+  }
+
+  let value: unknown;
+  try {
+    value = JSON.parse(bytes.toString("utf8"));
+  } catch {
+    return {
+      ok: false,
+      error: new MapCandidateValidationError("map_artifact_json_invalid", "map artifact is not valid JSON")
+    };
+  }
+
+  try {
+    return {
+      ok: true,
+      record: {
+        map: parseCodebaseMapDocument(value),
+        artifact: {
+          path: resolved.repositoryPath,
+          sha256: `sha256:${sha256(bytes)}` as ArtifactReference["sha256"]
+        }
+      }
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof MapCandidateValidationError
+        ? error
+        : new MapCandidateValidationError("map_artifact_schema_invalid", "map artifact schema is invalid")
+    };
+  }
+}
+
 export async function discoverLatestCodebaseMap(repositoryRoot: string): Promise<LatestCodebaseMapDiscovery> {
   const runs = await latestGuidanceRuns({ repositoryRoot, workflows: ["map"], limitPerWorkflow: 20 });
   const diagnostics: MapCandidateDiagnostic[] = [];
   for (const run of runs) {
-    const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : undefined;
-    if (artifactPath === undefined) continue;
-    const expectedArtifactPath = `.legion/project/workflow/map/${run.runId}/map.json`;
-    let resolved;
-    try {
-      resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath });
-      if (resolved.repositoryPath !== expectedArtifactPath) {
-        throw new Error("map output does not belong to its declaring run");
-      }
-    } catch {
-      diagnostics.push(mapCandidateDiagnostic(run.runId, new MapCandidateValidationError(
-        "map_artifact_path_invalid",
-        "map artifact path is unsafe or does not belong to its declaring run"
-      )));
+    if (typeof run.outputs["mapArtifactPath"] !== "string") continue;
+    const result = await readMapArtifactForRun(repositoryRoot, run);
+    if (!result.ok) {
+      diagnostics.push(mapCandidateDiagnostic(run.runId, result.error));
       continue;
     }
-    let bytes: Buffer;
-    try {
-      bytes = await readFile(resolved.absolutePath);
-    } catch {
-      diagnostics.push(mapCandidateDiagnostic(run.runId, new MapCandidateValidationError(
-        "map_artifact_unreadable",
-        "map artifact cannot be read"
-      )));
-      continue;
-    }
-    let value: unknown;
-    try {
-      value = JSON.parse(bytes.toString("utf8"));
-    } catch {
-      diagnostics.push(mapCandidateDiagnostic(run.runId, new MapCandidateValidationError(
-        "map_artifact_json_invalid",
-        "map artifact is not valid JSON"
-      )));
-      continue;
-    }
-    try {
-      const map = parseCodebaseMapDocument(value);
-      return {
-        record: {
-          map,
-          artifact: {
-            path: resolved.repositoryPath,
-            sha256: `sha256:${sha256(bytes)}` as ArtifactReference["sha256"]
-          }
-        },
-        diagnostics
-      };
-    } catch (error) {
-      const validation = error instanceof MapCandidateValidationError
-        ? error
-        : new MapCandidateValidationError("map_artifact_schema_invalid", "map artifact schema is invalid");
-      diagnostics.push(mapCandidateDiagnostic(run.runId, validation));
-    }
+    return { record: result.record, diagnostics };
   }
   return { diagnostics };
 }

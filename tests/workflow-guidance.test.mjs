@@ -322,6 +322,115 @@ test("a failed latest structural refresh blocks reads instead of serving an olde
   }
 });
 
+test("a malformed newest structural workflow run blocks discovery instead of falling back", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+    const first = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(first.exitCode, 0, first.stderr);
+    const latest = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:03:00.000Z",
+      "--json"
+    ]);
+    assert.equal(latest.exitCode, 0, latest.stderr);
+    const latestPayload = parseJsonOutput(latest);
+    await writeFile(path.join(root, ...latestPayload.artifactPath.split("/")), "{ not valid json\n", "utf8");
+
+    const check = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(check.exitCode, 0, check.stderr);
+    const checkPayload = parseJsonOutput(check);
+    assert.equal(checkPayload.status, "absent");
+    assert.ok(checkPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+
+    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(query.exitCode, 1);
+    const queryPayload = parseJsonOutput(query);
+    assert.equal(queryPayload.status, "blocked");
+    assert.ok(queryPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+    assert.equal(queryPayload.diagnostics.some(({ message }) => message.includes(first.runId)), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("structural discovery requires both workflow run profile markers", async () => {
+  for (const tamper of ["input", "output"]) {
+    const root = await tempRepo();
+    try {
+      await mkdir(path.join(root, "src"), { recursive: true });
+      await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+      const refresh = await runCliCapture([
+        "--repository-root", root,
+        "map", "--refresh", "--profile", "structural",
+        "--created-at", "2026-06-23T12:02:00.000Z",
+        "--json"
+      ]);
+      assert.equal(refresh.exitCode, 0, refresh.stderr);
+      const payload = parseJsonOutput(refresh);
+      const runPath = path.join(root, ...payload.artifactPath.split("/"));
+      const run = await readJson(root, payload.artifactPath);
+      if (tamper === "input") run.input.profile = "inventory";
+      else run.outputs.indexProfile = "inventory";
+      await writeFile(runPath, `${JSON.stringify(run)}\n`, "utf8");
+
+      const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+      assert.equal(query.exitCode, 1, `${tamper} profile tampering must block structural reads`);
+      const queryPayload = parseJsonOutput(query);
+      assert.equal(queryPayload.status, "blocked");
+      assert.ok(queryPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("structural discovery binds the v1 map metadata to the snapshot and run", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
+    const payload = parseJsonOutput(refresh);
+    const before = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(before.exitCode, 0, before.stderr);
+    const factId = parseJsonOutput(before).matches[0].id;
+    const mapPath = path.join(root, ...payload.mapArtifactPath.split("/"));
+    const map = await readJson(root, payload.mapArtifactPath);
+    map.sourceFingerprint = "0".repeat(64);
+    await writeFile(mapPath, `${JSON.stringify(map)}\n`, "utf8");
+
+    const check = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(check.exitCode, 0, check.stderr);
+    const checkPayload = parseJsonOutput(check);
+    assert.equal(checkPayload.status, "absent");
+    assert.ok(checkPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+
+    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(query.exitCode, 1);
+    assert.equal(parseJsonOutput(query).status, "blocked");
+
+    const why = await runCliCapture(["--repository-root", root, "map", "--why", factId, "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(why.exitCode, 1);
+    assert.equal(parseJsonOutput(why).status, "blocked");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("map refresh rejects an out-of-repository symlink scope before writing artifacts", async () => {
   const root = await tempRepo();
   const outside = await mkdtemp(path.join(tmpdir(), "legion-map-outside-"));
