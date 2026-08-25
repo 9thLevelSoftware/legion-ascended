@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 import {
   artifactPathSchema,
@@ -11,7 +11,8 @@ import {
 import {
   diagnosticForPath,
   resolveProjectArtifactPath,
-  type ArtifactDiagnostic
+  type ArtifactDiagnostic,
+  type ResolvedProjectArtifactPath
 } from "../paths.js";
 import {
   artifactReferenceForContent,
@@ -20,6 +21,7 @@ import {
 } from "../revisions.js";
 
 const INVALID_CODE_INDEX_PATH = ".legion/project/code-index/invalid-path" as ArtifactPath;
+const MAX_CODE_INDEX_ARTIFACT_BYTES = 256 * 1024 * 1024;
 
 export interface ReadCodeIndexSnapshotInput {
   readonly repositoryRoot: string;
@@ -93,43 +95,93 @@ function invalidPathDiagnostic(input: unknown, error: unknown): ArtifactDiagnost
   });
 }
 
+function artifactTooLargeDiagnostic(path: ArtifactPath, byteLength: number): ArtifactDiagnostic {
+  return diagnosticForPath({
+    code: "artifact_too_large",
+    message: `Code index artifact exceeds the 256 MiB maximum (${byteLength} bytes).`,
+    path
+  });
+}
+
+function preserveDiagnosticPaths(input: unknown, diagnostics: readonly ArtifactDiagnostic[]): readonly ArtifactDiagnostic[] {
+  const path = diagnosticPath(input);
+  return diagnostics.map((diagnostic) => ({
+    ...diagnostic,
+    source: {
+      ...diagnostic.source,
+      path
+    }
+  }));
+}
+
 export async function readCodeIndexSnapshot(
   input: ReadCodeIndexSnapshotInput
 ): Promise<CodeIndexSnapshotReadResult> {
-  let result;
+  let resolved: ResolvedProjectArtifactPath;
   try {
-    result = await readJsonArtifact({
+    resolved = await resolveProjectArtifactPath({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      diagnostics: [invalidPathDiagnostic(input.artifactPath, error)]
+    };
+  }
+
+  try {
+    const fileInfo = await stat(resolved.absolutePath);
+    if (fileInfo.size > MAX_CODE_INDEX_ARTIFACT_BYTES) {
+      return {
+        ok: false,
+        diagnostics: [artifactTooLargeDiagnostic(resolved.repositoryPath, fileInfo.size)]
+      };
+    }
+
+    const result = await readJsonArtifact({
       repositoryRoot: input.repositoryRoot,
       artifactPath: input.artifactPath,
       schema: codeIndexSnapshotSchema
     });
+    if (!result.ok) {
+      return {
+        ok: false,
+        diagnostics: preserveDiagnosticPaths(input.artifactPath, result.diagnostics)
+      };
+    }
+
+    if (result.bytes.byteLength > MAX_CODE_INDEX_ARTIFACT_BYTES) {
+      return {
+        ok: false,
+        diagnostics: [artifactTooLargeDiagnostic(resolved.repositoryPath, result.bytes.byteLength)]
+      };
+    }
+
+    return {
+      ok: true,
+      snapshot: result.value,
+      reference: result.reference,
+      diagnostics: []
+    };
   } catch (error) {
     return {
       ok: false,
       diagnostics: [
         filesystemDiagnostic({
-          path: diagnosticPath(input.artifactPath),
+          path: resolved.repositoryPath,
           error
         })
       ]
     };
   }
-
-  if (!result.ok) return result;
-
-  return {
-    ok: true,
-    snapshot: result.value,
-    reference: result.reference,
-    diagnostics: []
-  };
 }
 
 export async function verifyCodeIndexSqlite(
   input: VerifyCodeIndexSqliteInput
 ): Promise<CodeIndexSqliteVerificationResult> {
   const sqlitePath = input.snapshot?.sqlite?.path;
-  let resolved;
+  let resolved: ResolvedProjectArtifactPath;
   try {
     resolved = await resolveProjectArtifactPath({
       repositoryRoot: input.repositoryRoot,
@@ -142,36 +194,49 @@ export async function verifyCodeIndexSqlite(
     };
   }
 
-  let bytes: Uint8Array;
   try {
-    bytes = await readFile(resolved.absolutePath);
+    const fileInfo = await stat(resolved.absolutePath);
+    if (fileInfo.size > MAX_CODE_INDEX_ARTIFACT_BYTES) {
+      return {
+        ok: false,
+        diagnostics: [artifactTooLargeDiagnostic(resolved.repositoryPath, fileInfo.size)]
+      };
+    }
+
+    const bytes = await readFile(resolved.absolutePath);
+    if (bytes.byteLength > MAX_CODE_INDEX_ARTIFACT_BYTES) {
+      return {
+        ok: false,
+        diagnostics: [artifactTooLargeDiagnostic(resolved.repositoryPath, bytes.byteLength)]
+      };
+    }
+
+    const actualSha256 = hashContent(bytes).slice("sha256:".length);
+    if (actualSha256 !== input.snapshot.sqlite.sha256) {
+      return {
+        ok: false,
+        diagnostics: [
+          diagnosticForPath({
+            code: "hash_mismatch",
+            message: `SQLite materialization hash does not match the snapshot: expected ${input.snapshot.sqlite.sha256}, got ${actualSha256}.`,
+            path: resolved.repositoryPath
+          })
+        ]
+      };
+    }
+
+    return {
+      ok: true,
+      reference: artifactReferenceForContent({
+        path: resolved.repositoryPath,
+        content: bytes
+      }),
+      diagnostics: []
+    };
   } catch (error) {
     return {
       ok: false,
       diagnostics: [filesystemDiagnostic({ path: resolved.repositoryPath, error })]
     };
   }
-
-  const actualSha256 = hashContent(bytes).slice("sha256:".length);
-  if (actualSha256 !== input.snapshot.sqlite.sha256) {
-    return {
-      ok: false,
-      diagnostics: [
-        diagnosticForPath({
-          code: "hash_mismatch",
-          message: `SQLite materialization hash does not match the snapshot: expected ${input.snapshot.sqlite.sha256}, got ${actualSha256}.`,
-          path: resolved.repositoryPath
-        })
-      ]
-    };
-  }
-
-  return {
-    ok: true,
-    reference: artifactReferenceForContent({
-      path: resolved.repositoryPath,
-      content: bytes
-    }),
-    diagnostics: []
-  };
 }

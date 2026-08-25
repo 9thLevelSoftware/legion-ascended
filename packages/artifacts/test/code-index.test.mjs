@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -178,6 +178,7 @@ test("rejects unsafe and symlink-escaping snapshot and SQLite paths without read
       const read = await readCodeIndexSnapshot({ repositoryRoot, artifactPath: SNAPSHOT_PATH });
       assert.equal(read.ok, false, stableProtocolJson(read));
       assert.ok(diagnosticCodes(read).includes("invalid_path"));
+      assert.equal(read.diagnostics[0].source.path, SNAPSHOT_PATH);
       assert.equal(read.diagnostics.some((diagnostic) => diagnostic.code === "invalid_json"), false);
 
       const verification = await verifyCodeIndexSqlite({
@@ -192,6 +193,46 @@ test("rejects unsafe and symlink-escaping snapshot and SQLite paths without read
   });
 });
 
+test("bounds snapshot and SQLite artifact reads at 256 MiB", async () => {
+  await withRepository(async (repositoryRoot) => {
+    const oversizedBytes = 256 * 1024 * 1024 + 1;
+    const snapshotAbsolutePath = path.join(repositoryRoot, ...SNAPSHOT_PATH.split("/"));
+    await mkdir(path.dirname(snapshotAbsolutePath), { recursive: true });
+    await writeFile(snapshotAbsolutePath, "", "utf8");
+    await truncate(snapshotAbsolutePath, oversizedBytes);
+
+    const oversizedSnapshot = await readCodeIndexSnapshot({ repositoryRoot, artifactPath: SNAPSHOT_PATH });
+    assert.equal(oversizedSnapshot.ok, false, stableProtocolJson(oversizedSnapshot));
+    assert.ok(diagnosticCodes(oversizedSnapshot).includes("artifact_too_large"));
+    assert.equal(oversizedSnapshot.diagnostics[0].source.path, SNAPSHOT_PATH);
+
+    const snapshot = validSnapshot();
+    await writeSnapshot(repositoryRoot, snapshot);
+    const sqliteAbsolutePath = path.join(repositoryRoot, ...SQLITE_PATH.split("/"));
+    await truncate(sqliteAbsolutePath, oversizedBytes);
+
+    const read = await readCodeIndexSnapshot({ repositoryRoot, artifactPath: SNAPSHOT_PATH });
+    assert.equal(read.ok, true, stableProtocolJson(read));
+    if (!read.ok) return;
+
+    const oversizedSqlite = await verifyCodeIndexSqlite({ repositoryRoot, snapshot: read.snapshot });
+    assert.equal(oversizedSqlite.ok, false, stableProtocolJson(oversizedSqlite));
+    assert.ok(diagnosticCodes(oversizedSqlite).includes("artifact_too_large"));
+    assert.equal(oversizedSqlite.diagnostics[0].source.path, SQLITE_PATH);
+  });
+});
+
+test("returns an unreadable diagnostic for an existing directory snapshot path", async () => {
+  await withRepository(async (repositoryRoot) => {
+    const directoryPath = ".legion/project/code-index-directory";
+    await mkdir(path.join(repositoryRoot, ...directoryPath.split("/")), { recursive: true });
+
+    const read = await readCodeIndexSnapshot({ repositoryRoot, artifactPath: directoryPath });
+    assert.equal(read.ok, false, stableProtocolJson(read));
+    assert.ok(diagnosticCodes(read).includes("unreadable"));
+    assert.equal(read.diagnostics[0].source.path, directoryPath);
+  });
+});
 test("rejects absolute snapshot paths without accessing them", async () => {
   await withRepository(async (repositoryRoot) => {
     const outsideRoot = await mkdtemp(path.join(tmpdir(), "legion-artifacts-code-index-absolute-"));
