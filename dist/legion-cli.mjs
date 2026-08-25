@@ -38229,7 +38229,7 @@ function isStableDefaultBranch(branch) {
 }
 
 // packages/cli/src/workflow/intake/driver.ts
-import { lstat as lstat4, readFile as readFile21, readdir as readdir15, writeFile as writeFile9 } from "node:fs/promises";
+import { lstat as lstat5, readFile as readFile21, readdir as readdir15, writeFile as writeFile9 } from "node:fs/promises";
 import path38 from "node:path";
 
 // packages/cli/src/workflow/authored-source.ts
@@ -41647,13 +41647,13 @@ async function loadExploration(repositoryRoot, runId) {
 
 // packages/cli/src/workflow/intake/lifecycle.ts
 import { createHash as createHash23, randomUUID as randomUUID3 } from "node:crypto";
-import { link, lstat as lstat3, open as open2, readFile as readFile20, readdir as readdir14, realpath as realpath5, rename as rename5, rm as rm7, rmdir as rmdir2, writeFile as writeFile8 } from "node:fs/promises";
+import { link, lstat as lstat4, open as open2, readFile as readFile20, readdir as readdir14, realpath as realpath5, rename as rename5, rm as rm7, rmdir as rmdir2, writeFile as writeFile8 } from "node:fs/promises";
 import path37 from "node:path";
 
 // packages/cli/src/workflow/codebase-map.ts
 import { createHash as createHash22 } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readFile as readFile18, readdir as readdir12, realpath as realpath4, stat as stat7 } from "node:fs/promises";
+import { lstat as lstat3, readFile as readFile18, readdir as readdir12, realpath as realpath4, stat as stat7 } from "node:fs/promises";
 import path35 from "node:path";
 
 // packages/index-store/dist/index.js
@@ -46537,7 +46537,38 @@ async function buildStructuralCodeIndex(input) {
 }
 
 // packages/cli/src/workflow/codebase-map.ts
+async function assertMapWorkflowArtifactRootSafe(repositoryRoot) {
+  const repositoryRealPath = await realpath4(repositoryRoot);
+  let current = path35.resolve(repositoryRoot);
+  for (const component of [".legion", "project", "workflow", "map"]) {
+    current = path35.join(current, component);
+    let componentStat;
+    try {
+      componentStat = await lstat3(current);
+    } catch (error51) {
+      if (isNodeErrorCode2(error51, "ENOENT")) return;
+      throw error51;
+    }
+    let componentRealPath;
+    try {
+      componentRealPath = await realpath4(current);
+    } catch (error51) {
+      throw new Error(
+        `Workflow map artifact root must stay inside the repository; existing component ${path35.relative(repositoryRoot, current)} cannot be resolved.`,
+        { cause: error51 }
+      );
+    }
+    const relative = path35.relative(repositoryRealPath, componentRealPath);
+    if (relative === ".." || relative.startsWith(`..${path35.sep}`) || path35.isAbsolute(relative)) {
+      throw new Error(
+        `Workflow map artifact root must stay inside the repository; existing component ${path35.relative(repositoryRoot, current)} resolves outside the repository.`
+      );
+    }
+    if (!componentStat.isDirectory() && !componentStat.isSymbolicLink()) return;
+  }
+}
 async function collectMapSource(input) {
+  await assertMapWorkflowArtifactRootSafe(input.repositoryRoot);
   const scope = await normalizeScope(input.repositoryRoot, input.scope);
   const sourceFiles = await collectSourceFiles(input.repositoryRoot, scope);
   return {
@@ -48213,7 +48244,7 @@ async function stageIntakeDraft(input) {
   }
   let json2;
   try {
-    if ((await lstat3(absoluteSource)).isSymbolicLink()) throw new Error("The intake draft file cannot be a symbolic link.");
+    if ((await lstat4(absoluteSource)).isSymbolicLink()) throw new Error("The intake draft file cannot be a symbolic link.");
     const [rootRealPath, sourceRealPath] = await Promise.all([
       realpath5(path37.resolve(input.repositoryRoot)),
       realpath5(absoluteSource)
@@ -48317,7 +48348,7 @@ async function stageIntakeDraft(input) {
           repositoryRoot: input.repositoryRoot,
           artifactPath: draftArtifactPath(draft.id)
         });
-        await lstat3(target.absolutePath);
+        await lstat4(target.absolutePath);
         return {
           ok: false,
           diagnostics: [{ code: "draft_already_exists", message: `Draft ${draft.id} already exists and cannot be overwritten.` }]
@@ -48355,7 +48386,7 @@ async function stageIntakeDraft(input) {
         replacesDraft = intakeDraftSchema.parse({ ...previous, status: "invalidated" });
         try {
           const replacementResolved = await resolveProjectArtifactPath({ repositoryRoot: input.repositoryRoot, artifactPath: draftArtifactPath(draft.id) });
-          await lstat3(replacementResolved.absolutePath);
+          await lstat4(replacementResolved.absolutePath);
           return { ok: false, diagnostics: [{ code: "draft_already_exists", message: `Draft ${draft.id} already exists and cannot be overwritten.` }] };
         } catch (error51) {
           if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
@@ -48467,7 +48498,7 @@ async function evidenceMatches(repositoryRoot, evidence) {
     try {
       const absolute = path37.resolve(repositoryRoot, evidence.artifact.path);
       const relative = path37.relative(path37.resolve(repositoryRoot), absolute);
-      if (relative.startsWith("..") || path37.isAbsolute(relative) || (await lstat3(absolute)).isSymbolicLink()) return false;
+      if (relative.startsWith("..") || path37.isAbsolute(relative) || (await lstat4(absolute)).isSymbolicLink()) return false;
       const [rootRealPath, evidenceRealPath] = await Promise.all([realpath5(path37.resolve(repositoryRoot)), realpath5(absolute)]);
       const contained = path37.relative(rootRealPath, evidenceRealPath);
       if (contained.startsWith("..") || path37.isAbsolute(contained)) return false;
@@ -48826,19 +48857,19 @@ function parseAcceptanceJournal(bytes, filenameDraftId) {
   };
 }
 async function assertCommittedSessionDirectoryShape(sessionDirectoryPath, sessionPath) {
-  const directoryInfo = await lstat3(sessionDirectoryPath);
+  const directoryInfo = await lstat4(sessionDirectoryPath);
   if (!directoryInfo.isDirectory()) throw new Error("committed session parent is not a regular directory");
   const entries = await readdir14(sessionDirectoryPath, { withFileTypes: true });
   if (entries.length !== 1 || entries[0]?.name !== path37.basename(sessionPath) || !entries[0].isFile()) {
     throw new Error("committed session directory contains unexpected state");
   }
-  const sessionInfo = await lstat3(sessionPath);
+  const sessionInfo = await lstat4(sessionPath);
   if (!sessionInfo.isFile()) throw new Error("committed session is not a regular file");
 }
 async function inspectOpenAcceptanceReservation(input) {
   let entries;
   try {
-    const reservationInfo = await lstat3(input.reservationPath);
+    const reservationInfo = await lstat4(input.reservationPath);
     if (!reservationInfo.isDirectory()) throw new Error("session reservation is not a regular directory");
     entries = await readdir14(input.reservationPath, { withFileTypes: true });
   } catch (error51) {
@@ -48861,7 +48892,7 @@ async function inspectOpenAcceptanceReservation(input) {
   const isTemporary = entries[0].name === "session.json.tmp";
   const artifactPath = `${intakeSessionArtifactPath(input.journal.sessionId)}${isTemporary ? ".tmp" : ""}`;
   const resolved = await resolveProjectArtifactPath({ repositoryRoot: input.repositoryRoot, artifactPath });
-  const info2 = await lstat3(resolved.absolutePath);
+  const info2 = await lstat4(resolved.absolutePath);
   if (!info2.isFile()) throw new Error("journaled session publication is not a regular file");
   const sessionRaw = await readFile20(resolved.absolutePath);
   if (sha2562(sessionRaw) !== input.journal.sessionSha256) {
@@ -48911,7 +48942,7 @@ async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
       const artifactPath = path37.join(transactions, entry.name);
       try {
         if (!entry.isFile()) throw new Error("ownership artifact is not a regular file");
-        const info2 = await lstat3(artifactPath);
+        const info2 = await lstat4(artifactPath);
         if (!info2.isFile()) throw new Error("ownership artifact is not a regular file");
         const raw = await readFile20(artifactPath);
         if (ownership.kind === "publication-temp") {
@@ -48976,7 +49007,7 @@ async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
         repositoryRoot,
         artifactPath: draftArtifactPath(journal.draftId)
       });
-      const draftInfo = await lstat3(resolvedDraft.absolutePath);
+      const draftInfo = await lstat4(resolvedDraft.absolutePath);
       if (!draftInfo.isFile()) throw new Error("referenced draft is not a regular file");
       const draftRaw = await readFile20(resolvedDraft.absolutePath);
       const draft = intakeDraftSchema.parse(JSON.parse(draftRaw.toString("utf8")));
@@ -49055,7 +49086,7 @@ async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
 }
 async function assertLegacyAcceptanceOwnershipUnchanged(artifact, lease) {
   await assertTransitionLeaseOwned(lease);
-  const info2 = await lstat3(artifact.artifactPath);
+  const info2 = await lstat4(artifact.artifactPath);
   if (!info2.isFile() || info2.mtimeMs !== artifact.mtimeMs) {
     throw new Error("acceptance ownership artifact changed during recovery");
   }
@@ -49088,13 +49119,13 @@ async function assertAcceptanceRecoveryCandidateUnchanged(repositoryRoot, candid
     if (active.hash !== candidate.reviewHash) throw new Error("active review changed during acceptance recovery");
     if (candidate.reservationState === "missing") {
       try {
-        await lstat3(candidate.reservationPath);
+        await lstat4(candidate.reservationPath);
         throw new Error("acceptance reservation reappeared during recovery");
       } catch (error51) {
         if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
       }
     } else {
-      const info2 = await lstat3(candidate.reservationPath);
+      const info2 = await lstat4(candidate.reservationPath);
       if (!info2.isDirectory()) throw new Error("acceptance reservation changed during recovery");
       const entries = await readdir14(candidate.reservationPath, { withFileTypes: true });
       if (candidate.reservationState === "empty") {
@@ -51184,7 +51215,7 @@ ${renderNextAction(action)}`
 async function classifyRoadmap(target) {
   let stats;
   try {
-    stats = await lstat4(target);
+    stats = await lstat5(target);
   } catch (error51) {
     if (error51 !== null && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
       return { kind: "absent" };

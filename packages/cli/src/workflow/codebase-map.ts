@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readFile, readdir, realpath, stat } from "node:fs/promises";
+import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -96,6 +96,45 @@ export interface CodebaseMapQueryMatch {
  * meant the "nothing to map" answer came from a different snapshot than the
  * artifacts would have been written from.
  */
+/**
+ * Verify the workflow map root before a refresh claims a run directory or
+ * materializes the structural index. Every existing component is resolved so a
+ * symlink in `.legion`, `project`, `workflow`, or `map` cannot redirect writes
+ * outside the repository.
+ */
+export async function assertMapWorkflowArtifactRootSafe(repositoryRoot: string): Promise<void> {
+  const repositoryRealPath = await realpath(repositoryRoot);
+  let current = path.resolve(repositoryRoot);
+  for (const component of [".legion", "project", "workflow", "map"]) {
+    current = path.join(current, component);
+    let componentStat;
+    try {
+      componentStat = await lstat(current);
+    } catch (error) {
+      if (isNodeErrorCode(error, "ENOENT")) return;
+      throw error;
+    }
+
+    let componentRealPath: string;
+    try {
+      componentRealPath = await realpath(current);
+    } catch (error) {
+      throw new Error(
+        `Workflow map artifact root must stay inside the repository; existing component ${path.relative(repositoryRoot, current)} cannot be resolved.`,
+        { cause: error }
+      );
+    }
+    const relative = path.relative(repositoryRealPath, componentRealPath);
+    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error(
+        `Workflow map artifact root must stay inside the repository; existing component ${path.relative(repositoryRoot, current)} resolves outside the repository.`
+      );
+    }
+
+    if (!componentStat.isDirectory() && !componentStat.isSymbolicLink()) return;
+  }
+}
+
 export async function collectMapSource(input: {
   readonly repositoryRoot: string;
   readonly scope?: string;
@@ -104,6 +143,7 @@ export async function collectMapSource(input: {
   readonly files: readonly CodebaseMapFile[];
   readonly sourceFiles: readonly MapSourceFile[];
 }> {
+  await assertMapWorkflowArtifactRootSafe(input.repositoryRoot);
   const scope = await normalizeScope(input.repositoryRoot, input.scope);
   const sourceFiles = await collectSourceFiles(input.repositoryRoot, scope);
   return {

@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { buildStructuralCodeIndex } from "../packages/cli/dist/workflow/code-index.js";
+import { directoryLinkType, requireDirSymlink } from "./helpers/symlink-capability.mjs";
 import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
 
 async function tempRepo() {
@@ -812,12 +813,13 @@ test("structural discovery binds the v1 map metadata to the snapshot and run", a
   }
 });
 
-test("map refresh rejects an out-of-repository symlink scope before writing artifacts", async () => {
+test("map refresh rejects an out-of-repository symlink scope before writing artifacts", async (t) => {
+  if (!requireDirSymlink(t)) return;
   const root = await tempRepo();
   const outside = await mkdtemp(path.join(tmpdir(), "legion-map-outside-"));
   try {
     await writeFile(path.join(outside, "secret.ts"), "export function outsideScope() { return 1; }\n", "utf8");
-    await symlink(outside, path.join(root, "linked-scope"));
+    await symlink(outside, path.join(root, "linked-scope"), directoryLinkType());
     const refresh = await runCliCapture([
       "--repository-root", root,
       "map", "--refresh", "--profile", "structural", "--scope", "linked-scope",
@@ -832,6 +834,44 @@ test("map refresh rejects an out-of-repository symlink scope before writing arti
   } finally {
     await rm(root, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("map refresh rejects an out-of-repository workflow map symlink before writing artifacts", async (t) => {
+  if (!requireDirSymlink(t)) return;
+  const linkCases = [
+    [".legion", [".legion"]],
+    ["project ancestor", [".legion", "project"]],
+    ["workflow ancestor", [".legion", "project", "workflow"]],
+    ["map root", [".legion", "project", "workflow", "map"]]
+  ];
+
+  for (const [name, components] of linkCases) {
+    await t.test(name, async () => {
+      const root = await tempRepo();
+      const outside = await mkdtemp(path.join(tmpdir(), "legion-map-outside-"));
+      try {
+        await writeFile(path.join(root, "app.ts"), "export const inside = true;\n", "utf8");
+        const linkPath = path.join(root, ...components);
+        await mkdir(path.dirname(linkPath), { recursive: true });
+        await symlink(outside, linkPath, directoryLinkType());
+
+        const refresh = await runCliCapture([
+          "--repository-root", root,
+          "map", "--refresh", "--profile", "structural",
+          "--created-at", "2026-06-23T12:02:00.000Z",
+          "--json"
+        ]);
+        assert.equal(refresh.exitCode, 1, refresh.stderr);
+        const payload = parseJsonOutput(refresh);
+        assert.equal(payload.status, "usage_error");
+        assert.match(payload.diagnostics[0].message, /Workflow map artifact root must stay inside the repository/);
+        assert.deepEqual(await readdir(outside), []);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+        await rm(outside, { recursive: true, force: true });
+      }
+    });
   }
 });
 
