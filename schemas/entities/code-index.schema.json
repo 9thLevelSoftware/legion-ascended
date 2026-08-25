@@ -94,6 +94,7 @@
     },
     "coverage": {
       "readOnly": true,
+      "maxItems": 100000,
       "type": "array",
       "items": {
         "type": "object",

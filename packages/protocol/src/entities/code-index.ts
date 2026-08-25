@@ -173,13 +173,14 @@ export const codeIndexSnapshotSchema = z
     sourceFingerprint: codeIndexSha256Schema,
     extractor: codeIndexExtractorSchema,
     sqlite: codeIndexSqliteSchema,
-    coverage: z.array(codeIndexFileCoverageSchema).readonly(),
+    coverage: z.array(codeIndexFileCoverageSchema).max(100_000).readonly(),
     symbols: z.array(codeIndexSymbolSchema),
     imports: z.array(codeIndexImportSchema),
     exports: z.array(codeIndexExportSchema)
   })
   .superRefine((snapshot, context) => {
     const seenCoveragePaths = new Set<string>();
+    let previousCoveragePath: string | undefined;
 
     for (const [index, coverage] of snapshot.coverage.entries()) {
       if (seenCoveragePaths.has(coverage.path)) {
@@ -190,6 +191,15 @@ export const codeIndexSnapshotSchema = z
         });
       }
       seenCoveragePaths.add(coverage.path);
+
+      if (previousCoveragePath !== undefined && previousCoveragePath >= coverage.path) {
+        context.addIssue({
+          code: "custom",
+          message: "Code index coverage paths must be in strictly ascending lexicographic order.",
+          path: ["coverage", index, "path"]
+        });
+      }
+      previousCoveragePath = coverage.path;
     }
 
     const seenIds = new Set<string>();

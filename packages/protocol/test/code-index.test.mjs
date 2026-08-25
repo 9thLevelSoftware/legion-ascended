@@ -119,6 +119,32 @@ test("code index coverage rejects duplicate repository-relative paths", () => {
   assert.equal(codeIndexSnapshotSchema.safeParse(snapshot).success, false);
 });
 
+test("code index coverage rejects more than 100000 entries", () => {
+  const snapshot = validSnapshot();
+  snapshot.coverage = Array.from({ length: 100_001 }, (_, index) => ({
+    path: `src/file-${String(index).padStart(6, "0")}.ts`,
+    status: "parsed"
+  }));
+
+  assert.equal(codeIndexSnapshotSchema.safeParse(snapshot).success, false);
+});
+
+test("code index coverage rejects paths that are not in canonical order", () => {
+  const snapshot = validSnapshot();
+  snapshot.coverage = [
+    {
+      path: "src/z.ts",
+      status: "parsed"
+    },
+    {
+      path: "src/a.ts",
+      status: "parsed"
+    }
+  ];
+
+  assert.equal(codeIndexSnapshotSchema.safeParse(snapshot).success, false);
+});
+
 test("code index snapshot rejects unknown fields", () => {
   assert.equal(codeIndexSnapshotSchema.safeParse({ ...validSnapshot(), unexpected: true }).success, false);
 });
