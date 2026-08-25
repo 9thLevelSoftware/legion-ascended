@@ -382,6 +382,9 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       symbolsArtifactPath: artifacts.symbolsArtifactPath,
       searchArtifactPath: artifacts.searchArtifactPath,
       mapArtifactPath: artifacts.mapArtifactPath,
+      mapRunId: artifacts.mapRunId,
+      generatedAt: artifacts.map.generatedAt,
+      mapArtifactSha256: artifacts.mapArtifactSha256,
       sourceFingerprint: artifacts.map.sourceFingerprint,
       sourceFileCount: artifacts.map.sourceFileCount,
       ...(semantic === undefined
@@ -411,6 +414,9 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       runId: paths.runId,
       artifactPath: paths.workflowRunArtifactPath,
       mapArtifactPath: artifacts.mapArtifactPath,
+      mapRunId: artifacts.mapRunId,
+      generatedAt: artifacts.map.generatedAt,
+      mapArtifactSha256: artifacts.mapArtifactSha256,
       sourceFingerprint: artifacts.map.sourceFingerprint,
       sourceFileCount: artifacts.map.sourceFileCount,
       ...(semantic === undefined
@@ -640,6 +646,22 @@ async function mapQuery(context: CliContext, query: string, profile: MapProfile 
   const structuralDiscovery = profile === "structural" || profile === undefined
     ? await discoverLatestStructuralCodeIndex(context.repositoryRoot)
     : undefined;
+  const structuralLatestFailure = structuralDiscovery?.diagnostics.find(({ code }) => code === "map_structural_latest_failure");
+  if (profile === undefined && structuralLatestFailure !== undefined) {
+    const action = nextAction("legion map --refresh --profile structural", "The latest structural map refresh is unusable; refresh it before querying.");
+    return failure(
+      {
+        ok: false,
+        status: "blocked",
+        workflow: "map",
+        mode: "query",
+        query,
+        diagnostics: structuralDiscovery?.diagnostics ?? [],
+        nextAction: action
+      },
+      ["Map query is blocked.", renderNextAction(action)].join("\n")
+    );
+  }
   if (structuralDiscovery?.record !== undefined) {
     const state = await resolveMapState(context.repositoryRoot, undefined, createdAt, "structural");
     const refreshAction = nextAction("legion map --refresh --profile structural", "A fresh structural snapshot is required before querying the index.");

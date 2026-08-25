@@ -99,6 +99,28 @@ test("legion map --why refuses write and ambiguous combinations", async (t) => {
   assert.match(`${ambiguous.stdout}${ambiguous.stderr}`, /profile|inventory/);
 });
 
+test("default map query blocks when the newest structural run is broken instead of falling back lexically", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const first = await run("map", "--refresh", "--profile", "structural", "--json");
+  assert.equal(first.exitCode, 0, first.stderr);
+  const latest = await run("map", "--refresh", "--profile", "structural", "--json");
+  assert.equal(latest.exitCode, 0, latest.stderr);
+  const latestPayload = parseJsonOutput(latest);
+  const runPath = path.join(root, ...latestPayload.artifactPath.split("/"));
+  const runRecord = JSON.parse(await readFile(runPath, "utf8"));
+  runRecord.status = "blocked";
+  await writeFile(runPath, `${JSON.stringify(runRecord)}\n`, "utf8");
+
+  const query = await run("map", "--query", "resolveAsset", "--json");
+  assert.equal(query.exitCode, 1);
+  const payload = parseJsonOutput(query);
+  assert.equal(payload.status, "blocked");
+  assert.equal(payload.matches, undefined);
+  assert.equal(payload.nextAction.command, "legion map --refresh --profile structural");
+  assert.ok(payload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+  assert.ok(payload.diagnostics.some(({ message }) => message.includes(latestPayload.runId)));
+});
+
 test("structural map read modes preserve run count and inventory query uses lexical fallback", async (t) => {
   const { root, run } = await scratchRepo(t);
   const structural = await run("map", "--refresh", "--profile", "structural", "--json");

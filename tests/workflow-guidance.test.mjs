@@ -173,6 +173,10 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
     assert.equal(run.input.profile, "structural");
     assert.equal(run.outputs.indexProfile, "structural");
     assert.equal(run.outputs.semanticIndexSha256, refreshPayload.semanticIndexSha256);
+    assert.match(run.outputs.mapRunId, /^run_map-[0-9a-f]{32}$/u);
+    assert.equal(run.outputs.generatedAt, run.createdAt);
+    assert.match(run.outputs.mapArtifactSha256, /^[0-9a-f]{64}$/u);
+    assert.equal(run.outputs.mapArtifactSha256, sha256Hex(await readFile(path.join(root, ...refreshPayload.mapArtifactPath.split("/")))));
     assert.match(refreshPayload.snapshotId, /^idx_[0-9a-f]{24}$/);
     assert.match(refreshPayload.semanticIndexArtifactPath, /semantic-index\.json$/);
     assert.match(refreshPayload.semanticSqliteArtifactPath, /semantic-index\.sqlite$/);
@@ -476,6 +480,143 @@ test("structural discovery rejects forged snapshot and run mapRunId metadata aft
     const queryPayload = parseJsonOutput(query);
     assert.equal(queryPayload.status, "blocked");
     assert.ok(queryPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("structural discovery requires map provenance outputs", async () => {
+  for (const missing of ["mapRunId", "generatedAt", "mapArtifactSha256"]) {
+    const root = await tempRepo();
+    try {
+      await mkdir(path.join(root, "src"), { recursive: true });
+      await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+      const refresh = await runCliCapture([
+        "--repository-root", root,
+        "map", "--refresh", "--profile", "structural",
+        "--created-at", "2026-06-23T12:02:00.000Z",
+        "--json"
+      ]);
+      assert.equal(refresh.exitCode, 0, refresh.stderr);
+      const payload = parseJsonOutput(refresh);
+      const runPath = path.join(root, ...payload.artifactPath.split("/"));
+      const run = await readJson(root, payload.artifactPath);
+      delete run.outputs[missing];
+      await writeFile(runPath, `${JSON.stringify(run)}\n`, "utf8");
+
+      const check = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+      assert.equal(check.exitCode, 0, check.stderr);
+      const checkPayload = parseJsonOutput(check);
+      assert.equal(checkPayload.status, "absent", `${missing} must make the structural candidate unusable`);
+      assert.ok(checkPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("structural discovery binds generatedAt across run, snapshot, and v1 map", async () => {
+  for (const tamper of ["run-output", "snapshot", "map"]) {
+    const root = await tempRepo();
+    try {
+      await mkdir(path.join(root, "src"), { recursive: true });
+      await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+      const refresh = await runCliCapture([
+        "--repository-root", root,
+        "map", "--refresh", "--profile", "structural",
+        "--created-at", "2026-06-23T12:02:00.000Z",
+        "--json"
+      ]);
+      assert.equal(refresh.exitCode, 0, refresh.stderr);
+      const payload = parseJsonOutput(refresh);
+      const runPath = path.join(root, ...payload.artifactPath.split("/"));
+      const mapPath = path.join(root, ...payload.mapArtifactPath.split("/"));
+      const snapshotPath = path.join(root, ...payload.semanticIndexArtifactPath.split("/"));
+      const run = await readJson(root, payload.artifactPath);
+      const snapshot = await readJson(root, payload.semanticIndexArtifactPath);
+      const map = await readJson(root, payload.mapArtifactPath);
+      if (tamper === "run-output") {
+        run.outputs.generatedAt = "2026-06-23T12:03:00.000Z";
+      } else if (tamper === "snapshot") {
+        snapshot.generatedAt = "2026-06-23T12:03:00.000Z";
+        const snapshotText = `${JSON.stringify(sortStable(snapshot))}\n`;
+        run.outputs.semanticIndexSha256 = sha256Hex(snapshotText);
+        await writeFile(snapshotPath, snapshotText, "utf8");
+      } else {
+        map.generatedAt = "2026-06-23T12:03:00.000Z";
+        const mapText = `${JSON.stringify(sortStable(map))}\n`;
+        run.outputs.mapArtifactSha256 = sha256Hex(mapText);
+        await writeFile(mapPath, mapText, "utf8");
+      }
+      await writeFile(runPath, `${JSON.stringify(run)}\n`, "utf8");
+
+      const check = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+      assert.equal(check.exitCode, 0, check.stderr);
+      const checkPayload = parseJsonOutput(check);
+      assert.equal(checkPayload.status, "absent", `${tamper} generatedAt tampering must block discovery`);
+      assert.ok(checkPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("structural discovery rejects v1 map content tampering through the exact artifact hash", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
+    const payload = parseJsonOutput(refresh);
+    const mapPath = path.join(root, ...payload.mapArtifactPath.split("/"));
+    const map = await readJson(root, payload.mapArtifactPath);
+    map.files[0].summary = "tampered summary";
+    await writeFile(mapPath, `${JSON.stringify(sortStable(map))}\n`, "utf8");
+
+    const check = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(check.exitCode, 0, check.stderr);
+    const checkPayload = parseJsonOutput(check);
+    assert.equal(checkPayload.status, "absent");
+    assert.ok(checkPayload.diagnostics.some(({ message }) => message.includes("map artifact content hash")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("structural discovery requires the snapshot coverage path set to match the v1 map", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
+    const payload = parseJsonOutput(refresh);
+    const runPath = path.join(root, ...payload.artifactPath.split("/"));
+    const snapshotPath = path.join(root, ...payload.semanticIndexArtifactPath.split("/"));
+    const run = await readJson(root, payload.artifactPath);
+    const snapshot = await readJson(root, payload.semanticIndexArtifactPath);
+    snapshot.coverage[0].path = "src/forged.ts";
+    const snapshotText = `${JSON.stringify(sortStable(snapshot))}\n`;
+    run.outputs.semanticIndexSha256 = sha256Hex(snapshotText);
+    await writeFile(snapshotPath, snapshotText, "utf8");
+    await writeFile(runPath, `${JSON.stringify(run)}\n`, "utf8");
+
+    const check = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(check.exitCode, 0, check.stderr);
+    const checkPayload = parseJsonOutput(check);
+    assert.equal(checkPayload.status, "absent");
+    assert.ok(checkPayload.diagnostics.some(({ message }) => message.includes("coverage paths")));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

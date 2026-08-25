@@ -62,6 +62,8 @@ export interface CodebaseMapDocument {
 
 export interface CodebaseMapArtifacts {
   readonly map: CodebaseMapDocument;
+  readonly mapRunId: RunId;
+  readonly mapArtifactSha256: string;
   readonly codebaseArtifactPath: ArtifactPath;
   readonly indexArtifactPath: ArtifactPath;
   readonly symbolsArtifactPath: ArtifactPath;
@@ -133,6 +135,8 @@ export async function refreshCodebaseMap(input: {
   const symbolsArtifactPath = guidanceArtifactPath(input.paths, "symbols.json");
   const searchArtifactPath = guidanceArtifactPath(input.paths, "search.md");
   const mapArtifactPath = guidanceArtifactPath(input.paths, "map.json");
+  const mapText = stableProtocolJson(map);
+  const mapRunId = structuralMapRunId(input.paths.runId);
 
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
@@ -162,11 +166,13 @@ export async function refreshCodebaseMap(input: {
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
     artifactPath: mapArtifactPath,
-    text: stableProtocolJson(map)
+    text: mapText
   });
 
   return {
     map,
+    mapRunId,
+    mapArtifactSha256: hashContent(mapText).slice("sha256:".length),
     codebaseArtifactPath,
     indexArtifactPath,
     symbolsArtifactPath,
@@ -357,11 +363,25 @@ export async function discoverLatestStructuralCodeIndex(repositoryRoot: string):
   }
   const expectedMapRunId = structuralMapRunId(run.runId);
   const recordedMapRunId = run.outputs["mapRunId"];
-  if ((recordedMapRunId !== undefined && recordedMapRunId !== expectedMapRunId) ||
+  if (typeof recordedMapRunId !== "string" || recordedMapRunId !== expectedMapRunId ||
       snapshot.mapRunId !== expectedMapRunId) {
     return rejectLatest(
       "map_semantic_snapshot_invalid",
-      "semantic snapshot or workflow output mapRunId is not derived from the declaring run"
+      "semantic snapshot or workflow output mapRunId is missing or not derived from the declaring run"
+    );
+  }
+  const generatedAt = run.outputs["generatedAt"];
+  if (typeof generatedAt !== "string" || generatedAt !== run.createdAt) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      "generatedAt is missing or does not match the declaring run"
+    );
+  }
+  const mapArtifactSha256 = run.outputs["mapArtifactSha256"];
+  if (typeof mapArtifactSha256 !== "string" || !/^[0-9a-f]{64}$/u.test(mapArtifactSha256)) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      "mapArtifactSha256 is missing or malformed in the workflow output"
     );
   }
   if (snapshot.sqlite.path !== expectedSqlitePath) {
@@ -378,6 +398,12 @@ export async function discoverLatestStructuralCodeIndex(repositoryRoot: string):
       "semantic snapshot content hash does not match the workflow output"
     );
   }
+  if (snapshot.generatedAt !== generatedAt) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      "semantic snapshot generatedAt does not match the declaring run"
+    );
+  }
   const sqliteResult = await verifyCodeIndexSqlite({ repositoryRoot, snapshot });
   if (!sqliteResult.ok) {
     return rejectLatest(
@@ -390,6 +416,27 @@ export async function discoverLatestStructuralCodeIndex(repositoryRoot: string):
     return rejectLatest(mapResult.error.code, mapResult.error.message);
   }
   const map = mapResult.record.map;
+  const actualMapArtifactSha256 = mapResult.record.artifact.sha256.slice("sha256:".length);
+  if (actualMapArtifactSha256 !== mapArtifactSha256) {
+    return rejectLatest(
+      "map_artifact_fingerprint_mismatch",
+      "map artifact content hash does not match the workflow output mapArtifactSha256"
+    );
+  }
+  if (map.generatedAt !== generatedAt) {
+    return rejectLatest(
+      "map_artifact_fingerprint_mismatch",
+      "v1 map generatedAt does not match the declaring run and semantic snapshot"
+    );
+  }
+  const mapFilePaths = map.files.map((file) => file.path).sort((left, right) => left.localeCompare(right));
+  const coveragePaths = snapshot.coverage.map((coverage) => coverage.path).sort((left, right) => left.localeCompare(right));
+  if (JSON.stringify(mapFilePaths) !== JSON.stringify(coveragePaths)) {
+    return rejectLatest(
+      "map_artifact_fingerprint_mismatch",
+      "semantic snapshot coverage paths do not exactly match the v1 map files"
+    );
+  }
   if (map.scope !== snapshot.scope || map.sourceFingerprint !== snapshot.sourceFingerprint ||
       map.sourceFileCount !== snapshot.coverage.length ||
       map.sourceFingerprint !== sourceFingerprint ||
@@ -790,7 +837,7 @@ async function readMapArtifactForRun(
         map: parseCodebaseMapDocument(value),
         artifact: {
           path: resolved.repositoryPath,
-          sha256: `sha256:${sha256(bytes)}` as ArtifactReference["sha256"]
+          sha256: hashContent(bytes)
         }
       }
     };
