@@ -178,6 +178,15 @@ test('marks named exports and their referenced symbols, including aliases', asyn
   );
 });
 
+test('does not resolve local bindings for source-bearing named re-exports', async () => {
+  const text = 'const foo = 1;\nexport { foo as bar } from "pkg";\n';
+  const result = await buildStructuralCodeIndex(input([file('src/source-reexport.js', text)]));
+
+  assert.deepEqual(result.symbols.map(({ name, exported }) => ({ name, exported })), [{ name: 'foo', exported: false }]);
+  assert.deepEqual(result.imports, []);
+  assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'bar', kind: 'export' }]);
+});
+
 test('emits default export facts with the default name for named declarations', async () => {
   const result = await buildStructuralCodeIndex(input([file('src/default-export.js', 'export default function named() {}\n')]));
 
@@ -271,6 +280,16 @@ test('resolves var named exports to the nearest function or program scope across
 test('keeps generator-function var bindings scoped to the generator function', async () => {
   const text = 'const holder = function* () { var f = 1; };\nexport { f };\n';
   const result = await buildStructuralCodeIndex(input([file('src/generator-var-export.js', text)]));
+
+  assert.deepEqual(result.symbols.filter(({ name }) => name === 'f').map(({ name, kind, exported }) => ({ name, kind, exported })), [
+    { name: 'f', kind: 'variable', exported: false }
+  ]);
+  assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'f', kind: 'export' }]);
+});
+
+test('keeps static-block var bindings out of the module export scope', async () => {
+  const text = 'class C { static { var f = 1; } }\nexport { f };\n';
+  const result = await buildStructuralCodeIndex(input([file('src/static-block-var-export.js', text)]));
 
   assert.deepEqual(result.symbols.filter(({ name }) => name === 'f').map(({ name, kind, exported }) => ({ name, kind, exported })), [
     { name: 'f', kind: 'variable', exported: false }
@@ -433,6 +452,24 @@ test('rejects non-string file.text before extension dispatch with a uniform Type
     () => buildStructuralCodeIndex({ ...input([]), files: null }),
     { name: 'TypeError', message: 'input.files must be an array.' }
   );
+});
+
+test('validates snapshot metadata before reading file text for parser dispatch', async () => {
+  let textRead = false;
+  const files = [{
+    path: 'src/valid.ts',
+    sha256: FILE_SHA256,
+    get text() {
+      textRead = true;
+      return 'export const value = 1;\n';
+    }
+  }];
+
+  await assert.rejects(
+    () => buildStructuralCodeIndex({ ...input(files), snapshotId: 'invalid-snapshot-id' }),
+    /Invalid code index snapshot ID/
+  );
+  assert.equal(textRead, false);
 });
 
 test('sorts facts and coverage deterministically and is repeat-run stable', async () => {

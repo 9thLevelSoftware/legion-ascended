@@ -309,7 +309,9 @@ function isVarScopeBoundary(nodeType: string): boolean {
     nodeType === "generator_function" ||
     nodeType === "generator_function_declaration" ||
     nodeType === "method_definition" ||
-    nodeType === "arrow_function"
+    nodeType === "arrow_function" ||
+    nodeType === "class_static_block" ||
+    nodeType === "static_block"
   );
 }
 
@@ -645,11 +647,15 @@ function collectTreeFacts(
       }
 
       const exportClause = node.namedChildren.find((child) => child.type === "export_clause");
+      const externalModule = node.childForFieldName("source") ?? node.childForFieldName("module");
       if (exportClause !== undefined) {
         for (const specifier of exportClause.namedChildren.filter((child) => child.type === "export_specifier")) {
           const exported = specifier.childForFieldName("alias") ?? specifier.childForFieldName("name");
           const original = specifier.childForFieldName("name");
-          if (original !== null && exported !== null) namedExports.push({ node, original: original.text, exported: exported.text });
+          if (original !== null && exported !== null) {
+            if (externalModule !== null) emitExport(node, exported.text, "export");
+            else namedExports.push({ node, original: original.text, exported: exported.text });
+          }
         }
       }
       const namespaceExport = node.namedChildren.find((child) => child.type === "namespace_export");
@@ -852,34 +858,52 @@ async function extractFile(
   }
 }
 
-export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput): Promise<CodeIndexSnapshotDraft> {
+type ValidatedStructuralCodeIndexInput = Omit<StructuralCodeIndexInput, "files"> & {
+  readonly profile: "structural";
+  readonly files: readonly FileInput[];
+};
+
+function validateInputMetadata(input: StructuralCodeIndexInput): ValidatedStructuralCodeIndexInput {
+  if (typeof input !== "object" || input === null) throw new TypeError("input must be an object.");
+
+  const snapshotId = codeIndexSnapshotIdSchema.parse(input.snapshotId);
+  const mapRunId = runIdSchema.parse(input.mapRunId);
+  const generatedAt = utcTimestampSchema.parse(input.generatedAt);
+  codeIndexProfileSchema.parse("structural");
+  const scope = input.scope === "." ? input.scope : artifactPathSchema.parse(input.scope);
+  const sourceFingerprint = codeIndexSha256Schema.parse(input.sourceFingerprint);
+
   if (!Array.isArray(input.files)) throw new TypeError("input.files must be an array.");
   if (input.files.length > MAX_FILES) throw new RangeError(`input.files exceeds maximum of ${MAX_FILES} files.`);
-  for (let index = 0; index < input.files.length; index += 1) {
-    const file = input.files[index];
-    if (typeof file !== "object" || file === null) throw new TypeError(`input.files[${index}] must be an object.`);
-    if (file.text !== undefined && typeof file.text !== "string") {
+
+  const seenPaths = new Set<string>();
+  const files = input.files.map((file, index) => {
+    if (typeof file !== "object" || file === null || Array.isArray(file)) {
+      throw new TypeError(`input.files[${index}] must be an object.`);
+    }
+    const parsedPath = artifactPathSchema.parse(file.path);
+    const parsedSha256 = codeIndexSha256Schema.parse(file.sha256);
+    const text = file.text;
+    if (text !== undefined && typeof text !== "string") {
       throw new TypeError(`input.files[${index}].text must be a string when provided.`);
     }
-  }
+    if (seenPaths.has(parsedPath)) throw new Error(`input.files contains duplicate path: ${parsedPath}.`);
+    seenPaths.add(parsedPath);
+    return text === undefined ? { path: parsedPath, sha256: parsedSha256 } : { path: parsedPath, sha256: parsedSha256, text };
+  });
+
+  return { snapshotId, mapRunId, generatedAt, profile: "structural", scope, sourceFingerprint, files };
+}
+
+export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput): Promise<CodeIndexSnapshotDraft> {
+  const validatedInput = validateInputMetadata(input);
 
   const coverage: CodeIndexFileCoverage[] = [];
   const symbols: CodeIndexSymbol[] = [];
   const imports: CodeIndexImport[] = [];
   const exports: CodeIndexExport[] = [];
 
-  const files = input.files
-    .map((file) => {
-      const parsedPath = artifactPathSchema.parse(file.path);
-      const parsedSha256 = codeIndexSha256Schema.parse(file.sha256);
-      return { ...file, path: parsedPath, sha256: parsedSha256 };
-    });
-  const seenPaths = new Set<string>();
-  for (const file of files) {
-    if (seenPaths.has(file.path)) throw new Error(`input.files contains duplicate path: ${file.path}.`);
-    seenPaths.add(file.path);
-  }
-  const sortedFiles = files
+  const sortedFiles = [...validatedInput.files]
     .sort((left, right) => compareCodeIndexStrings(left.path, right.path));
   for (const file of sortedFiles) {
     const extension = path.extname(file.path).toLowerCase();
@@ -900,12 +924,12 @@ export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput):
   }
 
   const draft: CodeIndexSnapshotDraft = {
-    snapshotId: input.snapshotId,
-    mapRunId: input.mapRunId,
-    generatedAt: input.generatedAt,
-    profile: "structural",
-    scope: input.scope,
-    sourceFingerprint: input.sourceFingerprint,
+    snapshotId: validatedInput.snapshotId,
+    mapRunId: validatedInput.mapRunId,
+    generatedAt: validatedInput.generatedAt,
+    profile: validatedInput.profile,
+    scope: validatedInput.scope,
+    sourceFingerprint: validatedInput.sourceFingerprint,
     extractor: { name: "tree-sitter", version: TREE_SITTER_VERSION },
     coverage: [...coverage].sort((left, right) => compareCodeIndexStrings(left.path, right.path)),
     symbols: sortFacts(symbols),
