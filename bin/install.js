@@ -158,7 +158,8 @@ Compatibility, legacy, and manual-only targets:
   --amazon-q    Deprecated alias for --kiro
   --windsurf    Windsurf
   --kilo        Kilo CLI
-  --aider       Aider (manual-only guidance; native install disabled)
+  --aider        Aider (manual-only guidance; native install disabled)
+  --grok         Grok Build (compatible native skill; use --all-targets)
 
   You can also use --target <runtime>, for example --target codex.
   If no runtime flag is given, you'll be prompted to select a first-class target.
@@ -285,6 +286,7 @@ function commandForRuntime(runtimeKey) {
     hermes: 'hermes',
     kilo: 'kilo',
     kilocode: 'code',
+    grok: 'grok',
     aider: 'aider'
   }[runtimeKey];
 }
@@ -352,23 +354,33 @@ function resolveHome() {
   return normalizePath(home);
 }
 
-function resolveTemplatePath(template, scope, home) {
+function resolveGrokHome(home) {
+  const configured = process.env.GROK_HOME;
+  if (!configured) return normalizePath(joinPath(home, '.grok'));
+  if (!path.isAbsolute(configured)) {
+    throw new Error('GROK_HOME must be an absolute path when set.');
+  }
+  return normalizePath(configured);
+}
+
+function resolveTemplatePath(template, scope, home, grokHome = null) {
   if (!template) return null;
   const projectDir = normalizePath(process.cwd());
   return normalizePath(
     template
       .replace(/\$PROJECT/g, projectDir)
+      .replace(/\$GROK_HOME/g, grokHome || resolveGrokHome(home))
       .replace(/\$HOME/g, home)
       .replace(/\$SCOPE/g, scope)
   );
 }
 
-function resolveNativeSurfaces(runtimeKey, scope, home) {
+function resolveNativeSurfaces(runtimeKey, scope, home, grokHome = null) {
   const runtime = RUNTIME_METADATA[runtimeKey];
   return runtime.nativeSurfaces
     .map((surface) => {
       const template = scope === 'local' ? surface.localPath : surface.globalPath;
-      const resolvedPath = resolveTemplatePath(template, scope, home);
+      const resolvedPath = resolveTemplatePath(template, scope, home, grokHome);
       if (!resolvedPath) return null;
       return {
         ...surface,
@@ -396,8 +408,11 @@ function getNativeSurface(paths, surfaceKey) {
 
 function resolvePaths(runtime, scope, home, legacyPrompts = false) {
   const rt = RUNTIME_METADATA[runtime];
-  const base = scope === 'local' ? normalizePath(process.cwd()) : home;
-  const nativeSurfaces = resolveNativeSurfaces(runtime, scope, home);
+  const grokHome = runtime === 'grok' ? resolveGrokHome(home) : null;
+  const base = scope === 'local'
+    ? normalizePath(process.cwd())
+    : (runtime === 'grok' ? grokHome : home);
+  const nativeSurfaces = resolveNativeSurfaces(runtime, scope, home, grokHome);
 
   let manifestDir;
   let agentsDir;
@@ -423,6 +438,14 @@ function resolvePaths(runtime, scope, home, legacyPrompts = false) {
     adaptersDir = joinPath(legionSkillDir, 'adapters');
     manifestDir = legionSkillDir;
     manifestFile = joinPath(legionSkillDir, 'manifest.json');
+  } else if (rt.storageLayout === 'grok') {
+    const root = scope === 'local' ? joinPath(base, '.grok') : grokHome;
+    agentsDir = joinPath(root, 'legion/agents');
+    commandsDir = joinPath(root, 'legion/commands');
+    skillsDir = joinPath(root, 'legion/skills');
+    adaptersDir = joinPath(root, 'legion/adapters');
+    manifestDir = joinPath(root, 'legion');
+    manifestFile = joinPath(manifestDir, 'manifest.json');
   } else {
     const root = scope === 'local' ? joinPath(base, '.legion') : joinPath(home, '.legion');
     agentsDir = joinPath(root, 'agents');
@@ -1641,6 +1664,10 @@ function printInstallPlan(runtimeKey, scope, verify, paths) {
 }
 
 function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompts = false, versionOverride = null) {
+  if (runtimeKey === 'grok' && legacyPrompts) {
+    throw new Error('Grok Build supports only the native skill surface; --legacy-prompts is out of scope.');
+  }
+
   const home = resolveHome();
   const paths = resolvePaths(runtimeKey, scope, home, legacyPrompts);
   const src = resolveSourceRoot();
@@ -2125,6 +2152,15 @@ function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompt
 
       case 'hermes-skill': {
         const backedUp = writeManagedFile(surface.path, generateLegionSkill(paths, 'Hermes Agent'), nativeArtifacts);
+        if (backedUp) {
+          console.log(`  ${surface.key}: backed up ${path.basename(surface.path)}.bak`);
+        }
+        console.log(`  ${surface.key}: ${surface.path}`);
+        break;
+      }
+
+      case 'grok-skill': {
+        const backedUp = writeManagedFile(surface.path, generateLegionSkill(paths, 'Grok Build'), nativeArtifacts);
         if (backedUp) {
           console.log(`  ${surface.key}: backed up ${path.basename(surface.path)}.bak`);
         }

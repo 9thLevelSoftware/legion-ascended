@@ -42,6 +42,7 @@ test("npm package dry-run includes workflow CLI and packaged quickstart", async 
   assert.equal(files.has("docs/site/main.js"), true);
   assert.equal(files.has("docs/site/assets/legion-ascended-mark.svg"), true);
   assert.equal(files.has("adapters/codex-cli.md"), true);
+  assert.equal(files.has("adapters/grok-build.md"), true);
   assert.equal(files.has("bundles/index.json"), true);
   assert.equal(files.has("bundles/explorer.md"), true);
   for (const asset of STRUCTURAL_RUNTIME_ASSETS) {

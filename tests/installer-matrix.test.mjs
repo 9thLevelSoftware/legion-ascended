@@ -57,6 +57,7 @@ const FIRST_CLASS_ARTIFACTS = {
 function manifestPathFor(project, runtimeKey) {
   if (runtimeKey === "claude") return path.join(project, ".claude", "legion", "manifest.json");
   if (runtimeKey === "hermes") return path.join(project, ".hermes", "skills", "workflow", "legion", "manifest.json");
+  if (runtimeKey === "grok") return path.join(project, ".grok", "legion", "manifest.json");
   return path.join(project, ".legion", "manifest.json");
 }
 
@@ -71,6 +72,7 @@ async function withTempProject(run) {
     return await run({
       home,
       project,
+      grokHome: path.join(root, "custom-grok-home"),
       env: {
         ...EXEC_OPTIONS.env,
         HOME: home,
@@ -144,6 +146,27 @@ test("runtime registry uses explicit product support tiers", () => {
     assert.ok(runtime.installLifecycle, `${runtimeKey}: installLifecycle is required`);
   }
 
+  assert.equal(RUNTIME_METADATA.grok.supportTier, "compatible");
+  assert.equal(RUNTIME_METADATA.grok.disposition, "headless-cli-with-native-skill");
+  assert.deepEqual(RUNTIME_METADATA.grok.canonicalEntrypoint, { local: "/legion", global: "/legion" });
+  assert.deepEqual(RUNTIME_METADATA.grok.scopeSupport, { local: true, global: true });
+  assert.deepEqual(RUNTIME_METADATA.grok.nativeSurfaces, [{
+    key: "grok-skill",
+    type: "grok-skill",
+    pathKind: "file",
+    localPath: "$PROJECT/.grok/skills/legion/SKILL.md",
+    globalPath: "$GROK_HOME/skills/legion/SKILL.md"
+  }]);
+  assert.deepEqual(
+    RUNTIME_METADATA.grok.evidence.map(({ url }) => url),
+    [
+      "https://docs.x.ai/build/overview",
+      "https://docs.x.ai/build/cli/reference",
+      "https://docs.x.ai/build/cli/headless-scripting",
+      "https://docs.x.ai/build/features/skills-plugins-marketplaces"
+    ]
+  );
+
   for (const runtimeKey of recommendedRuntimeKeys()) {
     const runtime = RUNTIME_METADATA[runtimeKey];
     assert.equal(runtime.supportTier, "first-class");
@@ -174,6 +197,7 @@ test("installer target list can show compatibility, legacy, and manual-only targ
   assert.match(result.stdout, /kiro\s+compatible/);
   assert.match(result.stdout, /gemini\s+legacy/);
   assert.match(result.stdout, /aider\s+manual-only/);
+  assert.match(result.stdout, /grok\s+compatible/);
 });
 
 test("installer rejects unknown and missing target values", async () => {
@@ -232,6 +256,118 @@ test("installer dry-run writes no project artifacts and warns for compatibility 
     assert.match(result.stdout, /Dry run only\. No files were written\./);
     assert.equal(existsSync(path.join(project, ".legion", "manifest.json")), false);
     assert.equal(existsSync(path.join(project, ".cursor", "rules", "legion.mdc")), false);
+  });
+});
+
+test("Grok Build dry-run and native skill lifecycle are safe and managed", async () => {
+  await withTempProject(async ({ env, grokHome, home, project }) => {
+    const skillPath = path.join(project, ".grok", "skills", "legion", "SKILL.md");
+    const skillDir = path.dirname(skillPath);
+    const originalSkill = "---\nname: legion\ndescription: user-owned skill\n---\n\nKeep this content.\n";
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(skillPath, originalSkill, "utf8");
+
+    await assert.rejects(
+      execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "grok", "--local", "--legacy-prompts"], {
+        ...EXEC_OPTIONS,
+        cwd: project,
+        env
+      }),
+      (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stderr, /native skill surface.*legacy-prompts.*out of scope/i);
+        return true;
+      }
+    );
+    assert.equal(existsSync(path.join(project, ".grok", "commands")), false);
+
+    const dryRun = await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "grok", "--local", "--dry-run"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+    assert.match(dryRun.stdout, /Grok Build/);
+    assert.match(dryRun.stdout, /grok-skill/);
+    assert.match(dryRun.stdout, /Dry run only\. No files were written\./);
+    assert.equal(existsSync(manifestPathFor(project, "grok")), false);
+    assert.equal(readFileSync(skillPath, "utf8"), originalSkill);
+
+    await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "grok", "--local"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+    const installed = readFileSync(skillPath, "utf8");
+    assert.match(installed, /^name: legion$/m);
+    assert.match(installed, /Grok Build/);
+    assert.match(installed, /legion status --json/);
+    assert.equal(readFileSync(`${skillPath}.bak`, "utf8"), originalSkill);
+    assert.equal(existsSync(path.join(project, ".grok", "commands")), false);
+    assert.equal(existsSync(path.join(project, ".grok", "plugins")), false);
+
+    const manifest = JSON.parse(readFileSync(manifestPathFor(project, "grok"), "utf8"));
+    const resolvedSkillPath = await realpath(skillPath);
+    assert.equal(manifest.runtime, "grok");
+    assert.equal(manifest.supportTier, "compatible");
+    assert.equal(manifest.paths.native["grok-skill"], resolvedSkillPath.replaceAll("\\", "/"));
+    assert.ok(manifest.nativeArtifacts.some((artifact) => artifact.path === resolvedSkillPath.replaceAll("\\", "/") && artifact.backupCreated === true));
+
+    env.LEGION_TEST_NPM_LATEST = "999.0.0";
+    await execFileAsync(process.execPath, [LEGION_BIN, "update", "--target", "grok", "--local"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+    const updatedManifest = JSON.parse(readFileSync(manifestPathFor(project, "grok"), "utf8"));
+    assert.equal(updatedManifest.runtime, "grok");
+    assert.equal(updatedManifest.version, "999.0.0");
+
+    await execFileAsync(process.execPath, [LEGION_BIN, "uninstall", "--target", "grok", "--local"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+    assert.equal(existsSync(manifestPathFor(project, "grok")), false);
+    assert.equal(readFileSync(resolvedSkillPath, "utf8"), originalSkill);
+    assert.equal(existsSync(`${resolvedSkillPath}.bak`), false);
+
+    env.GROK_HOME = grokHome;
+    await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "grok", "--global"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+    const globalSkillPath = path.join(grokHome, "skills", "legion", "SKILL.md");
+    const globalManifestPath = path.join(grokHome, "legion", "manifest.json");
+    assert.equal(existsSync(globalSkillPath), true);
+    assert.equal(existsSync(globalManifestPath), true);
+    assert.equal(existsSync(path.join(home, ".grok", "skills", "legion", "SKILL.md")), false);
+    const globalManifest = JSON.parse(readFileSync(globalManifestPath, "utf8"));
+    assert.equal(globalManifest.paths.native["grok-skill"], globalSkillPath.replaceAll("\\", "/"));
+
+    await execFileAsync(process.execPath, [LEGION_BIN, "uninstall", "--target", "grok", "--global"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+    assert.equal(existsSync(globalSkillPath), false);
+    assert.equal(existsSync(globalManifestPath), false);
+
+    delete env.GROK_HOME;
+    await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "grok", "--global"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+    const fallbackSkillPath = path.join(home, ".grok", "skills", "legion", "SKILL.md");
+    assert.equal(existsSync(fallbackSkillPath), true);
+    assert.equal(existsSync(path.join(grokHome, "skills", "legion", "SKILL.md")), false);
+    await execFileAsync(process.execPath, [LEGION_BIN, "uninstall", "--target", "grok", "--global"], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+    assert.equal(existsSync(fallbackSkillPath), false);
   });
 });
 
