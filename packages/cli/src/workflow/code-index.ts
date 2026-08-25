@@ -359,6 +359,42 @@ function nodeName(node: Node): string | undefined {
   return undefined;
 }
 
+function bindingIdentifierNodes(pattern: Node): Node[] {
+  const bindings: Node[] = [];
+
+  function visit(node: Node): void {
+    if (node.type === "identifier" || node.type === "shorthand_property_identifier_pattern") {
+      bindings.push(node);
+      return;
+    }
+    if (node.type === "pair_pattern") {
+      const value = node.childForFieldName("value");
+      if (value !== null) visit(value);
+      return;
+    }
+    if (node.type === "object_assignment_pattern" || node.type === "assignment_pattern") {
+      const left = node.childForFieldName("left");
+      if (left !== null) visit(left);
+      return;
+    }
+    if (
+      node.type === "array_pattern" ||
+      node.type === "object_pattern" ||
+      node.type === "rest_pattern" ||
+      node.type === "tuple_pattern" ||
+      node.type === "list_pattern" ||
+      node.type === "list_splat_pattern" ||
+      node.type === "dictionary_splat_pattern" ||
+      node.type === "pattern_list"
+    ) {
+      for (const child of node.namedChildren) visit(child);
+    }
+  }
+
+  visit(pattern);
+  return bindings;
+}
+
 function addSymbol(
   symbols: CodeIndexSymbol[],
   seen: Set<number>,
@@ -551,11 +587,29 @@ function collectTreeFacts(
   function visit(node: Node): void {
     const kind = symbolKind(node);
     if (kind !== undefined) {
-      const name = nodeName(node);
-      if (name !== undefined) {
-        const symbolIndex = addSymbol(symbols, seenSymbols, node, file, offsets, kind, name, isDirectlyExported(node));
-        if (symbolIndex !== undefined) {
-          addDeclarationBinding({ symbolIndex, declaration: node, scope: lexicalScope(node, treeRoot), name, kind });
+      if (node.type === "variable_declarator" || (grammar === "python" && node.type === "assignment")) {
+        const pattern = namedChild(node, ["name", "left", "pattern"]);
+        const bindings =
+          pattern === null
+            ? []
+            : grammar === "python" && node.type === "assignment"
+              ? pattern.type === "identifier" ? [pattern] : []
+              : bindingIdentifierNodes(pattern);
+        for (const binding of bindings) {
+          const symbolNode = pattern !== null && binding.id === pattern.id ? node : binding;
+          const name = binding.text;
+          const symbolIndex = addSymbol(symbols, seenSymbols, symbolNode, file, offsets, kind, name, isDirectlyExported(symbolNode));
+          if (symbolIndex !== undefined) {
+            addDeclarationBinding({ symbolIndex, declaration: node, scope: lexicalScope(node, treeRoot), name, kind });
+          }
+        }
+      } else {
+        const name = nodeName(node);
+        if (name !== undefined) {
+          const symbolIndex = addSymbol(symbols, seenSymbols, node, file, offsets, kind, name, isDirectlyExported(node));
+          if (symbolIndex !== undefined) {
+            addDeclarationBinding({ symbolIndex, declaration: node, scope: lexicalScope(node, treeRoot), name, kind });
+          }
         }
       }
     }
@@ -575,6 +629,12 @@ function collectTreeFacts(
       const defaultExport = isDefaultExport(node);
       const declarations = exportDeclarationNodes(node, defaultExport);
       for (const declaration of declarations) {
+        if (!defaultExport && declaration.type === "variable_declarator") {
+          const pattern = namedChild(declaration, ["name", "left", "pattern"]);
+          const bindings = pattern === null ? [] : bindingIdentifierNodes(pattern);
+          for (const binding of bindings) emitExport(node, binding.text, "variable");
+          continue;
+        }
         const declarationType = exportDeclarationKind(declaration);
         const name = defaultExport ? "default" : (nodeName(declaration) ?? "default");
         emitExport(node, name, declarationType);
@@ -591,6 +651,11 @@ function collectTreeFacts(
           const original = specifier.childForFieldName("name");
           if (original !== null && exported !== null) namedExports.push({ node, original: original.text, exported: exported.text });
         }
+      }
+      const namespaceExport = node.namedChildren.find((child) => child.type === "namespace_export");
+      if (namespaceExport !== undefined) {
+        const name = namespaceExport.childForFieldName("name") ?? namespaceExport.namedChildren.find((child) => child.type === "identifier");
+        if (name !== undefined) emitExport(node, name.text, "export");
       }
     }
 

@@ -278,6 +278,63 @@ test('keeps generator-function var bindings scoped to the generator function', a
   assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'f', kind: 'export' }]);
 });
 
+test('emits one symbol and direct export for each object-destructured binding', async () => {
+  const result = await buildStructuralCodeIndex(input([file('src/destructured-direct-export.js', 'export const { a, b } = source;\n')]));
+
+  assert.deepEqual(result.symbols.map(({ name, kind, exported }) => ({ name, kind, exported })), [
+    { name: 'a', kind: 'variable', exported: true },
+    { name: 'b', kind: 'variable', exported: true }
+  ]);
+  assert.deepEqual(
+    result.exports.map(({ name, kind }) => ({ name, kind })).sort((left, right) => left.name.localeCompare(right.name)),
+    [
+      { name: 'a', kind: 'variable' },
+      { name: 'b', kind: 'variable' }
+    ]
+  );
+});
+
+test('resolves local destructured bindings in later named exports', async () => {
+  const result = await buildStructuralCodeIndex(input([file('src/destructured-named-export.js', 'const { a } = source;\nexport { a };\n')]));
+
+  assert.deepEqual(result.symbols.map(({ name, kind, exported }) => ({ name, kind, exported })), [
+    { name: 'a', kind: 'variable', exported: true }
+  ]);
+  assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'a', kind: 'variable' }]);
+});
+
+test('indexes array rest and assignment-pattern bindings', async () => {
+  const text = 'const [first, second = fallback, ...rest] = source;\nexport { first, second, rest };\n';
+  const result = await buildStructuralCodeIndex(input([file('src/array-destructured-export.js', text)]));
+
+  assert.deepEqual(result.symbols.map(({ name, kind, exported }) => ({ name, kind, exported })), [
+    { name: 'first', kind: 'variable', exported: true },
+    { name: 'second', kind: 'variable', exported: true },
+    { name: 'rest', kind: 'variable', exported: true }
+  ]);
+  assert.deepEqual(
+    result.exports.map(({ name, kind }) => ({ name, kind })).sort((left, right) => left.name.localeCompare(right.name)),
+    [
+      { name: 'first', kind: 'variable' },
+      { name: 'rest', kind: 'variable' },
+      { name: 'second', kind: 'variable' }
+    ]
+  );
+});
+
+test('emits namespace exports without fabricating an import fact', async () => {
+  const result = await buildStructuralCodeIndex(input([file('src/namespace-export.js', 'export * as ns from "pkg";\n')]));
+
+  assert.deepEqual(result.imports, []);
+  assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'ns', kind: 'export' }]);
+});
+
+test('emits Python assignment symbols only for identifier targets', async () => {
+  const result = await buildStructuralCodeIndex(input([file('src/assignment-targets.py', 'x = 1\nobj.field = 2\n')]));
+
+  assert.deepEqual(result.symbols.map(({ name, kind }) => ({ name, kind })), [{ name: 'x', kind: 'variable' }]);
+});
+
 test('sanitizes malformed YAML diagnostics without echoing source text', async () => {
   const secret = 'SECRET_TOKEN_123';
   const result = await buildStructuralCodeIndex(input([file('config/secret.yaml', `${secret}: [\n`)]));
