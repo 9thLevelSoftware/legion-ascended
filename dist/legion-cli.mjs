@@ -7,7 +7,7 @@ var __export = (target, all) => {
 
 // packages/cli/src/index.ts
 import path54 from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
 import path6 from "node:path";
@@ -35624,12 +35624,12 @@ import { existsSync as existsSync2 } from "node:fs";
 import path18 from "node:path";
 import { fileURLToPath } from "node:url";
 function resolveCliSourceRoot(importMetaUrl, requiredRelativePath) {
-  const moduleDirectory = path18.dirname(fileURLToPath(importMetaUrl));
+  const moduleDirectory2 = path18.dirname(fileURLToPath(importMetaUrl));
   const candidates = [
     // Bundled root CLI: dist/legion-cli.mjs -> package root.
-    path18.resolve(moduleDirectory, ".."),
+    path18.resolve(moduleDirectory2, ".."),
     // Package CLI build: packages/cli/dist/commands/<group>/index.js -> repo root.
-    path18.resolve(moduleDirectory, "..", "..", "..", "..", "..")
+    path18.resolve(moduleDirectory2, "..", "..", "..", "..", "..")
   ];
   for (const candidate of candidates) {
     if (existsSync2(path18.join(candidate, requiredRelativePath))) return candidate;
@@ -41877,8 +41877,10 @@ function findCodeIndexFact(input) {
 // packages/cli/src/workflow/code-index.ts
 import { createHash as createHash21 } from "node:crypto";
 import { createRequire } from "node:module";
+import { existsSync as existsSync4 } from "node:fs";
 import { readFile as readFile17 } from "node:fs/promises";
 import path34 from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { parseAllDocuments } from "yaml";
 
 // node_modules/.pnpm/web-tree-sitter@0.26.13/node_modules/web-tree-sitter/web-tree-sitter.js
@@ -45854,11 +45856,20 @@ var Query = class {
 
 // packages/cli/src/workflow/code-index.ts
 var require2 = createRequire(import.meta.url);
+var moduleDirectory = path34.dirname(fileURLToPath2(import.meta.url));
 var TREE_SITTER_VERSION = "0.26.13";
 var MAX_SOURCE_BYTES = 1 * 1024 * 1024;
 var MAX_FILES = 1e5;
 var MAX_DIAGNOSTICS = 32;
 var MAX_DIAGNOSTIC_LENGTH = 512;
+var GRAMMAR_ASSET_NAMES = Object.freeze({
+  javascript: "tree-sitter-javascript.wasm",
+  typescript: "tree-sitter-typescript.wasm",
+  tsx: "tree-sitter-tsx.wasm",
+  python: "tree-sitter-python.wasm",
+  json: "tree-sitter-json.wasm",
+  yaml: "tree-sitter-yaml.wasm"
+});
 var EXTENSION_TO_GRAMMAR = /* @__PURE__ */ new Map([
   [".js", { grammar: "javascript", language: "javascript" }],
   [".mjs", { grammar: "javascript", language: "javascript" }],
@@ -45943,7 +45954,17 @@ function normalizeGrammarWasm(bytes) {
   return new Uint8Array(normalized);
 }
 function wasmPath(grammar) {
-  return require2.resolve(`tree-sitter-wasms/out/tree-sitter-${grammar}.wasm`);
+  const assetName = GRAMMAR_ASSET_NAMES[grammar];
+  const bundledPath = path34.join(moduleDirectory, assetName);
+  if (existsSync4(bundledPath)) return bundledPath;
+  try {
+    return require2.resolve(`tree-sitter-wasms/out/${assetName}`);
+  } catch (error51) {
+    throw new Error(
+      `Unable to resolve Tree-sitter grammar asset ${assetName} from ${bundledPath} or tree-sitter-wasms/out/.`,
+      { cause: error51 }
+    );
+  }
 }
 function loadLanguage(grammar) {
   const existing = languagePromises.get(grammar);
@@ -56388,7 +56409,7 @@ function truncate4(text, maxLength) {
 // packages/cli/src/workflow/executor/verification-runner.ts
 import { spawn as spawn2 } from "node:child_process";
 import { createHash as createHash25 } from "node:crypto";
-import { existsSync as existsSync4 } from "node:fs";
+import { existsSync as existsSync5 } from "node:fs";
 import path47 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
@@ -56399,7 +56420,7 @@ function resolveCommand(command, args2) {
   if (command !== "legion") return { command, args: args2 };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
   const binPath = path47.join(sourceRoot, ...LEGION_BIN.split("/"));
-  if (!existsSync4(binPath)) return { command, args: args2 };
+  if (!existsSync5(binPath)) return { command, args: args2 };
   return { command: process.execPath, args: [binPath, ...args2] };
 }
 function sha2563(value) {
@@ -65485,7 +65506,7 @@ function stringMapValue(map2, key) {
   return typeof value === "string" ? value : void 0;
 }
 var invokedPath = process.argv[1] === void 0 ? void 0 : path54.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path54.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+if (invokedPath !== void 0 && path54.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

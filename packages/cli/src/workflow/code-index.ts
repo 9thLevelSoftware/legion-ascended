@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   artifactPathSchema,
@@ -42,6 +44,7 @@ declare global {
 }
 
 const require = createRequire(import.meta.url);
+const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const TREE_SITTER_VERSION = "0.26.13" as const;
 const MAX_SOURCE_BYTES = 1 * 1024 * 1024;
 const MAX_FILES = 100_000;
@@ -50,6 +53,15 @@ const MAX_DIAGNOSTIC_LENGTH = 512;
 
 type GrammarName = "javascript" | "typescript" | "tsx" | "python" | "json" | "yaml";
 type CoverageLanguage = GrammarName;
+
+const GRAMMAR_ASSET_NAMES: Readonly<Record<GrammarName, string>> = Object.freeze({
+  javascript: "tree-sitter-javascript.wasm",
+  typescript: "tree-sitter-typescript.wasm",
+  tsx: "tree-sitter-tsx.wasm",
+  python: "tree-sitter-python.wasm",
+  json: "tree-sitter-json.wasm",
+  yaml: "tree-sitter-yaml.wasm"
+});
 
 type FileInput = {
   readonly path: CodeIndexFileCoverage["path"];
@@ -181,7 +193,18 @@ function normalizeGrammarWasm(bytes: Uint8Array): Uint8Array {
 }
 
 function wasmPath(grammar: GrammarName): string {
-  return require.resolve(`tree-sitter-wasms/out/tree-sitter-${grammar}.wasm`);
+  const assetName = GRAMMAR_ASSET_NAMES[grammar];
+  const bundledPath = path.join(moduleDirectory, assetName);
+  if (existsSync(bundledPath)) return bundledPath;
+
+  try {
+    return require.resolve(`tree-sitter-wasms/out/${assetName}`);
+  } catch (error) {
+    throw new Error(
+      `Unable to resolve Tree-sitter grammar asset ${assetName} from ${bundledPath} or tree-sitter-wasms/out/.`,
+      { cause: error }
+    );
+  }
 }
 
 function loadLanguage(grammar: GrammarName): Promise<Language> {

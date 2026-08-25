@@ -7,6 +7,16 @@ import { selectPackReport } from "../scripts/check-package-contents.mjs";
 
 const execFileAsync = promisify(execFile);
 
+const STRUCTURAL_RUNTIME_ASSETS = [
+  "dist/web-tree-sitter.wasm",
+  "dist/tree-sitter-javascript.wasm",
+  "dist/tree-sitter-typescript.wasm",
+  "dist/tree-sitter-tsx.wasm",
+  "dist/tree-sitter-python.wasm",
+  "dist/tree-sitter-json.wasm",
+  "dist/tree-sitter-yaml.wasm"
+];
+
 test("npm package dry-run includes workflow CLI and packaged quickstart", async () => {
   const command = process.platform === "win32" ? "cmd.exe" : "npm";
   const args = process.platform === "win32"
@@ -34,6 +44,9 @@ test("npm package dry-run includes workflow CLI and packaged quickstart", async 
   assert.equal(files.has("adapters/codex-cli.md"), true);
   assert.equal(files.has("bundles/index.json"), true);
   assert.equal(files.has("bundles/explorer.md"), true);
+  for (const asset of STRUCTURAL_RUNTIME_ASSETS) {
+    assert.equal(files.has(asset), true, `published package is missing ${asset}`);
+  }
 });
 
 test("package entrypoint exposes workflow-first help", async () => {
