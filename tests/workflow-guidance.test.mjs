@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -114,7 +114,7 @@ test("map refresh, check, and query produce deterministic codebase artifacts", a
     assert.equal(missingScopePayload.status, "usage_error");
     assert.match(missingScopePayload.diagnostics[0].message, /Unable to read the codebase map/);
 
-    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--json"]);
+    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
     assert.equal(query.exitCode, 0, query.stderr);
     const queryPayload = parseJsonOutput(query);
     assert.equal(queryPayload.status, "completed");
@@ -159,9 +159,11 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
     const run = await readJson(root, refreshPayload.artifactPath);
     assert.equal(run.input.profile, "structural");
     assert.equal(run.outputs.indexProfile, "structural");
+    assert.equal(run.outputs.semanticIndexSha256, refreshPayload.semanticIndexSha256);
     assert.match(refreshPayload.snapshotId, /^idx_[0-9a-f]{24}$/);
     assert.match(refreshPayload.semanticIndexArtifactPath, /semantic-index\.json$/);
     assert.match(refreshPayload.semanticSqliteArtifactPath, /semantic-index\.sqlite$/);
+    assert.match(refreshPayload.semanticIndexSha256, /^[0-9a-f]{64}$/u);
     await assertFile(root, refreshPayload.semanticIndexArtifactPath);
     await assertFile(root, refreshPayload.semanticSqliteArtifactPath);
 
@@ -178,7 +180,7 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
     assert.equal(checkFresh.exitCode, 0, checkFresh.stderr);
     assert.equal(parseJsonOutput(checkFresh).status, "fresh");
 
-    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--json"]);
+    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
     assert.equal(query.exitCode, 0, query.stderr);
     const queryPayload = parseJsonOutput(query);
     assert.equal(queryPayload.indexProfile, "structural");
@@ -191,7 +193,7 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
     assert.equal(queryPayload.matches[0].sourceSha256.length, 64);
     assert.equal(queryPayload.matches[0].extractorVersion, "0.26.13");
 
-    const why = await runCliCapture(["--repository-root", root, "map", "--why", queryPayload.matches[0].id, "--json"]);
+    const why = await runCliCapture(["--repository-root", root, "map", "--why", queryPayload.matches[0].id, "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
     assert.equal(why.exitCode, 0, why.stderr);
     const whyPayload = parseJsonOutput(why);
     assert.equal(whyPayload.mode, "why");
@@ -214,8 +216,132 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
     const stale = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
     assert.equal(stale.exitCode, 0, stale.stderr);
     assert.equal(parseJsonOutput(stale).status, "stale");
+
+    const staleQuery = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--json"]);
+    assert.equal(staleQuery.exitCode, 1);
+    const staleQueryPayload = parseJsonOutput(staleQuery);
+    assert.equal(staleQueryPayload.status, "blocked");
+    assert.equal(staleQueryPayload.nextAction.command, "legion map --refresh --profile structural");
+    assert.ok(staleQueryPayload.diagnostics.some(({ code }) => code === "map_structural_stale"));
+
+    const staleWhy = await runCliCapture(["--repository-root", root, "map", "--why", queryPayload.matches[0].id, "--json"]);
+    assert.equal(staleWhy.exitCode, 1);
+    const staleWhyPayload = parseJsonOutput(staleWhy);
+    assert.equal(staleWhyPayload.status, "blocked");
+    assert.equal(staleWhyPayload.nextAction.command, "legion map --refresh --profile structural");
+    assert.ok(staleWhyPayload.diagnostics.some(({ code }) => code === "map_structural_stale"));
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("structural discovery rejects tampered latest output instead of falling back to an older snapshot", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "README.md"), "# Structural Integrity\n", "utf8");
+    await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+    const first = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(first.exitCode, 0, first.stderr);
+    const firstPayload = parseJsonOutput(first);
+    const second = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:03:00.000Z",
+      "--json"
+    ]);
+    assert.equal(second.exitCode, 0, second.stderr);
+    const secondPayload = parseJsonOutput(second);
+    const snapshotPath = path.join(root, ...secondPayload.semanticIndexArtifactPath.split("/"));
+    const snapshot = await readJson(root, secondPayload.semanticIndexArtifactPath);
+    await writeFile(snapshotPath, `${JSON.stringify({ ...snapshot, generatedAt: "2026-06-23T12:04:00.000Z" })}\n`, "utf8");
+
+    const hashQuery = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(hashQuery.exitCode, 1);
+    const hashPayload = parseJsonOutput(hashQuery);
+    assert.equal(hashPayload.status, "blocked");
+    assert.ok(hashPayload.diagnostics.some(({ message }) => message.includes("content hash")));
+
+    await writeFile(snapshotPath, `${JSON.stringify({ ...snapshot, sourceFingerprint: "0".repeat(64) })}\n`, "utf8");
+
+    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(query.exitCode, 1);
+    const payload = parseJsonOutput(query);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.matches, undefined);
+    assert.ok(payload.diagnostics.some(({ message }) => message.includes(secondPayload.runId)));
+    assert.equal(payload.diagnostics.some(({ message }) => message.includes(firstPayload.runId)), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a failed latest structural refresh blocks reads instead of serving an older snapshot", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "README.md"), "# Structural Failure\n", "utf8");
+    await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() { return 1; }\n", "utf8");
+    const first = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(first.exitCode, 0, first.stderr);
+    const latest = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:03:00.000Z",
+      "--json"
+    ]);
+    assert.equal(latest.exitCode, 0, latest.stderr);
+    const latestPayload = parseJsonOutput(latest);
+    const runPath = path.join(root, ...latestPayload.artifactPath.split("/"));
+    const run = await readJson(root, latestPayload.artifactPath);
+    await writeFile(runPath, `${JSON.stringify({ ...run, status: "blocked" })}\n`, "utf8");
+
+    const check = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--json"]);
+    assert.equal(check.exitCode, 0, check.stderr);
+    const checkPayload = parseJsonOutput(check);
+    assert.equal(checkPayload.status, "absent");
+    assert.ok(checkPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+
+    const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(query.exitCode, 1);
+    const queryPayload = parseJsonOutput(query);
+    assert.equal(queryPayload.status, "blocked");
+    assert.ok(queryPayload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("map refresh rejects an out-of-repository symlink scope before writing artifacts", async () => {
+  const root = await tempRepo();
+  const outside = await mkdtemp(path.join(tmpdir(), "legion-map-outside-"));
+  try {
+    await writeFile(path.join(outside, "secret.ts"), "export function outsideScope() { return 1; }\n", "utf8");
+    await symlink(outside, path.join(root, "linked-scope"));
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural", "--scope", "linked-scope",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 1);
+    const payload = parseJsonOutput(refresh);
+    assert.equal(payload.status, "usage_error");
+    assert.match(payload.diagnostics[0].message, /stay inside the repository/);
+    await assert.rejects(readdir(path.join(root, ".legion", "project", "workflow", "map")), { code: "ENOENT" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
   }
 });
 

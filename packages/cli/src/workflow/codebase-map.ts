@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -30,7 +30,7 @@ import { findCodeIndexFact, queryCodeIndexStore, writeCodeIndexStore, type CodeI
 
 import { buildStructuralCodeIndex, type CodeIndexSnapshotDraft } from "./code-index.js";
 import { writeProjectTextFile } from "./executor/result.js";
-import { guidanceArtifactPath, latestGuidanceRuns, type GuidanceRunPaths } from "./guidance-run.js";
+import { guidanceArtifactPath, latestGuidanceRuns, type GuidanceRunDocument, type GuidanceRunPaths } from "./guidance-run.js";
 import { isFullMapAuthoredFile, shouldTraverseAuthoredDirectory } from "./authored-source.js";
 
 export interface CodebaseMapFile {
@@ -102,7 +102,7 @@ export async function collectMapSource(input: {
   readonly files: readonly CodebaseMapFile[];
   readonly sourceFiles: readonly MapSourceFile[];
 }> {
-  const scope = normalizeScope(input.repositoryRoot, input.scope);
+  const scope = await normalizeScope(input.repositoryRoot, input.scope);
   const sourceFiles = await collectSourceFiles(input.repositoryRoot, scope);
   return {
     scope,
@@ -179,6 +179,7 @@ export interface StructuralCodeIndexArtifacts {
   readonly snapshot: CodeIndexSnapshot;
   readonly semanticIndexArtifactPath: ArtifactPath;
   readonly semanticSqliteArtifactPath: ArtifactPath;
+  readonly semanticIndexSha256: CodeIndexSha256;
   readonly parserDiagnostics: readonly string[];
   readonly factCount: number;
 }
@@ -196,7 +197,7 @@ export async function refreshStructuralCodeIndex(input: {
   readonly files: readonly MapSourceFile[];
 }): Promise<StructuralCodeIndexArtifacts> {
   const snapshotId = structuralSnapshotId(input.paths.runId, input.sourceFingerprint);
-  const mapRunId = formatEntityId("run", `map-${sha256(Buffer.from(input.paths.runId, "utf8")).slice(0, 32)}`) as RunId;
+  const mapRunId = structuralMapRunId(input.paths.runId);
   const draft: CodeIndexSnapshotDraft = await buildStructuralCodeIndex({
     snapshotId,
     mapRunId,
@@ -235,11 +236,13 @@ export async function refreshStructuralCodeIndex(input: {
     ...provisional,
     sqlite: { path: semanticSqliteArtifactPath, sha256: sqliteSha256 }
   };
+  const semanticIndexText = stableProtocolJson(snapshot);
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
     artifactPath: semanticIndexArtifactPath,
-    text: stableProtocolJson(snapshot)
+    text: semanticIndexText
   });
+  const semanticIndexSha256 = codeIndexSha256Schema.parse(sha256(Buffer.from(semanticIndexText, "utf8")));
 
   const parserDiagnostics = draft.coverage.flatMap((coverage) => {
     if (coverage.status !== "parser-error") return [];
@@ -250,6 +253,7 @@ export async function refreshStructuralCodeIndex(input: {
     snapshot,
     semanticIndexArtifactPath,
     semanticSqliteArtifactPath,
+    semanticIndexSha256,
     parserDiagnostics,
     factCount: store.factCount
   };
@@ -272,47 +276,113 @@ export interface StructuralCodeIndexDiscovery {
 export async function discoverLatestStructuralCodeIndex(repositoryRoot: string): Promise<StructuralCodeIndexDiscovery> {
   const runs = await latestGuidanceRuns({ repositoryRoot, workflows: ["map"], limitPerWorkflow: 20 });
   const diagnostics: MapCandidateDiagnostic[] = [];
-  for (const run of runs) {
-    if (run.status !== "completed" || run.outputs["indexProfile"] !== "structural") continue;
-    const snapshotPath = run.outputs["semanticIndexArtifactPath"];
-    if (typeof snapshotPath !== "string") continue;
-    const expectedRoot = `.legion/project/workflow/map/${run.runId}/`;
-    if (snapshotPath !== `${expectedRoot}semantic-index.json`) {
-      diagnostics.push(structuralCandidateDiagnostic(run.runId, "map_semantic_artifact_path_invalid", "semantic snapshot path does not belong to its declaring run"));
-      continue;
-    }
-    const snapshotResult = await readCodeIndexSnapshot({ repositoryRoot, artifactPath: snapshotPath });
-    if (!snapshotResult.ok) {
-      diagnostics.push(structuralCandidateDiagnostic(run.runId, "map_semantic_snapshot_invalid", formatArtifactDiagnostics(snapshotResult.diagnostics)));
-      continue;
-    }
-    if (snapshotResult.snapshot.profile !== "structural" || snapshotResult.snapshot.snapshotId !== run.outputs["snapshotId"]) {
-      diagnostics.push(structuralCandidateDiagnostic(run.runId, "map_semantic_snapshot_invalid", "semantic snapshot identity or profile does not match the workflow output"));
-      continue;
-    }
-    const sqlitePath = snapshotResult.snapshot.sqlite.path;
-    if (sqlitePath !== `${expectedRoot}semantic-index.sqlite`) {
-      diagnostics.push(structuralCandidateDiagnostic(run.runId, "map_semantic_artifact_path_invalid", "SQLite path does not belong to its declaring run"));
-      continue;
-    }
-    const sqliteResult = await verifyCodeIndexSqlite({ repositoryRoot, snapshot: snapshotResult.snapshot });
-    if (!sqliteResult.ok) {
-      diagnostics.push(structuralCandidateDiagnostic(run.runId, "map_semantic_sqlite_invalid", formatArtifactDiagnostics(sqliteResult.diagnostics)));
-      continue;
-    }
+  const run = runs.find(isStructuralMapRun);
+  if (run === undefined) return { diagnostics };
+
+  const rejectLatest = (
+    code: MapCandidateDiagnostic["code"],
+    message: string
+  ): StructuralCodeIndexDiscovery => {
+    diagnostics.push(structuralCandidateDiagnostic(run.runId, code, message));
+    diagnostics.push(structuralLatestFailureDiagnostic(run.runId, message));
+    return { diagnostics };
+  };
+
+  if (run.status !== "completed") {
     return {
-      record: {
-        snapshot: snapshotResult.snapshot,
-        snapshotArtifact: snapshotResult.reference,
-        sqliteArtifact: sqliteResult.reference,
-        runId: run.runId,
-        semanticIndexArtifactPath: snapshotPath as ArtifactPath,
-        semanticSqliteArtifactPath: sqlitePath
-      },
-      diagnostics
+      diagnostics: [structuralLatestFailureDiagnostic(
+        run.runId,
+        `latest structural map refresh has status ${run.status}`
+      )]
     };
   }
-  return { diagnostics };
+
+  const snapshotPath = run.outputs["semanticIndexArtifactPath"];
+  const expectedRoot = `.legion/project/workflow/map/${run.runId}/`;
+  const expectedSnapshotPath = `${expectedRoot}semantic-index.json`;
+  const expectedSqlitePath = `${expectedRoot}semantic-index.sqlite`;
+  if (typeof snapshotPath !== "string" || snapshotPath !== expectedSnapshotPath ||
+      run.outputs["semanticSqliteArtifactPath"] !== expectedSqlitePath) {
+    return rejectLatest(
+      "map_semantic_artifact_path_invalid",
+      "semantic index paths do not belong to the declaring run"
+    );
+  }
+
+  const snapshotResult = await readCodeIndexSnapshot({ repositoryRoot, artifactPath: snapshotPath });
+  if (!snapshotResult.ok) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      formatArtifactDiagnostics(snapshotResult.diagnostics)
+    );
+  }
+  const snapshot = snapshotResult.snapshot;
+  if (snapshot.profile !== "structural" || snapshot.snapshotId !== run.outputs["snapshotId"]) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      "semantic snapshot identity or profile does not match the workflow output"
+    );
+  }
+  if (snapshot.snapshotId !== structuralSnapshotId(run.runId, snapshot.sourceFingerprint)) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      "semantic snapshot ID is not bound to the declaring run and source fingerprint"
+    );
+  }
+  const sourceFingerprint = run.outputs["sourceFingerprint"];
+  if (typeof sourceFingerprint !== "string" || !/^[0-9a-f]{64}$/u.test(sourceFingerprint) ||
+      snapshot.sourceFingerprint !== sourceFingerprint) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      "semantic snapshot source fingerprint does not match the workflow output"
+    );
+  }
+  const sourceFileCount = run.outputs["sourceFileCount"];
+  if (!Number.isSafeInteger(sourceFileCount) || Number(sourceFileCount) < 0 ||
+      snapshot.coverage.length !== Number(sourceFileCount)) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      "semantic snapshot coverage count does not match the workflow output"
+    );
+  }
+  if (snapshot.mapRunId !== structuralMapRunId(run.runId)) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      "semantic snapshot mapRunId is not derived from the declaring run"
+    );
+  }
+  if (snapshot.sqlite.path !== expectedSqlitePath) {
+    return rejectLatest(
+      "map_semantic_artifact_path_invalid",
+      "SQLite path does not belong to its declaring run"
+    );
+  }
+  const semanticIndexSha256 = run.outputs["semanticIndexSha256"];
+  if (typeof semanticIndexSha256 !== "string" || !/^[0-9a-f]{64}$/u.test(semanticIndexSha256) ||
+      snapshotResult.reference.sha256 !== `sha256:${semanticIndexSha256}`) {
+    return rejectLatest(
+      "map_semantic_snapshot_invalid",
+      "semantic snapshot content hash does not match the workflow output"
+    );
+  }
+  const sqliteResult = await verifyCodeIndexSqlite({ repositoryRoot, snapshot });
+  if (!sqliteResult.ok) {
+    return rejectLatest(
+      "map_semantic_sqlite_invalid",
+      formatArtifactDiagnostics(sqliteResult.diagnostics)
+    );
+  }
+  return {
+    record: {
+      snapshot,
+      snapshotArtifact: snapshotResult.reference,
+      sqliteArtifact: sqliteResult.reference,
+      runId: run.runId,
+      semanticIndexArtifactPath: snapshotPath as ArtifactPath,
+      semanticSqliteArtifactPath: snapshot.sqlite.path
+    },
+    diagnostics
+  };
 }
 
 export function queryStructuralCodeIndex(input: {
@@ -347,6 +417,24 @@ function formatArtifactDiagnostics(diagnostics: readonly { readonly code: string
   return diagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`).join("; ");
 }
 
+function isStructuralMapRun(run: GuidanceRunDocument): boolean {
+  return run.input["profile"] === "structural" ||
+    run.outputs["indexProfile"] === "structural" ||
+    typeof run.outputs["semanticIndexArtifactPath"] === "string";
+}
+
+function structuralMapRunId(runId: string): RunId {
+  return formatEntityId("run", `map-${sha256(Buffer.from(runId, "utf8")).slice(0, 32)}`) as RunId;
+}
+
+function structuralLatestFailureDiagnostic(runId: string, message: string): MapCandidateDiagnostic {
+  return {
+    runId,
+    code: "map_structural_latest_failure",
+    message: `Latest structural map run ${runId} is unusable: ${message}.`
+  };
+}
+
 export function structuralSnapshotId(runId: string, sourceFingerprint: string): CodeIndexSnapshotId {
   return codeIndexSnapshotIdSchema.parse(`idx_${sha256(Buffer.from(`${runId}\0${sourceFingerprint}`, "utf8")).slice(0, 24)}`);
 }
@@ -364,7 +452,8 @@ export interface MapCandidateDiagnostic {
     | "map_artifact_fingerprint_mismatch"
     | "map_semantic_artifact_path_invalid"
     | "map_semantic_snapshot_invalid"
-    | "map_semantic_sqlite_invalid";
+    | "map_semantic_sqlite_invalid"
+    | "map_structural_latest_failure";
   readonly message: string;
 }
 
@@ -569,7 +658,7 @@ export async function currentCodebaseFingerprint(input: {
   readonly repositoryRoot: string;
   readonly scope?: string;
 }): Promise<{ readonly scope: string; readonly sourceFingerprint: string; readonly sourceFileCount: number }> {
-  const scope = normalizeScope(input.repositoryRoot, input.scope);
+  const scope = await normalizeScope(input.repositoryRoot, input.scope);
   const files = await collectSourceFiles(input.repositoryRoot, scope);
   return {
     scope,
@@ -603,15 +692,21 @@ export function queryCodebaseMap(map: CodebaseMapDocument, query: string, limit 
     }));
 }
 
-function normalizeScope(repositoryRoot: string, scope: string | undefined): string {
-  if (scope === undefined || scope.trim().length === 0 || scope.trim() === ".") return ".";
-  const absolute = path.resolve(repositoryRoot, scope);
+async function normalizeScope(repositoryRoot: string, scope: string | undefined): Promise<string> {
+  const repositoryRealPath = await realpath(repositoryRoot);
+  const isRepositoryScope = scope === undefined || scope.trim().length === 0 || scope.trim() === ".";
+  const absolute = isRepositoryScope ? repositoryRoot : path.resolve(repositoryRoot, scope);
   const relative = path.relative(repositoryRoot, absolute).replace(/\\/g, "/");
-  if (relative.length === 0) return ".";
   if (relative.startsWith("../") || path.isAbsolute(relative)) {
-    throw new Error(`Map scope must stay inside the repository: ${scope}`);
+    throw new Error(`Map scope must stay inside the repository: ${scope ?? "."}`);
   }
-  return relative;
+
+  const scopeRealPath = await realpath(absolute);
+  const realRelative = path.relative(repositoryRealPath, scopeRealPath);
+  if (realRelative === ".." || realRelative.startsWith(`..${path.sep}`) || path.isAbsolute(realRelative)) {
+    throw new Error(`Map scope must stay inside the repository: ${scope ?? "."}`);
+  }
+  return relative.length === 0 ? "." : relative;
 }
 
 async function collectSourceFiles(repositoryRoot: string, scope: string): Promise<readonly MapSourceFile[]> {

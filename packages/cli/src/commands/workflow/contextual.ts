@@ -389,6 +389,7 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
         : {
             semanticIndexArtifactPath: semantic.semanticIndexArtifactPath,
             semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
+            semanticIndexSha256: semantic.semanticIndexSha256,
             indexProfile: "structural",
             snapshotId: semantic.snapshot.snapshotId
           })
@@ -417,6 +418,7 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
         : {
             semanticIndexArtifactPath: semantic.semanticIndexArtifactPath,
             semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
+            semanticIndexSha256: semantic.semanticIndexSha256,
             indexProfile: "structural",
             snapshotId: semantic.snapshot.snapshotId
           }),
@@ -466,6 +468,39 @@ async function mapWhy(context: CliContext, factId: string): Promise<CliResult> {
           ...discovery.diagnostics,
           { code: "map_structural_missing", message: "No valid structural code index exists. Run legion map --refresh --profile structural first." }
         ],
+        nextAction: action
+      },
+      ["Map why is blocked.", renderNextAction(action)].join("\n")
+    );
+  }
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const state = await resolveMapState(context.repositoryRoot, undefined, createdAt, "structural");
+  if ("error" in state) {
+    return failure(
+      {
+        ok: false,
+        status: "blocked",
+        workflow: "map",
+        mode: "why",
+        snapshotId: discovery.record.snapshot.snapshotId,
+        indexProfile: "structural",
+        diagnostics: [...discovery.diagnostics, { code: "map_structural_unreadable", message: state.error }],
+        nextAction: action
+      },
+      ["Map why is blocked.", renderNextAction(action)].join("\n")
+    );
+  }
+  if (state.freshness !== "fresh") {
+    return failure(
+      {
+        ok: false,
+        status: "blocked",
+        workflow: "map",
+        mode: "why",
+        snapshotId: discovery.record.snapshot.snapshotId,
+        indexProfile: "structural",
+        diagnostics: [...discovery.diagnostics, structuralFreshnessDiagnostic(state)],
         nextAction: action
       },
       ["Map why is blocked.", renderNextAction(action)].join("\n")
@@ -554,6 +589,13 @@ function mapStateAction(state: MapState) {
     : nextAction("legion map --refresh", state.reason);
 }
 
+function structuralFreshnessDiagnostic(state: MapState): { readonly code: string; readonly message: string } {
+  return {
+    code: state.freshness === "stale" ? "map_structural_stale" : "map_structural_not_fresh",
+    message: `Structural map is ${state.freshness}: ${state.reason}`
+  };
+}
+
 async function mapCheck(context: CliContext, scope: string | undefined, profile: MapProfile): Promise<CliResult> {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
@@ -599,6 +641,40 @@ async function mapQuery(context: CliContext, query: string, profile: MapProfile 
     ? await discoverLatestStructuralCodeIndex(context.repositoryRoot)
     : undefined;
   if (structuralDiscovery?.record !== undefined) {
+    const state = await resolveMapState(context.repositoryRoot, undefined, createdAt, "structural");
+    const refreshAction = nextAction("legion map --refresh --profile structural", "A fresh structural snapshot is required before querying the index.");
+    if ("error" in state) {
+      return failure(
+        {
+          ok: false,
+          status: "blocked",
+          workflow: "map",
+          mode: "query",
+          query,
+          snapshotId: structuralDiscovery.record.snapshot.snapshotId,
+          indexProfile: "structural",
+          diagnostics: [...structuralDiscovery.diagnostics, { code: "map_structural_unreadable", message: state.error }],
+          nextAction: refreshAction
+        },
+        ["Map query is blocked.", renderNextAction(refreshAction)].join("\n")
+      );
+    }
+    if (state.freshness !== "fresh") {
+      return failure(
+        {
+          ok: false,
+          status: "blocked",
+          workflow: "map",
+          mode: "query",
+          query,
+          snapshotId: structuralDiscovery.record.snapshot.snapshotId,
+          indexProfile: "structural",
+          diagnostics: [...structuralDiscovery.diagnostics, structuralFreshnessDiagnostic(state)],
+          nextAction: refreshAction
+        },
+        ["Map query is blocked.", renderNextAction(refreshAction)].join("\n")
+      );
+    }
     let matches;
     try {
       matches = queryStructuralCodeIndex({
