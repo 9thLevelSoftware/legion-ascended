@@ -21,6 +21,18 @@ export const codeIndexCoverageStatusSchema = z.enum([
 
 export type CodeIndexCoverageStatus = z.infer<typeof codeIndexCoverageStatusSchema>;
 
+const codeIndexLanguageSchema = z.string().min(1).max(64);
+const codeIndexDiagnosticSchema = z.string().max(512);
+
+export const codeIndexFileCoverageSchema = z.strictObject({
+  path: artifactPathSchema,
+  status: codeIndexCoverageStatusSchema,
+  language: codeIndexLanguageSchema.optional(),
+  diagnostics: z.array(codeIndexDiagnosticSchema).max(32).optional()
+});
+
+export type CodeIndexFileCoverage = z.infer<typeof codeIndexFileCoverageSchema>;
+
 export const codeIndexSnapshotIdSchema = z
   .string()
   .regex(/^idx_[a-f0-9]{24}$/, "Invalid code index snapshot ID")
@@ -161,12 +173,25 @@ export const codeIndexSnapshotSchema = z
     sourceFingerprint: codeIndexSha256Schema,
     extractor: codeIndexExtractorSchema,
     sqlite: codeIndexSqliteSchema,
-    coverage: codeIndexCoverageStatusSchema,
+    coverage: z.array(codeIndexFileCoverageSchema).readonly(),
     symbols: z.array(codeIndexSymbolSchema),
     imports: z.array(codeIndexImportSchema),
     exports: z.array(codeIndexExportSchema)
   })
   .superRefine((snapshot, context) => {
+    const seenCoveragePaths = new Set<string>();
+
+    for (const [index, coverage] of snapshot.coverage.entries()) {
+      if (seenCoveragePaths.has(coverage.path)) {
+        context.addIssue({
+          code: "custom",
+          message: "Code index coverage paths must be unique within a snapshot.",
+          path: ["coverage", index, "path"]
+        });
+      }
+      seenCoveragePaths.add(coverage.path);
+    }
+
     const seenIds = new Set<string>();
 
     for (const arrayName of FACT_ARRAYS) {

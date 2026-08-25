@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
-import { codeIndexSnapshotSchema } from "../dist/index.js";
+import { codeIndexSnapshotSchema, entityJsonSchemas } from "../dist/index.js";
 
 const HASH = "a".repeat(64);
 const SNAPSHOT_ID = "idx_3f93b1d6df4af0fe5cc5a6e4";
@@ -32,7 +35,14 @@ function validSnapshot() {
       path: ".legion/index/code-index.sqlite",
       sha256: HASH
     },
-    coverage: "parsed",
+    coverage: [
+      {
+        path: "src/a.ts",
+        status: "parsed",
+        language: "typescript",
+        diagnostics: []
+      }
+    ],
     symbols: [],
     imports: [],
     exports: []
@@ -56,6 +66,57 @@ test("valid structural code index snapshot parses", () => {
   const snapshot = validSnapshot();
 
   assert.deepEqual(codeIndexSnapshotSchema.parse(snapshot), snapshot);
+});
+
+test("code index coverage accepts each status and bounded per-file metadata", () => {
+  const statuses = ["parsed", "metadata-only", "size-limited", "opaque", "parser-error", "unsupported"];
+
+  for (const [index, status] of statuses.entries()) {
+    const snapshot = validSnapshot();
+    snapshot.coverage = [
+      {
+        path: `src/file-${index}.ts`,
+        status,
+        language: "typescript",
+        diagnostics: ["parser note"]
+      }
+    ];
+
+    assert.equal(codeIndexSnapshotSchema.safeParse(snapshot).success, true, status);
+  }
+
+  const oversizedDiagnostic = validSnapshot();
+  oversizedDiagnostic.coverage[0].diagnostics = ["x".repeat(513)];
+  assert.equal(codeIndexSnapshotSchema.safeParse(oversizedDiagnostic).success, false);
+
+  const extraMetadata = validSnapshot();
+  extraMetadata.coverage[0].encoding = "utf-8";
+  assert.equal(codeIndexSnapshotSchema.safeParse(extraMetadata).success, false);
+});
+
+test("code index coverage rejects invalid statuses and paths", () => {
+  const invalidStatus = validSnapshot();
+  invalidStatus.coverage[0].status = "partial";
+  assert.equal(codeIndexSnapshotSchema.safeParse(invalidStatus).success, false);
+
+  const invalidPath = validSnapshot();
+  invalidPath.coverage[0].path = "../outside.ts";
+  assert.equal(codeIndexSnapshotSchema.safeParse(invalidPath).success, false);
+});
+
+test("code index coverage rejects duplicate repository-relative paths", () => {
+  const snapshot = validSnapshot();
+  snapshot.coverage = [
+    snapshot.coverage[0],
+    {
+      path: "src/a.ts",
+      status: "metadata-only",
+      language: "typescript",
+      diagnostics: []
+    }
+  ];
+
+  assert.equal(codeIndexSnapshotSchema.safeParse(snapshot).success, false);
 });
 
 test("code index snapshot rejects unknown fields", () => {
@@ -96,4 +157,12 @@ test("code index snapshot rejects fact arrays that are not sorted by path, byte,
   ];
 
   assert.equal(codeIndexSnapshotSchema.safeParse(snapshot).success, false);
+});
+
+test("code index generated JSON schema matches its committed artifact", async () => {
+  const testDirectory = dirname(fileURLToPath(import.meta.url));
+  const schemaPath = join(testDirectory, "..", "..", "..", "schemas", "entities", "code-index.schema.json");
+  const committed = JSON.parse(await readFile(schemaPath, "utf8"));
+
+  assert.deepEqual(committed, entityJsonSchemas.codeIndex);
 });

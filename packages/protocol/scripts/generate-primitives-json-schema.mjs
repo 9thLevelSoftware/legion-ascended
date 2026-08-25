@@ -22,6 +22,7 @@ const schemaFileNames = {
   reviewDecision: "review",
   fixtureCorpus: "fixture-corpus",
   compatibilityFixture: "compatibility-fixture",
+  codeIndex: "code-index",
   commandEnvelope: "command-envelope",
   commandResult: "command-result",
   queryRequest: "query-request",
