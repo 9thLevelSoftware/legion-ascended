@@ -195,10 +195,11 @@ function loadLanguage(grammar: GrammarName): Promise<Language> {
   return promise;
 }
 
-function sourceRange(node: Node): CodeIndexSourceRange {
+function sourceRange(node: Node, text: string): CodeIndexSourceRange {
+  const byteOffset = (offset: number): number => Buffer.byteLength(text.slice(0, offset), "utf8");
   return {
-    startByte: node.startIndex,
-    endByte: node.endIndex,
+    startByte: byteOffset(node.startIndex),
+    endByte: byteOffset(node.endIndex),
     startLine: node.startPosition.row,
     startColumn: node.startPosition.column,
     endLine: node.endPosition.row,
@@ -318,7 +319,7 @@ function addSymbol(
     id,
     path: file.path,
     sourceSha256: file.sha256,
-    range: sourceRange(node),
+    range: sourceRange(node, file.text ?? ""),
     extractorVersion: TREE_SITTER_VERSION,
     name,
     kind,
@@ -352,7 +353,7 @@ function addImport(imports: CodeIndexImport[], file: FileInput, node: Node, spec
     id,
     path: file.path,
     sourceSha256: file.sha256,
-    range: sourceRange(node),
+    range: sourceRange(node, file.text ?? ""),
     extractorVersion: TREE_SITTER_VERSION,
     specifier: normalizedSpecifier
   });
@@ -371,7 +372,7 @@ function addExport(
     id,
     path: file.path,
     sourceSha256: file.sha256,
-    range: sourceRange(node),
+    range: sourceRange(node, file.text ?? ""),
     extractorVersion: TREE_SITTER_VERSION,
     name,
     kind

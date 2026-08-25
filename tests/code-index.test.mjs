@@ -52,6 +52,55 @@ test('extracts TypeScript imports, symbols, direct exports, and exact source ran
   assert.equal(result.extractor.version, '0.26.13');
 });
 
+test('converts Tree-sitter UTF-16 offsets to UTF-8 byte ranges', async () => {
+  const text = '// π\nimport { helper } from "./dep.js";\nexport function greet() { return helper(); }\n';
+  const result = await buildStructuralCodeIndex(input([file('src/greet.ts', text)]));
+
+  const importRange = result.imports[0].range;
+  const symbolRange = result.symbols[0].range;
+  const exportRange = result.exports[0].range;
+  const rawImportStart = text.indexOf('import');
+  const rawImportEnd = text.indexOf(';', rawImportStart) + 1;
+  const rawFunctionStart = text.indexOf('function');
+  const rawFunctionEnd = text.indexOf('}', rawFunctionStart) + 1;
+  const rawExportStart = text.indexOf('export');
+  const expectedImportStart = Buffer.byteLength(text.slice(0, rawImportStart), 'utf8');
+  const expectedImportEnd = Buffer.byteLength(text.slice(0, rawImportEnd), 'utf8');
+  const expectedFunctionStart = Buffer.byteLength(text.slice(0, rawFunctionStart), 'utf8');
+  const expectedFunctionEnd = Buffer.byteLength(text.slice(0, rawFunctionEnd), 'utf8');
+  const expectedExportStart = Buffer.byteLength(text.slice(0, rawExportStart), 'utf8');
+
+  assert.deepEqual(importRange, {
+    startByte: expectedImportStart,
+    endByte: expectedImportEnd,
+    startLine: 1,
+    startColumn: 0,
+    endLine: 1,
+    endColumn: rawImportEnd - text.indexOf('import')
+  });
+  assert.deepEqual(symbolRange, {
+    startByte: expectedFunctionStart,
+    endByte: expectedFunctionEnd,
+    startLine: 2,
+    startColumn: rawFunctionStart - rawExportStart,
+    endLine: 2,
+    endColumn: rawFunctionEnd - rawExportStart
+  });
+  assert.deepEqual(exportRange, {
+    startByte: expectedExportStart,
+    endByte: expectedFunctionEnd,
+    startLine: 2,
+    startColumn: 0,
+    endLine: 2,
+    endColumn: rawFunctionEnd - rawExportStart
+  });
+  assert.notEqual(expectedImportStart, rawImportStart);
+  assert.notEqual(expectedImportEnd, rawImportEnd);
+  assert.notEqual(expectedFunctionStart, rawFunctionStart);
+  assert.notEqual(expectedFunctionEnd, rawFunctionEnd);
+  assert.notEqual(expectedExportStart, rawExportStart);
+});
+
 test('extracts Python function declarations', async () => {
   const text = 'def greet(name):\n    return name\n';
   const result = await buildStructuralCodeIndex(input([file('src/greet.py', text)]));
