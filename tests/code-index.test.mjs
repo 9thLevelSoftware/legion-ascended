@@ -268,6 +268,16 @@ test('resolves var named exports to the nearest function or program scope across
   assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'alias', kind: 'variable' }]);
 });
 
+test('keeps generator-function var bindings scoped to the generator function', async () => {
+  const text = 'const holder = function* () { var f = 1; };\nexport { f };\n';
+  const result = await buildStructuralCodeIndex(input([file('src/generator-var-export.js', text)]));
+
+  assert.deepEqual(result.symbols.filter(({ name }) => name === 'f').map(({ name, kind, exported }) => ({ name, kind, exported })), [
+    { name: 'f', kind: 'variable', exported: false }
+  ]);
+  assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'f', kind: 'export' }]);
+});
+
 test('sanitizes malformed YAML diagnostics without echoing source text', async () => {
   const secret = 'SECRET_TOKEN_123';
   const result = await buildStructuralCodeIndex(input([file('config/secret.yaml', `${secret}: [\n`)]));

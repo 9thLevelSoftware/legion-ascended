@@ -306,6 +306,7 @@ function isVarScopeBoundary(nodeType: string): boolean {
     nodeType === "function_declaration" ||
     nodeType === "function_definition" ||
     nodeType === "function_expression" ||
+    nodeType === "generator_function" ||
     nodeType === "generator_function_declaration" ||
     nodeType === "method_definition" ||
     nodeType === "arrow_function"
