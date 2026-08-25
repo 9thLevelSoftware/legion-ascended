@@ -155,6 +155,10 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
     const refreshPayload = parseJsonOutput(refresh);
     assert.equal(refreshPayload.status, "completed");
     assert.equal(refreshPayload.indexProfile, "structural");
+    assert.match(refreshPayload.artifactPath, /-refresh\/workflow-run\.json$/u);
+    const run = await readJson(root, refreshPayload.artifactPath);
+    assert.equal(run.input.profile, "structural");
+    assert.equal(run.outputs.indexProfile, "structural");
     assert.match(refreshPayload.snapshotId, /^idx_[0-9a-f]{24}$/);
     assert.match(refreshPayload.semanticIndexArtifactPath, /semantic-index\.json$/);
     assert.match(refreshPayload.semanticSqliteArtifactPath, /semantic-index\.sqlite$/);

@@ -798,8 +798,8 @@ export interface MapState {
   readonly generatedAt: string | null;
   readonly ageDays: number | null;
   readonly mapArtifact: ArtifactReference | null;
-  readonly indexProfile: MapProfile;
-  readonly snapshotId: string | null;
+  readonly indexProfile?: MapProfile;
+  readonly snapshotId?: string | null;
   readonly diagnostics: readonly MapCandidateDiagnostic[];
 }
 
@@ -841,8 +841,9 @@ export async function resolveMapState(
     mapArtifact: profile === "structural"
       ? (structuralRecord?.snapshotArtifact ?? null)
       : (inventoryRecord?.artifact ?? null),
-    indexProfile: profile,
-    snapshotId: structuralRecord?.snapshot.snapshotId ?? null,
+    ...(profile === "structural"
+      ? { indexProfile: "structural" as const, snapshotId: structuralRecord?.snapshot.snapshotId ?? null }
+      : {}),
     diagnostics: discovery.diagnostics
   };
 

@@ -351,7 +351,7 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "map",
-    slugSource: profile === "structural" ? `refresh structural ${scope ?? ""}` : `refresh inventory ${scope ?? ""}`,
+    slugSource: scope === undefined ? "refresh" : `refresh ${scope}`,
     createdAt
   });
   try {
