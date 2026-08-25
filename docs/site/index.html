@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Legion | Ascended</title>
-    <meta name="description" content="Legion Ascended is a guided execution layer for AI-assisted software work: one Legion command surface, durable artifacts, human review, and ship-readiness gates.">
+    <title>Legion | Ascended 9.2.1</title>
+    <meta name="description" content="Legion Ascended 9.2.1 is a guided execution layer with Semantic Map v2, deterministic provenance, human review, and ship-readiness gates.">
     <link rel="icon" type="image/svg+xml" href="./assets/legion-ascended-mark.svg">
     <link rel="preload" href="./assets/legion-ascended-mark.svg" as="image">
     <link rel="preload" href="./assets/tithe-sigil.svg" as="image">
@@ -57,6 +57,7 @@
         <p class="ascended-flame">Ascended</p>
         <p class="tagline">"My Name Is Legion, For We Are Many"</p>
         <p class="sub-tagline">A guided execution layer for AI-assisted software work. One Legion command surface.</p>
+        <p class="release-pill" data-release-version>v9.2.1 &middot; Semantic Map v2</p>
       </header>
 
       <div class="divider"><div class="divider-line"></div></div>
@@ -86,8 +87,11 @@
           The command surface is always <em>legion</em>. Requires Node.js <em>&gt;=24 &lt;26</em>.
         </p>
         <div class="ritual-code">
-<pre><span class="comment"># Put the command on PATH (or prefix every call with npx legion-ascended)</span>
-<span class="command">npm</span> i <span class="flag">-g</span> <span class="string">legion-ascended</span>
+<pre><span class="comment"># Install or update the current release on PATH</span>
+<span class="command">npm</span> i <span class="flag">-g</span> <span class="string">legion-ascended@latest</span>
+
+<span class="comment"># Or run the CLI without a global install</span>
+<span class="command">npx</span> <span class="string">legion-ascended</span> map <span class="flag">--check</span>
 
 <span class="comment"># See the recommended first-class hosts</span>
 <span class="command">legion</span> install <span class="flag">--list-targets</span>
@@ -117,6 +121,69 @@
         </div>
       </section>
 
+      <section class="semantic-map-section reveal-section" id="semantic-map" aria-labelledby="semantic-map-title">
+        <div class="map-kicker">Release 9.2.1 &middot; deterministic provenance</div>
+        <h2 id="semantic-map-title">Semantic Map v2</h2>
+        <p class="intro-text">
+          Give the human reviewer a stable codebase index before the work begins. Semantic Map v2
+          keeps the legacy inventory files, then adds a hash-pinned structural snapshot and a local
+          FTS5 accelerator for precise retrieval.
+        </p>
+        <div class="map-profile-grid">
+          <article class="map-profile-card">
+            <h3>Structural profile</h3>
+            <p>
+              The default refresh profile. It preserves <code>codebase.md</code>, <code>index.jsonl</code>,
+              <code>symbols.json</code>, <code>search.md</code>, and <code>map.json</code>, then adds
+              <code>semantic-index.json</code> and <code>semantic-index.sqlite</code>.
+            </p>
+          </article>
+          <article class="map-profile-card">
+            <h3>Inventory profile</h3>
+            <p>
+              The v1 compatibility path. It writes only the five legacy inventory artifacts for tools
+              that do not need structural facts or FTS-backed retrieval.
+            </p>
+          </article>
+        </div>
+        <div class="map-command-panel">
+          <div class="map-command-line">
+            <code>legion map --refresh --profile structural</code>
+            <button class="copy-btn" type="button" data-copy="legion map --refresh --profile structural">Copy</button>
+          </div>
+          <div class="map-command-line">
+            <code>legion map --refresh --profile inventory</code>
+            <button class="copy-btn" type="button" data-copy="legion map --refresh --profile inventory">Copy</button>
+          </div>
+          <div class="map-command-line">
+            <code>legion map --check --profile structural</code>
+            <button class="copy-btn" type="button" data-copy="legion map --check --profile structural">Copy</button>
+          </div>
+          <div class="map-command-line">
+            <code>legion map --query &quot;resolve asset&quot;</code>
+            <button class="copy-btn" type="button" data-copy="legion map --query &quot;resolve asset&quot;">Copy</button>
+          </div>
+          <div class="map-command-line">
+            <code>legion map --why sym_&lt;fact-id&gt;</code>
+            <button class="copy-btn" type="button" data-copy="legion map --why sym_&lt;fact-id&gt;">Copy</button>
+          </div>
+        </div>
+        <div class="map-notes">
+          <p>
+            <strong>Read-only by design.</strong> <code>--check</code>, <code>--query</code>, and
+            <code>--why</code> do not create workflow runs or rewrite artifacts. Refresh is the only
+            map mode that writes. <code>--scope</code> belongs on refresh, freshness checks, or a bare
+            summary; query and why use the stored dataset and reject a new scope.
+          </p>
+          <p>
+            <strong>Provenance is not proof.</strong> Results identify source paths, hashes, extractor
+            versions, fact IDs, and exact ranges. Open those files and verify behavior before a human
+            approves the plan. The map focuses inspection; <code>legion review</code> and explicit
+            human acceptance still provide the evidence that <code>legion ship</code> evaluates.
+          </p>
+        </div>
+      </section>
+
       <div class="divider"><div class="divider-line"></div></div>
 
       <section class="reveal-section">
@@ -137,7 +204,7 @@
             <tr><td>legion attest</td><td>Record that a named human asserts specific hash-pinned files are this change's evidence.</td></tr>
             <tr><td>legion release</td><td>Record how the change's release is observed and taken back.</td></tr>
             <tr><td>legion explore</td><td>Create read-only design discovery and handoff notes.</td></tr>
-            <tr><td>legion map</td><td>Refresh, check, and query deterministic codebase map artifacts.</td></tr>
+            <tr><td>legion map</td><td>Refresh the structural or legacy inventory profile, check freshness, query deterministic facts, and explain one structural fact with provenance.</td></tr>
             <tr><td>legion quick</td><td>Create a one-task ad-hoc change for the normal build/review loop.</td></tr>
             <tr><td>legion advise</td><td>Produce read-only advisory guidance.</td></tr>
             <tr><td>legion polish</td><td>Create scoped polish work that still goes through build and review.</td></tr>
@@ -167,7 +234,7 @@
         <div class="workflow-visual">
           <div class="workflow-step optional"><span class="step-cmd">legion explore</span><span class="step-desc">Research, constraints, approaches, handoff notes</span></div>
           <div class="workflow-arrow">&darr;</div>
-          <div class="workflow-step optional"><span class="step-cmd">legion map</span><span class="step-desc">Architecture, symbols, search, freshness checks</span></div>
+          <div class="workflow-step optional"><span class="step-cmd">legion map</span><span class="step-desc">Semantic v2 provenance, v1 inventory, search, and freshness checks</span></div>
           <div class="workflow-arrow">&darr;</div>
           <div class="workflow-step"><span class="step-cmd">legion start</span><span class="step-desc">Project truth record</span></div>
           <div class="workflow-arrow">&darr;</div>
@@ -222,6 +289,7 @@
           <a href="https://github.com/9thLevelSoftware/legion-ascended">GitHub Repository</a>
           &middot; <a href="https://github.com/9thLevelSoftware/legion-ascended/blob/main/README.md">README</a>
           &middot; <a href="https://github.com/9thLevelSoftware/legion-ascended/blob/main/docs/cli/INSTALL-MATRIX.md">Install Matrix</a>
+          &middot; <a href="#semantic-map">Semantic Map v2</a>
           &middot; <a href="https://ko-fi.com/vitruvianredux">The Tithe</a>
         </p>
         <p class="footer-quote">"My name is Legion, for we are many."</p>

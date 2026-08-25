@@ -2,6 +2,23 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.2.1] - GA-pending
+
+### Added
+- Semantic Map v2: the default structural map profile now emits a hash-pinned
+  `semantic-index.json` snapshot and its local FTS5 `semantic-index.sqlite`
+  acceleration alongside the preserved v1 inventory artifacts.
+- Published Tree-sitter WASM runtime assets for JavaScript, TypeScript, TSX,
+  Python, JSON, and YAML structural extraction so the packaged CLI can build
+  the same deterministic index after npm installation.
+
+### Changed
+- `legion map` now documents explicit `structural` and legacy-compatible
+  `inventory` profiles, read-only freshness/query/why modes, scope rules, and
+  provenance boundaries in the CLI and user documentation.
+- Refreshed the README and static product site with current install/update
+  commands, Semantic Map v2 examples, and the human-review workflow.
+
 ## [9.2.0] - GA-pending
 
 ### Added
