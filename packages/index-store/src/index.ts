@@ -1,7 +1,6 @@
 import {
   codeIndexExportSchema,
   codeIndexImportSchema,
-  codeIndexSnapshotSchema,
   codeIndexSymbolSchema,
   type CodeIndexFact,
   type CodeIndexSha256,
@@ -31,6 +30,11 @@ export interface CodeIndexSearchHit {
 }
 
 type CodeIndexFactKind = "symbol" | "import" | "export";
+type CodeIndexStoreSnapshot = {
+  readonly symbols: readonly CodeIndexSnapshot["symbols"][number][];
+  readonly imports: readonly CodeIndexSnapshot["imports"][number][];
+  readonly exports: readonly CodeIndexSnapshot["exports"][number][];
+};
 
 type SqliteFactRow = {
   readonly id: string;
@@ -105,7 +109,7 @@ function searchableText(factKind: CodeIndexFactKind, fact: CodeIndexFact): strin
   return values.flatMap((value) => tokenize(value)).join(" ");
 }
 
-function materializedFacts(snapshot: CodeIndexSnapshot): readonly { readonly factKind: CodeIndexFactKind; readonly fact: CodeIndexFact }[] {
+function materializedFacts(snapshot: CodeIndexStoreSnapshot): readonly { readonly factKind: CodeIndexFactKind; readonly fact: CodeIndexFact }[] {
   return [
     ...snapshot.symbols.map((fact) => ({ factKind: "symbol" as const, fact })),
     ...snapshot.imports.map((fact) => ({ factKind: "import" as const, fact })),
@@ -210,9 +214,13 @@ function searchHit(row: SqliteSearchRow): CodeIndexSearchHit {
 
 export function writeCodeIndexStore(input: {
   readonly databasePath: string;
-  readonly snapshot: CodeIndexSnapshot;
+  readonly snapshot: CodeIndexStoreSnapshot;
 }): CodeIndexStoreWrite {
-  const snapshot = codeIndexSnapshotSchema.parse(input.snapshot);
+  const snapshot: CodeIndexStoreSnapshot = {
+    symbols: input.snapshot.symbols.map((fact) => codeIndexSymbolSchema.parse(fact)),
+    imports: input.snapshot.imports.map((fact) => codeIndexImportSchema.parse(fact)),
+    exports: input.snapshot.exports.map((fact) => codeIndexExportSchema.parse(fact))
+  };
   const temporaryPath = temporaryDatabasePath(input.databasePath);
   removeTemporaryDatabaseFiles(temporaryPath);
 

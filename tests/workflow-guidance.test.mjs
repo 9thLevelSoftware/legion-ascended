@@ -264,6 +264,35 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
   }
 });
 
+test("structural queries accept one-character Unicode identifiers", async () => {
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "unicode.ts"), "export const π = 1;\n", "utf8");
+
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
+
+    const query = await runCliCapture([
+      "--repository-root", root,
+      "map", "--query", "π", "--profile", "structural",
+      "--created-at", "2026-06-23T12:05:00.000Z",
+      "--json"
+    ]);
+    assert.equal(query.exitCode, 0, query.stderr);
+    const payload = parseJsonOutput(query);
+    assert.equal(payload.status, "completed");
+    assert.ok(payload.matches.some(({ name }) => name === "π"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("scoped structural readback uses the stored scope while mismatched explicit scope is blocked", async () => {
   const root = await tempRepo();
   try {

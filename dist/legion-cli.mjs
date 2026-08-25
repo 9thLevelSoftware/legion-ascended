@@ -41796,7 +41796,11 @@ function searchHit(row) {
   };
 }
 function writeCodeIndexStore(input) {
-  const snapshot = codeIndexSnapshotSchema.parse(input.snapshot);
+  const snapshot = {
+    symbols: input.snapshot.symbols.map((fact) => codeIndexSymbolSchema.parse(fact)),
+    imports: input.snapshot.imports.map((fact) => codeIndexImportSchema.parse(fact)),
+    exports: input.snapshot.exports.map((fact) => codeIndexExportSchema.parse(fact))
+  };
   const temporaryPath = temporaryDatabasePath(input.databasePath);
   removeTemporaryDatabaseFiles(temporaryPath);
   let database;
@@ -45990,7 +45994,7 @@ function utf8OffsetTable(text) {
     const codeUnit = text.charCodeAt(index);
     const nextCodeUnit = text.charCodeAt(index + 1);
     if (codeUnit >= 55296 && codeUnit <= 56319 && nextCodeUnit >= 56320 && nextCodeUnit <= 57343) {
-      offsets[index + 1] = (offsets[index] ?? 0) + 3;
+      offsets[index + 1] = offsets[index] ?? 0;
       offsets[index + 2] = (offsets[index] ?? 0) + 4;
       index += 1;
       continue;
@@ -46220,7 +46224,8 @@ function collectTreeFacts(treeRoot, file2, grammar, offsets) {
     }
   }
   function emitExport(node, name2, kind) {
-    const key = `${name2}\0${kind}`;
+    const scope = lexicalScope(node, treeRoot);
+    const key = `${name2}\0${kind}\0${node.id}\0${node.startIndex}\0${node.endIndex}\0${scope.id}`;
     if (emittedExports.has(key)) return;
     emittedExports.add(key);
     addExport(exports, file2, node, offsets, name2, kind);
@@ -46414,14 +46419,9 @@ function validateDraft(draft) {
   }
   return draft;
 }
-function compareCodeIndexStrings(left, right) {
-  if (left < right) return -1;
-  if (left > right) return 1;
-  return 0;
-}
 function sortFacts(facts) {
   return [...facts].sort(
-    (left, right) => compareCodeIndexStrings(left.path, right.path) || left.range.startByte - right.range.startByte || compareCodeIndexStrings(left.id, right.id)
+    (left, right) => left.path.localeCompare(right.path) || left.range.startByte - right.range.startByte || left.id.localeCompare(right.id)
   );
 }
 async function extractFile(file2, mapping) {
@@ -46502,7 +46502,7 @@ async function buildStructuralCodeIndex(input) {
   const symbols = [];
   const imports = [];
   const exports = [];
-  const sortedFiles = [...validatedInput.files].sort((left, right) => compareCodeIndexStrings(left.path, right.path));
+  const sortedFiles = [...validatedInput.files].sort((left, right) => left.path.localeCompare(right.path));
   for (const file2 of sortedFiles) {
     const extension = path34.extname(file2.path).toLowerCase();
     if (MARKDOWN_EXTENSIONS.has(extension)) {
@@ -46528,7 +46528,7 @@ async function buildStructuralCodeIndex(input) {
     scope: validatedInput.scope,
     sourceFingerprint: validatedInput.sourceFingerprint,
     extractor: { name: "tree-sitter", version: TREE_SITTER_VERSION },
-    coverage: [...coverage].sort((left, right) => compareCodeIndexStrings(left.path, right.path)),
+    coverage: [...coverage].sort((left, right) => left.path.localeCompare(right.path)),
     symbols: sortFacts(symbols),
     imports: sortFacts(imports),
     exports: sortFacts(exports)
@@ -46655,7 +46655,17 @@ async function refreshStructuralCodeIndex(input) {
   const semanticIndexArtifactPath = guidanceArtifactPath(input.paths, "semantic-index.json");
   const semanticSqliteArtifactPath = guidanceArtifactPath(input.paths, "semantic-index.sqlite");
   const databasePath = path35.join(input.repositoryRoot, ...semanticSqliteArtifactPath.split("/"));
-  const provisional = {
+  const store = writeCodeIndexStore({
+    databasePath,
+    snapshot: {
+      symbols: draft.symbols,
+      imports: draft.imports,
+      exports: draft.exports
+    }
+  });
+  const sqliteBytes = await readFile18(databasePath);
+  const sqliteSha256 = codeIndexSha256Schema.parse(hashContent(sqliteBytes).slice("sha256:".length));
+  const snapshot = {
     schemaVersion: 1,
     kind: "code_index_snapshot",
     ...draft,
@@ -46664,16 +46674,6 @@ async function refreshStructuralCodeIndex(input) {
     symbols: [...draft.symbols],
     imports: [...draft.imports],
     exports: [...draft.exports],
-    sqlite: {
-      path: semanticSqliteArtifactPath,
-      sha256: codeIndexSha256Schema.parse("0".repeat(64))
-    }
-  };
-  const store = writeCodeIndexStore({ databasePath, snapshot: provisional });
-  const sqliteBytes = await readFile18(databasePath);
-  const sqliteSha256 = codeIndexSha256Schema.parse(hashContent(sqliteBytes).slice("sha256:".length));
-  const snapshot = {
-    ...provisional,
     sqlite: { path: semanticSqliteArtifactPath, sha256: sqliteSha256 }
   };
   const semanticIndexText = stableProtocolJson(snapshot);
@@ -64167,11 +64167,6 @@ async function mapSummary(context, scope, profile) {
   );
 }
 async function mapQuery(context, query, profile) {
-  if (queryTerms(query).length === 0) {
-    return usageError(
-      `legion map --query ${JSON.stringify(query)} has no searchable terms. Terms are at least two characters of letters, digits, underscore, hyphen or slash.`
-    );
-  }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
   const structuralDiscovery = profile === "structural" || profile === void 0 ? await discoverLatestStructuralCodeIndex(context.repositoryRoot) : void 0;
@@ -64235,6 +64230,7 @@ async function mapQuery(context, query, profile) {
       });
     } catch (error51) {
       const message = error51 instanceof Error ? error51.message : String(error51);
+      const diagnosticMessage2 = message === "query must contain at least one alphanumeric token" ? `legion map --query ${JSON.stringify(query)} has no searchable terms. The structural index requires at least one alphanumeric token.` : message;
       const action3 = nextAction("legion map --refresh --profile structural", "The structural SQLite index could not answer this query.");
       return failure(
         {
@@ -64245,7 +64241,7 @@ async function mapQuery(context, query, profile) {
           query,
           snapshotId: structuralDiscovery.record.snapshot.snapshotId,
           indexProfile: "structural",
-          diagnostics: [...structuralDiscovery.diagnostics, { code: "map_structural_unreadable", message }],
+          diagnostics: [...structuralDiscovery.diagnostics, { code: "map_structural_unreadable", message: diagnosticMessage2 }],
           nextAction: action3
         },
         ["Map query is blocked.", renderNextAction(action3)].join("\n")
@@ -64289,6 +64285,11 @@ async function mapQuery(context, query, profile) {
         nextAction: action2
       },
       ["Map query is blocked.", renderNextAction(action2)].join("\n")
+    );
+  }
+  if (queryTerms(query).length === 0) {
+    return usageError(
+      `legion map --query ${JSON.stringify(query)} has no searchable terms. Terms are at least two characters of letters, digits, underscore, hyphen or slash.`
     );
   }
   const discovery = await discoverLatestCodebaseMap(context.repositoryRoot);

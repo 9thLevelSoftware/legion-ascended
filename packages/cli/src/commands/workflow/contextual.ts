@@ -635,11 +635,6 @@ async function mapSummary(context: CliContext, scope: string | undefined, profil
 }
 
 async function mapQuery(context: CliContext, query: string, profile: MapProfile | undefined): Promise<CliResult> {
-  if (queryTerms(query).length === 0) {
-    return usageError(
-      `legion map --query ${JSON.stringify(query)} has no searchable terms. Terms are at least two characters of letters, digits, underscore, hyphen or slash.`
-    );
-  }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
 
@@ -706,6 +701,9 @@ async function mapQuery(context: CliContext, query: string, profile: MapProfile 
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const diagnosticMessage = message === "query must contain at least one alphanumeric token"
+        ? `legion map --query ${JSON.stringify(query)} has no searchable terms. The structural index requires at least one alphanumeric token.`
+        : message;
       const action = nextAction("legion map --refresh --profile structural", "The structural SQLite index could not answer this query.");
       return failure(
         {
@@ -716,7 +714,7 @@ async function mapQuery(context: CliContext, query: string, profile: MapProfile 
           query,
           snapshotId: structuralDiscovery.record.snapshot.snapshotId,
           indexProfile: "structural",
-          diagnostics: [...structuralDiscovery.diagnostics, { code: "map_structural_unreadable", message }],
+          diagnostics: [...structuralDiscovery.diagnostics, { code: "map_structural_unreadable", message: diagnosticMessage }],
           nextAction: action
         },
         ["Map query is blocked.", renderNextAction(action)].join("\n")
@@ -760,6 +758,12 @@ async function mapQuery(context: CliContext, query: string, profile: MapProfile 
         nextAction: action
       },
       ["Map query is blocked.", renderNextAction(action)].join("\n")
+    );
+  }
+
+  if (queryTerms(query).length === 0) {
+    return usageError(
+      `legion map --query ${JSON.stringify(query)} has no searchable terms. Terms are at least two characters of letters, digits, underscore, hyphen or slash.`
     );
   }
 

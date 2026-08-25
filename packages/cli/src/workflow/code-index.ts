@@ -236,7 +236,7 @@ function utf8OffsetTable(text: string): Uint32Array {
     if (codeUnit >= 0xd800 && codeUnit <= 0xdbff && nextCodeUnit >= 0xdc00 && nextCodeUnit <= 0xdfff) {
       // Buffer.byteLength(text.slice(0, offset), "utf8") encodes a lone
       // high surrogate as U+FFFD, while the complete pair is four bytes.
-      offsets[index + 1] = (offsets[index] ?? 0) + 3;
+      offsets[index + 1] = offsets[index] ?? 0;
       offsets[index + 2] = (offsets[index] ?? 0) + 4;
       index += 1;
       continue;
@@ -582,7 +582,8 @@ function collectTreeFacts(
   }
 
   function emitExport(node: Node, name: string, kind: string): void {
-    const key = `${name}\u0000${kind}`;
+    const scope = lexicalScope(node, treeRoot);
+    const key = `${name}\u0000${kind}\u0000${node.id}\u0000${node.startIndex}\u0000${node.endIndex}\u0000${scope.id}`;
     if (emittedExports.has(key)) return;
     emittedExports.add(key);
     addExport(exports, file, node, offsets, name, kind);
@@ -814,15 +815,9 @@ function validateDraft(draft: CodeIndexSnapshotDraft): CodeIndexSnapshotDraft {
   return draft;
 }
 
-function compareCodeIndexStrings(left: string, right: string): number {
-  if (left < right) return -1;
-  if (left > right) return 1;
-  return 0;
-}
-
 function sortFacts<T extends { readonly path: string; readonly range: CodeIndexSourceRange; readonly id: string }>(facts: readonly T[]): T[] {
   return [...facts].sort((left, right) =>
-    compareCodeIndexStrings(left.path, right.path) || left.range.startByte - right.range.startByte || compareCodeIndexStrings(left.id, right.id)
+    left.path.localeCompare(right.path) || left.range.startByte - right.range.startByte || left.id.localeCompare(right.id)
   );
 }
 
@@ -927,7 +922,7 @@ export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput):
   const exports: CodeIndexExport[] = [];
 
   const sortedFiles = [...validatedInput.files]
-    .sort((left, right) => compareCodeIndexStrings(left.path, right.path));
+    .sort((left, right) => left.path.localeCompare(right.path));
   for (const file of sortedFiles) {
     const extension = path.extname(file.path).toLowerCase();
     if (MARKDOWN_EXTENSIONS.has(extension)) {
@@ -954,7 +949,7 @@ export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput):
     scope: validatedInput.scope,
     sourceFingerprint: validatedInput.sourceFingerprint,
     extractor: { name: "tree-sitter", version: TREE_SITTER_VERSION },
-    coverage: [...coverage].sort((left, right) => compareCodeIndexStrings(left.path, right.path)),
+    coverage: [...coverage].sort((left, right) => left.path.localeCompare(right.path)),
     symbols: sortFacts(symbols),
     imports: sortFacts(imports),
     exports: sortFacts(exports)

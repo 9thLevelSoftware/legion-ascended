@@ -126,6 +126,37 @@ test('preserves UTF-8 offsets after supplementary Unicode characters', async () 
   assert.equal(symbol.id, expectedFactId('sym', symbol));
 });
 
+test('uses exact UTF-8 byte ranges and IDs for facts spanning a supplementary character', async () => {
+  const text = 'export const value = "😀";\n';
+  const result = await buildStructuralCodeIndex(input([file('src/supplementary-range.ts', text)]));
+
+  const symbol = result.symbols[0];
+  const rawStart = text.indexOf('value');
+  const rawEnd = text.indexOf(';', rawStart);
+  assert.deepEqual(symbol.range, {
+    startByte: Buffer.byteLength(text.slice(0, rawStart), 'utf8'),
+    endByte: Buffer.byteLength(text.slice(0, rawEnd), 'utf8'),
+    startLine: 0,
+    startColumn: rawStart,
+    endLine: 0,
+    endColumn: rawEnd
+  });
+  assert.equal(symbol.id, expectedFactId('sym', symbol));
+  assert.equal(symbol.range.endByte - symbol.range.startByte, Buffer.byteLength(text.slice(rawStart, rawEnd), 'utf8'));
+});
+
+test('keeps lone surrogate source ranges at their replacement-byte width', async () => {
+  const text = 'export const value = "\ud800";\n';
+  const result = await buildStructuralCodeIndex(input([file('src/lone-surrogate.ts', text)]));
+
+  const symbol = result.symbols[0];
+  const rawStart = text.indexOf('value');
+  const rawEnd = text.indexOf(';', rawStart);
+  assert.equal(symbol.range.startByte, Buffer.byteLength(text.slice(0, rawStart), 'utf8'));
+  assert.equal(symbol.range.endByte, Buffer.byteLength(text.slice(0, rawEnd), 'utf8'));
+  assert.equal(symbol.id, expectedFactId('sym', symbol));
+});
+
 test('extracts Python function declarations', async () => {
   const text = 'def greet(name):\n    return name\n';
   const result = await buildStructuralCodeIndex(input([file('src/greet.py', text)]));
@@ -176,6 +207,26 @@ test('marks named exports and their referenced symbols, including aliases', asyn
       { name: 'value', exported: true }
     ]
   );
+});
+
+test('keeps same-named exports in distinct TypeScript namespaces', async () => {
+  const text = [
+    'namespace A { export const value = 1; }',
+    'namespace B { export const value = 2; }',
+    ''
+  ].join('\n');
+  const result = await buildStructuralCodeIndex(input([file('src/namespaced-exports.ts', text)]));
+
+  assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [
+    { name: 'value', kind: 'variable' },
+    { name: 'value', kind: 'variable' }
+  ]);
+  assert.equal(new Set(result.exports.map(({ id }) => id)).size, 2);
+  assert.notEqual(result.exports[0].range.startByte, result.exports[1].range.startByte);
+  assert.deepEqual(result.symbols.map(({ name, exported }) => ({ name, exported })), [
+    { name: 'value', exported: true },
+    { name: 'value', exported: true }
+  ]);
 });
 
 test('does not resolve local bindings for source-bearing named re-exports', async () => {
@@ -513,7 +564,7 @@ test('validates SHA-256 metadata even for unsupported files', async () => {
   );
 });
 
-test('uses protocol lexical ordering for paths rather than locale collation', async () => {
+test('sorts paths with locale collation', async () => {
   const result = await buildStructuralCodeIndex(
     input([
       file('a.ts', 'export const lower = 1;\n'),
@@ -521,6 +572,6 @@ test('uses protocol lexical ordering for paths rather than locale collation', as
     ])
   );
 
-  assert.deepEqual(result.coverage.map(({ path }) => path), ['B.ts', 'a.ts']);
-  assert.deepEqual(result.symbols.map(({ path }) => path), ['B.ts', 'a.ts']);
+  assert.deepEqual(result.coverage.map(({ path }) => path), ['a.ts', 'B.ts']);
+  assert.deepEqual(result.symbols.map(({ path }) => path), ['a.ts', 'B.ts']);
 });

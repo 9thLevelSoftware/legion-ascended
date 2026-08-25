@@ -260,7 +260,17 @@ export async function refreshStructuralCodeIndex(input: {
   const semanticIndexArtifactPath = guidanceArtifactPath(input.paths, "semantic-index.json");
   const semanticSqliteArtifactPath = guidanceArtifactPath(input.paths, "semantic-index.sqlite");
   const databasePath = path.join(input.repositoryRoot, ...semanticSqliteArtifactPath.split("/"));
-  const provisional: CodeIndexSnapshot = {
+  const store = writeCodeIndexStore({
+    databasePath,
+    snapshot: {
+      symbols: draft.symbols,
+      imports: draft.imports,
+      exports: draft.exports
+    }
+  });
+  const sqliteBytes = await readFile(databasePath);
+  const sqliteSha256 = codeIndexSha256Schema.parse(hashContent(sqliteBytes).slice("sha256:".length));
+  const snapshot: CodeIndexSnapshot = {
     schemaVersion: 1,
     kind: "code_index_snapshot",
     ...draft,
@@ -269,17 +279,6 @@ export async function refreshStructuralCodeIndex(input: {
     symbols: [...draft.symbols],
     imports: [...draft.imports],
     exports: [...draft.exports],
-    sqlite: {
-      path: semanticSqliteArtifactPath,
-      sha256: codeIndexSha256Schema.parse("0".repeat(64))
-    }
-  };
-
-  const store = writeCodeIndexStore({ databasePath, snapshot: provisional });
-  const sqliteBytes = await readFile(databasePath);
-  const sqliteSha256 = codeIndexSha256Schema.parse(hashContent(sqliteBytes).slice("sha256:".length));
-  const snapshot: CodeIndexSnapshot = {
-    ...provisional,
     sqlite: { path: semanticSqliteArtifactPath, sha256: sqliteSha256 }
   };
   const semanticIndexText = stableProtocolJson(snapshot);

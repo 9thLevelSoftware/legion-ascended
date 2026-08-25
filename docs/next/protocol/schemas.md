@@ -18,6 +18,7 @@ Protocol version: `0.3.0`
 | primitives | `common` | Legion protocol common actor, provenance, error, blocker, and validation schemas | `https://schemas.9thlevelsoftware.com/legion/primitives/common.schema.json` | `schemas/primitives/common.schema.json` |
 | entities | `project` | Legion protocol project entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/project.schema.json` | `schemas/entities/project.schema.json` |
 | entities | `change` | Legion protocol change entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/change.schema.json` | `schemas/entities/change.schema.json` |
+| entities | `codeIndex` | Legion protocol code index snapshot entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/code-index.schema.json` | `schemas/entities/codeIndex.schema.json` |
 | entities | `requirement` | Legion protocol requirement entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/requirement.schema.json` | `schemas/entities/requirement.schema.json` |
 | entities | `decision` | Legion protocol decision entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/decision.schema.json` | `schemas/entities/decision.schema.json` |
 | entities | `oracle` | Legion protocol oracle entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/oracle.schema.json` | `schemas/entities/oracle.schema.json` |

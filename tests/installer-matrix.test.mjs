@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -407,7 +407,7 @@ test("update preserves the surface the install chose", async () => {
 
 test("update hands installation to the registry target package", async () => {
   await withTempProject(async ({ env, home, project }) => {
-    const root = path.dirname(home);
+    const root = path.dirname(await realpath(home));
     const packageManagers = await createFakePackageManagers(root, ROOT);
     const globalRoot = path.join(root, "global", "node_modules");
     const globalPackage = path.join(globalRoot, "legion-ascended");
@@ -424,7 +424,7 @@ test("update hands installation to the registry target package", async () => {
     );
     const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
     env[pathKey] = [packageManagers.managerDir, env[pathKey]].filter(Boolean).join(path.delimiter);
-    env.LEGION_TEST_NPM_LATEST = "9.0.6";
+    env.LEGION_TEST_NPM_LATEST = "9.2.2";
     env.LEGION_TEST_NPM_ROOT = globalRoot;
 
     const run = (args) => execFileAsync(process.execPath, [LEGION_BIN, ...args], { ...EXEC_OPTIONS, cwd: project, env });
@@ -441,8 +441,8 @@ test("update hands installation to the registry target package", async () => {
       : invocations.trim().split(/\r?\n/).map((line) => JSON.parse(line));
     assert.deepEqual(records, [
       { tool: "npm", args: ["root", "--global"] },
-      { tool: "npm", args: ["install", "--global", "legion-ascended@9.0.6"] },
-      { tool: "npx", args: ["--yes", "legion-ascended@9.0.6", "install", "--target", "claude", "--local"] }
+      { tool: "npm", args: ["install", "--global", "legion-ascended@9.2.2"] },
+      { tool: "npx", args: ["--yes", "legion-ascended@9.2.2", "install", "--target", "claude", "--local"] }
     ]);
   });
 });
