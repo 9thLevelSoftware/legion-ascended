@@ -815,9 +815,15 @@ function validateDraft(draft: CodeIndexSnapshotDraft): CodeIndexSnapshotDraft {
   return draft;
 }
 
+function compareCodeIndexStrings(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
 function sortFacts<T extends { readonly path: string; readonly range: CodeIndexSourceRange; readonly id: string }>(facts: readonly T[]): T[] {
   return [...facts].sort((left, right) =>
-    left.path.localeCompare(right.path) || left.range.startByte - right.range.startByte || left.id.localeCompare(right.id)
+    compareCodeIndexStrings(left.path, right.path) || left.range.startByte - right.range.startByte || compareCodeIndexStrings(left.id, right.id)
   );
 }
 
@@ -922,7 +928,7 @@ export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput):
   const exports: CodeIndexExport[] = [];
 
   const sortedFiles = [...validatedInput.files]
-    .sort((left, right) => left.path.localeCompare(right.path));
+    .sort((left, right) => compareCodeIndexStrings(left.path, right.path));
   for (const file of sortedFiles) {
     const extension = path.extname(file.path).toLowerCase();
     if (MARKDOWN_EXTENSIONS.has(extension)) {
@@ -949,7 +955,7 @@ export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput):
     scope: validatedInput.scope,
     sourceFingerprint: validatedInput.sourceFingerprint,
     extractor: { name: "tree-sitter", version: TREE_SITTER_VERSION },
-    coverage: [...coverage].sort((left, right) => left.path.localeCompare(right.path)),
+    coverage: [...coverage].sort((left, right) => compareCodeIndexStrings(left.path, right.path)),
     symbols: sortFacts(symbols),
     imports: sortFacts(imports),
     exports: sortFacts(exports)

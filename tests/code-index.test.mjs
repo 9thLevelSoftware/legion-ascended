@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
+import { readCodeIndexSnapshot } from '../packages/artifacts/dist/index.js';
+import { codeIndexSnapshotSchema } from '../packages/protocol/dist/index.js';
 import { buildStructuralCodeIndex } from '../packages/cli/dist/workflow/code-index.js';
 
 const SNAPSHOT_ID = 'idx_0123456789abcdef01234567';
@@ -564,14 +569,41 @@ test('validates SHA-256 metadata even for unsupported files', async () => {
   );
 });
 
-test('sorts paths with locale collation', async () => {
-  const result = await buildStructuralCodeIndex(
-    input([
-      file('a.ts', 'export const lower = 1;\n'),
-      file('B.ts', 'export const upper = 2;\n')
-    ])
-  );
+test('uses protocol byte-wise lexical ordering for paths and validates structural read-back', async () => {
+  const files = [
+    file('a.ts', 'export const lower = 1;\n'),
+    file('B.ts', 'export const upper = 2;\n')
+  ];
+  const first = await buildStructuralCodeIndex(input(files));
+  const second = await buildStructuralCodeIndex(input([...files].reverse()));
+  const expectedPaths = ['B.ts', 'a.ts'];
 
-  assert.deepEqual(result.coverage.map(({ path }) => path), ['a.ts', 'B.ts']);
-  assert.deepEqual(result.symbols.map(({ path }) => path), ['a.ts', 'B.ts']);
+  assert.deepEqual(second, first);
+  assert.deepEqual(first.coverage.map(({ path: filePath }) => filePath), expectedPaths);
+  for (const facts of [first.symbols, first.imports, first.exports]) {
+    assert.deepEqual(facts.map(({ path: filePath }) => filePath), facts.length === 0 ? [] : expectedPaths.slice(0, facts.length));
+  }
+
+  const snapshot = codeIndexSnapshotSchema.parse({
+    schemaVersion: 1,
+    kind: 'code_index_snapshot',
+    ...first,
+    sqlite: {
+      path: '.legion/project/code-index/semantic-index.sqlite',
+      sha256: SOURCE_SHA256
+    }
+  });
+  const root = await mkdtemp(path.join(tmpdir(), 'legion-code-index-readback-'));
+  const artifactPath = '.legion/project/code-index/semantic-index.json';
+  const absoluteArtifactPath = path.join(root, ...artifactPath.split('/'));
+  try {
+    await mkdir(path.dirname(absoluteArtifactPath), { recursive: true });
+    await writeFile(absoluteArtifactPath, `${JSON.stringify(snapshot)}\n`, 'utf8');
+
+    const readBack = await readCodeIndexSnapshot({ repositoryRoot: root, artifactPath });
+    assert.equal(readBack.ok, true);
+    if (readBack.ok) assert.deepEqual(readBack.snapshot, snapshot);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

@@ -46419,9 +46419,14 @@ function validateDraft(draft) {
   }
   return draft;
 }
+function compareCodeIndexStrings(left, right) {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
 function sortFacts(facts) {
   return [...facts].sort(
-    (left, right) => left.path.localeCompare(right.path) || left.range.startByte - right.range.startByte || left.id.localeCompare(right.id)
+    (left, right) => compareCodeIndexStrings(left.path, right.path) || left.range.startByte - right.range.startByte || compareCodeIndexStrings(left.id, right.id)
   );
 }
 async function extractFile(file2, mapping) {
@@ -46502,7 +46507,7 @@ async function buildStructuralCodeIndex(input) {
   const symbols = [];
   const imports = [];
   const exports = [];
-  const sortedFiles = [...validatedInput.files].sort((left, right) => left.path.localeCompare(right.path));
+  const sortedFiles = [...validatedInput.files].sort((left, right) => compareCodeIndexStrings(left.path, right.path));
   for (const file2 of sortedFiles) {
     const extension = path34.extname(file2.path).toLowerCase();
     if (MARKDOWN_EXTENSIONS.has(extension)) {
@@ -46528,7 +46533,7 @@ async function buildStructuralCodeIndex(input) {
     scope: validatedInput.scope,
     sourceFingerprint: validatedInput.sourceFingerprint,
     extractor: { name: "tree-sitter", version: TREE_SITTER_VERSION },
-    coverage: [...coverage].sort((left, right) => left.path.localeCompare(right.path)),
+    coverage: [...coverage].sort((left, right) => compareCodeIndexStrings(left.path, right.path)),
     symbols: sortFacts(symbols),
     imports: sortFacts(imports),
     exports: sortFacts(exports)
