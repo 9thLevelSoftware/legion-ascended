@@ -9,6 +9,7 @@ export * from "./api/schema-documents.js";
 export * from "./entities/approval.js";
 export * from "./entities/attestation.js";
 export * from "./entities/change.js";
+export * from "./entities/code-index.js";
 export * from "./entities/common.js";
 export * from "./entities/decision.js";
 export * from "./entities/evidence.js";
