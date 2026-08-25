@@ -34,7 +34,7 @@ type CodeIndexFactKind = "symbol" | "import" | "export";
 
 type SqliteFactRow = {
   readonly id: string;
-  readonly fact_kind: CodeIndexFactKind;
+  readonly fact_kind: string;
   readonly path: string;
   readonly name: string | null;
   readonly source_sha256: string;
@@ -139,11 +139,18 @@ function removeDatabaseSidecars(databasePath: string): void {
   }
 }
 
-function parseFact(factKind: CodeIndexFactKind, payloadJson: string): CodeIndexFact {
+function parseFact(factKind: string, payloadJson: string): CodeIndexFact {
   const payload: unknown = JSON.parse(payloadJson);
-  if (factKind === "symbol") return codeIndexSymbolSchema.parse(payload);
-  if (factKind === "import") return codeIndexImportSchema.parse(payload);
-  return codeIndexExportSchema.parse(payload);
+  switch (factKind) {
+    case "symbol":
+      return codeIndexSymbolSchema.parse(payload);
+    case "import":
+      return codeIndexImportSchema.parse(payload);
+    case "export":
+      return codeIndexExportSchema.parse(payload);
+    default:
+      throw new Error(`Unknown code index fact kind: ${factKind}`);
+  }
 }
 
 function readFactRow(database: DatabaseSync, id: string): SqliteFactRow | undefined {
@@ -156,6 +163,17 @@ function readFactRow(database: DatabaseSync, id: string): SqliteFactRow | undefi
   `).get(id) as SqliteFactRow | undefined;
 }
 
+function validatedFactKind(factKind: string): CodeIndexFactKind {
+  switch (factKind) {
+    case "symbol":
+    case "import":
+    case "export":
+      return factKind;
+    default:
+      throw new Error(`Unknown code index fact kind: ${factKind}`);
+  }
+}
+
 function validateLimit(limit: number): void {
   if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
     throw new RangeError("limit must be an integer between 1 and 1000");
@@ -163,24 +181,31 @@ function validateLimit(limit: number): void {
 }
 
 function safeMatchQuery(query: string): string {
+  if (typeof query !== "string") {
+    throw new TypeError("query must be a string");
+  }
+  if (query.length > 4_096) {
+    throw new RangeError("query must be at most 4096 UTF-16 code units");
+  }
   const tokens = tokenize(query);
   if (tokens.length === 0) {
     throw new RangeError("query must contain at least one alphanumeric token");
+  }
+  if (tokens.length > 128) {
+    throw new RangeError("query must contain at most 128 tokens");
   }
   return tokens.map((token) => `"${token.replaceAll('"', '""')}"`).join(" AND ");
 }
 
 function searchHit(row: SqliteSearchRow): CodeIndexSearchHit {
-  const fact = parseFact(row.fact_kind, row.payload_json);
-  const base = {
+  const factKind = validatedFactKind(row.fact_kind);
+  const fact = parseFact(factKind, row.payload_json);
+  return {
     ...fact,
-    kind: "kind" in fact ? fact.kind : row.fact_kind,
-    factKind: row.fact_kind,
+    kind: "kind" in fact ? fact.kind : factKind,
+    factKind,
     rank: Number(row.rank)
-  };
-  const name = factSearchName(fact);
-  if (name === null) return base as CodeIndexSearchHit;
-  return { ...base, name } as CodeIndexSearchHit;
+  } as CodeIndexSearchHit;
 }
 
 export function writeCodeIndexStore(input: {
