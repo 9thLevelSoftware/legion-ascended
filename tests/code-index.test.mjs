@@ -186,6 +186,42 @@ test('emits default export facts with the default name for named declarations', 
   assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'default', kind: 'function' }]);
 });
 
+test('emits default export facts for anonymous default functions and classes', async () => {
+  const result = await buildStructuralCodeIndex(
+    input([
+      file('src/anonymous-function.js', 'export default function () {}\n'),
+      file('src/anonymous-class.js', 'export default class {}\n')
+    ])
+  );
+
+  assert.deepEqual(
+    result.exports.map(({ path, name, kind }) => ({ path, name, kind })),
+    [
+      { path: 'src/anonymous-class.js', name: 'default', kind: 'class' },
+      { path: 'src/anonymous-function.js', name: 'default', kind: 'function' }
+    ]
+  );
+  assert.deepEqual(result.symbols, []);
+});
+
+test('emits one default export fact for expression and identifier default exports', async () => {
+  const result = await buildStructuralCodeIndex(
+    input([
+      file('src/default-expression.js', 'export default 42;\n'),
+      file('src/default-identifier.js', 'const value = 1;\nexport default value;\n')
+    ])
+  );
+
+  assert.deepEqual(
+    result.exports.map(({ path, name, kind }) => ({ path, name, kind })),
+    [
+      { path: 'src/default-expression.js', name: 'default', kind: 'export' },
+      { path: 'src/default-identifier.js', name: 'default', kind: 'export' }
+    ]
+  );
+  assert.equal(result.exports.filter(({ name }) => name === 'default').length, 2);
+});
+
 test('resolves named exports by lexical scope and nearest preceding binding', async () => {
   const text = [
     'function f() {}',
@@ -209,6 +245,15 @@ test('resolves named exports by lexical scope and nearest preceding binding', as
   assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'alias', kind: 'function' }]);
 });
 
+test('resolves named exports to a same-scope declaration after the export', async () => {
+  const result = await buildStructuralCodeIndex(input([file('src/export-before-declaration.js', 'export { f };\nconst f = 1;\n')]));
+
+  assert.deepEqual(result.symbols.map(({ name, kind, exported }) => ({ name, kind, exported })), [
+    { name: 'f', kind: 'variable', exported: true }
+  ]);
+  assert.deepEqual(result.exports.map(({ name, kind }) => ({ name, kind })), [{ name: 'f', kind: 'variable' }]);
+});
+
 test('sanitizes malformed YAML diagnostics without echoing source text', async () => {
   const secret = 'SECRET_TOKEN_123';
   const result = await buildStructuralCodeIndex(input([file('config/secret.yaml', `${secret}: [\n`)]));
@@ -220,6 +265,16 @@ test('sanitizes malformed YAML diagnostics without echoing source text', async (
   assert.equal(diagnostic.includes(secret), false);
   assert.ok(diagnostic.length <= 512);
   assert.match(diagnostic, /^yaml parser error at line \d+: document rejected$/);
+});
+
+test('parses valid multi-document YAML without fabricating declaration facts', async () => {
+  const text = ['---', 'name: legion', '---', '- enabled', '- true', '---', 'scalar', ''].join('\n');
+  const result = await buildStructuralCodeIndex(input([file('config/multi-document.yaml', text)]));
+
+  assert.deepEqual(result.coverage, [{ path: 'config/multi-document.yaml', status: 'parsed', language: 'yaml' }]);
+  assert.deepEqual(result.symbols, []);
+  assert.deepEqual(result.imports, []);
+  assert.deepEqual(result.exports, []);
 });
 
 test('reports JSON and YAML as parsed coverage without fabricated declaration facts', async () => {
@@ -306,6 +361,23 @@ test('rejects input file lists above the extraction bound', async () => {
   await assert.rejects(
     () => buildStructuralCodeIndex(input(files)),
     { name: 'RangeError', message: 'input.files exceeds maximum of 100000 files.' }
+  );
+});
+
+test('rejects duplicate repository-relative input paths before extraction', async () => {
+  await assert.rejects(
+    () => buildStructuralCodeIndex(input([file('src/repeated.ts', 'const first = 1;'), file('src/repeated.ts', 'const second = 2;')])),
+    { name: 'Error', message: 'input.files contains duplicate path: src/repeated.ts.' }
+  );
+});
+
+test('validates SHA-256 metadata even for unsupported files', async () => {
+  await assert.rejects(
+    () => buildStructuralCodeIndex(input([{ path: 'notes.txt', sha256: 'not-a-sha256', text: 'plain text' }])),
+    (error) => {
+      assert.match(String(error), /Invalid SHA-256 digest/);
+      return true;
+    }
   );
 });
 

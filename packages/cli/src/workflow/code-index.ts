@@ -31,7 +31,7 @@ import {
   type RunId,
   type UtcTimestamp
 } from "@legion/protocol";
-import { parseDocument } from "yaml";
+import { parseAllDocuments } from "yaml";
 import { Language, Node, Parser } from "web-tree-sitter";
 
 declare global {
@@ -430,13 +430,24 @@ function pythonImportSpecifiers(node: Node): string[] {
     .map((child) => child.type === "aliased_import" ? (child.childForFieldName("name")?.text ?? child.text) : child.text);
 }
 
-function exportDeclarationNodes(node: Node): Node[] {
+function exportDeclarationNodes(node: Node, defaultExport: boolean): Node[] {
   const declaration = node.childForFieldName("declaration");
-  if (declaration === null) return [];
+  if (declaration === null) {
+    if (!defaultExport) return [];
+    return node.namedChildren.filter((child) => child.type !== "export_clause");
+  }
   if (declaration.type === "lexical_declaration" || declaration.type === "variable_declaration") {
     return declaration.namedChildren.filter((child) => child.type === "variable_declarator");
   }
   return [declaration];
+}
+
+function exportDeclarationKind(node: Node): string {
+  const kind = declarationKind(node.type);
+  if (kind !== undefined) return kind;
+  if (node.type === "function_expression") return "function";
+  if (node.type === "class") return "class";
+  return "export";
 }
 
 function isDefaultExport(node: Node): boolean {
@@ -473,12 +484,17 @@ function collectTreeFacts(
 
   function resolveNamedExport(name: string, exportNode: Node): (typeof declarationBindings)[number] | undefined {
     const exportScope = lexicalScope(exportNode, treeRoot);
-    let nearest: (typeof declarationBindings)[number] | undefined;
+    let preceding: (typeof declarationBindings)[number] | undefined;
+    let following: (typeof declarationBindings)[number] | undefined;
     for (const binding of declarationBindings) {
-      if (binding.name !== name || binding.scope.id !== exportScope.id || binding.declaration.endIndex > exportNode.startIndex) continue;
-      if (nearest === undefined || binding.declaration.endIndex > nearest.declaration.endIndex) nearest = binding;
+      if (binding.name !== name || binding.scope.id !== exportScope.id) continue;
+      if (binding.declaration.endIndex <= exportNode.startIndex) {
+        if (preceding === undefined || binding.declaration.endIndex > preceding.declaration.endIndex) preceding = binding;
+      } else if (binding.declaration.startIndex >= exportNode.endIndex) {
+        if (following === undefined || binding.declaration.startIndex < following.declaration.startIndex) following = binding;
+      }
     }
-    return nearest;
+    return preceding ?? following;
   }
 
   function visit(node: Node): void {
@@ -486,10 +502,9 @@ function collectTreeFacts(
     if (kind !== undefined) {
       const name = nodeName(node);
       if (name !== undefined) {
-        const symbolNode = kind === "variable" && node.type === "assignment" ? node : node;
-        const symbolIndex = addSymbol(symbols, seenSymbols, symbolNode, file, offsets, kind, name, isDirectlyExported(node));
+        const symbolIndex = addSymbol(symbols, seenSymbols, node, file, offsets, kind, name, isDirectlyExported(node));
         if (symbolIndex !== undefined) {
-          declarationBindings.push({ symbolIndex, declaration: symbolNode, scope: lexicalScope(symbolNode, treeRoot), name, kind });
+          declarationBindings.push({ symbolIndex, declaration: node, scope: lexicalScope(node, treeRoot), name, kind });
         }
       }
     }
@@ -506,10 +521,10 @@ function collectTreeFacts(
     }
 
     if (node.type === "export_statement") {
-      const declarations = exportDeclarationNodes(node);
       const defaultExport = isDefaultExport(node);
+      const declarations = exportDeclarationNodes(node, defaultExport);
       for (const declaration of declarations) {
-        const declarationType = declarationKind(declaration.type) ?? (declaration.type === "lexical_declaration" ? "variable" : "export");
+        const declarationType = exportDeclarationKind(declaration);
         if (declaration.type === "lexical_declaration" || declaration.type === "variable_declaration") {
           const variableName = nodeName(declaration);
           if (variableName !== undefined) emitExport(node, variableName, "variable");
@@ -602,13 +617,14 @@ function parseYamlCompatibilityFallback(
   readonly exports: readonly CodeIndexExport[];
 } {
   try {
-    const document = parseDocument(file.text ?? "");
-    if (document.errors.length > 0) {
+    const documents = parseAllDocuments(file.text ?? "");
+    const parserErrors = documents.flatMap((document) => document.errors);
+    if (parserErrors.length > 0) {
       return {
         coverage: {
           ...baseCoverage,
           status: "parser-error",
-          diagnostics: document.errors
+          diagnostics: parserErrors
             .slice(0, MAX_DIAGNOSTICS)
             .map((error) => yamlParserDiagnostic(error))
         },
@@ -734,9 +750,19 @@ export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput):
   const exports: CodeIndexExport[] = [];
 
   const files = input.files
-    .map((file) => ({ ...file, path: artifactPathSchema.parse(file.path) }))
-    .sort((left, right) => compareCodeIndexStrings(left.path, right.path));
+    .map((file) => {
+      const parsedPath = artifactPathSchema.parse(file.path);
+      const parsedSha256 = codeIndexSha256Schema.parse(file.sha256);
+      return { ...file, path: parsedPath, sha256: parsedSha256 };
+    });
+  const seenPaths = new Set<string>();
   for (const file of files) {
+    if (seenPaths.has(file.path)) throw new Error(`input.files contains duplicate path: ${file.path}.`);
+    seenPaths.add(file.path);
+  }
+  const sortedFiles = files
+    .sort((left, right) => compareCodeIndexStrings(left.path, right.path));
+  for (const file of sortedFiles) {
     const extension = path.extname(file.path).toLowerCase();
     if (MARKDOWN_EXTENSIONS.has(extension)) {
       coverage.push({ path: file.path, status: "metadata-only" });
@@ -747,7 +773,7 @@ export async function buildStructuralCodeIndex(input: StructuralCodeIndexInput):
       coverage.push({ path: file.path, status: "unsupported" });
       continue;
     }
-    const extracted = await extractFile({ ...file, path: artifactPathSchema.parse(file.path) }, mapping);
+    const extracted = await extractFile(file, mapping);
     coverage.push(extracted.coverage);
     symbols.push(...extracted.symbols);
     imports.push(...extracted.imports);
