@@ -290,6 +290,13 @@ function executeFinding({ specialist }) {
   };
 }
 
+function hasSyntheticUserInput(assumption) {
+  return assumption.evidence.some((entry) =>
+    entry.kind === "user-input" &&
+    entry.path.startsWith(".legion/project/workflow/brownfield-specialists/")
+  );
+}
+
 test("scales the stable roster from effort one through five", () => {
   assert.deepEqual(getBrownfieldSpecialistRoster(1).map((entry) => [entry.name, entry.pass]), [
     ["architecture", 1], ["code", 1]
@@ -377,6 +384,7 @@ test("converts malformed JSON and executor failures into blocking unknown assump
   assert.equal(malformed.assumptions.length, 2);
   assert.ok(malformed.assumptions.every((assumption) => assumption.confidence === "unknown" && assumption.blocking));
   assert.ok(malformed.assumptions.every((assumption) => assessmentAssumptionSchema.safeParse(assumption).success));
+  assert.ok(malformed.assumptions.every(hasSyntheticUserInput));
   assert.ok(malformed.executionRecords.every((record) => record.status === "failed"));
 
   const failed = await runBrownfieldSpecialists({
@@ -387,6 +395,7 @@ test("converts malformed JSON and executor failures into blocking unknown assump
   assert.match(failed.assumptions[0].statement, /executor unavailable/u);
   assert.ok(failed.executionRecords.every((record) => record.status === "failed"));
   assert.ok(failed.executionRecords.every((record) => record.outputSize >= Buffer.byteLength("executor unavailable", "utf8")));
+  assert.ok(failed.assumptions.every(hasSyntheticUserInput));
 });
 
 test("rejects missing or out-of-bounds evidence and records the specialist failure", async () => {
@@ -397,6 +406,7 @@ test("rejects missing or out-of-bounds evidence and records the specialist failu
   assert.equal(missingEvidence.findings.length, 0);
   assert.equal(missingEvidence.assumptions.length, 2);
   assert.match(missingEvidence.executionRecords[0].diagnostic, /evidence|invalid|failed/iu);
+  assert.ok(missingEvidence.assumptions.every(hasSyntheticUserInput));
 
   const outOfBounds = await runBrownfieldSpecialists({
     ...input(),
@@ -404,15 +414,78 @@ test("rejects missing or out-of-bounds evidence and records the specialist failu
   });
   assert.equal(outOfBounds.findings.length, 0);
   assert.equal(outOfBounds.assumptions.length, 2);
+  assert.ok(outOfBounds.assumptions.every(hasSyntheticUserInput));
+});
+
+test("drains a timed-out callback before the next specialist and before returning", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-timeout-"));
+  const delayedFile = path.join(repositoryRoot, "late.txt");
+  let active = 0;
+  let maxActive = 0;
+  let callbackCount = 0;
+  let firstCallbackSettled = false;
+  let mutationAfterResult = false;
+  let resultReturned = false;
+  try {
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      timeoutMs: 5,
+      execute: async (request) => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        const callbackNumber = callbackCount += 1;
+        try {
+          if (callbackNumber === 1) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+            if (resultReturned) mutationAfterResult = true;
+            await writeFile(delayedFile, "late callback mutation\\n", "utf8");
+          }
+          if (callbackNumber > 1) assert.equal(firstCallbackSettled, true);
+          return executeFinding(request);
+        } finally {
+          if (callbackNumber === 1) firstCallbackSettled = true;
+          active -= 1;
+        }
+      }
+    });
+    resultReturned = true;
+    assert.equal(maxActive, 1);
+    assert.equal(mutationAfterResult, false);
+    assert.equal(firstCallbackSettled, true);
+    assert.equal(active, 0);
+    assert.equal(result.assumptions.length, 2);
+    assert.ok(result.assumptions.every(hasSyntheticUserInput));
+    assert.ok(result.executionRecords.every((record) => record.status !== "succeeded"));
+    assert.ok(result.executionRecords.some((record) => record.status === "blocked"));
+    assert.ok(result.executionRecords.every((record) => /timed out|read-only|changed/iu.test(record.diagnostic)));
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("redacts encoded credential JSON after the bounded decode budget", () => {
+  const secret = "json-secret-seventeen-times";
+  const credentialJson = JSON.stringify({ password: secret, apiKey: "api-key-seventeen-times" });
+  const encodedSeventeenTimes = Array.from({ length: 17 }, () => 0)
+    .reduce((value) => encodeURIComponent(value), credentialJson);
+  for (const redact of [redactBrownfieldSpecialistText, adapterModule.redactAdapterTranscript]) {
+    const redacted = redact(encodedSeventeenTimes);
+    assert.equal(redacted.includes(secret), false);
+    assert.equal(redacted.includes("api-key-seventeen-times"), false);
+    assert.equal(redacted.includes("password"), false);
+    assert.equal(redacted.includes("apiKey"), false);
+    assert.match(redacted, /REDACTED/iu);
+  }
 });
 
 test("times out an executor without losing a typed record", async () => {
   const result = await runBrownfieldSpecialists({
     ...input(),
     timeoutMs: 10,
-    execute: async () => new Promise(() => {})
+    execute: async () => new Promise((resolve) => setTimeout(() => resolve("not-json"), 25))
   });
   assert.equal(result.assumptions.length, 2);
+  assert.ok(result.assumptions.every(hasSyntheticUserInput));
   assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
   assert.ok(result.executionRecords.every((record) => /timed out/u.test(record.diagnostic)));
 });
@@ -446,6 +519,7 @@ test("uses the real fake adapter boundary and preserves the source tree", async 
     const result = await runBrownfieldSpecialists({ ...input({ repositoryRoot }) });
     assert.equal(result.ok, false);
     assert.equal(result.assumptions.length, 2);
+    assert.ok(result.assumptions.every(hasSyntheticUserInput));
     assert.ok(result.executionRecords.every((record) => record.transport === "adapter"));
     assert.equal(await readFile(sourcePath, "utf8"), "source bytes\n");
   } finally {
@@ -486,6 +560,7 @@ test("persists a blocking unknown assumption for an empty structural snapshot", 
     assert.equal(assumption.evidence[0].kind, "user-input");
     return assessmentAssumptionSchema.safeParse(assumption).success;
   }));
+  assert.ok(result.assumptions.every(hasSyntheticUserInput));
 });
 
 test("registers bounded test inventory and conservative link metadata in the effort two test pack", () => {
@@ -536,6 +611,7 @@ test("preserves Unicode and ampersand source evidence in blocking assumptions af
     assert.equal(assumption.blocking, true);
     return assessmentAssumptionSchema.safeParse(assumption).success;
   }));
+  assert.ok(result.assumptions.every(hasSyntheticUserInput));
   assert.ok(result.assumptions.some((assumption) => assumption.evidence.some((entry) =>
     entry.kind === "source-file" && entry.path === testPath
   )));
@@ -559,6 +635,7 @@ test("sanitizes direct Claude and Codex result artifacts before cleanup can fail
           execute: undefined
         });
         assert.equal(result.ok, false);
+        assert.ok(result.assumptions.every(hasSyntheticUserInput));
         assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
       });
       assert.ok(retainedRoots.length > 0);
@@ -639,6 +716,7 @@ test("records pack truncation and rejects evidence omitted from the specialist p
   assert.equal(result.findings.length, 0);
   assert.equal(result.assumptions.length, 2);
   assert.ok(result.executionRecords.every((record) => record.status === "failed"));
+  assert.ok(result.assumptions.every(hasSyntheticUserInput));
   assert.ok(result.executionRecords.every((record) => record.truncation.evidenceTruncated));
   assert.ok(result.executionRecords.every((record) => /supplied signal pack|supported conclusion/iu.test(record.diagnostic)));
 });
@@ -665,6 +743,7 @@ test("rejects evidence omitted from a command-result pack", async () => {
   assert.equal(result.findings.length, 0);
   assert.equal(result.assumptions.length, 2);
   assert.ok(result.executionRecords.every((record) => record.status === "failed"));
+  assert.ok(result.assumptions.every(hasSyntheticUserInput));
   assert.ok(result.executionRecords.every((record) => record.truncation.evidenceTruncated));
   assert.ok(result.executionRecords.every((record) => /supplied signal pack|supported conclusion/iu.test(record.diagnostic)));
 });
@@ -684,6 +763,7 @@ test("rejects in-process callbacks that mutate supplied source files", async () 
     });
     assert.equal(result.findings.length, 0);
     assert.equal(result.assumptions.length, 2);
+    assert.ok(result.assumptions.every(hasSyntheticUserInput));
     assert.ok(result.executionRecords.every((record) => record.status === "failed"));
     assert.ok(result.executionRecords.every((record) => /read-only|mutat|changed|source/iu.test(record.diagnostic)));
     assert.equal(await readFile(sourceFile, "utf8"), "mutated source bytes\\n");
@@ -705,6 +785,7 @@ test("rejects in-process callbacks that add repository files", async () => {
     });
     assert.equal(result.findings.length, 0);
     assert.equal(result.assumptions.length, 2);
+    assert.ok(result.assumptions.every(hasSyntheticUserInput));
     assert.ok(result.executionRecords.every((record) => record.status === "failed"));
     assert.ok(result.executionRecords.every((record) => /read-only|add|changed|source/iu.test(record.diagnostic)));
     assert.equal(await readFile(addedFile, "utf8"), "callback-created bytes\\n");
@@ -838,6 +919,7 @@ test("fails closed when isolated adapter artifact cleanup fails", async () => {
   try {
     const result = await runBrownfieldSpecialists({ ...input({ repositoryRoot }), execute: undefined });
     assert.equal(result.ok, false);
+    assert.ok(result.assumptions.every(hasSyntheticUserInput));
     assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
     assert.ok(result.executionRecords.every((record) => /cleanup/iu.test(record.diagnostic)));
     assert.ok(retainedRoots.length > 0);
@@ -866,6 +948,7 @@ test("fails closed when isolated adapter artifact cleanup succeeds without remov
   try {
     const result = await runBrownfieldSpecialists({ ...input({ repositoryRoot }), execute: undefined });
     assert.equal(result.ok, false);
+    assert.ok(result.assumptions.every(hasSyntheticUserInput));
     assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
     assert.ok(result.executionRecords.every((record) => /cleanup/iu.test(record.diagnostic)));
     assert.ok(retainedRoots.length > 0);

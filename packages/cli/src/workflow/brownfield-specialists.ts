@@ -910,26 +910,30 @@ function normalizeSpecialistOutput(input: {
   return { findings, assumptions };
 }
 
-function missingEvidenceReference(assessmentId: string, specialist: BrownfieldSpecialistSpec): AssessmentEvidenceRef {
+function syntheticFailureEvidenceReference(assessmentId: string, specialist: BrownfieldSpecialistSpec): AssessmentEvidenceRef {
   return assessmentEvidenceRefSchema.parse({
     kind: "user-input",
-    path: artifactPathSchema.parse(`${EXECUTION_ARTIFACT_ROOT}/${assessmentId}/${specialist.name}-pass-${specialist.pass}/missing-evidence.json`),
-    note: "No source or structural evidence was supplied; specialist result is blocked pending explicit user input or command-result evidence."
+    path: artifactPathSchema.parse(`${EXECUTION_ARTIFACT_ROOT}/${assessmentId}/${specialist.name}-pass-${specialist.pass}/failure-evidence.json`),
+    note: "Synthetic user-input evidence for a failed, blocked, or invalid specialist result; explicit user input or command-result evidence is required for resolution."
   });
 }
 
 function fallbackEvidence(pack: BrownfieldExcerptPack, snapshot: CodeIndexSnapshot, assessmentId: string): readonly AssessmentEvidenceRef[] {
-  if (pack.evidence.length > 0) return pack.evidence.slice(0, 1);
+  const synthetic = syntheticFailureEvidenceReference(assessmentId, pack.specialist);
+  if (pack.evidence.length > 0) return [...pack.evidence.slice(0, 1), synthetic];
   const fact = [...snapshot.symbols, ...snapshot.imports, ...snapshot.exports]
     .sort((left, right) => compareStrings(left.id, right.id))[0];
-  if (fact === undefined) return [missingEvidenceReference(assessmentId, pack.specialist)];
-  return [assessmentEvidenceRefSchema.parse({
-    kind: "structural-fact",
-    path: snapshot.sqlite.path,
-    sha256: snapshot.sqlite.sha256,
-    factId: codeIndexFactIdSchema.parse(fact.id),
-    note: "Structural snapshot evidence for an unknown specialist result."
-  })];
+  if (fact === undefined) return [synthetic];
+  return [
+    assessmentEvidenceRefSchema.parse({
+      kind: "structural-fact",
+      path: snapshot.sqlite.path,
+      sha256: snapshot.sqlite.sha256,
+      factId: codeIndexFactIdSchema.parse(fact.id),
+      note: "Structural snapshot evidence for an unknown specialist result."
+    }),
+    synthetic
+  ];
 }
 
 function unknownAssumption(input: {
@@ -940,7 +944,7 @@ function unknownAssumption(input: {
 }): AssessmentAssumption {
   const evidence = input.evidence.length > 0
     ? input.evidence
-    : [missingEvidenceReference(input.assessmentId, input.specialist)];
+    : [syntheticFailureEvidenceReference(input.assessmentId, input.specialist)];
   const idDigest = createHash("sha256")
     .update([input.assessmentId, input.specialist.name, String(input.specialist.pass), input.diagnostic].join("\u0000"), "utf8")
     .digest("hex");
@@ -1216,15 +1220,40 @@ async function runReadOnlyInProcessCallback(input: {
   readonly baseline?: RepositorySnapshot;
 }): Promise<unknown> {
   const before = input.baseline ?? await snapshotRepository(input.repositoryRoot);
+  // Keep the callback promise alive after the observation timeout. An
+  // in-process callback cannot be cancelled safely, so returning at the race
+  // boundary would let it mutate the repository while the next specialist is
+  // already running. The timeout is therefore observed for diagnostics, but
+  // the callback is drained before the repository is rehashed and the caller
+  // is allowed to dispatch the next specialist.
+  const callbackPromise = Promise.resolve().then(() => input.execute(input.request));
   let result: unknown;
   let callbackError: unknown;
   try {
-    result = await withTimeout(Promise.resolve(input.execute(input.request)), input.timeoutMs);
+    result = await withTimeout(callbackPromise, input.timeoutMs);
   } catch (error) {
     callbackError = error;
+    if (isRecord(error) && error["code"] === "SPECIALIST_TIMEOUT") {
+      // Awaiting the original promise also consumes a late rejection, so a
+      // timed-out callback never becomes an unhandled rejection after return.
+      try {
+        await callbackPromise;
+      } catch {
+        // Preserve the timeout as the observed execution outcome.
+      }
+    }
   }
   const mutation = await repositoryMutationDiagnostic(input.repositoryRoot, before);
-  if (mutation !== undefined) throw new Error(mutation);
+  if (mutation !== undefined) {
+    const diagnostic = callbackError === undefined
+      ? mutation
+      : `${safeDiagnostic(callbackError)} ${mutation}`;
+    const mutationError = new Error(diagnostic) as Error & { code?: string };
+    if (isRecord(callbackError) && typeof callbackError["code"] === "string") {
+      mutationError.code = callbackError["code"];
+    }
+    throw mutationError;
+  }
   if (callbackError !== undefined) throw callbackError;
   return result;
 }

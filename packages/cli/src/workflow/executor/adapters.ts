@@ -39,22 +39,24 @@ const BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu;
 const TOKEN_RE = /\b(?:sk|ghp|gho|xox[baprs]-)[A-Za-z0-9_-]{8,}\b/gu;
 const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu;
 const ENCODED_SEGMENT_RE = /[^\s]*%[0-9a-f]{2}[^\s]*/giu;
+const ENCODED_ESCAPE_RE = /%[0-9a-f]{2}/iu;
 const MAX_REDACTION_DECODE_PASSES = 16;
 const MAX_REDACTION_DECODE_LENGTH = 64 * 1024;
 
-function decodeRepeatedly(value: string): string {
-  if (value.length > MAX_REDACTION_DECODE_LENGTH) return value;
+function decodeRepeatedly(value: string): { readonly decoded: string; readonly exhausted: boolean } {
+  if (value.length > MAX_REDACTION_DECODE_LENGTH) return { decoded: value, exhausted: true };
   let decoded = value;
   for (let attempt = 0; attempt < MAX_REDACTION_DECODE_PASSES; attempt += 1) {
     try {
       const next = decodeURIComponent(decoded);
-      if (next === decoded || next.length > MAX_REDACTION_DECODE_LENGTH) break;
+      if (next === decoded) return { decoded, exhausted: false };
+      if (next.length > MAX_REDACTION_DECODE_LENGTH) return { decoded, exhausted: true };
       decoded = next;
     } catch {
-      break;
+      return { decoded, exhausted: ENCODED_ESCAPE_RE.test(decoded) };
     }
   }
-  return decoded;
+  return { decoded, exhausted: ENCODED_ESCAPE_RE.test(decoded) };
 }
 
 function redactDirectText(value: string): string {
@@ -72,7 +74,12 @@ export function redactAdapterTranscript(text: string): string {
   return direct.replace(ENCODED_SEGMENT_RE, (match) => {
     if (!match.includes("%")) return match;
     if (match.length > MAX_REDACTION_DECODE_LENGTH) return "[REDACTED_ENCODED_SECRET]";
-    const decoded = decodeRepeatedly(match);
+    const decodedResult = decodeRepeatedly(match);
+    // A bounded decoder must fail closed. Returning a partially decoded value
+    // after the budget is exhausted would preserve an opaque credential that
+    // can be decoded by the next consumer of the transcript.
+    if (decodedResult.exhausted) return "[REDACTED_ENCODED_SECRET]";
+    const decoded = decodedResult.decoded;
     return decoded !== match && redactDirectText(decoded) !== decoded
       ? "[REDACTED_ENCODED_SECRET]"
       : match;
