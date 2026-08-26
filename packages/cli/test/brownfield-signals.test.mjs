@@ -384,6 +384,64 @@ test("classifies test-looking CI paths as verification risk without inventorying
   }
 });
 
+test("classifies CircleCI and Travis config paths without misclassifying CircleCI source", async () => {
+  const fixture = await makeFixture([
+    [".circleci/config.yml", "version: 2.1\njobs: {}\n"],
+    [".circleci/config.test.yml", "version: 2.1\njobs: {}\n"],
+    [".circleci/config.yaml", "version: 2.1\njobs: {}\n"],
+    [".circleci/runner.ts", "export const runner = true;\n"],
+    [".travis.yml", "language: node_js\n"],
+    [".travis.yaml", "language: node_js\n"]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const verificationPaths = result.riskSignals
+      .filter((signal) => signal.code === "verification-evidence-missing")
+      .flatMap((signal) => signal.evidence)
+      .filter((evidence) => evidence.kind === "source-file")
+      .map((evidence) => evidence.path);
+    for (const ciPath of [
+      ".circleci/config.yml",
+      ".circleci/config.test.yml",
+      ".circleci/config.yaml",
+      ".travis.yml",
+      ".travis.yaml"
+    ]) {
+      assert.ok(verificationPaths.includes(ciPath), ciPath);
+      assert.equal(result.testFiles.includes(ciPath), false, ciPath);
+    }
+    assert.equal(verificationPaths.includes(".circleci/runner.ts"), false);
+    assert.equal(result.testFiles.includes(".circleci/runner.ts"), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("classifies an exact parent relative import as cross-boundary without claiming resolution", async () => {
+  const fixture = await makeFixture([
+    ["src/parent-import.ts", "import \"..\";\nexport const parent = true;\n"]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const signal = result.architectureSignals.find((candidate) =>
+      candidate.code === "cross-boundary-import" && candidate.statement.includes("src/parent-import.ts")
+    );
+    assert.ok(signal);
+    assert.match(signal.statement, /specifier \.\./u);
+    assert.match(signal.statement, /not resolved here/u);
+    assert.ok(signal.evidence.some((evidence) =>
+      evidence.kind === "source-file" && evidence.path === "src/parent-import.ts"
+    ));
+    assert.deepEqual(result.dependencyEdges.find((edge) => edge.from === "src/parent-import.ts"), {
+      from: "src/parent-import.ts",
+      to: "..",
+      evidence: signal.evidence.find((evidence) => evidence.kind === "structural-fact")
+    });
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("resolves a scaled duplicate-basename inventory with bounded links", async () => {
   const duplicateCount = 1_024;
   const duplicateFiles = Array.from({ length: duplicateCount }, (_, index) => {

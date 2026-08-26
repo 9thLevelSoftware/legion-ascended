@@ -36,6 +36,7 @@ const BOUNDED_HOTSPOT_SAMPLE_NOTE = `Bounded hotspot sample: first ${HOTSPOT_FAC
 const OPAQUE_IMPORT_SPECIFIER = "opaque external import specifier (redacted)";
 const TEST_DIRECTORY_NAMES = new Set(["test", "tests", "spec", "__tests__"]);
 const CI_FILE_NAMES = new Set(["jenkinsfile", ".gitlab-ci.yml", ".gitlab-ci.yaml", "azure-pipelines.yml"]);
+const CI_CONFIG_EXTENSIONS = new Set([".yml", ".yaml"]);
 const BINARY_EXTENSIONS = new Set([
   ".a", ".bin", ".class", ".dll", ".dylib", ".exe", ".gif", ".gz", ".ico", ".jar", ".jpeg", ".jpg", ".mov", ".mp3",
   ".mp4", ".o", ".pdf", ".png", ".so", ".tar", ".ttf", ".wasm", ".wav", ".webp", ".woff", ".woff2", ".zip"
@@ -182,11 +183,15 @@ function isManifestOrCi(sourcePath: string): boolean {
   const normalizedPath = sourcePath.toLowerCase();
   const basename = path.posix.basename(sourcePath).toLowerCase();
   const isCiConfig = normalizedPath.startsWith("ci/") && !AUTHORED_SOURCE_EXTENSIONS.has(sourceExtension(sourcePath));
+  const isCircleCiConfig = normalizedPath.startsWith(".circleci/") && CI_CONFIG_EXTENSIONS.has(sourceExtension(sourcePath));
+  const isTravisConfig = normalizedPath === ".travis.yml" || normalizedPath === ".travis.yaml";
   return AUTHORED_DEPENDENCY_MANIFESTS.has(basename) ||
     AUTHORED_BUILD_CONFIGURATION.has(basename) ||
     (basename.startsWith("package.") && basename.endsWith(".json")) ||
     CI_FILE_NAMES.has(basename) ||
     isCiConfig ||
+    isCircleCiConfig ||
+    isTravisConfig ||
     (normalizedPath.startsWith(".github/workflows/") && normalizedPath.split("/").length > 2);
 }
 
@@ -793,7 +798,7 @@ function collectArchitectureSignals(input: {
   }
 
   for (const fact of snapshot.imports) {
-    if (!fact.specifier.startsWith("../")) continue;
+    if (fact.specifier !== ".." && !fact.specifier.startsWith("../")) continue;
     const sourceRoot = topLevelRoot(fact.path);
     const lexicalTarget = path.posix.normalize(path.posix.join(path.posix.dirname(fact.path), fact.specifier));
     const targetRoot = topLevelRoot(lexicalTarget);
