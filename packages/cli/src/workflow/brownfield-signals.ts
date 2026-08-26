@@ -18,6 +18,7 @@ import {
   type CodeIndexSnapshot,
   type CodeIndexSourcePath
 } from "@legion/protocol";
+import { fingerprintSourceFiles } from "./codebase-map.js";
 
 const MAX_BOUNDED_SOURCE_BYTES = 256 * 1024;
 const MAX_BOUNDED_MAP_BYTES = 16 * 1024 * 1024;
@@ -302,13 +303,35 @@ async function expectedSourceHashes(
   const sqliteAbsolutePath = path.join(repositoryRoot, ...sqliteArtifactPath.split("/"));
   const mapAbsolutePath = path.join(path.dirname(sqliteAbsolutePath), "map.json");
   const mapDocument = await readBoundedMapDocument(mapAbsolutePath);
-  if (mapDocument["sourceFingerprint"] !== snapshot.sourceFingerprint) {
-    throw new Error("Snapshot source hash inventory does not match the validated structural snapshot fingerprint.");
+  if (mapDocument["schemaVersion"] !== 1 || mapDocument["kind"] !== "codebase_map") {
+    throw new Error("Snapshot source hash inventory has invalid map identity.");
   }
+  if (mapDocument["scope"] !== snapshot.scope) {
+    throw new Error("Snapshot source hash inventory scope does not match the validated structural snapshot.");
+  }
+  if (mapDocument["generatedAt"] !== snapshot.generatedAt) {
+    throw new Error("Snapshot source hash inventory timestamp does not match the validated structural snapshot.");
+  }
+
+  const declaredSourceFingerprint = codeIndexSha256Schema.parse(mapDocument["sourceFingerprint"]);
+  const declaredSourceFileCount = mapDocument["sourceFileCount"];
+  if (!Number.isSafeInteger(declaredSourceFileCount) || Number(declaredSourceFileCount) < 0) {
+    throw new Error("Snapshot source hash inventory has an invalid source file count.");
+  }
+
   const files = mapDocument["files"];
   if (!Array.isArray(files)) throw new Error("Snapshot source hash inventory has no file entries.");
 
   const sourceHashes = new Map<string, CodeIndexSha256>();
+  const fingerprintEntries = [] as {
+    readonly path: CodeIndexSourcePath;
+    readonly sha256: CodeIndexSha256;
+    readonly sizeBytes: number;
+    readonly lineCount: number;
+    readonly symbols: readonly string[];
+    readonly headings: readonly string[];
+    readonly summary: string;
+  }[];
   for (const file of files) {
     if (file === null || typeof file !== "object" || Array.isArray(file)) {
       throw new Error("Snapshot source hash inventory contains an invalid file entry.");
@@ -318,6 +341,38 @@ async function expectedSourceHashes(
     const sourceSha256 = codeIndexSha256Schema.parse(record["sha256"]);
     if (sourceHashes.has(sourcePath)) throw new Error(`Snapshot source hash inventory contains a duplicate path: ${sourcePath}.`);
     sourceHashes.set(sourcePath, sourceSha256);
+    fingerprintEntries.push({
+      path: sourcePath,
+      sha256: sourceSha256,
+      sizeBytes: 0,
+      lineCount: 0,
+      symbols: [],
+      headings: [],
+      summary: ""
+    });
+  }
+
+  if (declaredSourceFileCount !== files.length || files.length !== snapshot.coverage.length) {
+    throw new Error("Snapshot source hash inventory file count does not match the validated structural snapshot coverage.");
+  }
+  const coveragePaths = new Set<string>(snapshot.coverage.map((coverage) => coverage.path));
+  for (const sourcePath of sourceHashes.keys()) {
+    if (!coveragePaths.has(sourcePath)) {
+      throw new Error(`Snapshot source hash inventory path ${sourcePath} is absent from snapshot coverage.`);
+    }
+  }
+  for (const coverage of snapshot.coverage) {
+    if (!sourceHashes.has(coverage.path)) {
+      throw new Error(`Snapshot source hash inventory has no hash for coverage path ${coverage.path}.`);
+    }
+  }
+
+  const computedSourceFingerprint = fingerprintSourceFiles(fingerprintEntries);
+  if (declaredSourceFingerprint !== computedSourceFingerprint) {
+    throw new Error("Snapshot source hash inventory fingerprint does not match its validated file entries.");
+  }
+  if (declaredSourceFingerprint !== snapshot.sourceFingerprint) {
+    throw new Error("Snapshot source hash inventory does not match the validated structural snapshot fingerprint.");
   }
 
   const result = new Map<string, CodeIndexSha256>();
@@ -371,7 +426,7 @@ function findTestLinks(
     links.push({
       testPath,
       sourcePath,
-      reason: "heuristic filename/path match; low confidence"
+      reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
     });
   }
   return links;
@@ -630,7 +685,12 @@ export async function collectBrownfieldSignals(input: {
     observations.set(sourcePath, observation);
   }
 
-  const testFiles = sourcePaths.filter(isTestFile);
+  const testFiles = sorted(
+    input.snapshot.coverage
+      .filter((coverage) => isTestFile(coverage.path) && isEligibleSourceForTestNeighbor(coverage))
+      .map((coverage) => coverage.path),
+    compareStrings
+  );
   const sourceFiles = sourcePaths.filter((sourcePath) => !isTestFile(sourcePath));
   const eligibleTestNeighborSources = new Set(
     input.snapshot.coverage

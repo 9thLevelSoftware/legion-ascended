@@ -12,8 +12,7 @@ import {
 import { writeCodeIndexStore } from "@legion/index-store";
 import { buildStructuralCodeIndex } from "../dist/workflow/code-index.js";
 import { collectBrownfieldSignals } from "../dist/workflow/brownfield-signals.js";
-
-const HASH = "a".repeat(64);
+import { fingerprintSourceFiles } from "../dist/workflow/codebase-map.js";
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -53,17 +52,29 @@ async function makeFixture(extraFiles = [], coverageStatusOverrides = {}) {
     await writeFile(absolutePath, text, "utf8");
   }
 
-  const fileInputs = [...files.entries()].map(([relativePath, text]) => ({
-    path: relativePath,
-    sha256: sha256(text),
-    text
+  const mapFiles = [...files.entries()]
+    .map(([relativePath, text]) => ({
+      path: relativePath,
+      sha256: sha256(text),
+      sizeBytes: Buffer.byteLength(text),
+      lineCount: text.split(/\r?\n/u).length,
+      symbols: [],
+      headings: [],
+      summary: "fixture"
+    }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+  const sourceFingerprint = fingerprintSourceFiles(mapFiles);
+  const fileInputs = mapFiles.map((file) => ({
+    path: file.path,
+    sha256: file.sha256,
+    text: files.get(file.path)
   }));
   const draft = await buildStructuralCodeIndex({
     snapshotId: "idx_000000000000000000000001",
     mapRunId: "run_brownfield-signals",
     generatedAt: "2026-08-26T12:00:00.000Z",
     scope: ".",
-    sourceFingerprint: HASH,
+    sourceFingerprint,
     files: fileInputs
   });
 
@@ -93,17 +104,9 @@ async function makeFixture(extraFiles = [], coverageStatusOverrides = {}) {
     kind: "codebase_map",
     generatedAt: "2026-08-26T12:00:00.000Z",
     scope: ".",
-    sourceFingerprint: HASH,
-    sourceFileCount: files.size,
-    files: [...files.entries()].map(([relativePath, text]) => ({
-      path: relativePath,
-      sha256: sha256(text),
-      sizeBytes: Buffer.byteLength(text),
-      lineCount: text.split("\\n").length,
-      symbols: [],
-      headings: [],
-      summary: "fixture"
-    }))
+    sourceFingerprint,
+    sourceFileCount: mapFiles.length,
+    files: mapFiles
   }), "utf8");
 
   return {
@@ -139,7 +142,7 @@ test("collects deterministic architecture, dependency, test, documentation, and 
     assert.deepEqual(first.testToSourceLinks, [{
       testPath: "src/build-&-config.test.ts",
       sourcePath: "src/build-&-config.ts",
-      reason: "heuristic filename/path match; low confidence"
+      reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
     }]);
     assert.ok(first.dependencyEdges.some((edge) =>
       edge.from === "src/build-&-config.ts" && edge.to === "../shared/util.js"
@@ -247,8 +250,16 @@ test("links test files only to parsed, supported, non-generated source candidate
     assert.deepEqual(result.testToSourceLinks.find((link) => link.testPath === "src/feature.test.ts"), {
       testPath: "src/feature.test.ts",
       sourcePath: "src/feature.ts",
-      reason: "heuristic filename/path match; low confidence"
+      reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
     });
+    assert.deepEqual(result.testFiles, [
+      "src/build-&-config.test.ts",
+      "src/feature.test.ts",
+      "src/opaque-target.test.ts",
+      "src/parser-only.test.ts",
+      "src/size-target.test.ts",
+      "tests/ambiguous.test.ts"
+    ]);
     assert.equal(result.testToSourceLinks.some((link) => link.testPath === "tests/ambiguous.test.ts"), false);
     for (const excludedTestPath of [
       "generated/only-target.test.ts",
@@ -331,6 +342,60 @@ test("fails closed when a coverage-only source file changes after the snapshot",
     );
   } finally {
     await fixture.cleanup();
+  }
+});
+
+test("fails closed when a changed coverage-only file is hidden by rewriting its map hash and fingerprint", async () => {
+  const fixture = await makeFixture();
+  try {
+    const mapPath = path.join(path.dirname(fixture.sqlitePath), "map.json");
+    const map = JSON.parse(await readFile(mapPath, "utf8"));
+    const changedText = "# Changed after snapshot and rewritten map\n";
+    await writeFile(path.join(fixture.repositoryRoot, "README.md"), changedText, "utf8");
+    const readme = map.files.find((file) => file.path === "README.md");
+    readme.sha256 = sha256(changedText);
+    map.sourceFingerprint = fingerprintSourceFiles(map.files);
+    await writeFile(mapPath, JSON.stringify(map), "utf8");
+
+    await assert.rejects(
+      () => collectBrownfieldSignals(fixture),
+      /does not match the validated structural snapshot fingerprint/u
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("fails closed for every map inventory binding mismatch", async () => {
+  const mutations = {
+    path: (map) => {
+      map.files[0].path = "renamed-source.ts";
+    },
+    hash: (map) => {
+      map.files[0].sha256 = "b".repeat(64);
+    },
+    count: (map) => {
+      map.sourceFileCount += 1;
+    },
+    scope: (map) => {
+      map.scope = "src";
+    },
+    fingerprint: (map) => {
+      map.sourceFingerprint = "c".repeat(64);
+    }
+  };
+
+  for (const [label, mutate] of Object.entries(mutations)) {
+    const fixture = await makeFixture();
+    try {
+      const mapPath = path.join(path.dirname(fixture.sqlitePath), "map.json");
+      const map = JSON.parse(await readFile(mapPath, "utf8"));
+      mutate(map);
+      await writeFile(mapPath, JSON.stringify(map), "utf8");
+      await assert.rejects(() => collectBrownfieldSignals(fixture), undefined, label);
+    } finally {
+      await fixture.cleanup();
+    }
   }
 });
 
