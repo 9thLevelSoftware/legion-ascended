@@ -39,7 +39,24 @@ Ad-hoc commands prepare real work instead of mutating code directly. `legion qui
 
 ## Install Targets
 
-Installer support is tiered by host parity. The default target prompt and `legion install --list-targets` show only first-class targets: Claude Code, Codex, GitHub Copilot CLI, Antigravity, OpenCode, and Kilo Code Plugin.
+Installer support is tiered by host parity. The default target prompt and `legion install --list-targets` show only eight first-class targets: Claude Code, Codex, GitHub Copilot CLI, Antigravity, OpenCode, Hermes Agent, Grok Build, and Kilo Code Plugin.
+
+Grok Build is first-class Legion support through a managed native skill and a bounded headless JSON executor. The upstream Grok CLI is alpha, so this first-class label describes Legion's integration and install lifecycle, not upstream stability or full parity. Verify the upstream CLI, then preview or apply the managed skill install:
+
+```powershell
+grok --version
+legion install --target grok --local --dry-run
+legion install --target grok --local
+```
+
+For headless build or review execution, select Grok explicitly. Its native surface does not provide parallel subagents, so Legion runs this executor sequentially:
+
+```powershell
+legion build --executor grok
+legion review --executor grok
+```
+
+The managed skill is installed at `$PROJECT/.grok/skills/legion/SKILL.md` for local scope and `$GROK_HOME/skills/legion/SKILL.md` for global scope; when `GROK_HOME` is unset, global scope falls back to `<home>/.grok`. Legion owns only the managed skill and manifest files, while Grok owns authentication.
 
 ```powershell
 legion install --list-targets

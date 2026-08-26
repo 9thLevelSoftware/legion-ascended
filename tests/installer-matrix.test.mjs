@@ -234,6 +234,15 @@ test("installer target list can show compatibility, legacy, and manual-only targ
   assert.match(result.stdout, /grok\s+first-class/);
 });
 
+test("installer help groups Grok with first-class targets and preserves its alpha caveat", async () => {
+  const result = await execFileAsync(process.execPath, [LEGION_BIN, "install", "--help"], EXEC_OPTIONS);
+  const firstClassSection = result.stdout.split("Compatibility, legacy, and manual-only targets:")[0];
+  const lowerTierSection = result.stdout.split("Compatibility, legacy, and manual-only targets:")[1];
+
+  assert.match(firstClassSection, /^\s+--grok\s+Grok Build \(first-class Legion skill; upstream CLI alpha\)$/m);
+  assert.doesNotMatch(lowerTierSection, /^\s+--grok\b/m);
+});
+
 test("installer rejects unknown and missing target values", async () => {
   await assert.rejects(
     execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "not-a-runtime", "--local"], EXEC_OPTIONS),
