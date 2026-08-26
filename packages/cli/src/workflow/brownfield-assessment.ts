@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { lstat, mkdir, open, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import {
   artifactReferenceSchema,
@@ -152,37 +153,72 @@ async function fsyncDirectoryIfSupported(directory: string): Promise<void> {
   }
 }
 
-async function atomicWriteText(repositoryRoot: string, artifactPath: ArtifactPath, text: string): Promise<void> {
-  const resolved = await resolveSafeBundlePath(repositoryRoot, artifactPath);
-  await mkdir(path.dirname(resolved.absolutePath), { recursive: true });
-  await resolveSafeBundlePath(repositoryRoot, artifactPath);
+function errorWithCode(code: string, message: string): Error & { readonly code: string } {
+  const error = new Error(message) as Error & { code: string };
+  error.code = code;
+  return error;
+}
 
-  const existing = await lstatIfPresent(resolved.absolutePath);
-  if (existing !== undefined) {
-    throw new Error(`Refusing to overwrite existing brownfield assessment artifact: ${artifactPath}`);
-  }
-
-  const temporaryPath = path.join(
-    path.dirname(resolved.absolutePath),
-    `.${path.basename(resolved.absolutePath)}.${process.pid}.${randomUUID()}.tmp`
-  );
-  let temporaryHandle;
+async function writeStagedText(stageDirectory: string, fileName: BundleFileName, text: string): Promise<void> {
+  const stagedPath = path.join(stageDirectory, fileName);
+  let stagedHandle: import("node:fs/promises").FileHandle | undefined;
   try {
-    temporaryHandle = await open(
-      temporaryPath,
+    stagedHandle = await open(
+      stagedPath,
       fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | NOFOLLOW_FLAG,
       0o600
     );
-    await temporaryHandle.writeFile(text, "utf8");
-    await temporaryHandle.sync();
-    await temporaryHandle.close();
-    temporaryHandle = undefined;
-    await rename(temporaryPath, resolved.absolutePath);
-    await fsyncDirectoryIfSupported(path.dirname(resolved.absolutePath));
+    await stagedHandle.writeFile(text, "utf8");
+    await stagedHandle.sync();
+    await stagedHandle.close();
+    stagedHandle = undefined;
   } catch (error) {
-    await temporaryHandle?.close().catch(() => undefined);
-    await rm(temporaryPath, { force: true }).catch(() => undefined);
+    await stagedHandle?.close().catch(() => undefined);
+    await rm(stagedPath, { force: true }).catch(() => undefined);
     throw error;
+  }
+}
+
+async function acquirePublishLock(parentDirectory: string, finalPath: string): Promise<string> {
+  // Node does not expose a portable rename-no-replace primitive. An exclusive
+  // sibling directory serializes the final rename so every cooperating creator
+  // observes the destination before publishing and never overwrites it.
+  const lockPath = path.join(parentDirectory, `.${path.basename(finalPath)}.publish-lock`);
+  for (let attempt = 0; attempt < 30_000; attempt += 1) {
+    try {
+      await mkdir(lockPath, { mode: 0o700 });
+      return lockPath;
+    } catch (error) {
+      if (!isNodeErrorCode(error, "EEXIST")) throw error;
+      const lockStat = await lstatIfPresent(lockPath);
+      if (lockStat !== undefined && (lockStat.isSymbolicLink() || !lockStat.isDirectory())) {
+        throw new Error(`Brownfield assessment publication lock is unsafe: ${lockPath}`);
+      }
+      const finalStat = await lstatIfPresent(finalPath);
+      if (finalStat !== undefined) {
+        throw errorWithCode("EEXIST", `Brownfield assessment bundle already exists: ${finalPath}`);
+      }
+      await delay(1);
+    }
+  }
+  throw new Error(`Timed out waiting to publish the brownfield assessment bundle: ${finalPath}`);
+}
+
+async function publishStagedBundle(repositoryRoot: string, paths: BrownfieldAssessmentPaths, stagedPath: string): Promise<void> {
+  const parentArtifactPath = artifactPathSchema.parse(ASSESSMENT_ROOT);
+  const parent = await resolveSafeBundlePath(repositoryRoot, parentArtifactPath);
+  const final = await resolveSafeBundlePath(repositoryRoot, paths.root);
+  const lockPath = await acquirePublishLock(parent.absolutePath, final.absolutePath);
+  try {
+    const existing = await lstatIfPresent(final.absolutePath);
+    if (existing !== undefined) {
+      throw errorWithCode("EEXIST", `Brownfield assessment bundle already exists: ${paths.root}`);
+    }
+    await rename(stagedPath, final.absolutePath);
+    await fsyncDirectoryIfSupported(parent.absolutePath);
+  } finally {
+    await rm(lockPath, { recursive: true, force: true }).catch(() => undefined);
+    await fsyncDirectoryIfSupported(parent.absolutePath);
   }
 }
 
@@ -399,6 +435,17 @@ async function readAssessmentState(input: {
   if (state.assessmentId !== input.assessmentId) {
     throw new Error(`Brownfield assessment state ID does not match its directory: ${input.assessmentId}`);
   }
+  const recomputedAssessmentId = assessmentIdFor({
+    generatedAt: state.generatedAt,
+    scope: state.scope,
+    snapshotId: state.snapshotId,
+    sourceFingerprint: state.sourceFingerprint,
+    semanticIndexSha256: state.semanticIndexSha256,
+    semanticSqliteSha256: state.semanticSqliteSha256
+  }, state.effort);
+  if (recomputedAssessmentId !== input.assessmentId) {
+    throw new Error(`Brownfield assessment identity does not match its directory or persisted state: ${input.assessmentId}`);
+  }
   if (state.repositoryRoot !== SAFE_REPOSITORY_ROOT) {
     throw new Error(`Brownfield assessment repositoryRoot must be the safe repository-relative value '${SAFE_REPOSITORY_ROOT}'.`);
   }
@@ -419,9 +466,10 @@ async function writeInitialBundle(input: {
   readonly paths: BrownfieldAssessmentPaths;
   readonly state: BrownfieldAssessment;
 }): Promise<void> {
-  const root = await resolveSafeBundlePath(input.repositoryRoot, input.paths.root);
-  await mkdir(root.absolutePath, { recursive: true });
-  await resolveSafeBundlePath(input.repositoryRoot, input.paths.root);
+  const parentArtifactPath = artifactPathSchema.parse(ASSESSMENT_ROOT);
+  const parent = await resolveSafeBundlePath(input.repositoryRoot, parentArtifactPath);
+  await mkdir(parent.absolutePath, { recursive: true });
+  await resolveSafeBundlePath(input.repositoryRoot, parentArtifactPath);
 
   const placeholder = stableProtocolJson([]);
   const contentByFile: Readonly<Record<BundleFileName, string>> = {
@@ -432,9 +480,24 @@ async function writeInitialBundle(input: {
     "synthesis.json": placeholder,
     "review.json": placeholder
   };
-  for (const fileName of BUNDLE_FILE_NAMES) {
-    const field = fileName.slice(0, -5) as "state" | "signals" | "assumptions" | "findings" | "synthesis" | "review";
-    await atomicWriteText(input.repositoryRoot, input.paths[field], contentByFile[fileName]);
+  const stagedPath = path.join(
+    parent.absolutePath,
+    `.${path.basename(input.paths.root)}.${process.pid}.${randomUUID()}.staging`
+  );
+  let staged = false;
+  try {
+    await mkdir(stagedPath, { mode: 0o700 });
+    staged = true;
+    for (const fileName of BUNDLE_FILE_NAMES) {
+      await writeStagedText(stagedPath, fileName, contentByFile[fileName]);
+    }
+    await fsyncDirectoryIfSupported(stagedPath);
+    await publishStagedBundle(input.repositoryRoot, input.paths, stagedPath);
+    staged = false;
+  } finally {
+    if (staged) {
+      await rm(stagedPath, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 }
 

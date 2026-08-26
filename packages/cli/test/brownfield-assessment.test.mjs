@@ -243,6 +243,54 @@ test("creates deterministic idempotent bundles with atomic files", async () => {
   }
 });
 
+test("concurrent creators publish one complete bundle without overwriting state", async () => {
+  const fixture = await writeMapFixture();
+  try {
+    const results = await Promise.all(Array.from({ length: 8 }, () => createBrownfieldAssessment({
+      repositoryRoot: fixture.repositoryRoot,
+      effort: 1,
+      scope: ".",
+      snapshot: fixture.record
+    })));
+    const ids = new Set(results.map((result) => result.assessmentId));
+    assert.deepEqual([...ids], [results[0].assessmentId]);
+
+    const root = path.join(fixture.repositoryRoot, ...results[0].paths.root.split("/"));
+    const entries = await readdir(root);
+    assert.deepEqual(entries.sort(), ["assumptions.json", "findings.json", "review.json", "signals.json", "state.json", "synthesis.json"]);
+    assert.deepEqual(await readdir(path.dirname(root)), [path.basename(root)]);
+    const stateText = await readFile(path.join(root, "state.json"), "utf8");
+    assert.equal(stateText, stableProtocolJson(JSON.parse(stateText)));
+    const loaded = await readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: results[0].assessmentId });
+    assert.equal(loaded.state.effort, 1);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("fails closed when persisted effort no longer matches the assessment identity", async () => {
+  const fixture = await writeMapFixture();
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    await readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId });
+
+    const statePath = path.join(fixture.repositoryRoot, ...created.paths.state.split("/"));
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    state.effort = 5;
+    await writeFile(statePath, stableProtocolJson(state), "utf8");
+    await expectDiagnostic(
+      () => readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId }),
+      /identity|assessment ID|effort/iu
+    );
+    await expectDiagnostic(
+      () => createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record }),
+      /identity|assessment ID|effort/iu
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("rejects partial bundles and strict/tampered state on read", async () => {
   const fixture = await writeMapFixture();
   try {
@@ -269,7 +317,7 @@ test("rejects partial bundles and strict/tampered state on read", async () => {
     await writeFile(statePath, stableProtocolJson(state), "utf8");
     await expectDiagnostic(
       () => readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId }),
-      /provenance|fingerprint|snapshot|legion map --refresh --profile structural/iu
+      /identity|provenance|fingerprint|snapshot|legion map --refresh --profile structural/iu
     );
   } finally {
     await fixture.cleanup();
