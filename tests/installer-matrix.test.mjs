@@ -27,6 +27,7 @@ const START_GUIDANCE_SURFACES = {
   antigravity: [".agents/plugins/legion/commands/legion.md", ".agents/plugins/legion/commands/start.md"],
   opencode: [".opencode/commands/legion.md", ".opencode/commands/legion-start.md", ".opencode/agent/legion.md"],
   hermes: [".hermes/skills/workflow/legion/SKILL.md"],
+  grok: [".grok/skills/legion/SKILL.md"],
   kilocode: [
     ".kilocode/workflows/legion.md", ".kilocode/workflows/legion-start.md", ".kilocode/skills/legion/SKILL.md",
     ".kilo/commands/legion.md", ".kilo/commands/legion-start.md", ".kilo/skills/legion/SKILL.md", ".kilocodemodes"
@@ -51,6 +52,7 @@ const FIRST_CLASS_ARTIFACTS = {
   antigravity: [".agents/plugins/legion/plugin.json", ".agents/plugins/legion/commands/legion.md"],
   opencode: [".opencode/commands/legion.md", ".opencode/agent/legion.md"],
   hermes: [".hermes/skills/workflow/legion/SKILL.md"],
+  grok: [".grok/skills/legion/SKILL.md"],
   kilocode: [".kilocode/workflows/legion.md", ".kilocode/skills/legion/SKILL.md", ".kilocodemodes"]
 };
 
@@ -164,7 +166,7 @@ process.stdout.write("grok 1.2.3 (fake)\\n");
 
 test("runtime registry uses explicit product support tiers", () => {
   assert.deepEqual(SUPPORT_TIERS, ["first-class", "compatible", "legacy", "manual-only", "unsupported"]);
-  assert.deepEqual(recommendedRuntimeKeys(), ["claude", "codex", "copilot", "antigravity", "opencode", "hermes", "kilocode"]);
+  assert.deepEqual(recommendedRuntimeKeys(), ["claude", "codex", "copilot", "antigravity", "opencode", "hermes", "grok", "kilocode"]);
 
   for (const runtimeKey of Object.keys(RUNTIME_METADATA)) {
     const runtime = RUNTIME_METADATA[runtimeKey];
@@ -176,8 +178,9 @@ test("runtime registry uses explicit product support tiers", () => {
     assert.ok(runtime.installLifecycle, `${runtimeKey}: installLifecycle is required`);
   }
 
-  assert.equal(RUNTIME_METADATA.grok.supportTier, "compatible");
+  assert.equal(RUNTIME_METADATA.grok.supportTier, "first-class");
   assert.equal(RUNTIME_METADATA.grok.disposition, "headless-cli-with-native-skill");
+  assert.equal(RUNTIME_METADATA.grok.smokeTestStatus, "covered");
   assert.deepEqual(RUNTIME_METADATA.grok.canonicalEntrypoint, { local: "/legion", global: "/legion" });
   assert.deepEqual(RUNTIME_METADATA.grok.scopeSupport, { local: true, global: true });
   assert.deepEqual(RUNTIME_METADATA.grok.nativeSurfaces, [{
@@ -215,6 +218,7 @@ test("installer target list hides non-first-class targets by default", async () 
 
   assert.match(result.stdout, /claude\s+first-class/);
   assert.match(result.stdout, /codex\s+first-class/);
+  assert.match(result.stdout, /grok\s+first-class/);
   assert.match(result.stdout, /kilocode\s+first-class/);
   assert.doesNotMatch(result.stdout, /cursor\s+compatible/);
   assert.doesNotMatch(result.stdout, /gemini\s+legacy/);
@@ -227,7 +231,7 @@ test("installer target list can show compatibility, legacy, and manual-only targ
   assert.match(result.stdout, /kiro\s+compatible/);
   assert.match(result.stdout, /gemini\s+legacy/);
   assert.match(result.stdout, /aider\s+manual-only/);
-  assert.match(result.stdout, /grok\s+compatible/);
+  assert.match(result.stdout, /grok\s+first-class/);
 });
 
 test("installer rejects unknown and missing target values", async () => {
@@ -387,7 +391,7 @@ test("Grok Build dry-run and native skill lifecycle are safe and managed", async
     const manifest = JSON.parse(readFileSync(manifestPathFor(project, "grok"), "utf8"));
     const resolvedSkillPath = await realpath(skillPath);
     assert.equal(manifest.runtime, "grok");
-    assert.equal(manifest.supportTier, "compatible");
+    assert.equal(manifest.supportTier, "first-class");
     assert.equal(manifest.paths.native["grok-skill"], resolvedSkillPath.replaceAll("\\", "/"));
     assert.ok(manifest.nativeArtifacts.some((artifact) => artifact.path === resolvedSkillPath.replaceAll("\\", "/") && artifact.backupCreated === true));
 

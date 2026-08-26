@@ -616,16 +616,15 @@ const RUNTIME_METADATA = {
     aliases: ['--grok-build'],
     label: 'Grok Build',
     adapterFile: 'grok-build.md',
-    supportTier: 'compatible',
+    supportTier: 'first-class',
     disposition: 'headless-cli-with-native-skill',
     installSurface: 'native Legion skill for Grok Build project and user scopes',
     canonicalEntrypoint: { local: '/legion', global: '/legion' },
     parityGaps: [
-      'Headless executor and packed-install smoke gates remain pending; Grok Build is compatible until those gates pass.',
       'The verified local Grok Build CLI is alpha (1.0.10); parity claims are limited to the documented skill and inspection surface.'
     ],
     lastVerified: GROK_VERIFIED_ON,
-    smokeTestStatus: 'metadata-only',
+    smokeTestStatus: 'covered',
     installLifecycle: MANAGED_INSTALL_LIFECYCLE,
     scopeSupport: { local: true, global: true },
     storageLayout: 'grok',

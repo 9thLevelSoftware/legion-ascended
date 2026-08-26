@@ -25,10 +25,11 @@ known_quirks:
 
 Grok Build is an xAI CLI with a native Agent Skills surface and a bounded headless
 JSON mode. Legion installs one generated skill named `legion`, which Grok exposes
-as `/legion` when the project or user skill is discovered. The verified local CLI
-was `grok 1.0.10 (5992780042ca) [alpha]`; this adapter therefore remains
-experimental in the adapter catalog and compatible in Legion's installer matrix
-until the executor and packed-install gates pass.
+as `/legion` when the project or user skill is discovered. The Legion installer and
+executor are first-class in 9.3.0, with install, detection, executor, and
+packed-install smoke coverage. The verified local Grok CLI was `grok 1.0.10
+(5992780042ca) [alpha]`; the upstream alpha status remains an explicit caveat and
+this adapter therefore remains `experimental` in the adapter catalog.
 
 The native skill surface is deliberately limited to:
 
@@ -43,12 +44,12 @@ this installer.
 
 | Generic Concept | Implementation |
 |---|---|
-| `spawn_agent_personality` | Not available in the native Grok Build skill surface. Run the requested `legion <command> --json` workflow in the current Grok session, or use the future headless executor explicitly. |
-| `spawn_agent_autonomous` | Not available as a native subagent primitive. A future executor may invoke one bounded `grok` process with an argv array and a temporary `--prompt-file`. |
+| `spawn_agent_personality` | Not available in the native Grok Build skill surface. Run the requested `legion <command> --json` workflow in the current Grok session, or use the headless executor explicitly. |
+| `spawn_agent_autonomous` | Not available as a native subagent primitive. Legion's Grok executor invokes one bounded `grok` process with an argv array and a temporary `--prompt-file`. |
 | `spawn_agent_readonly` | No separate native read-only agent is advertised by this adapter. Do not claim read-only isolation; use Legion's own review gates. |
 | `coordinate_parallel` | Not available. Execute plans sequentially and preserve each plan's artifacts under `.legion/`. |
-| `collect_results` | Read the JSON returned by `legion <command> --json` or the future completed headless envelope; treat malformed, partial, or error envelopes as diagnostics rather than success. |
-| `shutdown_agents` | No-op for the current native skill surface. A future headless process must be bounded by the executor timeout and terminated by the process runner. |
+| `collect_results` | Read the JSON returned by `legion <command> --json` or the completed headless envelope; treat malformed, partial, or error envelopes as diagnostics rather than success. |
+| `shutdown_agents` | No-op for the current native skill surface. A headless process is bounded by the executor timeout and terminated by the process runner. |
 | `cleanup_coordination` | No Grok coordination infrastructure is created. Remove only Legion-managed artifacts through the installer manifest. |
 | `ask_user` | Present numbered choices in the Grok session and wait for explicit user input. Never infer approval, acceptance, or an attestation. |
 | `model_planning` | User-configured Grok Build model; no model override is assumed by the Legion skill. |
@@ -91,7 +92,7 @@ For each plan:
 6. If Grok returns an authentication, timeout, malformed-output, or incomplete-result
    diagnostic, stop the wave and report the diagnostic rather than claiming success.
 
-The future headless execution adapter uses this documented argv shape, without a
+The headless execution adapter uses this documented argv shape, without a
 shell string and without probing credentials:
 
 ```text
@@ -116,7 +117,7 @@ Install and discovery are credential-free. Use `grok --version` for bounded
 availability detection and `grok inspect --json` for read-only skill discovery.
 Grok owns browser authentication and any API-key configuration. Legion must never
 run `grok login`, inspect credential files, read `XAI_API_KEY`, or send an API key
-through an installer, skill, or future executor.
+through an installer, skill, or executor.
 
 ## Dispatch Configuration
 

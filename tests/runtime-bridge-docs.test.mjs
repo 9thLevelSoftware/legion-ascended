@@ -27,13 +27,12 @@ test("runtime bridge docs stay aligned with the runtime metadata matrix", async 
 
   assert.deepEqual(
     recommendedRuntimeKeys(),
-    ["claude", "codex", "copilot", "antigravity", "opencode", "hermes", "kilocode"],
+    ["claude", "codex", "copilot", "antigravity", "opencode", "hermes", "grok", "kilocode"],
     "recommended runtime metadata should expose only first-class targets"
   );
 
-  // Grok Build is intentionally compatible/manual-visible in Task 2. Its
-  // adapter catalog entry is shipped now; later executor work owns promotion
-  // into the broader runtime documentation surfaces.
+  // Grok Build keeps an explicit alpha caveat in its adapter catalog, while
+  // the Legion installer and executor are first-class in this release.
   for (const runtimeKey of RUNTIME_ORDER.filter((key) => key !== "grok")) {
     const runtime = RUNTIME_METADATA[runtimeKey];
     assert.ok(readme.includes(runtime.label), `${runtimeKey}: README should mention ${runtime.label}`);

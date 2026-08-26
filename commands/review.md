@@ -1,9 +1,11 @@
 ---
 name: legion:review
 description: Run quality review cycle with testing/QA agents
-argument-hint: "[--phase N] [--dry-run]"
+argument-hint: "[--phase N] [--executor claude|codex|hermes|grok|manual|fake] [--dry-run]"
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, Agent, TeamCreate, TeamDelete, TaskCreate, TaskUpdate, TaskList, SendMessage, AskUserQuestion]
 ---
+
+The CLI executor selector is `--executor claude|codex|hermes|grok|manual|fake`; use `grok` for the bounded headless Grok Build adapter. Grok has no native parallel-subagent primitive, so that path reviews sequentially.
 
 <objective>
 Select appropriate review agents for the current phase, run a personality-injected dev-QA review loop using `settings.review.max_cycles` (default 3), route fixes to the right agents, and mark the phase complete only after review passes. Escalate to the user if the configured cycle limit fails to resolve all blockers.

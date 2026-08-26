@@ -62,6 +62,11 @@ legion install --list-targets --all-targets
 legion install --target codex --explain
 legion install --target codex --local --dry-run
 legion install --target codex --local
+
+# Grok Build: verify the host CLI, preview, then install its native Legion skill
+grok --version
+legion install --target grok --local --dry-run
+legion install --target grok --local
 ```
 
 Note that `--global` here means "install the adapter files into your home directory instead of the
@@ -88,6 +93,7 @@ Recommended first-class targets:
 | `antigravity` | Antigravity CLI | `/legion` |
 | `opencode` | OpenCode | `/legion` |
 | `hermes` | Hermes Agent | `/legion` |
+| `grok` | Grok Build | `/legion` |
 | `kilocode` | Kilo Code Plugin | Legion mode or `/legion` |
 
 Compatibility, legacy, and manual-only targets are documented too, but they are not the default happy
@@ -108,7 +114,8 @@ packaging first. Claude Desktop is not Claude Code; the `claude` target above is
 ## Semantic Map v2
 
 The `map` command gives the workflow a deterministic, inspectable view of a repository before a human
-plans or reviews a change. Release `9.2.1` ships Semantic Map v2 in the npm package, including the
+plans or reviews a change. Release `9.3.0` ships Semantic Map v2 and the first-class Grok Build
+install target and executor in the npm package, including the
 published Tree-sitter WASM grammars used by the structural profile. It requires Node.js `>=24 <26`.
 
 Install or update the global CLI with the current package:
@@ -350,11 +357,33 @@ Typed internals live under `legion dev` (`project`, `change`, `board`, `migrate`
 
 ## Executors
 
+`--executor` selects the driver that does the work. With the flag omitted, the first installed one wins:
+`claude`, then `codex`, `hermes`, `grok`, then `manual`.
+
 | Executor | Use |
 | --- | --- |
+| `claude` | Live execution and review through Claude Code's headless JSON surface |
 | `codex` | Live execution and review through `codex exec` with workspace-write sandboxing |
+| `hermes` | Live execution and review through `hermes chat -q` |
+| `grok` | Grok Build headless JSON through `grok --prompt-file <promptAbsolutePath> --cwd <repositoryRoot> --output-format json --permission-mode bypassPermissions` |
 | `manual` | Prompt, context, and evidence preparation without running an agent |
 | `fake` | Deterministic tests and dogfood runs |
+
+Grok Build authentication remains owned by Grok: Legion only performs the bounded `grok --version`
+detection probe and never stores, reads, or transmits browser login state or `XAI_API_KEY`. The verified
+Grok CLI is an upstream alpha, so this release keeps that caveat explicit even though the Legion install
+and executor are first-class. Grok has no native parallel-subagent primitive; the execution mode is
+sequential, so `legion build --executor grok` and `legion review --executor grok` run one bounded
+process at a time.
+
+Install and invoke it explicitly:
+
+```powershell
+grok --version
+legion install --target grok --local
+legion build --executor grok
+legion review --executor grok
+```
 
 Every writable dispatch goes through one guarded path. Control artifacts under `.legion/project` are
 snapshotted before the run and restored afterwards; a run that modifies them is blocked and told

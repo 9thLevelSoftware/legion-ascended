@@ -159,7 +159,7 @@ Compatibility, legacy, and manual-only targets:
   --windsurf    Windsurf
   --kilo        Kilo CLI
   --aider        Aider (manual-only guidance; native install disabled)
-  --grok         Grok Build (compatible native skill; use --all-targets)
+  --grok         Grok Build (first-class native skill)
 
   You can also use --target <runtime>, for example --target codex.
   If no runtime flag is given, you'll be prompted to select a first-class target.

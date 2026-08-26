@@ -2,6 +2,35 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.3.0] - GA-pending
+
+### Added
+- Grok Build is now a first-class Legion install target and executor. The managed
+  installer writes the native `/legion` Agent Skill to
+  `$PROJECT/.grok/skills/legion/SKILL.md` for local installs or
+  `$GROK_HOME/skills/legion/SKILL.md` for global installs, with `<home>/.grok`
+  as the global fallback when `GROK_HOME` is unset.
+- `legion build --executor grok` and `legion review --executor grok` use Grok's
+  bounded, argv-only headless JSON contract:
+  `grok --prompt-file <promptAbsolutePath> --cwd <repositoryRoot>
+  --output-format json --permission-mode bypassPermissions`. Completed JSON
+  envelopes are normalized into Legion execution evidence; malformed, partial,
+  error, non-zero, and timeout responses fail closed.
+- Release smoke coverage proves Grok detection, native local/global install
+  lifecycle, executor result normalization, command help, package contents, and
+  production-dependency packed-install execution with a credential-free fake
+  Grok executable.
+
+### Changed
+- Grok Build is included in the recommended target list and automatic executor
+  order after Hermes and before manual execution. Grok owns browser/API-key
+  authentication; Legion only performs a bounded `grok --version` probe and
+  never reads or transmits `XAI_API_KEY`.
+- Grok execution remains sequential because the upstream CLI exposes no native
+  parallel-subagent primitive. The verified Grok Build CLI is still an upstream
+  alpha, so the adapter retains an explicit alpha compatibility caveat despite
+  the first-class Legion install/executor support.
+
 ## [9.2.1] - GA-pending
 
 ### Added
