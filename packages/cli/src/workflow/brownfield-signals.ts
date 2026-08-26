@@ -583,7 +583,8 @@ function collectArchitectureSignals(input: {
       "fan-out-hotspot",
       "moderate",
       `File ${sourcePath} contains ${facts.length} persisted import facts; this is a structural fan-out hotspot, not a resolved dependency claim.`,
-      [sourceEvidence(observation, "Source file for persisted import fan-out."), ...facts.slice(0, 8).map((fact) => importFactEvidence(sqliteArtifactPath, sqliteSha256, fact))]
+      [sourceEvidence(observation, "Source file for persisted import fan-out."), ...facts.slice(0, 8).map((fact) => importFactEvidence(sqliteArtifactPath, sqliteSha256, fact))],
+      facts.length > 8
     );
   }
 
@@ -604,7 +605,8 @@ function collectArchitectureSignals(input: {
       "fan-in-hotspot",
       "moderate",
       `Import specifier ${safeImportSpecifier(specifier)} appears in ${facts.length} persisted import facts; the collector does not resolve it to a module.`,
-      [...observationsForFacts, ...facts.slice(0, 8).map((fact) => importFactEvidence(sqliteArtifactPath, sqliteSha256, fact))]
+      [...observationsForFacts, ...facts.slice(0, 8).map((fact) => importFactEvidence(sqliteArtifactPath, sqliteSha256, fact))],
+      facts.length > 8
     );
   }
 

@@ -195,6 +195,38 @@ test("collects deterministic architecture, dependency, test, documentation, and 
   }
 });
 
+test("discloses bounded fan-out and fan-in hotspot evidence samples", async () => {
+  const fanOutImports = Array.from({ length: 9 }, () => "import { shared } from \"./shared.ts\";").join("\n");
+  const fanInFiles = Array.from({ length: 9 }, (_, index) => [
+    `src/fan-in-${String(index).padStart(2, "0")}.ts`,
+    "import { shared } from \"./shared.ts\";\nexport const value = shared;\n"
+  ]);
+  const fixture = await makeFixture([
+    ["src/fan-out.ts", `${fanOutImports}\nexport const value = shared;\n`],
+    ...fanInFiles
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const fanOut = result.architectureSignals.find((signal) =>
+      signal.code === "fan-out-hotspot" && signal.statement.includes("src/fan-out.ts")
+    );
+    assert.ok(fanOut);
+    assert.match(fanOut.statement, /bounded sample/iu);
+    assert.ok(fanOut.evidence.length <= 64);
+    assert.ok(fanOut.evidence.every((evidence) => /bounded sample/iu.test(evidence.note)));
+
+    const fanIn = result.architectureSignals.find((signal) =>
+      signal.code === "fan-in-hotspot" && signal.statement.includes("./shared.ts")
+    );
+    assert.ok(fanIn);
+    assert.match(fanIn.statement, /bounded sample/iu);
+    assert.ok(fanIn.evidence.length <= 64);
+    assert.ok(fanIn.evidence.every((evidence) => /bounded sample/iu.test(evidence.note)));
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("does not mark exports orphan when an import resolves to the exported module", async () => {
   const fixture = await makeFixture([
     ["src/api.ts", "export function run() {}\nexport default function fallback() {}\n"],
