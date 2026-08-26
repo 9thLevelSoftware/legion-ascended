@@ -41,6 +41,7 @@ const SCHEMA_FILE_NAMES = {
   reviewDecision: "review",
   fixtureCorpus: "fixture-corpus",
   compatibilityFixture: "compatibility-fixture",
+  brownfieldAssessment: "brownfield-assessment",
   commandEnvelope: "command-envelope",
   commandResult: "command-result",
   queryRequest: "query-request",

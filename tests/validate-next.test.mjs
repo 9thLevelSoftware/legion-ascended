@@ -119,6 +119,13 @@ test("P01-T11 protocol compatibility workflow uses pinned actions and generated 
 test("P01-T11 generated protocol docs match the current schema and transition sources", async () => {
   await runCommand("pnpm run typecheck");
   const expectedDocs = await renderProtocolDocs({ root: ROOT });
+  const schemaCatalog = expectedDocs["docs/next/protocol/schemas.md"];
+
+  assert.match(
+    schemaCatalog,
+    /\| entities \| `brownfieldAssessment` \| Legion protocol brownfield assessment entity schema \| `https:\/\/schemas\.9thlevelsoftware\.com\/legion\/entities\/brownfield-assessment\.schema\.json` \| `schemas\/entities\/brownfield-assessment\.schema\.json` \|/
+  );
+  assert.doesNotMatch(schemaCatalog, /schemas\/entities\/brownfieldAssessment\.schema\.json/);
 
   for (const [relativePath, expectedContents] of Object.entries(expectedDocs)) {
     const actualContents = await readFile(path.join(ROOT, relativePath), "utf8");
