@@ -152,7 +152,13 @@ test("published package installs production dependencies and executes a fake Gro
       assert.equal(existsSync(path.join(packageRoot, asset)), true, `packed package is missing ${asset}`);
     }
 
-    const npmEnv = { ...process.env, npm_config_audit: "false", npm_config_fund: "false" };
+    const npmEnv = {
+      ...process.env,
+      // Node 26 emits an expected SQLite ExperimentalWarning; keep it out of CLI stderr assertions across Node versions.
+      NODE_NO_WARNINGS: "1",
+      npm_config_audit: "false",
+      npm_config_fund: "false"
+    };
     await execFileAsync("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", "--prefer-offline"], {
       cwd: packageRoot,
       env: npmEnv,

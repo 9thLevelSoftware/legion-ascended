@@ -532,12 +532,15 @@ async function withGrokShim(options, run) {
   const previousTimeout = process.env.LEGION_GROK_EXEC_TIMEOUT_MS;
   const previousAgent = process.env.GROK_AGENT;
   const previousSession = process.env.GROK_SESSION_ID;
+  const previousNoWarnings = process.env.NODE_NO_WARNINGS;
   try {
     const binDir = await installGrokShim(root, options);
     process.env.PATH = process.platform === "win32"
       ? `${binDir}${path.delimiter}${previousPath ?? ""}`
       : binDir;
     if (options.timeoutMs !== undefined) process.env.LEGION_GROK_EXEC_TIMEOUT_MS = String(options.timeoutMs);
+    // Node 26 emits an expected SQLite ExperimentalWarning; isolate it for portable child stderr assertions.
+    process.env.NODE_NO_WARNINGS = "1";
     delete process.env.GROK_AGENT;
     delete process.env.GROK_SESSION_ID;
     return await run(root, binDir);
@@ -550,6 +553,8 @@ async function withGrokShim(options, run) {
     else process.env.GROK_AGENT = previousAgent;
     if (previousSession === undefined) delete process.env.GROK_SESSION_ID;
     else process.env.GROK_SESSION_ID = previousSession;
+    if (previousNoWarnings === undefined) delete process.env.NODE_NO_WARNINGS;
+    else process.env.NODE_NO_WARNINGS = previousNoWarnings;
     await rm(root, { recursive: true, force: true });
   }
 }
@@ -599,7 +604,9 @@ async function withGrokFixture(root, options, run) {
     HOME: home,
     USERPROFILE: home,
     PATH: pathValue,
-    NO_COLOR: "1"
+    NO_COLOR: "1",
+    // Node 26 emits an expected SQLite ExperimentalWarning; keep it out of local Grok CLI stderr assertions.
+    NODE_NO_WARNINGS: "1"
   };
   delete env.XAI_API_KEY;
   return run({ env, home, recordPath, fake });
