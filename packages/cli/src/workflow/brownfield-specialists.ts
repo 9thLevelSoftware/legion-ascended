@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, lstat, mkdtemp, readdir, readFile, readlink, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -33,6 +33,7 @@ import { resolveProjectArtifactPath, stableProtocolJson } from "@legion/artifact
 import type { BrownfieldSignals } from "./brownfield-signals.js";
 import {
   adapterForKind,
+  redactAdapterTranscript,
   selectExecutionAdapterKind,
   writeProjectTextFile,
   type ExecutionAdapterKind,
@@ -64,9 +65,9 @@ const MAX_SPECIALIST_FINDINGS = 2_000;
 const MAX_SPECIALIST_ASSUMPTIONS = 256;
 const DEFAULT_SPECIALIST_TIMEOUT_MS = 600_000;
 const EXECUTION_ARTIFACT_ROOT = ".legion/project/workflow/brownfield-specialists";
-const SOURCE_EVIDENCE_COMPATIBLE_ARTIFACT_PATH = `${EXECUTION_ARTIFACT_ROOT}/source-evidence.json`;
 const BOUNDED_EVIDENCE_NOTE = " [BOUNDED_EVIDENCE]";
 const BOUNDED_PROMPT_NOTE = "\n[BOUNDED_PROMPT_TRUNCATED]";
+const BOUNDED_PACK_NOTE = "[BOUNDED_PACK_TRUNCATED]";
 
 let cleanupAdapterArtifacts: (root: string) => Promise<void> = (root) => rm(root, { recursive: true, force: true });
 
@@ -127,6 +128,19 @@ export interface BrownfieldExcerpt {
   readonly text: string;
 }
 
+export interface BrownfieldPackTruncation {
+  readonly bounded: boolean;
+  readonly excerptsTotal: number;
+  readonly excerptsIncluded: number;
+  readonly excerptsOmitted: number;
+  readonly excerptsTruncated: boolean;
+  readonly evidenceTotal: number;
+  readonly evidenceIncluded: number;
+  readonly evidenceOmitted: number;
+  readonly evidenceTruncated: boolean;
+  readonly promptTruncated: boolean;
+}
+
 export interface BrownfieldExcerptPack {
   readonly specialist: BrownfieldSpecialistSpec;
   readonly snapshotId: CodeIndexSnapshot["snapshotId"];
@@ -136,6 +150,7 @@ export interface BrownfieldExcerptPack {
   readonly summary: AssessmentSignalSummary;
   readonly excerpts: readonly BrownfieldExcerpt[];
   readonly evidence: readonly AssessmentEvidenceRef[];
+  readonly truncation: BrownfieldPackTruncation;
   readonly prompt: string;
   readonly promptHash: CodeIndexSha256;
   /** UTF-16 character count, matching the pre-spawn contract. */
@@ -182,6 +197,7 @@ export interface BrownfieldSpecialistExecutionRecord {
   readonly summary: AssessmentSignalSummary;
   readonly evidence: readonly AssessmentEvidenceRef[];
   readonly excerptPaths: readonly BrownfieldSpecialistEvidenceLocation[];
+  readonly truncation: BrownfieldPackTruncation;
   readonly promptHash: CodeIndexSha256;
   readonly promptSize: number;
   readonly promptBytes: number;
@@ -212,7 +228,6 @@ interface EvidenceSupport {
   readonly source: ReadonlySet<string>;
   readonly structural: ReadonlySet<string>;
   readonly command: ReadonlySet<string>;
-  readonly userInput: ReadonlySet<string>;
 }
 
 interface ParsedSpecialistOutput {
@@ -244,47 +259,8 @@ function boundedText(value: string, limit: number): string {
   return `${sanitized.slice(0, Math.max(1, limit - marker.length))}${marker}`;
 }
 
-function decodeRepeatedly(value: string): string {
-  if (value.length > MAX_REDACTION_DECODE_LENGTH) return value;
-  let decoded = value;
-  for (let attempt = 0; attempt < MAX_REDACTION_DECODE_PASSES; attempt += 1) {
-    try {
-      const next = decodeURIComponent(decoded);
-      if (next === decoded || next.length > MAX_REDACTION_DECODE_LENGTH) break;
-      decoded = next;
-    } catch {
-      break;
-    }
-  }
-  return decoded;
-}
-
-function redactDirectText(value: string): string {
-  return value
-    .replace(CONTROL_RE, "�")
-    .replace(URL_RE, "[REDACTED_URL]")
-    .replace(JSON_CREDENTIAL_RE, "[REDACTED_JSON_SECRET]")
-    .replace(BEARER_RE, "Bearer [REDACTED_TOKEN]")
-    .replace(SECRET_ASSIGNMENT_RE, "[REDACTED_SECRET]")
-    .replace(TOKEN_RE, "[REDACTED_TOKEN]");
-}
-
-/**
- * Apply redaction to direct and bounded percent-encoded forms. Encoded spans
- * are replaced in their original representation so safe source paths do not
- * get normalized while a decoded credential key or URL cannot survive.
- */
-export function redactBrownfieldSpecialistText(value: string): string {
-  const direct = redactDirectText(value);
-  return direct.replace(ENCODED_SEGMENT_RE, (match) => {
-    if (!match.includes("%")) return match;
-    if (match.length > MAX_REDACTION_DECODE_LENGTH) return "[REDACTED_ENCODED_SECRET]";
-    const decoded = decodeRepeatedly(match);
-    return decoded !== match && redactDirectText(decoded) !== decoded
-      ? "[REDACTED_ENCODED_SECRET]"
-      : match;
-  });
-}
+/** Redaction is shared with every generic executor adapter. */
+export const redactBrownfieldSpecialistText = redactAdapterTranscript;
 
 function evidenceKey(reference: AssessmentEvidenceRef): string {
   switch (reference.kind) {
@@ -302,28 +278,7 @@ function evidenceSortKey(reference: AssessmentEvidenceRef): string {
 }
 
 function normalizedEvidenceReference(reference: unknown): AssessmentEvidenceRef {
-  const parsed = assessmentEvidenceRefSchema.safeParse(reference);
-  if (parsed.success) return parsed.data;
-  if (isRecord(reference) && reference["kind"] === "user-input") {
-    const path = codeIndexSourcePathSchema.parse(reference["path"]);
-    // The shared assessment schema currently treats user-input evidence paths as
-    // control artifacts. Validate its strict shape with a safe placeholder,
-    // then retain the source path validated above in the specialist-local type.
-    const compatible = assessmentEvidenceRefSchema.parse({
-      ...reference,
-      path: artifactPathSchema.parse(SOURCE_EVIDENCE_COMPATIBLE_ARTIFACT_PATH)
-    });
-    return { ...compatible, path } as unknown as AssessmentEvidenceRef;
-  }
-  throw parsed.error;
-}
-
-function protocolCompatibleEvidence(reference: AssessmentEvidenceRef): AssessmentEvidenceRef {
-  if (reference.kind !== "user-input") return reference;
-  return {
-    ...reference,
-    path: artifactPathSchema.parse(SOURCE_EVIDENCE_COMPATIBLE_ARTIFACT_PATH)
-  } as unknown as AssessmentEvidenceRef;
+  return assessmentEvidenceRefSchema.parse(reference);
 }
 
 function parseSpecialistAssumption(value: unknown): AssessmentAssumption {
@@ -331,11 +286,7 @@ function parseSpecialistAssumption(value: unknown): AssessmentAssumption {
     return assessmentAssumptionSchema.parse(value);
   }
   const evidence = value["evidence"].map((entry) => sanitizeEvidence(entry as AssessmentEvidenceRef));
-  const parsed = assessmentAssumptionSchema.parse({
-    ...value,
-    evidence: evidence.map(protocolCompatibleEvidence)
-  });
-  return { ...parsed, evidence } as AssessmentAssumption;
+  return assessmentAssumptionSchema.parse({ ...value, evidence });
 }
 
 function parseSpecialistFinding(value: unknown): AssessmentFinding {
@@ -343,11 +294,7 @@ function parseSpecialistFinding(value: unknown): AssessmentFinding {
     return assessmentFindingSchema.parse(value);
   }
   const evidence = value["evidence"].map((entry) => sanitizeEvidence(entry as AssessmentEvidenceRef));
-  const parsed = assessmentFindingSchema.parse({
-    ...value,
-    evidence: evidence.map(protocolCompatibleEvidence)
-  });
-  return { ...parsed, evidence } as AssessmentFinding;
+  return assessmentFindingSchema.parse({ ...value, evidence });
 }
 
 function sanitizeEvidence(reference: AssessmentEvidenceRef): AssessmentEvidenceRef {
@@ -370,11 +317,11 @@ function sanitizeEvidence(reference: AssessmentEvidenceRef): AssessmentEvidenceR
     case "git-metadata":
       return assessmentEvidenceRefSchema.parse({ kind: parsed.kind, path: parsed.path, note });
     case "user-input":
-      return {
+      return assessmentEvidenceRefSchema.parse({
         kind: parsed.kind,
-        path: codeIndexSourcePathSchema.parse(parsed.path),
+        path: parsed.path,
         note
-      } as unknown as AssessmentEvidenceRef;
+      });
   }
 }
 
@@ -402,11 +349,16 @@ function supportedTestLink(snapshot: CodeIndexSnapshot, link: BrownfieldSignals[
 
 function testMetadataEvidence(sourcePath: string, note: string): AssessmentEvidenceRef {
   const path = codeIndexSourcePathSchema.parse(sourcePath);
-  return {
-    kind: "user-input",
+  // Test inventory is path metadata, not content or execution proof. Keep the
+  // source-path schema on the path and use a deterministic metadata anchor so
+  // the final protocol evidence remains a real source-file reference.
+  const sha256 = codeIndexSha256Schema.parse(createHash("sha256").update(`test-inventory\u0000${path}`, "utf8").digest("hex"));
+  return assessmentEvidenceRefSchema.parse({
+    kind: "source-file",
     path,
+    sha256,
     note: boundedText(note, 512)
-  } as unknown as AssessmentEvidenceRef;
+  });
 }
 
 function excerptFrom(input: {
@@ -457,7 +409,6 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
   const sourceEvidence = new Set<string>();
   const structuralEvidence = new Set<string>();
   const commandEvidence = new Set<string>();
-  const userInputEvidence = new Set<string>();
   const signalEvidence: AssessmentEvidenceRef[] = [];
   const metadataEvidence: AssessmentEvidenceRef[] = [];
 
@@ -507,7 +458,7 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
         testMetadataEvidence(link.sourcePath, `Bounded source target metadata for ${link.sourcePath}; linked from parsed supported test ${link.testPath}.`)
       ];
       metadataEvidence.push(...refs);
-      for (const reference of refs) userInputEvidence.add(evidenceKey(reference));
+      for (const reference of refs) sourceEvidence.add(evidenceKey(reference));
     }
   }
   for (const [index, testPath] of input.signals.testFiles.entries()) {
@@ -515,7 +466,7 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
     if (!coveredPaths.has(testPath)) throw new Error(`Test file ${index} is outside snapshot coverage.`);
     const reference = testMetadataEvidence(testPath, `Bounded test inventory metadata for ${testPath}; presence is not execution or coverage proof.`);
     metadataEvidence.push(reference);
-    userInputEvidence.add(evidenceKey(reference));
+    sourceEvidence.add(evidenceKey(reference));
   }
 
   const commandResults: AssessmentEvidenceRef[] = [];
@@ -531,7 +482,7 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
     summary,
     evidence: uniqueEvidence([...signalEvidence, ...metadataEvidence]),
     commandResults: uniqueEvidence(commandResults),
-    support: { source: sourceEvidence, structural: structuralEvidence, command: commandEvidence, userInput: userInputEvidence }
+    support: { source: sourceEvidence, structural: structuralEvidence, command: commandEvidence }
   };
 }
 
@@ -643,7 +594,7 @@ function buildExcerpts(input: PackInput, specialist: BrownfieldSpecialistSpec, v
   return sorted(excerpts, (left, right) =>
     compareStrings(left.kind, right.kind) || compareStrings(left.path, right.path) ||
     compareStrings(left.text, right.text) || compareStrings(JSON.stringify(left.evidence), JSON.stringify(right.evidence))
-  ).slice(0, MAX_EXCERPTS_PER_PACK);
+  );
 }
 
 function boundedPrompt(prompt: string): string {
@@ -666,18 +617,23 @@ function packPrompt(input: {
   readonly summary: AssessmentSignalSummary;
   readonly excerpts: readonly BrownfieldExcerpt[];
   readonly evidence: readonly AssessmentEvidenceRef[];
-}): string {
-  const evidence = uniqueEvidence(input.evidence).slice(0, MAX_EVIDENCE_PER_PACK);
+  readonly truncation: BrownfieldPackTruncation;
+}): { readonly prompt: string; readonly promptTruncated: boolean } {
+  const evidence = uniqueEvidence(input.evidence);
   const excerpts = input.excerpts.map((excerpt) => ({
     kind: excerpt.kind,
     path: excerpt.path,
     ...(excerpt.sha256 === undefined ? {} : { sha256: excerpt.sha256 }),
-    factIds: excerpt.factIds.slice(0, MAX_EVIDENCE_PER_EXCERPT),
-    evidence: uniqueEvidence(excerpt.evidence).slice(0, MAX_EVIDENCE_PER_EXCERPT),
+    factIds: [...excerpt.factIds],
+    evidence: uniqueEvidence(excerpt.evidence),
     text: boundedText(excerpt.text, MAX_EXCERPT_CHARS)
   }));
+  const packMarker = input.truncation.bounded
+    ? `${BOUNDED_PACK_NOTE} excerpts_omitted=${input.truncation.excerptsOmitted} evidence_omitted=${input.truncation.evidenceOmitted}`
+    : "[BOUNDED_PACK_COMPLETE]";
   const prompt = [
     `You are the ${input.specialist.name} assessor for a brownfield repository.`,
+    packMarker,
     BROWNFIELD_SPECIALIST_SAFETY_CONTRACT,
     `Specialist pass: ${input.specialist.pass}. Focus: ${input.specialist.focus}.`,
     `Snapshot ID: ${input.snapshot.snapshotId}. Scope: ${input.snapshot.scope}.`,
@@ -687,7 +643,30 @@ function packPrompt(input: {
     `Excerpts (bounded and deduplicated): ${JSON.stringify(excerpts)}.`,
     "Return one JSON object with only `findings` and `assumptions` arrays."
   ].join("\n");
-  return boundedPrompt(prompt);
+  const bounded = boundedPrompt(prompt);
+  return { prompt: bounded, promptTruncated: bounded !== prompt };
+}
+
+function excerptsForPack(
+  excerpts: readonly BrownfieldExcerpt[],
+  evidence: readonly AssessmentEvidenceRef[]
+): readonly BrownfieldExcerpt[] {
+  const included = new Set(evidence.map(evidenceKey));
+  return excerpts.flatMap((excerpt) => {
+    const retainedEvidence = excerpt.evidence.filter((reference) => included.has(evidenceKey(reference)));
+    if (retainedEvidence.length === 0) return [];
+    const retainedFactIds = retainedEvidence
+      .filter((reference): reference is Extract<AssessmentEvidenceRef, { readonly kind: "structural-fact" }> => reference.kind === "structural-fact")
+      .map((reference) => reference.factId)
+      .sort(compareStrings);
+    const evidenceWasDropped = retainedEvidence.length !== excerpt.evidence.length;
+    return [{
+      ...excerpt,
+      factIds: retainedFactIds,
+      evidence: retainedEvidence,
+      text: evidenceWasDropped ? `${boundedText(excerpt.text, Math.max(1, MAX_EXCERPT_CHARS - BOUNDED_EVIDENCE_NOTE.length))}${BOUNDED_EVIDENCE_NOTE}` : excerpt.text
+    }];
+  });
 }
 
 /**
@@ -701,12 +680,32 @@ export function buildBrownfieldExcerptPacks(input: PackInput): readonly Brownfie
   const roster = rosterForEffort(effort);
   const provenance = snapshotProvenance(snapshot);
   return roster.map((specialist) => {
-    const excerpts = buildExcerpts(input, specialist, validated);
-    const evidence = uniqueEvidence([
-      ...excerpts.flatMap((excerpt) => excerpt.evidence),
+    const allExcerpts = buildExcerpts(input, specialist, validated);
+    const limitedExcerpts = allExcerpts.slice(0, MAX_EXCERPTS_PER_PACK);
+    const allEvidence = uniqueEvidence([
+      ...allExcerpts.flatMap((excerpt) => excerpt.evidence),
       ...validated.commandResults
-    ]).slice(0, MAX_EVIDENCE_PER_PACK);
-    const prompt = packPrompt({ specialist, snapshot, summary: validated.summary, excerpts, evidence });
+    ]);
+    const evidence = allEvidence.slice(0, MAX_EVIDENCE_PER_PACK);
+    const excerpts = excerptsForPack(limitedExcerpts, evidence);
+    const baseTruncation: BrownfieldPackTruncation = {
+      bounded: allExcerpts.length > MAX_EXCERPTS_PER_PACK || allEvidence.length > MAX_EVIDENCE_PER_PACK,
+      excerptsTotal: allExcerpts.length,
+      excerptsIncluded: excerpts.length,
+      excerptsOmitted: allExcerpts.length - excerpts.length,
+      excerptsTruncated: allExcerpts.length > MAX_EXCERPTS_PER_PACK,
+      evidenceTotal: allEvidence.length,
+      evidenceIncluded: evidence.length,
+      evidenceOmitted: allEvidence.length - evidence.length,
+      evidenceTruncated: allEvidence.length > MAX_EVIDENCE_PER_PACK,
+      promptTruncated: false
+    };
+    const packedPrompt = packPrompt({ specialist, snapshot, summary: validated.summary, excerpts, evidence, truncation: baseTruncation });
+    const truncation: BrownfieldPackTruncation = {
+      ...baseTruncation,
+      promptTruncated: packedPrompt.promptTruncated,
+      bounded: baseTruncation.bounded || packedPrompt.promptTruncated
+    };
     return {
       specialist,
       snapshotId: snapshot.snapshotId,
@@ -714,10 +713,11 @@ export function buildBrownfieldExcerptPacks(input: PackInput): readonly Brownfie
       summary: validated.summary,
       excerpts,
       evidence,
-      prompt,
-      promptHash: hashUnknown(prompt),
-      promptSize: prompt.length,
-      promptBytes: Buffer.byteLength(prompt, "utf8")
+      truncation,
+      prompt: packedPrompt.prompt,
+      promptHash: hashUnknown(packedPrompt.prompt),
+      promptSize: packedPrompt.prompt.length,
+      promptBytes: Buffer.byteLength(packedPrompt.prompt, "utf8")
     };
   });
 }
@@ -750,6 +750,14 @@ function snapshotProvenance(snapshot: CodeIndexSnapshot): {
 
 function serializedSize(value: unknown): number {
   if (typeof value === "string") return Buffer.byteLength(value, "utf8");
+  if (value instanceof Error) {
+    const code = (value as Error & { readonly code?: unknown }).code;
+    return Buffer.byteLength(JSON.stringify({
+      name: value.name,
+      message: value.message,
+      ...(code === undefined ? {} : { code })
+    }), "utf8");
+  }
   try {
     return Buffer.byteLength(JSON.stringify(value) ?? "", "utf8");
   } catch {
@@ -821,7 +829,6 @@ function supportedEvidence(referenceInput: AssessmentEvidenceRef, support: Evide
   if (reference.kind === "source-file") return support.source.has(evidenceKey(reference));
   if (reference.kind === "structural-fact") return support.structural.has(evidenceKey(reference));
   if (reference.kind === "command-result") return support.command.has(evidenceKey(reference));
-  if (reference.kind === "user-input") return support.userInput.has(evidenceKey(reference));
   return false;
 }
 
@@ -1116,15 +1123,138 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   }
 }
 
+function cloneAndFreeze<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((entry) => cloneAndFreeze(entry))) as T;
+  }
+  if (typeof value !== "object" || value === null) return value;
+  const clone: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) clone[key] = cloneAndFreeze(entry);
+  return Object.freeze(clone) as T;
+}
+
+type RepositoryEntry = {
+  readonly kind: "file" | "symlink" | "other";
+  readonly digest: string;
+};
+
+type RepositorySnapshot = ReadonlyMap<string, RepositoryEntry>;
+
+async function snapshotRepository(root: string): Promise<RepositorySnapshot> {
+  const entries = new Map<string, RepositoryEntry>();
+  let rootStat;
+  try {
+    rootStat = await lstat(root);
+  } catch (error) {
+    if (isRecord(error) && error["code"] === "ENOENT") return entries;
+    throw error;
+  }
+  if (!rootStat.isDirectory()) throw new Error("In-process specialist repository root is not a directory.");
+
+  const visit = async (absoluteRoot: string, relativeRoot: string): Promise<void> => {
+    const children = (await readdir(absoluteRoot, { withFileTypes: true }))
+      .sort((left, right) => compareStrings(left.name, right.name));
+    for (const child of children) {
+      const absolutePath = path.join(absoluteRoot, child.name);
+      const relativePath = relativeRoot.length === 0 ? child.name : `${relativeRoot}/${child.name}`;
+      const stat = await lstat(absolutePath);
+      if (stat.isDirectory()) {
+        await visit(absolutePath, relativePath);
+        continue;
+      }
+      if (stat.isFile()) {
+        const bytes = await readFile(absolutePath);
+        entries.set(relativePath, {
+          kind: "file",
+          digest: createHash("sha256").update(bytes).digest("hex")
+        });
+        continue;
+      }
+      if (stat.isSymbolicLink()) {
+        entries.set(relativePath, {
+          kind: "symlink",
+          digest: createHash("sha256").update(await readlink(absolutePath), "utf8").digest("hex")
+        });
+        continue;
+      }
+      entries.set(relativePath, {
+        kind: "other",
+        digest: `${stat.mode}:${stat.size}`
+      });
+    }
+  };
+  await visit(root, "");
+  return entries;
+}
+
+async function repositoryMutationDiagnostic(
+  root: string,
+  before: RepositorySnapshot
+): Promise<string | undefined> {
+  const after = await snapshotRepository(root);
+  const changed: string[] = [];
+  const paths = [...new Set([...before.keys(), ...after.keys()])].sort(compareStrings);
+  for (const relativePath of paths) {
+    const previous = before.get(relativePath);
+    const current = after.get(relativePath);
+    if (previous === undefined) changed.push(`added ${relativePath}`);
+    else if (current === undefined) changed.push(`removed ${relativePath}`);
+    else if (previous.kind !== current.kind || previous.digest !== current.digest) changed.push(`changed ${relativePath}`);
+  }
+  if (changed.length === 0) return undefined;
+  return boundedText(
+    `In-process specialist callback violated the read-only repository boundary: ${changed.slice(0, 8).join(", ")}${changed.length > 8 ? `, and ${changed.length - 8} more` : ""}.`,
+    MAX_DIAGNOSTIC_CHARS
+  );
+}
+
+async function runReadOnlyInProcessCallback(input: {
+  readonly repositoryRoot: string;
+  readonly execute: BrownfieldSpecialistExecutor;
+  readonly request: BrownfieldSpecialistExecutionRequest;
+  readonly timeoutMs: number;
+  readonly baseline?: RepositorySnapshot;
+}): Promise<unknown> {
+  const before = input.baseline ?? await snapshotRepository(input.repositoryRoot);
+  let result: unknown;
+  let callbackError: unknown;
+  try {
+    result = await withTimeout(Promise.resolve(input.execute(input.request)), input.timeoutMs);
+  } catch (error) {
+    callbackError = error;
+  }
+  const mutation = await repositoryMutationDiagnostic(input.repositoryRoot, before);
+  if (mutation !== undefined) throw new Error(mutation);
+  if (callbackError !== undefined) throw callbackError;
+  return result;
+}
+
+function evidenceSupportForPack(
+  pack: BrownfieldExcerptPack
+): EvidenceSupport {
+  const source = new Set<string>();
+  const structural = new Set<string>();
+  const command = new Set<string>();
+  const add = (referenceInput: AssessmentEvidenceRef): void => {
+    const reference = normalizedEvidenceReference(referenceInput);
+    if (reference.kind === "source-file") source.add(evidenceKey(reference));
+    else if (reference.kind === "structural-fact") {
+      structural.add(evidenceKey(reference));
+      structural.add([reference.kind, reference.path, "", reference.factId].join("\u0000"));
+    } else if (reference.kind === "command-result") command.add(evidenceKey(reference));
+  };
+  for (const reference of pack.evidence) add(reference);
+  return { source, structural, command };
+}
+
 async function runOne(input: {
   readonly repositoryRoot: string;
   readonly assessmentId: string;
   readonly snapshot: CodeIndexSnapshot;
-  readonly signals: BrownfieldSignals;
   readonly executor: ExecutionAdapterKind;
   readonly pack: BrownfieldExcerptPack;
   readonly execute: BrownfieldSpecialistExecutor | undefined;
-  readonly support: EvidenceSupport;
+  readonly readOnlyBaseline?: RepositorySnapshot;
   readonly timeoutMs: number;
 }): Promise<{
   readonly record: BrownfieldSpecialistExecutionRecord;
@@ -1132,7 +1262,7 @@ async function runOne(input: {
   readonly diagnostic?: string;
 }> {
   const { pack } = input;
-  const request: BrownfieldSpecialistExecutionRequest = {
+  const request = cloneAndFreeze<BrownfieldSpecialistExecutionRequest>({
     repositoryRoot: input.repositoryRoot,
     assessmentId: input.assessmentId,
     snapshotId: pack.snapshotId,
@@ -1150,7 +1280,8 @@ async function runOne(input: {
     semanticIndexSha256: pack.semanticIndexSha256,
     semanticSqliteSha256: pack.semanticSqliteSha256,
     executor: input.executor
-  };
+  });
+  const support = evidenceSupportForPack(pack);
   let outcome: SpecialistRunOutcome;
   try {
     let raw: unknown;
@@ -1163,7 +1294,13 @@ async function runOne(input: {
         executor: input.executor
       });
     } else {
-      raw = await withTimeout(Promise.resolve(input.execute(request)), input.timeoutMs);
+      raw = await runReadOnlyInProcessCallback({
+        repositoryRoot: input.repositoryRoot,
+        execute: input.execute,
+        request,
+        timeoutMs: input.timeoutMs,
+        ...(input.readOnlyBaseline === undefined ? {} : { baseline: input.readOnlyBaseline })
+      });
     }
     const parsedEnvelope = specialistPayloadFrom(raw);
     outcome = { status: parsedEnvelope.status, raw, ...(parsedEnvelope.payload === undefined ? {} : { payload: parsedEnvelope.payload }), diagnostic: parsedEnvelope.diagnostic };
@@ -1177,7 +1314,7 @@ async function runOne(input: {
   let status = outcome.status;
   if (status === "succeeded") {
     try {
-      parsed = normalizeSpecialistOutput({ value: outcome.payload, specialist: pack.specialist, support: input.support });
+      parsed = normalizeSpecialistOutput({ value: outcome.payload, specialist: pack.specialist, support });
     } catch (error) {
       status = "failed";
       diagnostic = safeDiagnostic(error);
@@ -1200,6 +1337,7 @@ async function runOne(input: {
       ...(excerpt.sha256 === undefined ? {} : { sha256: excerpt.sha256 }),
       factIds: excerpt.factIds
     })),
+    truncation: pack.truncation,
     promptHash: pack.promptHash,
     promptSize: pack.promptSize,
     promptBytes: pack.promptBytes,
@@ -1244,12 +1382,14 @@ export async function runBrownfieldSpecialists(input: {
     effort,
     ...(input.commandResults === undefined ? {} : { commandResults: input.commandResults })
   };
-  const validated = validateSignals(packInput, snapshot);
   const packs = buildBrownfieldExcerptPacks(packInput);
   const records: BrownfieldSpecialistExecutionRecord[] = [];
   const findings: AssessmentFinding[] = [];
   const assumptions: AssessmentAssumption[] = [];
   const diagnostics: string[] = [];
+  const readOnlyBaseline = input.execute === undefined
+    ? undefined
+    : await snapshotRepository(input.repositoryRoot);
   const seenFindingIds = new Set<string>();
   const seenAssumptionIds = new Set<string>();
 
@@ -1258,11 +1398,10 @@ export async function runBrownfieldSpecialists(input: {
       repositoryRoot: input.repositoryRoot,
       assessmentId,
       snapshot,
-      signals: input.signals,
       executor: selected,
       pack,
       execute: input.execute,
-      support: validated.support,
+      ...(readOnlyBaseline === undefined ? {} : { readOnlyBaseline }),
       timeoutMs
     });
     let record = run.record;

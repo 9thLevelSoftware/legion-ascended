@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -142,6 +142,38 @@ function input(overrides = {}) {
     executor: "fake",
     ...overrides
   };
+}
+
+function oversizedPackInput(count = 140) {
+  const sourcePaths = [SOURCE_PATH, ...Array.from({ length: count }, (_entry, index) => `src/overflow-${String(index).padStart(3, "0")}.ts`)];
+  const baseSnapshot = snapshotFixture();
+  const snapshot = codeIndexSnapshotSchema.parse({
+    ...baseSnapshot,
+    coverage: sourcePaths.map((sourcePath) => ({ path: sourcePath, status: "parsed", language: "typescript" })),
+    imports: [{
+      ...baseSnapshot.imports[0],
+      path: SOURCE_PATH
+    }]
+  });
+  const architectureSignals = sourcePaths.slice(1).map((sourcePath, index) => ({
+    code: `overflow-${String(index).padStart(3, "0")}`,
+    severity: "moderate",
+    statement: `Inspect ${sourcePath}.`,
+    evidence: [{
+      kind: "source-file",
+      path: sourcePath,
+      sha256: SOURCE_SHA,
+      note: `bounded overflow evidence ${index}`
+    }]
+  }));
+  return input({
+    snapshot,
+    signals: {
+      ...signalsFixture(),
+      architectureSignals,
+      dependencyEdges: []
+    }
+  });
 }
 
 function adapterModelResult(secret) {
@@ -354,6 +386,7 @@ test("converts malformed JSON and executor failures into blocking unknown assump
   assert.equal(failed.assumptions.length, 2);
   assert.match(failed.assumptions[0].statement, /executor unavailable/u);
   assert.ok(failed.executionRecords.every((record) => record.status === "failed"));
+  assert.ok(failed.executionRecords.every((record) => record.outputSize >= Buffer.byteLength("executor unavailable", "utf8")));
 });
 
 test("rejects missing or out-of-bounds evidence and records the specialist failure", async () => {
@@ -498,9 +531,13 @@ test("preserves Unicode and ampersand source evidence in blocking assumptions af
     execute: async () => "not-json"
   });
   assert.equal(result.assumptions.length, 3);
-  assert.ok(result.assumptions.every((assumption) => assumption.confidence === "unknown" && assumption.blocking));
+  assert.ok(result.assumptions.every((assumption) => {
+    assert.equal(assumption.confidence, "unknown");
+    assert.equal(assumption.blocking, true);
+    return assessmentAssumptionSchema.safeParse(assumption).success;
+  }));
   assert.ok(result.assumptions.some((assumption) => assumption.evidence.some((entry) =>
-    entry.kind === "user-input" && entry.path === testPath
+    entry.kind === "source-file" && entry.path === testPath
   )));
 });
 
@@ -584,13 +621,110 @@ test("bounds nested evidence and truncates oversized prompts instead of throwing
   }
 });
 
+test("records pack truncation and rejects evidence omitted from the specialist pack", async () => {
+  const fixture = oversizedPackInput();
+  const packs = buildBrownfieldExcerptPacks(fixture);
+  assert.ok(packs.every((pack) => pack.excerpts.length <= 64));
+  assert.ok(packs.every((pack) => pack.evidence.length <= 128));
+  assert.ok(packs.some((pack) => pack.truncation.excerptsTruncated || pack.truncation.evidenceTruncated));
+  assert.ok(packs.some((pack) => pack.prompt.includes("[BOUNDED_PACK_TRUNCATED]")));
+  const omitted = fixture.signals.architectureSignals.at(-1).evidence[0];
+  const result = await runBrownfieldSpecialists({
+    ...fixture,
+    execute: async ({ specialist }) => ({
+      findings: [{ ...validFinding(specialist.name), evidence: [omitted] }],
+      assumptions: []
+    })
+  });
+  assert.equal(result.findings.length, 0);
+  assert.equal(result.assumptions.length, 2);
+  assert.ok(result.executionRecords.every((record) => record.status === "failed"));
+  assert.ok(result.executionRecords.every((record) => record.truncation.evidenceTruncated));
+  assert.ok(result.executionRecords.every((record) => /supplied signal pack|supported conclusion/iu.test(record.diagnostic)));
+});
+
+test("rejects evidence omitted from a command-result pack", async () => {
+  const commandResults = Array.from({ length: 129 }, (_entry, index) => ({
+    kind: "command-result",
+    path: `.legion/project/workflow/command-results/${String(index).padStart(3, "0")}.json`,
+    note: `bounded command result ${index}`
+  }));
+  const fixture = input({ commandResults });
+  const packs = buildBrownfieldExcerptPacks(fixture);
+  assert.ok(packs.every((pack) => pack.truncation.evidenceTruncated));
+  const omitted = commandResults.at(-1);
+  assert.ok(omitted);
+  assert.ok(packs.every((pack) => !pack.evidence.some((entry) => entry.kind === "command-result" && entry.path === omitted.path)));
+  const result = await runBrownfieldSpecialists({
+    ...fixture,
+    execute: async ({ specialist }) => ({
+      findings: [{ ...validFinding(specialist.name), evidence: [omitted] }],
+      assumptions: []
+    })
+  });
+  assert.equal(result.findings.length, 0);
+  assert.equal(result.assumptions.length, 2);
+  assert.ok(result.executionRecords.every((record) => record.status === "failed"));
+  assert.ok(result.executionRecords.every((record) => record.truncation.evidenceTruncated));
+  assert.ok(result.executionRecords.every((record) => /supplied signal pack|supported conclusion/iu.test(record.diagnostic)));
+});
+
+test("rejects in-process callbacks that mutate supplied source files", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-read-only-"));
+  const sourceFile = path.join(repositoryRoot, "src", "app.ts");
+  await mkdir(path.dirname(sourceFile), { recursive: true });
+  await writeFile(sourceFile, "original source bytes\\n", "utf8");
+  try {
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: async (request) => {
+        await writeFile(request.repositoryRoot + "/src/app.ts", "mutated source bytes\\n", "utf8");
+        return executeFinding(request);
+      }
+    });
+    assert.equal(result.findings.length, 0);
+    assert.equal(result.assumptions.length, 2);
+    assert.ok(result.executionRecords.every((record) => record.status === "failed"));
+    assert.ok(result.executionRecords.every((record) => /read-only|mutat|changed|source/iu.test(record.diagnostic)));
+    assert.equal(await readFile(sourceFile, "utf8"), "mutated source bytes\\n");
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("rejects in-process callbacks that add repository files", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-read-only-add-"));
+  const addedFile = path.join(repositoryRoot, "generated.txt");
+  try {
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: async (request) => {
+        await writeFile(addedFile, "callback-created bytes\\n", "utf8");
+        return executeFinding(request);
+      }
+    });
+    assert.equal(result.findings.length, 0);
+    assert.equal(result.assumptions.length, 2);
+    assert.ok(result.executionRecords.every((record) => record.status === "failed"));
+    assert.ok(result.executionRecords.every((record) => /read-only|add|changed|source/iu.test(record.diagnostic)));
+    assert.equal(await readFile(addedFile, "utf8"), "callback-created bytes\\n");
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
 test("redacts URLs, credential values, bearer tokens, controls, and encoded secrets", () => {
   const encodedAssignment = encodeURIComponent("password=topsecret");
   const encodedJsonTwice = encodeURIComponent(encodeURIComponent("{\"password\":\"json-secret-twice\",\"apiKey\":\"api-key-twice\"}"));
   const encodedJsonFourTimes = [1, 2, 3, 4].reduce((value) => encodeURIComponent(value), "{\"password\":\"json-secret-four-times\",\"apiKey\":\"api-key-four-times\"}");
+  const encodedJsonEightTimes = [1, 2, 3, 4, 5, 6, 7, 8].reduce((value) => encodeURIComponent(value), "{\"password\":\"json-secret-eight-times\",\"apiKey\":\"api-key-eight-times\"}");
   const deeplyEncodedUrl = encodeURIComponent(encodeURIComponent("https://user:topsecret@example.invalid/private?api_key=topsecret"));
   const raw = [
     "https://example.invalid/public/path",
+    "postgresql://db-user:postgres-secret@example.invalid:5432/app?sslpassword=query-secret#fragment-secret",
+    "ftp://ftp-user:ftp-secret@example.invalid/private",
+    "git://git-user:git-secret@example.invalid/repository",
+    "custom+scheme://scheme-user:scheme-secret@example.invalid/private",
     "{\"password\":\"topsecret\",\"apiKey\":\"api-secret\"}",
     "Authorization: Bearer bearer-secret-token-123456",
     "password = source-secret",
@@ -599,11 +733,19 @@ test("redacts URLs, credential values, bearer tokens, controls, and encoded secr
     encodedAssignment,
     encodedJsonTwice,
     encodedJsonFourTimes,
+    encodedJsonEightTimes,
     deeplyEncodedUrl,
     "safe" + String.fromCharCode(1) + "text"
   ].join(String.fromCharCode(10));
   const redacted = redactBrownfieldSpecialistText(raw);
   assert.equal(redacted.includes("https://example.invalid/public/path"), false);
+  assert.equal(redacted.includes("postgresql://db-user:postgres-secret@example.invalid"), false);
+  assert.equal(redacted.includes("postgres-secret"), false);
+  assert.equal(redacted.includes("query-secret"), false);
+  assert.equal(redacted.includes("fragment-secret"), false);
+  assert.equal(redacted.includes("ftp-secret"), false);
+  assert.equal(redacted.includes("git-secret"), false);
+  assert.equal(redacted.includes("scheme-secret"), false);
   assert.equal(redacted.includes("topsecret"), false);
   assert.equal(redacted.includes("api-secret"), false);
   assert.equal(redacted.includes("bearer-secret-token-123456"), false);
@@ -614,6 +756,8 @@ test("redacts URLs, credential values, bearer tokens, controls, and encoded secr
   assert.equal(redacted.includes("api-key-twice"), false);
   assert.equal(redacted.includes("json-secret-four-times"), false);
   assert.equal(redacted.includes("api-key-four-times"), false);
+  assert.equal(redacted.includes("json-secret-eight-times"), false);
+  assert.equal(redacted.includes("api-key-eight-times"), false);
   assert.equal(redacted.includes("password"), false);
   assert.equal(redacted.includes("apiKey"), false);
   const hasControl = (value) => [...value].some((character) => {
@@ -629,9 +773,15 @@ test("redacts URLs, credential values, bearer tokens, controls, and encoded secr
     assert.equal(transcript.includes("topsecret"), false);
     assert.equal(transcript.includes("api-secret"), false);
     assert.equal(transcript.includes("https://example.invalid/public/path"), false);
+    assert.equal(transcript.includes("postgres-secret"), false);
+    assert.equal(transcript.includes("ftp-secret"), false);
+    assert.equal(transcript.includes("git-secret"), false);
+    assert.equal(transcript.includes("scheme-secret"), false);
     assert.equal(transcript.includes("partial-key-secret"), false);
     assert.equal(transcript.includes("json-secret-twice"), false);
     assert.equal(transcript.includes("api-key-four-times"), false);
+    assert.equal(transcript.includes("json-secret-eight-times"), false);
+    assert.equal(transcript.includes("api-key-eight-times"), false);
     assert.equal(transcript.includes("password"), false);
     assert.equal(transcript.includes("apiKey"), false);
     assert.equal(hasControl(transcript), false);

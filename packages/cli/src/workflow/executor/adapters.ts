@@ -28,15 +28,18 @@ const DEFAULT_HERMES_EXEC_TIMEOUT_MS = 600_000;
 const DEFAULT_GROK_EXEC_TIMEOUT_MS = 600_000;
 const GROK_VERSION_RE = /^grok\s+(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\s+\([0-9A-Za-z-]+\))?(?:\s+\[[A-Za-z0-9.-]+\])?\s*$/u;
 const SECRET_ASSIGNMENT_RE =
-  /\b(?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;}]+)/giu;
+  /\b(?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization|password|passwd|pwd|token|secret)\b\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;}]+)/giu;
 const JSON_CREDENTIAL_RE =
-  /["'](?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)["']\s*:\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,\s}]+)/giu;
-const URL_RE = /\b(?:https?|ssh|git\+https?):\/\/[^\s<>"']+/giu;
+  /["'](?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization|password|passwd|pwd|token|secret)["']\s*:\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,\s}]+)/giu;
+// Treat every URI with an authority as sensitive. This deliberately uses an
+// opaque replacement rather than trying to preserve a public URL while
+// accidentally leaking userinfo, query, or fragment credentials.
+const URL_RE = /\b[a-z][a-z0-9+.-]{0,31}:\/\/[^\s<>"'`]+/giu;
 const BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu;
 const TOKEN_RE = /\b(?:sk|ghp|gho|xox[baprs]-)[A-Za-z0-9_-]{8,}\b/gu;
 const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu;
 const ENCODED_SEGMENT_RE = /[^\s]*%[0-9a-f]{2}[^\s]*/giu;
-const MAX_REDACTION_DECODE_PASSES = 4;
+const MAX_REDACTION_DECODE_PASSES = 16;
 const MAX_REDACTION_DECODE_LENGTH = 64 * 1024;
 
 function decodeRepeatedly(value: string): string {
@@ -378,7 +381,8 @@ const hermesAdapter: ExecutionAdapter = {
       invocation.args,
       "",  // stdin unused — hermes reads from -q arg
       request.repositoryRoot,
-      hermesExecTimeoutMs()
+      hermesExecTimeoutMs(),
+      "Hermes Agent"
     );
     const rawOutput = [
       processResult.stdout,
@@ -704,7 +708,8 @@ const claudeAdapter: ExecutionAdapter = {
       invocation.args,
       request.prompt,
       request.repositoryRoot,
-      claudeExecTimeoutMs()
+      claudeExecTimeoutMs(),
+      "Claude"
     );
     const rawOutput = [
       processResult.stdout,
@@ -853,7 +858,8 @@ const codexAdapter: ExecutionAdapter = {
       invocation.args,
       request.prompt,
       request.repositoryRoot,
-      codexExecTimeoutMs()
+      codexExecTimeoutMs(),
+      "Codex"
     );
     const rawOutput = [
       processResult.stdout,
@@ -962,7 +968,14 @@ function claudeExecTimeoutMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CLAUDE_EXEC_TIMEOUT_MS;
 }
 
-async function spawnWithInput(command: string, args: readonly string[], input: string, cwd: string, timeoutMs: number): Promise<{
+async function spawnWithInput(
+  command: string,
+  args: readonly string[],
+  input: string,
+  cwd: string,
+  timeoutMs: number,
+  executorLabel: string
+): Promise<{
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
@@ -995,7 +1008,7 @@ async function spawnWithInput(command: string, args: readonly string[], input: s
 
     const timeout = setTimeout(() => {
       timedOut = true;
-      stderr += `${stderr.length === 0 ? "" : "\n"}Codex executor timed out after ${timeoutMs}ms.`;
+      stderr += `${stderr.length === 0 ? "" : "\n"}${executorLabel} executor timed out after ${timeoutMs}ms.`;
       terminateProcessTree(child.pid);
       setTimeout(() => settle(124), 1_000).unref();
     }, timeoutMs);
