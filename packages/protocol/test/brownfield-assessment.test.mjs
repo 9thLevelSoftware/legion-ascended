@@ -27,7 +27,27 @@ function evidence(overrides = {}) {
   return {
     kind: "structural-fact",
     path: ".legion/index/semantic-map.json",
+    factId: "imp_6f93b1d6df4af0fe5cc5a6e4",
     note: "Structural export fact",
+    ...overrides
+  };
+}
+
+function sourceFileEvidence(overrides = {}) {
+  return {
+    kind: "source-file",
+    path: "src/build-&-config-配置.ts",
+    sha256: HASH,
+    note: "Source file digest",
+    ...overrides
+  };
+}
+
+function userInputEvidence(overrides = {}) {
+  return {
+    kind: "user-input",
+    path: ".legion/assessment/user-input.json",
+    note: "Owner input evidence",
     ...overrides
   };
 }
@@ -39,7 +59,7 @@ function validAssumption(overrides = {}) {
     confidence: "unknown",
     blocking: true,
     resolution: "Confirm with the repository owner before synthesis.",
-    evidence: [evidence({ kind: "user-input", path: ".legion/assessment/user-input.json" })],
+    evidence: [userInputEvidence()],
     ...overrides
   };
 }
@@ -116,23 +136,31 @@ test("assessment primitive enums and effort bounds are strict", () => {
   assert.equal(assessmentSeveritySchema.safeParse("warning").success, false);
 });
 
-test("evidence references require safe artifact paths and notes", () => {
-  assert.equal(assessmentEvidenceRefSchema.safeParse(evidence()).success, true);
-  assert.equal(
-    assessmentEvidenceRefSchema.safeParse({
-      ...evidence(),
-      sha256: HASH,
-      factId: "sym_7f93b1d6df4af0fe5cc5a6e4"
-    }).success,
-    true
-  );
+test("evidence references enforce kind-specific identity and safe paths", () => {
+  const validByKind = [
+    evidence(),
+    sourceFileEvidence(),
+    { kind: "manifest", path: ".legion/manifest.json", note: "Manifest evidence" },
+    { kind: "test-result", path: ".legion/results/protocol.json", note: "Test evidence" },
+    { kind: "command-result", path: ".legion/results/typecheck.log", note: "Command evidence" },
+    { kind: "git-metadata", path: ".git/HEAD", note: "Git metadata evidence" },
+    { kind: "user-input", path: ".legion/assessment/user-input.json", note: "Owner input evidence" }
+  ];
+
+  for (const valid of validByKind) {
+    assert.equal(assessmentEvidenceRefSchema.safeParse(valid).success, true, valid.kind);
+  }
 
   for (const invalid of [
+    { ...evidence(), factId: undefined },
+    { ...evidence(), factId: "fact_123" },
+    { ...sourceFileEvidence(), sha256: undefined },
+    { ...sourceFileEvidence(), sha256: `sha256:${HASH}` },
+    { ...sourceFileEvidence(), path: "../outside.ts" },
     { ...evidence(), path: "../outside.json" },
     { ...evidence(), path: "/absolute.json" },
     { ...evidence(), note: "" },
     { ...evidence(), sha256: `sha256:${HASH}` },
-    { ...evidence(), factId: "fact_123" },
     { ...evidence(), unexpected: true }
   ]) {
     assert.equal(assessmentEvidenceRefSchema.safeParse(invalid).success, false);
@@ -181,11 +209,64 @@ test("brownfield assessment binds strict provenance, scope, and bounded collecti
   assert.equal(brownfieldAssessmentSchema.safeParse({ ...assessment, unexpected: true }).success, false);
 });
 
+test("brownfield assessment enforces unique IDs and closed finding assumption references", () => {
+  const assessment = validAssessment({
+    assumptions: [
+      validAssumption(),
+      validAssumption({ id: "asm_6f93b1d6df4af0fe5cc5a6e4", evidence: [sourceFileEvidence()] })
+    ],
+    findings: [
+      validFinding({ assumptions: [ASSUMPTION_ID, "asm_6f93b1d6df4af0fe5cc5a6e4"] }),
+      validFinding({ id: "af_6f93b1d6df4af0fe5cc5a6e4", assumptions: [] })
+    ]
+  });
+
+  assert.equal(brownfieldAssessmentSchema.safeParse(assessment).success, true);
+  assert.equal(
+    brownfieldAssessmentSchema.safeParse({
+      ...assessment,
+      assumptions: [assessment.assumptions[0], assessment.assumptions[0]]
+    }).success,
+    false,
+    "duplicate assumption IDs must fail"
+  );
+  assert.equal(
+    brownfieldAssessmentSchema.safeParse({
+      ...assessment,
+      findings: [assessment.findings[0], assessment.findings[0]]
+    }).success,
+    false,
+    "duplicate finding IDs must fail"
+  );
+  assert.equal(
+    brownfieldAssessmentSchema.safeParse({
+      ...assessment,
+      findings: [
+        { ...assessment.findings[0], assumptions: [ASSUMPTION_ID, ASSUMPTION_ID] },
+        assessment.findings[1]
+      ]
+    }).success,
+    false,
+    "duplicate assumption references must fail"
+  );
+  assert.equal(
+    brownfieldAssessmentSchema.safeParse({
+      ...assessment,
+      findings: [
+        { ...assessment.findings[0], assumptions: ["asm_7f93b1d6df4af0fe5cc5a6e4"] },
+        assessment.findings[1]
+      ]
+    }).success,
+    false,
+    "unknown assumption references must fail"
+  );
+});
+
 test("brownfield assessment accepts unknown confidence and user-input evidence for needs-input cases", () => {
   const assessment = validAssessment({
     phase: "blocked",
     assumptions: [validAssumption({ confidence: "unknown", blocking: true })],
-    findings: [validFinding({ confidence: "unknown", evidence: [evidence({ kind: "user-input", path: ".legion/assessment/user-input.json", note: "Owner input is required." })] })],
+    findings: [validFinding({ confidence: "unknown", evidence: [userInputEvidence({ note: "Owner input is required." })] })],
     nextActions: ["Request the missing product intent from the repository owner."]
   });
 
@@ -210,4 +291,8 @@ test("brownfield assessment generated JSON schema matches its committed artifact
   const committed = JSON.parse(await readFile(schemaPath, "utf8"));
 
   assert.deepEqual(committed, entityJsonSchemas.brownfieldAssessment);
+  assert.match(
+    entityJsonSchemas.brownfieldAssessment.description,
+    /Runtime validation requires unique assumption and finding IDs/
+  );
 });

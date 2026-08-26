@@ -182,47 +182,211 @@
             "maxItems": 64,
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "kind": {
-                  "type": "string",
-                  "enum": [
-                    "structural-fact",
-                    "source-file",
-                    "manifest",
-                    "test-result",
-                    "command-result",
-                    "git-metadata",
-                    "user-input"
-                  ]
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "structural-fact"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "factId": {
+                      "type": "string",
+                      "pattern": "^(idx|sym|imp|exp)_[a-f0-9]{24}$"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note",
+                    "factId"
+                  ],
+                  "additionalProperties": false
                 },
-                "path": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 512,
-                  "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-                  "description": "Relative POSIX artifact path inside an approved artifact root."
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "source-file"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.{1,2}(?:\\/|$))(?!.*[\\u0000-\\u001F\\u007F])[^/]+(?:\\/[^/]+)*$",
+                      "description": "Relative POSIX repository source path with no traversal, backslashes, empty segments, or control characters."
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "sha256",
+                    "note"
+                  ],
+                  "additionalProperties": false
                 },
-                "sha256": {
-                  "type": "string",
-                  "pattern": "^[0-9a-f]{64}$"
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "manifest"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note"
+                  ],
+                  "additionalProperties": false
                 },
-                "factId": {
-                  "type": "string",
-                  "pattern": "^(idx|sym|imp|exp)_[a-f0-9]{24}$"
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "test-result"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note"
+                  ],
+                  "additionalProperties": false
                 },
-                "note": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 512
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "command-result"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "git-metadata"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "user-input"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note"
+                  ],
+                  "additionalProperties": false
                 }
-              },
-              "required": [
-                "kind",
-                "path",
-                "note"
-              ],
-              "additionalProperties": false
+              ]
             }
           }
         },
@@ -292,47 +456,211 @@
             "maxItems": 128,
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "kind": {
-                  "type": "string",
-                  "enum": [
-                    "structural-fact",
-                    "source-file",
-                    "manifest",
-                    "test-result",
-                    "command-result",
-                    "git-metadata",
-                    "user-input"
-                  ]
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "structural-fact"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "factId": {
+                      "type": "string",
+                      "pattern": "^(idx|sym|imp|exp)_[a-f0-9]{24}$"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note",
+                    "factId"
+                  ],
+                  "additionalProperties": false
                 },
-                "path": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 512,
-                  "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-                  "description": "Relative POSIX artifact path inside an approved artifact root."
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "source-file"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.{1,2}(?:\\/|$))(?!.*[\\u0000-\\u001F\\u007F])[^/]+(?:\\/[^/]+)*$",
+                      "description": "Relative POSIX repository source path with no traversal, backslashes, empty segments, or control characters."
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "sha256",
+                    "note"
+                  ],
+                  "additionalProperties": false
                 },
-                "sha256": {
-                  "type": "string",
-                  "pattern": "^[0-9a-f]{64}$"
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "manifest"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note"
+                  ],
+                  "additionalProperties": false
                 },
-                "factId": {
-                  "type": "string",
-                  "pattern": "^(idx|sym|imp|exp)_[a-f0-9]{24}$"
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "test-result"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note"
+                  ],
+                  "additionalProperties": false
                 },
-                "note": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 512
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "command-result"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "git-metadata"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "user-input"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "note"
+                  ],
+                  "additionalProperties": false
                 }
-              },
-              "required": [
-                "kind",
-                "path",
-                "note"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "assumptions": {
@@ -391,5 +719,6 @@
     "findings",
     "nextActions"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Runtime validation requires unique assumption and finding IDs; every finding assumption reference must resolve to an assumption in the same assessment and must not repeat within a finding."
 }
