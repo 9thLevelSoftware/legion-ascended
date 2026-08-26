@@ -26,12 +26,19 @@ async function tempRoot() {
 }
 
 async function runCli(args, options = {}) {
+  const childEnv = {
+    ...process.env,
+    ...options.env,
+    // Node 26 emits an expected SQLite ExperimentalWarning; keep CLI stderr assertions portable.
+    NODE_NO_WARNINGS: "1"
+  };
   try {
     const result = await execFile(process.execPath, [CLI, "next", "--json", "--no-color", ...args], {
       cwd: ROOT,
       encoding: "utf8",
       maxBuffer: 1024 * 1024 * 16,
-      ...options
+      ...options,
+      env: childEnv
     });
     return {
       exitCode: 0,
