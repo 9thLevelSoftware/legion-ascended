@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { open, readFile, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -39,6 +40,8 @@ const BINARY_EXTENSIONS = new Set([
   ".mp4", ".o", ".pdf", ".png", ".so", ".tar", ".ttf", ".wasm", ".wav", ".webp", ".woff", ".woff2", ".zip"
 ]);
 const GENERATED_DIRECTORY_NAMES = new Set(["build", "dist", "generated", "gen", "out", "target", "__generated__"]);
+const NOFOLLOW_FLAG = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+const READ_ONLY_ARTIFACT_FLAGS = constants.O_RDONLY | NOFOLLOW_FLAG;
 
 export interface BrownfieldSignals {
   readonly summary: AssessmentSignalSummary;
@@ -115,14 +118,18 @@ function isTestFile(sourcePath: string): boolean {
   const extension = path.posix.extname(basename);
   const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
   return parts.slice(0, -1).some((part) => TEST_DIRECTORY_NAMES.has(part.toLowerCase())) ||
-    /(?:^|[._-])(test|spec)(?:$|[._-])/iu.test(stem);
+    /(?:^|[._-])(test|spec)(?:$|[._-])/iu.test(stem) ||
+    /(?:Tests?|Spec)$/u.test(stem);
 }
 
 function sourceStem(sourcePath: string): string {
   const basename = path.posix.basename(sourcePath);
   const extension = path.posix.extname(basename);
   const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
-  return stem.replace(/(?:[._-])(test|spec)$/iu, "");
+  return stem
+    .replace(/(?:[._-])(test|spec)$/iu, "")
+    .replace(/(?:Tests?|Spec)$/u, "")
+    .replace(/^test[._-]/iu, "");
 }
 
 function sourceBasename(sourcePath: string): string {
@@ -209,6 +216,39 @@ function sortSignals(signals: readonly Signal[]): Signal[] {
   );
 }
 
+async function openValidatedArtifact(absolutePath: string, label: string): Promise<FileHandle> {
+  let linkStat;
+  try {
+    linkStat = await lstat(absolutePath);
+  } catch (error) {
+    throw new Error(`${label} is missing or unreadable at ${absolutePath}.`, { cause: error });
+  }
+  if (linkStat.isSymbolicLink()) {
+    throw new Error(`${label} must not be a symbolic link at ${absolutePath}.`);
+  }
+  if (!linkStat.isFile()) {
+    throw new Error(`${label} is not a regular file at ${absolutePath}.`);
+  }
+
+  let descriptor: FileHandle;
+  try {
+    descriptor = await open(absolutePath, READ_ONLY_ARTIFACT_FLAGS);
+  } catch (error) {
+    throw new Error(`${label} is missing or unreadable at ${absolutePath}.`, { cause: error });
+  }
+  try {
+    const openedStat = await descriptor.stat();
+    if (!openedStat.isFile()) throw new Error(`${label} is not a regular file at ${absolutePath}.`);
+    if (linkStat.dev !== 0 && openedStat.dev !== 0 && (linkStat.dev !== openedStat.dev || linkStat.ino !== openedStat.ino)) {
+      throw new Error(`${label} changed while it was being opened at ${absolutePath}.`);
+    }
+    return descriptor;
+  } catch (error) {
+    await descriptor.close().catch(() => undefined);
+    throw error;
+  }
+}
+
 async function artifactPathForSqlite(
   repositoryRoot: string,
   sqlitePath: string,
@@ -223,24 +263,26 @@ async function artifactPathForSqlite(
     throw new Error(`SQLite path ${sqlitePath} does not match the validated snapshot path ${expected}.`);
   }
 
-  let fileStat;
+  const descriptor = await openValidatedArtifact(absolute, "SQLite materialization");
   try {
-    fileStat = await stat(absolute);
-  } catch (error) {
-    throw new Error(`SQLite materialization is missing or unreadable at ${parsed}.`, { cause: error });
-  }
-  if (!fileStat.isFile()) throw new Error(`SQLite materialization is not a regular file at ${parsed}.`);
-
-  const actualSha256 = await hashFile(absolute);
-  if (actualSha256 !== expectedSha256) {
-    throw new Error(`SQLite materialization hash does not match the snapshot: expected ${expectedSha256}, got ${actualSha256}.`);
+    const actualSha256 = await hashFile(descriptor);
+    if (actualSha256 !== expectedSha256) {
+      throw new Error(`SQLite materialization hash does not match the snapshot: expected ${expectedSha256}, got ${actualSha256}.`);
+    }
+  } finally {
+    await descriptor.close();
   }
   return parsed;
 }
 
-async function hashFile(absolutePath: string): Promise<CodeIndexSha256> {
+async function hashFile(descriptor: FileHandle): Promise<CodeIndexSha256> {
   const digest = createHash("sha256");
-  for await (const chunk of createReadStream(absolutePath)) digest.update(chunk as Buffer);
+  const chunk = Buffer.allocUnsafe(64 * 1024);
+  while (true) {
+    const result = await descriptor.read(chunk, 0, chunk.length, null);
+    if (result.bytesRead === 0) break;
+    digest.update(chunk.subarray(0, result.bytesRead));
+  }
   return codeIndexSha256Schema.parse(digest.digest("hex"));
 }
 
@@ -323,27 +365,44 @@ async function inspectSourceFile(
 }
 
 async function readBoundedMapDocument(absolutePath: string): Promise<Record<string, unknown>> {
-  let fileStat;
+  const descriptor = await openValidatedArtifact(absolutePath, "Snapshot source hash inventory");
   try {
-    fileStat = await stat(absolutePath);
-  } catch (error) {
-    throw new Error(`Snapshot source hash inventory is missing or unreadable at ${absolutePath}.`, { cause: error });
-  }
-  if (!fileStat.isFile()) throw new Error(`Snapshot source hash inventory is not a regular file at ${absolutePath}.`);
-  if (fileStat.size > MAX_BOUNDED_MAP_BYTES) {
-    throw new Error(`Snapshot source hash inventory exceeds the bounded metadata limit at ${absolutePath}.`);
-  }
+    const fileStat = await descriptor.stat();
+    if (fileStat.size > MAX_BOUNDED_MAP_BYTES) {
+      throw new Error(`Snapshot source hash inventory exceeds the bounded metadata limit at ${absolutePath}.`);
+    }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(await readFile(absolutePath, "utf8"));
-  } catch (error) {
-    throw new Error(`Snapshot source hash inventory is not valid JSON at ${absolutePath}.`, { cause: error });
+    const chunks: Buffer[] = [];
+    const chunk = Buffer.allocUnsafe(64 * 1024);
+    let totalBytes = 0;
+    while (totalBytes <= MAX_BOUNDED_MAP_BYTES) {
+      const bytesToRead = Math.min(chunk.length, MAX_BOUNDED_MAP_BYTES + 1 - totalBytes);
+      const result = await descriptor.read(chunk, 0, bytesToRead, null);
+      if (result.bytesRead === 0) break;
+      chunks.push(Buffer.from(chunk.subarray(0, result.bytesRead)));
+      totalBytes += result.bytesRead;
+    }
+    if (totalBytes > MAX_BOUNDED_MAP_BYTES) {
+      throw new Error(`Snapshot source hash inventory exceeds the bounded metadata limit at ${absolutePath}.`);
+    }
+    const finalStat = await descriptor.stat();
+    if (finalStat.size !== totalBytes) {
+      throw new Error(`Snapshot source hash inventory changed while it was being read at ${absolutePath}.`);
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(Buffer.concat(chunks, totalBytes).toString("utf8"));
+    } catch (error) {
+      throw new Error(`Snapshot source hash inventory is not valid JSON at ${absolutePath}.`, { cause: error });
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`Snapshot source hash inventory must be an object at ${absolutePath}.`);
+    }
+    return parsed as Record<string, unknown>;
+  } finally {
+    await descriptor.close();
   }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`Snapshot source hash inventory must be an object at ${absolutePath}.`);
-  }
-  return parsed as Record<string, unknown>;
 }
 
 /**
@@ -457,13 +516,33 @@ function findTestLinks(
   coverage: readonly CodeIndexSnapshot["coverage"][number][]
 ): BrownfieldSignals["testToSourceLinks"] {
   const sourceCandidatesByBasename = new Map<string, CodeIndexSourcePath[]>();
+  const sourceCandidatesByBasenameAndExtension = new Map<string, CodeIndexSourcePath[]>();
+  const sourceCandidatesByBasenameExtensionAndDirectory = new Map<string, CodeIndexSourcePath[]>();
+  const candidateKey = (basename: string, extension: string, directory?: string): string =>
+    `${basename}\u0000${extension}\u0000${directory ?? ""}`;
+
+  const addCandidate = (index: Map<string, CodeIndexSourcePath[]>, key: string, sourcePath: CodeIndexSourcePath): void => {
+    const candidates = index.get(key) ?? [];
+    candidates.push(sourcePath);
+    index.set(key, candidates);
+  };
+
   for (const entry of coverage) {
     if (isTestFile(entry.path) || !isEligibleSourceForTestNeighbor(entry)) continue;
-    const candidates = sourceCandidatesByBasename.get(sourceBasename(entry.path)) ?? [];
-    candidates.push(entry.path);
-    sourceCandidatesByBasename.set(sourceBasename(entry.path), candidates);
+    const basename = sourceBasename(entry.path);
+    const extension = sourceExtension(entry.path);
+    const directory = path.posix.dirname(entry.path);
+    addCandidate(sourceCandidatesByBasename, basename, entry.path);
+    addCandidate(sourceCandidatesByBasenameAndExtension, candidateKey(basename, extension), entry.path);
+    addCandidate(sourceCandidatesByBasenameExtensionAndDirectory, candidateKey(basename, extension, directory), entry.path);
   }
-  for (const candidates of sourceCandidatesByBasename.values()) candidates.sort(compareStrings);
+  for (const index of [
+    sourceCandidatesByBasename,
+    sourceCandidatesByBasenameAndExtension,
+    sourceCandidatesByBasenameExtensionAndDirectory
+  ]) {
+    for (const candidates of index.values()) candidates.sort(compareStrings);
+  }
 
   const testFileSet = new Set(testFiles);
   const eligibleTestPaths = new Set(
@@ -476,20 +555,23 @@ function findTestLinks(
   for (const testPath of sorted(testFiles, compareStrings)) {
     if (!eligibleTestPaths.has(testPath)) continue;
     const testStem = sourceBasename(testPath);
+    const testExtension = sourceExtension(testPath);
     const testDirectory = path.posix.dirname(testPath);
-    const candidates = sourceCandidatesByBasename.get(testStem) ?? [];
-    if (candidates.length === 0) continue;
+    const candidates = sourceCandidatesByBasename.get(testStem);
+    if (candidates === undefined || candidates.length === 0) continue;
 
     let sourcePath: CodeIndexSourcePath | undefined;
     if (candidates.length === 1) {
       sourcePath = candidates[0];
     } else {
-      const compatibleCandidates = candidates.filter((candidate) => sourceExtension(candidate) === sourceExtension(testPath));
-      if (compatibleCandidates.length === 1) {
+      const compatibleCandidates = sourceCandidatesByBasenameAndExtension.get(candidateKey(testStem, testExtension));
+      if (compatibleCandidates?.length === 1) {
         sourcePath = compatibleCandidates[0];
-      } else if (compatibleCandidates.length > 1) {
-        const sameDirectoryCandidates = compatibleCandidates.filter((candidate) => path.posix.dirname(candidate) === testDirectory);
-        if (sameDirectoryCandidates.length === 1) sourcePath = sameDirectoryCandidates[0];
+      } else if (compatibleCandidates !== undefined && compatibleCandidates.length > 1) {
+        const sameDirectoryCandidates = sourceCandidatesByBasenameExtensionAndDirectory.get(
+          candidateKey(testStem, testExtension, testDirectory)
+        );
+        if (sameDirectoryCandidates?.length === 1) sourcePath = sameDirectoryCandidates[0];
       }
     }
     if (sourcePath === undefined) continue;

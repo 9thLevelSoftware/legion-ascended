@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -250,6 +250,14 @@ test("links test files only to parsed, supported, non-generated source candidate
     ["src/feature.py", "def feature():\n    return 1\n"],
     ["src/feature.ts", "export function feature() { return 1; }\n"],
     ["src/feature.test.ts", "test(\"feature\", () => feature());\n"],
+    ["src/Foo.py", "def foo():\n    return 1\n"],
+    ["tests/FooTest.py", "def test_foo():\n    return foo()\n"],
+    ["tests/test_feature.py", "def test_feature():\n    return feature()\n"],
+    ["tests/test-feature.py", "def test_feature_hyphenated():\n    return feature()\n"],
+    ["src/FooTest.java", "class FooTest {}\n"],
+    ["src/FooTests.swift", "final class FooTests {}\n"],
+    ["src/FeatureSpec.scala", "class FeatureSpec\n"],
+    ["src/contest.java", "class Contest {}\n"],
     ["src/main.ts", "export function main() { return 1; }\n"],
     ["tests/main_test.go", "package main\n\nfunc TestMain(t *testing.T) {}\n"],
     ["src/ambiguous.ts", "export const source = 1;\n"],
@@ -288,14 +296,41 @@ test("links test files only to parsed, supported, non-generated source candidate
     });
     assert.deepEqual(result.testFiles, [
       "ci/code-target.test.ts",
+      "src/FeatureSpec.scala",
+      "src/FooTest.java",
+      "src/FooTests.swift",
       "src/build-&-config.test.ts",
       "src/feature.test.ts",
       "src/opaque-target.test.ts",
       "src/parser-only.test.ts",
       "src/size-target.test.ts",
+      "tests/FooTest.py",
       "tests/ambiguous.test.ts",
-      "tests/main_test.go"
+      "tests/main_test.go",
+      "tests/test-feature.py",
+      "tests/test_feature.py"
     ]);
+    for (const [testPath, sourcePath] of [
+      ["src/feature.test.ts", "src/feature.ts"],
+      ["tests/FooTest.py", "src/Foo.py"],
+      ["tests/test-feature.py", "src/feature.py"],
+      ["tests/test_feature.py", "src/feature.py"]
+    ]) {
+      assert.deepEqual(result.testToSourceLinks.find((link) => link.testPath === testPath), {
+        testPath,
+        sourcePath,
+        reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
+      });
+    }
+    for (const inventoryPath of ["src/FooTest.java", "src/FooTests.swift", "src/FeatureSpec.scala"]) {
+      assert.ok(result.testFiles.includes(inventoryPath), inventoryPath);
+      assert.equal(result.testToSourceLinks.some((link) => link.testPath === inventoryPath), false, inventoryPath);
+    }
+    assert.equal(result.testFiles.includes("src/contest.java"), false);
+    assert.equal(result.testToSourceLinks.filter((link) => link.sourcePath === "src/feature.py").length, 2);
+    assert.equal(result.testToSourceLinks.find((link) => link.testPath === "tests/FooTest.py")?.sourcePath, "src/Foo.py");
+    assert.equal(result.testToSourceLinks.find((link) => link.testPath === "tests/test-feature.py")?.sourcePath, "src/feature.py");
+    assert.equal(result.testToSourceLinks.find((link) => link.testPath === "tests/test_feature.py")?.sourcePath, "src/feature.py");
     assert.deepEqual(result.testToSourceLinks.find((link) => link.testPath === "ci/code-target.test.ts"), {
       testPath: "ci/code-target.test.ts",
       sourcePath: "ci/code-target.ts",
@@ -316,6 +351,30 @@ test("links test files only to parsed, supported, non-generated source candidate
       "docs/guide-target.test.md"
     ]) {
       assert.equal(result.testToSourceLinks.some((link) => link.testPath === excludedTestPath), false, excludedTestPath);
+    }
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("resolves a scaled duplicate-basename inventory with bounded links", async () => {
+  const duplicateCount = 1_024;
+  const duplicateFiles = Array.from({ length: duplicateCount }, (_, index) => {
+    const directory = `duplicates/${String(index).padStart(4, "0")}`;
+    return [
+      [`${directory}/index.ts`, `export const value${index} = ${index};\n`],
+      [`${directory}/index.test.ts`, `test("index ${index}", () => value${index});\n`]
+    ];
+  }).flat();
+  const fixture = await makeFixture(duplicateFiles);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const links = result.testToSourceLinks.filter((link) => link.testPath.startsWith("duplicates/"));
+    assert.equal(links.length, duplicateCount);
+    assert.equal(new Set(links.map((link) => link.testPath)).size, duplicateCount);
+    assert.equal(new Set(links.map((link) => link.sourcePath)).size, duplicateCount);
+    for (const link of links) {
+      assert.equal(link.sourcePath, link.testPath.replace(/\.test(?=\.ts$)/u, ""));
     }
   } finally {
     await fixture.cleanup();
@@ -370,6 +429,64 @@ test("fails closed when the validated SQLite materialization is missing or tampe
     );
   } finally {
     await tampered.cleanup();
+  }
+});
+
+test("fails closed when a direct SQLite or map artifact is a symlink", async (t) => {
+  const sqliteFixture = await makeFixture();
+  try {
+    const sqliteRealPath = `${sqliteFixture.sqlitePath}.real`;
+    await rename(sqliteFixture.sqlitePath, sqliteRealPath);
+    try {
+      await symlink(sqliteRealPath, sqliteFixture.sqlitePath, "file");
+    } catch (error) {
+      if (process.platform === "win32" && ["EPERM", "EACCES", "UNKNOWN"].includes(error?.code)) {
+        t.skip(`file symlinks unavailable: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    await assert.rejects(
+      () => collectBrownfieldSignals(sqliteFixture),
+      /symbolic link|regular file|unreadable/u
+    );
+  } finally {
+    await sqliteFixture.cleanup();
+  }
+
+  const mapFixture = await makeFixture();
+  try {
+    const mapPath = path.join(path.dirname(mapFixture.sqlitePath), "map.json");
+    const mapRealPath = `${mapPath}.real`;
+    await rename(mapPath, mapRealPath);
+    try {
+      await symlink(mapRealPath, mapPath, "file");
+    } catch (error) {
+      if (process.platform === "win32" && ["EPERM", "EACCES", "UNKNOWN"].includes(error?.code)) {
+        t.skip(`file symlinks unavailable: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    await assert.rejects(
+      () => collectBrownfieldSignals(mapFixture),
+      /symbolic link|regular file|unreadable/u
+    );
+  } finally {
+    await mapFixture.cleanup();
+  }
+});
+
+test("fails closed when a missing map inventory cannot be opened", async () => {
+  const fixture = await makeFixture();
+  try {
+    await rm(path.join(path.dirname(fixture.sqlitePath), "map.json"));
+    await assert.rejects(
+      () => collectBrownfieldSignals(fixture),
+      /Snapshot source hash inventory is missing or unreadable|ENOENT/u
+    );
+  } finally {
+    await fixture.cleanup();
   }
 });
 
