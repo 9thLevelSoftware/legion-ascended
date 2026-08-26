@@ -65,6 +65,12 @@ export interface ExecutionRequest {
   readonly rawLogAbsolutePath: string;
   readonly redactedLogArtifactPath: ArtifactPath;
   readonly redactedLogAbsolutePath: string;
+  /**
+   * Optional isolated root for adapter-owned transcripts/results. The execution
+   * working directory remains `repositoryRoot`; this root is only for generic
+   * adapter persistence and is removed by callers that use ephemeral artifacts.
+   */
+  readonly artifactRepositoryRoot?: string;
 }
 
 export interface ExecutionAdapter {

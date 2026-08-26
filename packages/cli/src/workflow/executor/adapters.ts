@@ -17,7 +17,6 @@ import {
   parseResultFromText,
   prepareProjectTextFile,
   readOptionalText,
-  redactTranscript,
   writeProjectExecutionResult,
   writeProjectTextFile
 } from "./result.js";
@@ -28,6 +27,54 @@ const DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 900_000;
 const DEFAULT_HERMES_EXEC_TIMEOUT_MS = 600_000;
 const DEFAULT_GROK_EXEC_TIMEOUT_MS = 600_000;
 const GROK_VERSION_RE = /^grok\s+(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\s+\([0-9A-Za-z-]+\))?(?:\s+\[[A-Za-z0-9.-]+\])?\s*$/u;
+const SECRET_ASSIGNMENT_RE =
+  /\b(?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;}]+)/giu;
+const JSON_CREDENTIAL_RE =
+  /["'](?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)["']\s*:\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,\s}]+)/giu;
+const URL_RE = /\b(?:https?|ssh|git\+https?):\/\/[^\s<>"']+/giu;
+const BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu;
+const TOKEN_RE = /\b(?:sk|ghp|gho|xox[baprs]-)[A-Za-z0-9_-]{8,}\b/gu;
+const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu;
+const ENCODED_SEGMENT_RE = /[^\s]*%[0-9a-f]{2}[^\s]*/giu;
+const MAX_REDACTION_DECODE_PASSES = 4;
+const MAX_REDACTION_DECODE_LENGTH = 64 * 1024;
+
+function decodeRepeatedly(value: string): string {
+  if (value.length > MAX_REDACTION_DECODE_LENGTH) return value;
+  let decoded = value;
+  for (let attempt = 0; attempt < MAX_REDACTION_DECODE_PASSES; attempt += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded || next.length > MAX_REDACTION_DECODE_LENGTH) break;
+      decoded = next;
+    } catch {
+      break;
+    }
+  }
+  return decoded;
+}
+
+function redactDirectText(value: string): string {
+  return value
+    .replace(CONTROL_RE, "�")
+    .replace(URL_RE, "[REDACTED_URL]")
+    .replace(JSON_CREDENTIAL_RE, "[REDACTED_JSON_SECRET]")
+    .replace(BEARER_RE, "Bearer [REDACTED_TOKEN]")
+    .replace(SECRET_ASSIGNMENT_RE, "[REDACTED_SECRET]")
+    .replace(TOKEN_RE, "[REDACTED_TOKEN]");
+}
+
+export function redactAdapterTranscript(text: string): string {
+  const direct = redactDirectText(text);
+  return direct.replace(ENCODED_SEGMENT_RE, (match) => {
+    if (!match.includes("%")) return match;
+    if (match.length > MAX_REDACTION_DECODE_LENGTH) return "[REDACTED_ENCODED_SECRET]";
+    const decoded = decodeRepeatedly(match);
+    return decoded !== match && redactDirectText(decoded) !== decoded
+      ? "[REDACTED_ENCODED_SECRET]"
+      : match;
+  });
+}
 
 // Claude Code has no OS-level sandbox flag, so a read-only run is enforced by
 // denying every tool that can mutate the repository. The guarded execution
@@ -164,6 +211,48 @@ export function adapterForKind(kind: ExecutionAdapterKind): ExecutionAdapter {
   }
 }
 
+function artifactRepositoryRoot(request: ExecutionRequest): string {
+  return request.artifactRepositoryRoot ?? request.repositoryRoot;
+}
+
+function isolatedArtifactText(request: ExecutionRequest, text: string): string {
+  return request.artifactRepositoryRoot === undefined ? text : redactAdapterTranscript(text);
+}
+
+function isolatedExecutionResult(request: ExecutionRequest, result: ExecutionResult): ExecutionResult {
+  if (request.artifactRepositoryRoot === undefined) return result;
+  return {
+    ...(result.structuredOutput === undefined ? {} : { structuredOutput: redactAdapterTranscript(result.structuredOutput) }),
+    ok: result.ok,
+    status: result.status,
+    summary: redactAdapterTranscript(result.summary),
+    filesChanged: result.filesChanged.map((entry) => redactAdapterTranscript(entry)),
+    commandsRun: result.commandsRun.map((entry) => ({
+      command: redactAdapterTranscript(entry.command),
+      args: entry.args.map((arg) => redactAdapterTranscript(arg)),
+      exitCode: entry.exitCode
+    })),
+    findings: result.findings.map((entry) => ({
+      id: redactAdapterTranscript(entry.id),
+      title: redactAdapterTranscript(entry.title),
+      body: redactAdapterTranscript(entry.body),
+      severity: entry.severity,
+      ...(entry.evidenceRefs === undefined ? {} : { evidenceRefs: entry.evidenceRefs.map((ref) => redactAdapterTranscript(ref)) })
+    })),
+    ...(result.reviewVerdicts === undefined ? {} : { reviewVerdicts: result.reviewVerdicts }),
+    ...(result.rawOutput === undefined ? {} : { rawOutput: redactAdapterTranscript(result.rawOutput) }),
+    ...(result.exitCode === undefined ? {} : { exitCode: result.exitCode })
+  };
+}
+
+async function persistExecutionResult(request: ExecutionRequest, result: ExecutionResult): Promise<void> {
+  await writeProjectExecutionResult({
+    repositoryRoot: artifactRepositoryRoot(request),
+    artifactPath: request.resultArtifactPath,
+    result: isolatedExecutionResult(request, result)
+  });
+}
+
 async function codexAvailable(): Promise<boolean> {
   try {
     const invocation = codexInvocation(["exec", "--help"]);
@@ -253,9 +342,32 @@ function grokExecTimeoutMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GROK_EXEC_TIMEOUT_MS;
 }
 
+export function hermesReadOnlyBlockedResult(): ExecutionResult {
+  return {
+    ok: false,
+    status: "blocked",
+    summary: "Hermes Agent cannot guarantee read-only execution for this specialist request.",
+    filesChanged: [],
+    commandsRun: [],
+    findings: [{
+      id: "hermes-read-only-unsupported",
+      title: "Hermes read-only execution is unavailable",
+      body: "The Hermes adapter has no platform-enforced read-only mode for this request. The specialist is blocked rather than being run with prompt-only safety claims.",
+      severity: "blocking"
+    }]
+  };
+}
+
 const hermesAdapter: ExecutionAdapter = {
   kind: "hermes",
   async run(request) {
+    if (request.readOnly) {
+      const result = hermesReadOnlyBlockedResult();
+      const artifactRoot = artifactRepositoryRoot(request);
+      await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text: `${result.summary}\n` });
+      await persistExecutionResult(request, result);
+      return result;
+    }
     // hermes chat -q takes the query as an argv argument (no stdin support).
     // The prompt is a task description, not a secret — argv exposure via `ps`
     // is acceptable here, matching how claude passes --print prompts.
@@ -286,6 +398,10 @@ const hermesAdapter: ExecutionAdapter = {
       rawOutput,
       exitCode: processResult.exitCode
     });
+    const hermesOutput = hermesStructuredOutput(parsed);
+    const withStructured: ExecutionResult = hermesOutput === undefined
+      ? normalized
+      : { ...normalized, structuredOutput: hermesOutput };
     const blockingFindings: ExecutionFinding[] = [];
     if (processResult.timedOut) {
       blockingFindings.push({
@@ -296,17 +412,18 @@ const hermesAdapter: ExecutionAdapter = {
       });
     }
     const result: ExecutionResult = blockingFindings.length === 0
-      ? normalized
+      ? withStructured
       : {
-          ...normalized,
+          ...withStructured,
           ok: false,
           status: processResult.timedOut ? "blocked" : "failed",
-          findings: [...normalized.findings, ...blockingFindings]
+          findings: [...withStructured.findings, ...blockingFindings]
         };
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    const redacted = redactAdapterTranscript(rawOutput);
+    const artifactRoot = artifactRepositoryRoot(request);
+    await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -417,22 +534,18 @@ const grokAdapter: ExecutionAdapter = {
       findings: [...withEnvelope.findings, ...findings]
     };
 
-    const redacted = redactTranscript(rawOutput);
+    const redacted = redactAdapterTranscript(rawOutput);
     await writeProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: request.rawLogArtifactPath,
-      text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n`
+      text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}\n`)
     });
     await writeProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: request.redactedLogArtifactPath,
-      text: redacted.length > 0 ? redacted : `${result.summary}\n`
+      text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`)
     });
-    await writeProjectExecutionResult({
-      repositoryRoot: request.repositoryRoot,
-      artifactPath: request.resultArtifactPath,
-      result
-    });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -493,6 +606,20 @@ function isRecordValue(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function hermesStructuredOutput(value: unknown): string | undefined {
+  if (!isRecordValue(value)) return undefined;
+  for (const key of ["structuredOutput", "output", "text", "result"]) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && parseResultFromText(candidate) !== undefined) return candidate;
+    if (isRecordValue(candidate) || Array.isArray(candidate)) {
+      const serialized = JSON.stringify(candidate);
+      if (serialized !== undefined) return serialized;
+    }
+  }
+  if (Array.isArray(value["findings"]) && Array.isArray(value["assumptions"])) return JSON.stringify(value);
+  return undefined;
+}
+
 const fakeAdapter: ExecutionAdapter = {
   kind: "fake",
   async run(request) {
@@ -528,9 +655,9 @@ const fakeAdapter: ExecutionAdapter = {
           }
         : {})
     };
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${result.summary}\n` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redactTranscript(`${result.summary}\n`) });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, `${result.summary}\n`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, `${result.summary}\n`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -560,9 +687,9 @@ const manualAdapter: ExecutionAdapter = {
         }
       ]
     };
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${summary}\n` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: `${summary}\n` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, `${summary}\n`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, `${summary}\n`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -642,10 +769,10 @@ const claudeAdapter: ExecutionAdapter = {
           findings: [...withStructured.findings, ...blockingFindings]
         };
 
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    const redacted = redactAdapterTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}\n`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
+    await writeProjectExecutionResult({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.resultArtifactPath, result });
     return result;
   }
 };
@@ -702,7 +829,7 @@ const codexAdapter: ExecutionAdapter = {
   async run(request) {
     const outputLastMessageArtifactPath = artifactPathSchema.parse(request.resultArtifactPath.replace(/executor-result\.json$/u, "executor-last-message.txt"));
     const outputLastMessagePath = await prepareProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: outputLastMessageArtifactPath
     });
     const args = codexExecArgs({
@@ -754,10 +881,10 @@ const codexAdapter: ExecutionAdapter = {
           ]
         }
       : withStructured;
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    const redacted = redactAdapterTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}\n`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
+    await writeProjectExecutionResult({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.resultArtifactPath, result });
     return result;
   }
 };
