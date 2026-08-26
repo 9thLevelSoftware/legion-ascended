@@ -830,6 +830,32 @@ test("redacts percent-encoded URI, userinfo, and query secrets from serialized s
   }
 });
 
+test("redacts deeply percent-encoded credential URI secrets from serialized signals", async () => {
+  const credentialUri = "https://alice:super-secret@example.test/pkg?api_key=another-secret";
+  let deeplyEncodedCredentialUri = credentialUri;
+  for (let depth = 0; depth < 4; depth += 1) deeplyEncodedCredentialUri = encodeURIComponent(deeplyEncodedCredentialUri);
+  const deeplyEncodedSpecifier = `./${deeplyEncodedCredentialUri}`;
+  const fixture = await makeFixture([
+    ["src/deeply-encoded-a.ts", `import "${deeplyEncodedSpecifier}";\n`],
+    ["src/deeply-encoded-b.ts", `import "${deeplyEncodedSpecifier}";\n`]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const serializedSignals = JSON.stringify({
+      dependencyEdges: result.dependencyEdges,
+      architectureStatements: result.architectureSignals.map((signal) => signal.statement)
+    });
+    assert.doesNotMatch(serializedSignals, /super-secret|another-secret|api_key/u);
+    assert.match(serializedSignals, /opaque external import specifier \(redacted\)/u);
+    assert.ok(result.dependencyEdges.some((edge) => edge.to === "opaque external import specifier (redacted)"));
+    assert.ok(result.architectureSignals.some((signal) =>
+      signal.code === "fan-in-hotspot" && signal.statement.includes("opaque external import specifier (redacted)")
+    ));
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("recognizes case-sensitive CamelCase test prefixes and links unique source neighbors", async () => {
   const fixture = await makeFixture([
     ["src/Foo.java", "class Foo {}\n"],

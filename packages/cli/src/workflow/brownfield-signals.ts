@@ -694,32 +694,12 @@ function isRelativeImportSpecifier(specifier: string): boolean {
   return specifier === "." || specifier === ".." || specifier.startsWith("./") || specifier.startsWith("../");
 }
 
-function decodedImportSpecifier(specifier: string): string | undefined {
-  if (!specifier.includes("%")) return undefined;
-  let decoded = specifier;
-  for (let depth = 0; depth < 3 && /%[0-9A-Fa-f]{2}/u.test(decoded); depth += 1) {
-    try {
-      const next = decodeURIComponent(decoded);
-      if (next === decoded) break;
-      decoded = next;
-    } catch {
-      return undefined;
-    }
-  }
-  return decoded;
-}
-
 function isOpaqueImportSpecifier(specifier: string): boolean {
+  if (specifier.includes("%")) return true;
   if (!isRelativeImportSpecifier(specifier)) return true;
-  const decoded = decodedImportSpecifier(specifier);
-  if (specifier.includes("%") && decoded === undefined) return true;
   return /(?:^|\/)\p{L}[\p{L}\d+.-]*:/u.test(specifier) ||
     /(?:^|\/)[^/?#\s:@]+:[^/?#\s@]+@/u.test(specifier) ||
-    (decoded !== undefined && (
-      /(?:^|\/)\p{L}[\p{L}\d+.-]*:/u.test(decoded) ||
-      /(?:^|\/)[^/?#\s:@]+:[^/?#\s@]+@/u.test(decoded) ||
-      /[?#]/u.test(decoded)
-    ));
+    /[?#]/u.test(specifier);
 }
 
 function safeImportSpecifier(specifier: string): string {
