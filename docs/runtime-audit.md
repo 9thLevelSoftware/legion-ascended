@@ -1,8 +1,12 @@
 # Runtime Audit
 
-Verified against official vendor documentation on June 23, 2026.
-
-Claude Code remains the control runtime. Every other runtime below was re-audited against official docs before changing installer behavior, support tiers, and adapter claims. The default installer prompt shows only first-class targets; use `legion install --list-targets --all-targets` to see compatibility, legacy, and manual-only targets.
+Verified against official vendor documentation on June 23, 2026. Grok Build's
+official sources and local CLI evidence were additionally verified on August 25,
+2026. Claude Code remains the control runtime. Every other runtime below was
+re-audited against official docs before changing installer behavior, support
+tiers, and adapter claims. The default installer prompt shows only first-class
+targets; use `legion install --list-targets --all-targets` to see compatibility,
+legacy, and manual-only targets.
 
 | Runtime | Tier | Disposition | Local | Global | Native Legion Surface | Native Entry |
 |---------|------|-------------|-------|--------|------------------------|--------------|
@@ -12,6 +16,7 @@ Claude Code remains the control runtime. Every other runtime below was re-audite
 | Antigravity CLI | First-class | Native plugins | Yes | Yes | `.agents/plugins/legion/` plus `~/.gemini/config/plugins/legion/` | `/legion` |
 | OpenCode | First-class | Commands and subagent | Yes | Yes | `.opencode/commands/`, `.opencode/agent/`, `~/.config/opencode/commands/`, `~/.config/opencode/agent/` | `/legion` |
 | Hermes Agent | First-class | Native skill with delegation | Yes | Yes | `.hermes/skills/workflow/legion/SKILL.md`, `~/.hermes/skills/workflow/legion/SKILL.md` | `/legion` |
+| Grok Build | First-class | Native skill plus bounded headless JSON executor | Yes | Yes | `$PROJECT/.grok/skills/legion/SKILL.md`, `$GROK_HOME/skills/legion/SKILL.md` (fallback `<home>/.grok/skills/legion/SKILL.md`) | `/legion` |
 | Kilo Code Plugin | First-class | Mode, workflows, and Agent Skills | Yes | Yes | `.kilocode/workflows/`, `.kilocode/skills/<name>/`, `.kilo/commands/`, `.kilo/skills/<name>/`, `.kilocodemodes`, `~/.kilocode/workflows/`, `~/.kilocode/skills/<name>/`, `~/.config/kilo/commands/`, `~/.kilo/skills/<name>/`, `~/.kilocode/globalStorage/kilo code.kilo-code/settings/custom_modes.yaml` | Select `Legion` mode or run `/legion` |
 | Cursor | Compatible | Rules-only | Yes | No | `.cursor/rules/legion.mdc` | Plain-language Legion requests |
 | Kiro CLI (formerly Amazon Q Developer CLI) | Compatible | Custom agent and steering | Yes | Yes | `.kiro/agents/legion.md`, `.kiro/steering/legion.md`, `~/.kiro/agents/legion.md`, `~/.kiro/steering/AGENTS.md` | `@legion` |
@@ -88,6 +93,38 @@ Claude Code remains the control runtime. Every other runtime below was re-audite
 - [Delegation](https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation)
 - [Kanban](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban)
 - [CLI Reference](https://hermes-agent.nousresearch.com/docs/reference/cli-commands)
+
+### Grok Build
+
+Grok Build is a **first-class Legion target** for the 9.3.0 installer and
+executor matrix. That first-class Legion designation covers the managed native
+skill install, bounded `grok --version` detection, headless executor contract,
+and packed-install smoke coverage; it does **not** claim stable upstream parity.
+The verified local upstream CLI is `grok 1.0.10 (5992780042ca) [alpha]`, so the
+alpha caveat remains part of the release evidence.
+
+- Native project skill: `$PROJECT/.grok/skills/legion/SKILL.md`.
+- Native user skill: `$GROK_HOME/skills/legion/SKILL.md`; when `GROK_HOME` is
+  unset, use `<home>/.grok/skills/legion/SKILL.md`.
+- Canonical host entry: `/legion`. Plugins and `.grok/commands` are separate
+  surfaces and are not part of this Legion install.
+- Headless executor argv (passed as an array, not a shell string):
+  `grok --prompt-file <path> --cwd <repo> --output-format json --permission-mode bypassPermissions`.
+- `json` is one completed result envelope. `streaming-json` is newline-delimited
+  session updates, and `grok agent stdio` is the separate ACP JSON-RPC entry
+  point; neither surface is interchangeable with the first executor result
+  contract.
+- Grok owns browser login and API-key configuration. Legion only runs the
+  bounded version probe and never reads, stores, or transmits `XAI_API_KEY`.
+- The native Grok surface has no parallel-subagent primitive, so Legion executes
+  Grok build and review waves sequentially.
+
+Official evidence:
+
+- [Grok Build overview and installation](https://docs.x.ai/build/overview)
+- [Grok Build CLI reference](https://docs.x.ai/build/cli/reference)
+- [Grok Build headless scripting and ACP](https://docs.x.ai/build/cli/headless-scripting)
+- [Grok Build skills, plugins, and marketplaces](https://docs.x.ai/build/features/skills-plugins-marketplaces)
 
 ### Kilo CLI
 

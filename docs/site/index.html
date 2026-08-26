@@ -74,9 +74,43 @@
         <div class="stats-bar">
           <div class="stat"><div class="num">5</div><div class="label">Core Steps</div></div>
           <div class="stat"><div class="num">9</div><div class="label">Guidance Commands</div></div>
-          <div class="stat"><div class="num">5</div><div class="label">Executors</div></div>
-          <div class="stat"><div class="num">7</div><div class="label">First-Class Targets</div></div>
+          <div class="stat"><div class="num">6</div><div class="label">Executors</div></div>
+          <div class="stat"><div class="num">8</div><div class="label">First-Class Targets</div></div>
           <div class="stat"><div class="num">1</div><div class="label">Command Surface</div></div>
+        </div>
+      </section>
+
+      <section class="reveal-section" id="grok-build" aria-labelledby="grok-build-title">
+        <h2 id="grok-build-title">Grok Build, Bound Precisely</h2>
+        <p class="intro-text">
+          <strong>Grok Build is a first-class Legion target</strong> in 9.3.0: Legion manages its
+          native skill install, bounded detection, headless executor, and packed-install smoke.
+          That is a Legion support claim, not a claim of stable upstream parity. The verified
+          upstream CLI is <code>grok 1.0.10 (5992780042ca) [alpha]</code>, so the alpha caveat remains.
+        </p>
+        <div class="map-notes">
+          <p>
+            <strong>Native skill paths.</strong> Local installs use
+            <code>$PROJECT/.grok/skills/legion/SKILL.md</code>. Global installs use
+            <code>$GROK_HOME/skills/legion/SKILL.md</code>; when <code>$GROK_HOME</code> is unset,
+            use the fallback path <code>&lt;home&gt;/.grok/skills/legion/SKILL.md</code>. The generated skill
+            appears to Grok as <code>/legion</code>. Plugins and <code>.grok/commands</code> are
+            separate surfaces and are not written by the Legion installer.
+          </p>
+          <p>
+            <strong>Headless contract.</strong> Legion passes argv, never a shell string:
+            <code>grok --prompt-file &lt;path&gt; --cwd &lt;repo&gt; --output-format json --permission-mode bypassPermissions</code>.
+            The completed <code>json</code> envelope is distinct from
+            <code>streaming-json</code> newline-delimited session updates and from
+            <code>grok agent stdio</code>, the separate ACP JSON-RPC surface.
+          </p>
+          <p>
+            <strong>Authentication and dispatch.</strong> Grok owns browser authentication and
+            API-key configuration. Legion never reads, stores, or transmits
+            <code>XAI_API_KEY</code>; it only performs the bounded version probe and lets Grok
+            report authentication diagnostics. Grok has no native parallel-subagent primitive,
+            so Legion executes its build and review waves sequentially.
+          </p>
         </div>
       </section>
 

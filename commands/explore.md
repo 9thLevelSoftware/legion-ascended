@@ -44,11 +44,12 @@ where wide latitude is correct, because nothing it produces is authoritative.
 <executor_guidance>
 The CLI accepts `--executor claude|codex|hermes|grok|manual|fake`; use the same
 selector in the recorded command when the discovery pass must run through a
-specific driver. Verify Grok Build first with `grok --version`: Grok is currently
-an alpha CLI and a compatible Legion target, not a first-class parity claim. Its
-native surface does not provide parallel subagents, so `--executor grok` runs the
-bounded headless workflow sequentially and must not be described as native
-parallel delegation.
+specific driver. Verify Grok Build first with `grok --version`: Grok is a
+first-class Legion target in this release for managed installation, detection,
+and bounded execution, while the upstream Grok CLI remains an alpha and is not
+a first-class upstream parity claim. Its native surface does not provide
+parallel subagents, so `--executor grok` runs the bounded headless workflow
+sequentially and must not be described as native parallel delegation.
 </executor_guidance>
 </authority>
 
