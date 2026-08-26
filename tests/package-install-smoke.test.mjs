@@ -190,19 +190,22 @@ test("published package installs production dependencies and executes a fake Gro
     const explicit = await runPackedCli(packedBin, project, env, ["build", "--executor", "grok", "--allow-dirty", "--json"]);
     assert.equal(JSON.parse(explicit.stdout).executor, "grok");
 
-    const automatic = await runPackedCli(packedBin, project, env, ["build", "--allow-dirty", "--json"]);
+    const automaticEnv = { ...env };
+    delete automaticEnv.GROK_AGENT;
+    delete automaticEnv.GROK_SESSION_ID;
+    const automatic = await runPackedCli(packedBin, project, automaticEnv, ["build", "--allow-dirty", "--json"]);
     assert.equal(JSON.parse(automatic.stdout).executor, "grok");
 
-    env.GROK_AGENT = "1";
+    const nestedEnv = { ...env, GROK_AGENT: "1" };
+    delete nestedEnv.GROK_SESSION_ID;
     await assert.rejects(
-      () => runPackedCli(packedBin, project, env, ["build", "--allow-dirty", "--json"]),
+      () => runPackedCli(packedBin, project, nestedEnv, ["build", "--allow-dirty", "--json"]),
       (error) => {
         assert.equal(error.code, 1);
         assert.equal(JSON.parse(error.stdout).executor, "manual");
         return true;
       }
     );
-    delete env.GROK_AGENT;
 
     env.FAKE_GROK_RESPONSE_FILE = path.join(GROK_FIXTURE_ROOT, "json-error.json");
     await assert.rejects(
