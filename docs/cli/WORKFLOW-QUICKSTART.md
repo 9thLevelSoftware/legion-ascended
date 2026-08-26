@@ -10,6 +10,12 @@ Use a first-class target unless you have a specific compatibility need:
 legion install --list-targets
 legion install --target codex --local --dry-run
 legion install --target codex --local
+
+# Grok Build is currently an alpha, compatible target
+# Verify the installed CLI before installing Legion's native skill surface
+grok --version
+legion install --target grok --local --dry-run
+legion install --target grok --local
 ```
 
 First-class targets expose one primary Legion entry point: `legion <command>` in the terminal, or a single `legion` skill/command/mode in the host. Compatibility, legacy, and manual-only targets are documented in `docs/cli/INSTALL-MATRIX.md` and shown with `legion install --list-targets --all-targets`.
@@ -19,6 +25,7 @@ First-class targets expose one primary Legion entry point: `legion <command>` in
 ```powershell
 legion status
 legion explore "clarify the first release slice" --executor fake
+legion explore "compare the implementation options" --executor grok
 legion start --goal "Metadata authoring and deterministic asset resolution"
 legion map --refresh --scope .                 # only when start returns map_refresh_required
 legion start --stage-draft .legion/var/intake-drafts/intake-draft.json # ignored host input from the review contract
@@ -51,12 +58,14 @@ Guidance runs write `workflow-run.json` plus command-specific markdown under `.l
 
 ## Executors
 
-`--executor` selects the driver that does the work. With the flag omitted, the first installed one wins: `claude`, then `codex`, then `manual`.
+`--executor` selects the driver that does the work. With the flag omitted, the first installed one wins: `claude`, then `codex`, `hermes`, `grok`, then `manual`.
 
 | Executor | What runs the task |
 | --- | --- |
 | `claude` | Claude Code, headless (`claude --print --output-format json`). `LEGION_CLAUDE_EXEC_TIMEOUT_MS` overrides the 15-minute cap. |
 | `codex` | Codex CLI (`codex exec`). `LEGION_CODEX_EXEC_TIMEOUT_MS` overrides the 5-minute cap. |
+| `hermes` | Hermes Agent (`hermes chat -q`). `LEGION_HERMES_EXEC_TIMEOUT_MS` overrides the 10-minute cap. |
+| `grok` | Grok Build headless JSON (`grok --prompt-file <path> --cwd <repository> --output-format json --permission-mode bypassPermissions`). `LEGION_GROK_EXEC_TIMEOUT_MS` overrides the 10-minute cap. The current Grok CLI is alpha and the Legion target is compatible, not first-class. Grok has no native parallel-subagent primitive, so Legion runs this path sequentially. |
 | `manual` | Nothing. It writes the instruction prompt, records `blocked`, and leaves the work to you. |
 | `fake` | A scripted in-memory adapter, for tests. |
 
@@ -71,6 +80,7 @@ Ad-hoc work still goes through the normal evidence gate:
 legion quick "fix the failing validation"
 legion polish packages/cli
 legion build --executor codex
+legion build --executor grok
 ```
 
 ## Approving Delta Specs
@@ -116,7 +126,7 @@ legion review --executor codex
 legion review --accept --approver dasbl
 ```
 
-`--executor` takes `claude`, `codex`, `manual`, or `fake`; see [Executors](#executors) above for what each one runs and what the default probes. Omitting `--approver` on the accept still exits 0 but records no human, which costs `whole_change_acceptance_evidence` at ship.
+`--executor` takes `claude`, `codex`, `hermes`, `grok`, `manual`, or `fake`; see [Executors](#executors) above for what each one runs and what the default probes. Omitting `--approver` on the accept still exits 0 but records no human, which costs `whole_change_acceptance_evidence` at ship.
 
 `legion build` blocks on a dirty git worktree unless you pass `--allow-dirty`. Use that override only when the current uncommitted state is intentional.
 

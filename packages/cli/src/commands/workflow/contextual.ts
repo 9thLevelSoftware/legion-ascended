@@ -60,11 +60,11 @@ import { collectEscalations, type ReviewFindingRecord } from "../../workflow/esc
 import { positionalText } from "./record.js";
 
 const HELP = {
-  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor claude|codex|manual|fake]\n\nBrainstorm freely before structured intake preparation. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Bare legion start automatically selects a compatible completed exploration; use --from-exploration <id> to select one explicitly or --without-exploration to opt out.",
+  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor claude|codex|hermes|grok|manual|fake]\n\nBrainstorm freely before structured intake preparation. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Bare legion start automatically selects a compatible completed exploration; use --from-exploration <id> to select one explicitly or --without-exploration to opt out.",
   map: "legion map [--refresh] [--profile inventory|structural] [--scope <path>] | [--check] [--profile inventory|structural] | [--query <text>] | [--why <fact-id>]\n\nGenerate, check, query, or explain deterministic codebase context.",
-  retro: "legion retro [--phase N|--milestone M] [--executor claude|codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
+  retro: "legion retro [--phase N|--milestone M] [--executor claude|codex|hermes|grok|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
   milestone: "legion milestone --status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>\n\nManage milestone status, summaries, and archives.",
-  council: "legion council <topic> [--executor claude|codex|manual|fake]\n\nRun governance deliberation formerly exposed as /legion:board."
+  council: "legion council <topic> [--executor claude|codex|hermes|grok|manual|fake]\n\nRun governance deliberation formerly exposed as /legion:board."
 } as const;
 
 export type ContextualWorkflowCommand = keyof typeof HELP;

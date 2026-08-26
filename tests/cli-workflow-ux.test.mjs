@@ -664,9 +664,28 @@ test("workflow grok availability validates semver and nested auto-selection guar
     assert.equal(await adapters.selectExecutionAdapterKind(undefined), "manual");
     assert.equal(await adapters.selectExecutionAdapterKind("grok"), "grok");
   });
-  await withGrokShim({ version: "grok unknown" }, async () => {
-    assert.equal(await adapters.grokAvailable(), false);
-  });
+  for (const version of [
+    "grok 1.0.10.11",
+    "grok 1.0",
+    "grok 1.0.10 extra semver 2.3.4",
+    "unrelated 1.0.10",
+    "version 1.0.10",
+    "grok unknown"
+  ]) {
+    await withGrokShim({ version }, async () => {
+      assert.equal(await adapters.grokAvailable(), false, `malformed Grok version accepted: ${version}`);
+    });
+  }
+  for (const version of [
+    "grok 1.0.10-alpha.1",
+    "grok 1.0.10+build.7",
+    "grok 1.0.10-alpha.1+build.7",
+    "grok 1.0.10 (5992780042ca) [alpha]"
+  ]) {
+    await withGrokShim({ version }, async () => {
+      assert.equal(await adapters.grokAvailable(), true, `valid Grok version rejected: ${version}`);
+    });
+  }
 });
 
 function claudeRunRequest(root, { readOnly = false, base = "chg_claude", run = "run_claude" } = {}) {
@@ -893,6 +912,10 @@ test("core workflow commands expose command-specific help", async () => {
     ["plan", /legion plan <phase-number>/],
     ["build", /legion build \[--executor claude\|codex\|hermes\|grok\|manual\|fake\]/],
     ["review", /legion review \[--executor claude\|codex\|hermes\|grok\|manual\|fake\]/],
+    ["advise", /legion advise <topic> \[--executor claude\|codex\|hermes\|grok\|manual\|fake\]/],
+    ["explore", /legion explore <topic> .*\[--executor claude\|codex\|hermes\|grok\|manual\|fake\]/],
+    ["retro", /legion retro .*\[--executor claude\|codex\|hermes\|grok\|manual\|fake\]/],
+    ["council", /legion council <topic> \[--executor claude\|codex\|hermes\|grok\|manual\|fake\]/],
     ["approve", /legion approve <subject>/],
     ["status", /legion status/],
     ["validate", /legion validate/],

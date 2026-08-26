@@ -40036,7 +40036,7 @@ var DEFAULT_CODEX_EXEC_TIMEOUT_MS = 3e5;
 var DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 9e5;
 var DEFAULT_HERMES_EXEC_TIMEOUT_MS = 6e5;
 var DEFAULT_GROK_EXEC_TIMEOUT_MS = 6e5;
-var GROK_VERSION_RE = /(?:^|[^\d])\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:$|[^\d])/u;
+var GROK_VERSION_RE = /^grok\s+(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\s+\([0-9A-Za-z-]+\))?(?:\s+\[[A-Za-z0-9.-]+\])?\s*$/u;
 var CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"];
 function claudeExecArgs(input) {
   return [
@@ -63234,7 +63234,7 @@ function positionalText(context) {
 // packages/cli/src/commands/workflow/ad-hoc.ts
 var HELP = {
   quick: "legion quick <task>\n\nCreate a typed ad-hoc taskgraph and route it through legion build.",
-  advise: "legion advise <topic> [--executor claude|codex|manual|fake]\n\nRun read-only advisory analysis and write guidance artifacts.",
+  advise: "legion advise <topic> [--executor claude|codex|hermes|grok|manual|fake]\n\nRun read-only advisory analysis and write guidance artifacts.",
   polish: "legion polish [target]\n\nCreate a typed polish taskgraph scoped to the target or current worktree.",
   learn: "legion learn <lesson>\n\nRecord project-specific operational learning and update the knowledge index."
 };
@@ -63914,11 +63914,11 @@ async function collectEscalations(input) {
 
 // packages/cli/src/commands/workflow/contextual.ts
 var HELP2 = {
-  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor claude|codex|manual|fake]\n\nBrainstorm freely before structured intake preparation. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Bare legion start automatically selects a compatible completed exploration; use --from-exploration <id> to select one explicitly or --without-exploration to opt out.",
+  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor claude|codex|hermes|grok|manual|fake]\n\nBrainstorm freely before structured intake preparation. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Bare legion start automatically selects a compatible completed exploration; use --from-exploration <id> to select one explicitly or --without-exploration to opt out.",
   map: "legion map [--refresh] [--profile inventory|structural] [--scope <path>] | [--check] [--profile inventory|structural] | [--query <text>] | [--why <fact-id>]\n\nGenerate, check, query, or explain deterministic codebase context.",
-  retro: "legion retro [--phase N|--milestone M] [--executor claude|codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
+  retro: "legion retro [--phase N|--milestone M] [--executor claude|codex|hermes|grok|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
   milestone: "legion milestone --status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>\n\nManage milestone status, summaries, and archives.",
-  council: "legion council <topic> [--executor claude|codex|manual|fake]\n\nRun governance deliberation formerly exposed as /legion:board."
+  council: "legion council <topic> [--executor claude|codex|hermes|grok|manual|fake]\n\nRun governance deliberation formerly exposed as /legion:board."
 };
 async function handleContextualWorkflow(context, command) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {

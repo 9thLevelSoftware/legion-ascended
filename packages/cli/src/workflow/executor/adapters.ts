@@ -27,7 +27,7 @@ const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 300_000;
 const DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 900_000;
 const DEFAULT_HERMES_EXEC_TIMEOUT_MS = 600_000;
 const DEFAULT_GROK_EXEC_TIMEOUT_MS = 600_000;
-const GROK_VERSION_RE = /(?:^|[^\d])\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:$|[^\d])/u;
+const GROK_VERSION_RE = /^grok\s+(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\s+\([0-9A-Za-z-]+\))?(?:\s+\[[A-Za-z0-9.-]+\])?\s*$/u;
 
 // Claude Code has no OS-level sandbox flag, so a read-only run is enforced by
 // denying every tool that can mutate the repository. The guarded execution
