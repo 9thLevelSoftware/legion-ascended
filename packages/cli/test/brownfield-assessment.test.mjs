@@ -377,6 +377,55 @@ test("does not block on FIFO publication lock metadata in the fallback path", as
   }
 });
 
+test("does not read through an ordinary directory rebind", async () => {
+  const fixture = await writeMapFixture();
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, scope: ".", snapshot: fixture.record });
+    const bundlePath = path.join(fixture.repositoryRoot, ...created.paths.root.split("/"));
+    const assessmentParent = path.dirname(bundlePath);
+    const hiddenPath = `${assessmentParent}.ordinary-race-hidden`;
+    const replacementPath = `${assessmentParent}.ordinary-race-replacement`;
+    await cp(assessmentParent, replacementPath, { recursive: true });
+    const replacementStatePath = path.join(replacementPath, path.basename(bundlePath), "state.json");
+    const replacementState = JSON.parse(await readFile(replacementStatePath, "utf8"));
+    replacementState.phase = "signals";
+    await writeFile(replacementStatePath, stableProtocolJson(replacementState), "utf8");
+
+    let stop = false;
+    let swaps = 0;
+    const mutator = (async () => {
+      while (!stop && swaps < 2_000) {
+        try {
+          await rename(assessmentParent, hiddenPath);
+          await rename(replacementPath, assessmentParent);
+          swaps += 1;
+          await new Promise((resolve) => setImmediate(resolve));
+          await rename(assessmentParent, replacementPath);
+          await rename(hiddenPath, assessmentParent);
+        } catch {
+          await rename(assessmentParent, replacementPath).catch(() => undefined);
+          await rename(hiddenPath, assessmentParent).catch(() => undefined);
+        }
+      }
+    })();
+
+    const observations = await Promise.all(Array.from({ length: 128 }, async () => {
+      try {
+        const result = await readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId });
+        return result.state.phase;
+      } catch {
+        return "rejected";
+      }
+    }));
+    stop = true;
+    await mutator;
+    assert.ok(swaps > 0, "ordinary-directory rebind did not run");
+    assert.ok(!observations.includes("signals"), `read bundle through ordinary directory rebind: ${observations.join(",")}`);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("fails closed when persisted effort no longer matches the assessment identity", async () => {
   const fixture = await writeMapFixture();
   try {

@@ -78,14 +78,15 @@ type AssessmentProvenance = {
   readonly semanticSqliteSha256: CodeIndexSha256;
 };
 
+type BundleFileHandle = Awaited<ReturnType<typeof open>>;
+type BundleStat = Awaited<ReturnType<typeof lstat>>;
 type ResolvedBundlePath = {
   readonly repositoryRoot: string;
   readonly repositoryPath: ArtifactPath;
   readonly absolutePath: string;
+  readonly repositoryStat: BundleStat;
+  readonly componentStats: readonly (BundleStat | undefined)[];
 };
-
-type BundleFileHandle = Awaited<ReturnType<typeof open>>;
-type BundleStat = Awaited<ReturnType<typeof lstat>>;
 type OpenedBundleFile = {
   readonly descriptor: BundleFileHandle;
   readonly openedStat: BundleStat;
@@ -95,11 +96,22 @@ type OpenedBundleDirectory = {
   readonly absolutePath: string;
   readonly descriptor?: BundleFileHandle;
 };
+type LockMetadata = {
+  readonly pid?: unknown;
+  readonly acquiredAt?: unknown;
+  readonly token?: unknown;
+};
+type StaleLockObservation = {
+  readonly lockIdentity: BundleStat;
+  readonly metadataToken?: string;
+};
 type PublishLock = {
   readonly absolutePath: string;
   readonly name: string;
   readonly parentDescriptor?: BundleFileHandle;
   readonly lockDescriptor?: BundleFileHandle;
+  readonly lockIdentity: BundleStat;
+  readonly metadataToken: string;
 };
 
 function isNodeErrorCode(error: unknown, code: string): boolean {
@@ -163,7 +175,11 @@ async function assertStableAbsolutePath(absolutePath: string, displayPath: strin
   }
 }
 
-async function assertStableFallbackPath(resolved: ResolvedBundlePath, artifactPath: ArtifactPath, allowMissingFinal = true): Promise<void> {
+async function assertStableFallbackPath(
+  resolved: Pick<ResolvedBundlePath, "absolutePath">,
+  artifactPath: ArtifactPath,
+  allowMissingFinal = true
+): Promise<void> {
   await assertStableAbsolutePath(resolved.absolutePath, artifactPath, allowMissingFinal);
 }
 
@@ -183,6 +199,24 @@ async function removeRelative(parent: BundleFileHandle, name: string): Promise<v
   await rm(descriptorChildPath(parent, name), { recursive: true, force: true });
 }
 
+async function removeRelativeIfOwned(
+  parent: BundleFileHandle,
+  name: string,
+  expectedIdentity: BundleStat
+): Promise<void> {
+  const currentStat = await lstatIfPresent(descriptorChildPath(parent, name));
+  if (currentStat === undefined || currentStat.isSymbolicLink() ||
+    sameFileIdentity(expectedIdentity, currentStat) === false) return;
+  await removeRelative(parent, name);
+}
+
+async function removePathIfOwned(absolutePath: string, expectedIdentity: BundleStat): Promise<void> {
+  const currentStat = await lstatIfPresent(absolutePath);
+  if (currentStat === undefined || currentStat.isSymbolicLink() ||
+    sameFileIdentity(expectedIdentity, currentStat) === false) return;
+  await rm(absolutePath, { recursive: true, force: true });
+}
+
 async function openBundleDirectory(
   repositoryRoot: string,
   artifactPath: ArtifactPath,
@@ -195,6 +229,9 @@ async function openBundleDirectory(
   }
 
   const handles: BundleFileHandle[] = [];
+  let result: OpenedBundleDirectory | undefined;
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     const root = await open(
       resolved.repositoryRoot,
@@ -205,8 +242,9 @@ async function openBundleDirectory(
     if (!rootStat.isDirectory()) {
       throw new Error(`Brownfield assessment repository root is not a directory: ${repositoryRoot}`);
     }
+    assertSameFileIdentity(resolved.repositoryStat, rootStat, repositoryRoot);
     let current = root;
-    for (const component of artifactPath.split("/")) {
+    for (const [index, component] of artifactPath.split("/").entries()) {
       let next: BundleFileHandle;
       try {
         next = await openRelativeDirectory(current, component);
@@ -220,23 +258,43 @@ async function openBundleDirectory(
         next = await openRelativeDirectory(current, component);
       }
       const nextStat = await next.stat();
+      handles.push(next);
       if (!nextStat.isDirectory()) {
-        await next.close().catch(() => undefined);
         throw new Error(`Brownfield assessment artifact path contains a non-directory component: ${artifactPath}`);
       }
-      handles.push(next);
+      const validatedStat = resolved.componentStats[index];
+      if (validatedStat !== undefined) assertSameFileIdentity(validatedStat, nextStat, artifactPath);
       current = next;
     }
-    for (const handle of handles.slice(0, -1)) await handle.close();
-    return { repositoryRoot: resolved.repositoryRoot, absolutePath: resolved.absolutePath, descriptor: current };
+    result = { repositoryRoot: resolved.repositoryRoot, absolutePath: resolved.absolutePath, descriptor: current };
   } catch (error) {
-    for (const handle of handles.reverse()) await handle.close().catch(() => undefined);
-    throw error;
+    operationError = error;
+    hasOperationError = true;
   }
+
+  const cleanupErrors: unknown[] = [];
+  if (result === undefined || hasOperationError) {
+    for (const handle of handles.reverse()) {
+      await attemptCleanup(cleanupErrors, () => handle.close());
+    }
+  } else {
+    const retained = handles[handles.length - 1];
+    for (const handle of handles.slice(0, -1).reverse()) {
+      await attemptCleanup(cleanupErrors, () => handle.close());
+    }
+    if (cleanupErrors.length > 0 && retained !== undefined) {
+      await attemptCleanup(cleanupErrors, () => retained.close());
+      result = undefined;
+    }
+  }
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to open ${artifactPath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${artifactPath}`);
+  return result!;
 }
 
 async function closeBundleDirectory(directory: OpenedBundleDirectory | undefined): Promise<void> {
-  await directory?.descriptor?.close().catch(() => undefined);
+  if (directory?.descriptor === undefined) return;
+  await directory.descriptor.close();
 }
 
 function stripSha256Prefix(value: string): CodeIndexSha256 {
@@ -267,32 +325,48 @@ async function resolveSafeBundlePath(repositoryRoot: string, artifactPath: Artif
   assertAssessmentArtifactPath(artifactPath);
   const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath });
   const repositoryRealPath = path.resolve(resolved.repositoryRoot);
+  const repositoryStat = await lstat(repositoryRealPath);
+  if (repositoryStat.isSymbolicLink() || !repositoryStat.isDirectory()) {
+    throw new Error(`Brownfield assessment repository root is not a directory: ${repositoryRoot}`);
+  }
   const assessmentRealPath = path.join(repositoryRealPath, ".legion", "project", "assessment");
   const relativeToAssessment = path.relative(assessmentRealPath, resolved.absolutePath);
   if (relativeToAssessment === ".." || relativeToAssessment.startsWith(`..${path.sep}`) || path.isAbsolute(relativeToAssessment)) {
     throw new Error(`Brownfield assessment artifact path escapes ${ASSESSMENT_ROOT}: ${artifactPath}`);
   }
 
+  const components = artifactPath.split("/");
+  const componentStats: (BundleStat | undefined)[] = [];
   let current = repositoryRealPath;
-  for (const [index, component] of artifactPath.split("/").entries()) {
+  for (const [index, component] of components.entries()) {
     current = path.join(current, component);
     let componentStat;
     try {
       componentStat = await lstat(current);
     } catch (error) {
-      if (isNodeErrorCode(error, "ENOENT")) break;
+      if (isNodeErrorCode(error, "ENOENT")) {
+        componentStats.push(undefined);
+        break;
+      }
       throw error;
     }
+    componentStats.push(componentStat);
     if (componentStat.isSymbolicLink()) {
       throw new Error(`Brownfield assessment artifact path contains a symbolic link: ${artifactPath}`);
     }
-    const isFinalComponent = index === artifactPath.split("/").length - 1;
+    const isFinalComponent = index === components.length - 1;
     if (!isFinalComponent && !componentStat.isDirectory()) {
       throw new Error(`Brownfield assessment artifact path contains a non-directory component: ${artifactPath}`);
     }
   }
 
-  return { repositoryRoot: repositoryRealPath, repositoryPath: resolved.repositoryPath, absolutePath: resolved.absolutePath };
+  return {
+    repositoryRoot: repositoryRealPath,
+    repositoryPath: resolved.repositoryPath,
+    absolutePath: resolved.absolutePath,
+    repositoryStat,
+    componentStats
+  };
 }
 
 async function lstatIfPresent(absolutePath: string): Promise<Awaited<ReturnType<typeof lstat>> | undefined> {
@@ -305,27 +379,34 @@ async function lstatIfPresent(absolutePath: string): Promise<Awaited<ReturnType<
 }
 
 async function fsyncDirectoryIfSupported(directory: string): Promise<void> {
-  let handle;
+  let handle: BundleFileHandle | undefined;
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     const directoryStat = await lstat(directory);
-    if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) return;
-    handle = await open(
-      directory,
-      fsConstants.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG | NONBLOCK_FLAG
-    );
-    const openedStat = await handle.stat();
-    if (!openedStat.isDirectory()) return;
-    await handle.sync();
-  } catch (error) {
-    if (isNodeErrorCode(error, "EACCES") || isNodeErrorCode(error, "EBADF") ||
-      isNodeErrorCode(error, "EISDIR") || isNodeErrorCode(error, "EINVAL") ||
-      isNodeErrorCode(error, "ENOTSUP") || isNodeErrorCode(error, "EPERM")) {
-      return;
+    if (!directoryStat.isSymbolicLink() && directoryStat.isDirectory()) {
+      handle = await open(
+        directory,
+        fsConstants.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG | NONBLOCK_FLAG
+      );
+      const openedStat = await handle.stat();
+      if (openedStat.isDirectory()) {
+        assertSameFileIdentity(directoryStat, openedStat, directory);
+        await handle.sync();
+      }
     }
-    throw error;
-  } finally {
-    await handle?.close();
+  } catch (error) {
+    if (!(isNodeErrorCode(error, "EACCES") || isNodeErrorCode(error, "EBADF") ||
+      isNodeErrorCode(error, "EISDIR") || isNodeErrorCode(error, "EINVAL") ||
+      isNodeErrorCode(error, "ENOTSUP") || isNodeErrorCode(error, "EPERM"))) {
+      operationError = error;
+      hasOperationError = true;
+    }
   }
+  const cleanupErrors: unknown[] = [];
+  if (handle !== undefined) await attemptCleanup(cleanupErrors, () => handle!.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to sync ${directory}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${directory}`);
 }
 
 function errorWithCode(code: string, message: string): Error & { readonly code: string } {
@@ -339,6 +420,45 @@ function sameFileIdentity(left: BundleStat, right: BundleStat): boolean | undefi
   return left.dev === right.dev && left.ino === right.ino;
 }
 
+function assertSameFileIdentity(expected: BundleStat, actual: BundleStat, displayPath: string): void {
+  if (sameFileIdentity(expected, actual) === false) {
+    throw new Error(`Brownfield assessment path changed while opening: ${displayPath}`);
+  }
+}
+
+async function attemptCleanup(
+  cleanupErrors: unknown[],
+  cleanup: () => Promise<void>
+): Promise<void> {
+  try {
+    await cleanup();
+  } catch (error) {
+    cleanupErrors.push(error);
+  }
+}
+
+function throwWithCleanup(
+  operationError: unknown,
+  cleanupErrors: readonly unknown[],
+  context: string
+): never {
+  if (cleanupErrors.length === 0) throw operationError;
+  if (operationError instanceof Error) {
+    Object.defineProperty(operationError, "cleanupErrors", {
+      configurable: true,
+      enumerable: false,
+      value: cleanupErrors,
+      writable: false
+    });
+    throw operationError;
+  }
+  throw new AggregateError([operationError, ...cleanupErrors], context);
+}
+
+function throwCleanupOnly(cleanupErrors: readonly unknown[], context: string): void {
+  if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, context);
+}
+
 function boundedReadError(artifactPath: ArtifactPath): Error & { readonly code: string } {
   return errorWithCode(
     "ERR_BROWNFIELD_BUNDLE_SIZE",
@@ -346,13 +466,16 @@ function boundedReadError(artifactPath: ArtifactPath): Error & { readonly code: 
   );
 }
 
-async function writeLockMetadata(lockPath: string, lockDescriptor?: BundleFileHandle): Promise<void> {
+async function writeLockMetadata(lockPath: string, lockDescriptor?: BundleFileHandle): Promise<string> {
+  const token = randomUUID();
   const metadata = JSON.stringify({
     pid: process.pid,
     acquiredAt: Date.now(),
-    token: randomUUID()
+    token
   });
   let descriptor: BundleFileHandle | undefined;
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     if (lockDescriptor === undefined) await assertStableAbsolutePath(lockPath, lockPath, false);
     descriptor = lockDescriptor === undefined
@@ -360,9 +483,15 @@ async function writeLockMetadata(lockPath: string, lockDescriptor?: BundleFileHa
       : await openRelativeFile(lockDescriptor, PUBLISH_LOCK_METADATA, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, 0o600);
     await descriptor.writeFile(metadata, "utf8");
     await descriptor.sync();
-  } finally {
-    await descriptor?.close().catch(() => undefined);
+  } catch (error) {
+    operationError = error;
+    hasOperationError = true;
   }
+  const cleanupErrors: unknown[] = [];
+  if (descriptor !== undefined) await attemptCleanup(cleanupErrors, () => descriptor!.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to write ${PUBLISH_LOCK_METADATA}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${PUBLISH_LOCK_METADATA}`);
+  return token;
 }
 
 function processIsAlive(pid: number): boolean {
@@ -377,93 +506,258 @@ function processIsAlive(pid: number): boolean {
 
 async function readLockMetadata(lockPath: string, lockDescriptor?: BundleFileHandle): Promise<string | undefined> {
   let descriptor: BundleFileHandle | undefined;
+  let result: string | undefined;
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     const metadataPath = path.join(lockPath, PUBLISH_LOCK_METADATA);
     const fallbackStat = lockDescriptor === undefined ? await lstatIfPresent(metadataPath) : undefined;
-    if (fallbackStat !== undefined && (fallbackStat.isSymbolicLink() || !fallbackStat.isFile())) return undefined;
-    descriptor = lockDescriptor === undefined
-      ? await open(metadataPath, fsConstants.O_RDONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG)
-      : await openRelativeFile(lockDescriptor, PUBLISH_LOCK_METADATA, fsConstants.O_RDONLY);
-    const metadataStat = await descriptor.stat();
-    if (!metadataStat.isFile() ||
-      (fallbackStat !== undefined && sameFileIdentity(fallbackStat, metadataStat) === false) ||
-      Number(metadataStat.size) > MAX_PUBLISH_LOCK_METADATA_BYTES) return undefined;
-    const chunks: Buffer[] = [];
-    let totalBytes = 0;
-    while (true) {
-      const remaining = MAX_PUBLISH_LOCK_METADATA_BYTES + 1 - totalBytes;
-      const buffer = Buffer.allocUnsafe(remaining);
-      const { bytesRead } = await descriptor.read(buffer, 0, buffer.length, null);
-      if (bytesRead === 0) break;
-      chunks.push(buffer.subarray(0, bytesRead));
-      totalBytes += bytesRead;
-      if (totalBytes > MAX_PUBLISH_LOCK_METADATA_BYTES) return undefined;
+    if (fallbackStat === undefined || (!fallbackStat.isSymbolicLink() && fallbackStat.isFile())) {
+      if (fallbackStat?.isSymbolicLink()) {
+        result = undefined;
+      } else {
+        descriptor = lockDescriptor === undefined
+          ? await open(metadataPath, fsConstants.O_RDONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG)
+          : await openRelativeFile(lockDescriptor, PUBLISH_LOCK_METADATA, fsConstants.O_RDONLY);
+        const metadataStat = await descriptor.stat();
+        if (metadataStat.isFile() &&
+          (fallbackStat === undefined || sameFileIdentity(fallbackStat, metadataStat) !== false) &&
+          Number(metadataStat.size) <= MAX_PUBLISH_LOCK_METADATA_BYTES) {
+          const chunks: Buffer[] = [];
+          let totalBytes = 0;
+          while (true) {
+            const remaining = MAX_PUBLISH_LOCK_METADATA_BYTES + 1 - totalBytes;
+            const buffer = Buffer.allocUnsafe(remaining);
+            const { bytesRead } = await descriptor.read(buffer, 0, buffer.length, null);
+            if (bytesRead === 0) break;
+            chunks.push(buffer.subarray(0, bytesRead));
+            totalBytes += bytesRead;
+            if (totalBytes > MAX_PUBLISH_LOCK_METADATA_BYTES) break;
+          }
+          const finalStat = await descriptor.stat();
+          if (totalBytes <= MAX_PUBLISH_LOCK_METADATA_BYTES && finalStat.isFile() &&
+            sameFileIdentity(metadataStat, finalStat) !== false && finalStat.size === totalBytes) {
+            result = Buffer.concat(chunks, totalBytes).toString("utf8");
+          }
+        }
+      }
     }
-    const finalStat = await descriptor.stat();
-    if (!finalStat.isFile() || finalStat.size !== totalBytes) return undefined;
-    return Buffer.concat(chunks, totalBytes).toString("utf8");
   } catch (error) {
-    if (isNodeErrorCode(error, "ENOENT")) return undefined;
-    throw error;
-  } finally {
-    await descriptor?.close().catch(() => undefined);
+    if (!isNodeErrorCode(error, "ENOENT")) {
+      operationError = error;
+      hasOperationError = true;
+    }
+  }
+  const cleanupErrors: unknown[] = [];
+  if (descriptor !== undefined) await attemptCleanup(cleanupErrors, () => descriptor!.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to read ${PUBLISH_LOCK_METADATA}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${PUBLISH_LOCK_METADATA}`);
+  return result;
+}
+
+function parseLockMetadata(text: string | undefined): LockMetadata | undefined {
+  if (text === undefined) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return typeof parsed === "object" && parsed !== null ? parsed as LockMetadata : undefined;
+  } catch {
+    return undefined;
   }
 }
 
-async function lockIsStale(lockPath: string, lockDescriptor?: BundleFileHandle): Promise<boolean> {
+function lockMetadataToken(text: string | undefined): string | undefined {
+  const token = parseLockMetadata(text)?.token;
+  return typeof token === "string" ? token : undefined;
+}
+
+async function lockIsStale(lockPath: string, lockDescriptor?: BundleFileHandle): Promise<StaleLockObservation | undefined> {
   const lockStat = lockDescriptor === undefined
     ? await lstatIfPresent(lockPath)
     : await lockDescriptor.stat();
-  if (lockStat === undefined) return false;
+  if (lockStat === undefined) return undefined;
   if (lockStat.isSymbolicLink() || !lockStat.isDirectory()) {
     throw new Error(`Brownfield assessment publication lock is unsafe: ${lockPath}`);
   }
   const metadataText = await readLockMetadata(lockPath, lockDescriptor);
-  if (metadataText !== undefined) {
-    try {
-      const metadata = JSON.parse(metadataText) as { pid?: unknown; acquiredAt?: unknown };
-      if (typeof metadata.acquiredAt === "number" && Date.now() - metadata.acquiredAt < PUBLISH_LOCK_STALE_MS) {
-        return false;
+  const metadata = parseLockMetadata(metadataText);
+  if (typeof metadata?.acquiredAt === "number" && Date.now() - metadata.acquiredAt < PUBLISH_LOCK_STALE_MS) {
+    return undefined;
+  }
+  if (typeof metadata?.pid === "number" && processIsAlive(metadata.pid)) return undefined;
+  if (Date.now() - Number(lockStat.mtimeMs) < PUBLISH_LOCK_STALE_MS) return undefined;
+  const metadataToken = lockMetadataToken(metadataText);
+  return metadataToken === undefined
+    ? { lockIdentity: lockStat }
+    : { lockIdentity: lockStat, metadataToken };
+}
+
+async function lockIsOwned(lock: PublishLock): Promise<boolean> {
+  const lockPathStat = lock.parentDescriptor === undefined
+    ? await lstatIfPresent(lock.absolutePath)
+    : await lstatIfPresent(descriptorChildPath(lock.parentDescriptor, lock.name));
+  const lockStat = lock.lockDescriptor === undefined
+    ? lockPathStat
+    : await lock.lockDescriptor.stat();
+  if (lockPathStat === undefined || lockStat === undefined || lockPathStat.isSymbolicLink() || !lockPathStat.isDirectory() ||
+    !lockStat.isDirectory()) return false;
+  if (sameFileIdentity(lock.lockIdentity, lockPathStat) === false ||
+    sameFileIdentity(lock.lockIdentity, lockStat) === false) return false;
+  return lockMetadataToken(await readLockMetadata(lock.absolutePath, lock.lockDescriptor)) === lock.metadataToken;
+}
+
+async function removeLockIfOwned(
+  parentDescriptor: BundleFileHandle | undefined,
+  lockName: string,
+  lockPath: string,
+  expectedIdentity: BundleStat,
+  expectedToken?: string
+): Promise<void> {
+  let lockDescriptor: BundleFileHandle | undefined;
+  let shouldRemove = false;
+  let operationError: unknown;
+  let hasOperationError = false;
+  try {
+    const currentStat = parentDescriptor === undefined
+      ? await lstatIfPresent(lockPath)
+      : await lstatIfPresent(descriptorChildPath(parentDescriptor, lockName));
+    if (currentStat !== undefined && !currentStat.isSymbolicLink() && currentStat.isDirectory() &&
+      sameFileIdentity(expectedIdentity, currentStat) !== false) {
+      if (parentDescriptor === undefined) {
+        if (expectedToken === undefined || lockMetadataToken(await readLockMetadata(lockPath)) === expectedToken) {
+          shouldRemove = true;
+        }
+      } else {
+        lockDescriptor = await openRelativeDirectory(parentDescriptor, lockName);
+        const openedStat = await lockDescriptor.stat();
+        if (openedStat.isDirectory() && sameFileIdentity(expectedIdentity, openedStat) !== false &&
+          (expectedToken === undefined || lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor)) === expectedToken)) {
+          shouldRemove = true;
+        }
       }
-      if (typeof metadata.pid === "number" && processIsAlive(metadata.pid)) return false;
-    } catch {
-      // Corrupt metadata is only recoverable once the directory itself is old.
+    }
+  } catch (error) {
+    if (!(isNodeErrorCode(error, "ENOENT") || isNodeErrorCode(error, "ELOOP"))) {
+      operationError = error;
+      hasOperationError = true;
     }
   }
-  return Date.now() - Number(lockStat.mtimeMs) >= PUBLISH_LOCK_STALE_MS;
+  const cleanupErrors: unknown[] = [];
+  if (shouldRemove) {
+    try {
+      if (parentDescriptor !== undefined) {
+        await removeRelative(parentDescriptor, lockName);
+      } else {
+        await rm(lockPath, { recursive: true, force: true });
+      }
+    } catch (error) {
+      operationError = error;
+      hasOperationError = true;
+    }
+  }
+  if (lockDescriptor !== undefined) await attemptCleanup(cleanupErrors, () => lockDescriptor!.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to remove ${lockPath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${lockPath}`);
 }
 
 async function releasePublishLock(lock: PublishLock): Promise<void> {
-  await lock.lockDescriptor?.close().catch(() => undefined);
-  if (lock.parentDescriptor !== undefined) {
-    await removeRelative(lock.parentDescriptor, lock.name).catch(() => undefined);
-  } else {
-    await rm(lock.absolutePath, { recursive: true, force: true }).catch(() => undefined);
+  let operationError: unknown;
+  let hasOperationError = false;
+  try {
+    if (await lockIsOwned(lock)) {
+      await removeLockIfOwned(lock.parentDescriptor, lock.name, lock.absolutePath, lock.lockIdentity, lock.metadataToken);
+    }
+  } catch (error) {
+    operationError = error;
+    hasOperationError = true;
   }
+  const cleanupErrors: unknown[] = [];
+  if (lock.lockDescriptor !== undefined) {
+    await attemptCleanup(cleanupErrors, () => lock.lockDescriptor!.close());
+  }
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to release ${lock.absolutePath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${lock.absolutePath}`);
 }
 
-async function quarantineStaleLock(parent: OpenedBundleDirectory, lockName: string, lockPath: string): Promise<boolean> {
+async function quarantineStaleLock(
+  parent: OpenedBundleDirectory,
+  lockName: string,
+  lockPath: string,
+  observed: StaleLockObservation
+): Promise<boolean> {
   const quarantineName = `${lockName}.stale-${process.pid}-${randomUUID()}`;
+  const quarantinePath = path.join(parent.absolutePath, quarantineName);
+  let lockDescriptor: BundleFileHandle | undefined;
+  let result = false;
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     if (parent.descriptor === undefined) {
       await assertStableAbsolutePath(parent.absolutePath, parent.absolutePath, false);
-      await rename(lockPath, path.join(parent.absolutePath, quarantineName));
+      const currentStat = await lstatIfPresent(lockPath);
+      if (currentStat === undefined || currentStat.isSymbolicLink() || !currentStat.isDirectory() ||
+        sameFileIdentity(observed.lockIdentity, currentStat) === false) {
+        result = false;
+      } else {
+        const currentToken = lockMetadataToken(await readLockMetadata(lockPath));
+        const finalStat = await lstatIfPresent(lockPath);
+        if (finalStat === undefined || finalStat.isSymbolicLink() || !finalStat.isDirectory() ||
+          sameFileIdentity(observed.lockIdentity, finalStat) === false || currentToken !== observed.metadataToken) {
+          result = false;
+        } else {
+          await rename(lockPath, quarantinePath);
+          result = true;
+        }
+      }
     } else {
-      await rename(
-        descriptorChildPath(parent.descriptor, lockName),
-        descriptorChildPath(parent.descriptor, quarantineName)
-      );
+      try {
+        lockDescriptor = await openRelativeDirectory(parent.descriptor, lockName);
+      } catch (error) {
+        if (isNodeErrorCode(error, "ENOENT") || isNodeErrorCode(error, "ELOOP")) {
+          result = false;
+        } else {
+          throw error;
+        }
+      }
+      if (lockDescriptor !== undefined) {
+        const currentStat = await lockDescriptor.stat();
+        if (!currentStat.isDirectory() || sameFileIdentity(observed.lockIdentity, currentStat) === false) {
+          result = false;
+        } else {
+          const currentToken = lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor));
+          const finalStat = await lockDescriptor.stat();
+          const namedStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, lockName));
+          if (namedStat === undefined || namedStat.isSymbolicLink() || !namedStat.isDirectory() ||
+            !finalStat.isDirectory() || sameFileIdentity(observed.lockIdentity, finalStat) === false ||
+            sameFileIdentity(observed.lockIdentity, namedStat) === false || currentToken !== observed.metadataToken) {
+            result = false;
+          } else {
+            await rename(
+              descriptorChildPath(parent.descriptor, lockName),
+              descriptorChildPath(parent.descriptor, quarantineName)
+            );
+            result = true;
+          }
+        }
+      }
     }
   } catch (error) {
-    if (isNodeErrorCode(error, "ENOENT")) return false;
-    throw error;
+    if (isNodeErrorCode(error, "ENOENT")) {
+      result = false;
+    } else {
+      operationError = error;
+      hasOperationError = true;
+    }
   }
-  if (parent.descriptor === undefined) {
-    await rm(path.join(parent.absolutePath, quarantineName), { recursive: true, force: true }).catch(() => undefined);
-  } else {
-    await removeRelative(parent.descriptor, quarantineName).catch(() => undefined);
+  const cleanupErrors: unknown[] = [];
+  if (lockDescriptor !== undefined) await attemptCleanup(cleanupErrors, () => lockDescriptor!.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to quarantine ${lockPath}`);
+  if (result) {
+    await attemptCleanup(cleanupErrors, parent.descriptor === undefined
+      ? () => removePathIfOwned(quarantinePath, observed.lockIdentity)
+      : () => removeRelativeIfOwned(parent.descriptor!, quarantineName, observed.lockIdentity));
   }
-  return true;
+  throwCleanupOnly(cleanupErrors, `Unable to remove quarantined lock ${quarantinePath}`);
+  return result;
 }
 
 async function acquirePublishLock(
@@ -477,30 +771,63 @@ async function acquirePublishLock(
     try {
       if (parent.descriptor === undefined) {
         await assertStableFallbackPath(
-          { repositoryRoot: parent.repositoryRoot, repositoryPath: artifactPathSchema.parse(ASSESSMENT_ROOT), absolutePath: parent.absolutePath },
+          { absolutePath: parent.absolutePath },
           artifactPathSchema.parse(ASSESSMENT_ROOT),
           false
         );
-        await mkdir(lockPath, { mode: 0o700 });
+        let metadataToken: string;
+        let lockIdentity: BundleStat | undefined;
         try {
-          await writeLockMetadata(lockPath);
-        } catch (metadataError) {
-          await rm(lockPath, { recursive: true, force: true }).catch(() => undefined);
-          throw metadataError;
-        }
-      } else {
-        await mkdirRelative(parent.descriptor, lockName);
-        const lockDescriptor = await openRelativeDirectory(parent.descriptor, lockName);
-        try {
-          await writeLockMetadata(lockPath, lockDescriptor);
-          return { absolutePath: lockPath, name: lockName, parentDescriptor: parent.descriptor, lockDescriptor };
+          await mkdir(lockPath, { mode: 0o700 });
+          lockIdentity = await lstat(lockPath);
+          if (!lockIdentity.isDirectory()) throw new Error(`Brownfield assessment publication lock is unsafe: ${lockPath}`);
+          metadataToken = await writeLockMetadata(lockPath);
+          return { absolutePath: lockPath, name: lockName, lockIdentity, metadataToken };
         } catch (error) {
-          await lockDescriptor.close().catch(() => undefined);
-          await removeRelative(parent.descriptor, lockName).catch(() => undefined);
-          throw error;
+          const cleanupErrors: unknown[] = [];
+          if (lockIdentity !== undefined) {
+            await attemptCleanup(cleanupErrors, () => removeLockIfOwned(undefined, lockName, lockPath, lockIdentity!));
+          }
+          throwWithCleanup(error, cleanupErrors, `Unable to create ${lockPath}`);
         }
       }
-      return { absolutePath: lockPath, name: lockName };
+
+      let lockDescriptor: BundleFileHandle | undefined;
+      let lockIdentity: BundleStat | undefined;
+      try {
+        await mkdirRelative(parent.descriptor, lockName);
+        const createdLockStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, lockName));
+        if (createdLockStat === undefined || createdLockStat.isSymbolicLink() || !createdLockStat.isDirectory()) {
+          throw new Error(`Brownfield assessment publication lock is unsafe: ${lockPath}`);
+        }
+        lockIdentity = createdLockStat;
+        lockDescriptor = await openRelativeDirectory(parent.descriptor, lockName);
+        const openedLockIdentity = await lockDescriptor.stat();
+        if (!openedLockIdentity.isDirectory() || sameFileIdentity(lockIdentity, openedLockIdentity) === false) {
+          throw new Error(`Brownfield assessment publication lock changed while opening: ${lockPath}`);
+        }
+        const namedStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, lockName));
+        if (namedStat === undefined || namedStat.isSymbolicLink() || !namedStat.isDirectory() ||
+          sameFileIdentity(openedLockIdentity, namedStat) === false) {
+          throw new Error(`Brownfield assessment publication lock changed while opening: ${lockPath}`);
+        }
+        const metadataToken = await writeLockMetadata(lockPath, lockDescriptor);
+        return {
+          absolutePath: lockPath,
+          name: lockName,
+          parentDescriptor: parent.descriptor,
+          lockDescriptor,
+          lockIdentity: openedLockIdentity,
+          metadataToken
+        };
+      } catch (error) {
+        const cleanupErrors: unknown[] = [];
+        if (lockDescriptor !== undefined) await attemptCleanup(cleanupErrors, () => lockDescriptor!.close());
+        if (lockIdentity !== undefined) {
+          await attemptCleanup(cleanupErrors, () => removeLockIfOwned(parent.descriptor, lockName, lockPath, lockIdentity!));
+        }
+        throwWithCleanup(error, cleanupErrors, `Unable to create ${lockPath}`);
+      }
     } catch (error) {
       if (!isNodeErrorCode(error, "EEXIST")) throw error;
       const lockStat = parent.descriptor === undefined
@@ -515,19 +842,27 @@ async function acquirePublishLock(
       if (finalStat !== undefined) {
         throw errorWithCode("EEXIST", `Brownfield assessment bundle already exists: ${finalPath}`);
       }
-      let stale: boolean;
+      let stale: StaleLockObservation | undefined;
       if (parent.descriptor === undefined) {
         stale = await lockIsStale(lockPath);
       } else {
-        const lockDescriptor = await openRelativeDirectory(parent.descriptor, lockName);
+        let lockDescriptor: BundleFileHandle | undefined;
+        let staleError: unknown;
+        let hasStaleError = false;
         try {
+          lockDescriptor = await openRelativeDirectory(parent.descriptor, lockName);
           stale = await lockIsStale(lockPath, lockDescriptor);
-        } finally {
-          await lockDescriptor.close().catch(() => undefined);
+        } catch (error) {
+          staleError = error;
+          hasStaleError = true;
         }
+        const cleanupErrors: unknown[] = [];
+        if (lockDescriptor !== undefined) await attemptCleanup(cleanupErrors, () => lockDescriptor!.close());
+        if (hasStaleError) throwWithCleanup(staleError, cleanupErrors, `Unable to inspect ${lockPath}`);
+        throwCleanupOnly(cleanupErrors, `Unable to close ${lockPath}`);
       }
-      if (stale) {
-        await quarantineStaleLock(parent, lockName, lockPath);
+      if (stale !== undefined) {
+        await quarantineStaleLock(parent, lockName, lockPath, stale);
         continue;
       }
       await delay(1);
@@ -544,22 +879,36 @@ async function writeStagedText(
 ): Promise<void> {
   const stagedPath = path.join(stageDirectory, fileName);
   let stagedHandle: BundleFileHandle | undefined;
+  let stagedIdentity: BundleStat | undefined;
   let completed = false;
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     if (stageDescriptor === undefined) await assertStableAbsolutePath(stageDirectory, stageDirectory, false);
     stagedHandle = stageDescriptor === undefined
       ? await open(stagedPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG, 0o600)
       : await openRelativeFile(stageDescriptor, fileName, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, 0o600);
+    const openedStat = await stagedHandle.stat();
+    if (!openedStat.isFile()) throw new Error(`Brownfield assessment staging file is not regular: ${stagedPath}`);
+    stagedIdentity = openedStat;
     await stagedHandle.writeFile(text, "utf8");
     await stagedHandle.sync();
     completed = true;
-  } finally {
-    await stagedHandle?.close().catch(() => undefined);
-    if (!completed) {
-      if (stageDescriptor === undefined) await rm(stagedPath, { force: true }).catch(() => undefined);
-      else await removeRelative(stageDescriptor, fileName).catch(() => undefined);
+  } catch (error) {
+    operationError = error;
+    hasOperationError = true;
+  }
+  const cleanupErrors: unknown[] = [];
+  if (stagedHandle !== undefined) await attemptCleanup(cleanupErrors, () => stagedHandle!.close());
+  if (!completed && stagedIdentity !== undefined) {
+    if (stageDescriptor === undefined) {
+      await attemptCleanup(cleanupErrors, () => removePathIfOwned(stagedPath, stagedIdentity!));
+    } else {
+      await attemptCleanup(cleanupErrors, () => removeRelativeIfOwned(stageDescriptor, fileName, stagedIdentity!));
     }
   }
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to write ${stagedPath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${stagedPath}`);
 }
 
 async function syncBundleDirectory(directory: OpenedBundleDirectory): Promise<void> {
@@ -579,10 +928,12 @@ async function publishStagedBundle(
   stagedPath: string,
   parent: OpenedBundleDirectory
 ): Promise<void> {
-  const final = await resolveSafeBundlePath(path.dirname(path.dirname(path.dirname(parent.absolutePath))), paths.root);
+  const final = await resolveSafeBundlePath(parent.repositoryRoot, paths.root);
   const finalName = path.basename(final.absolutePath);
   const stagedName = path.basename(stagedPath);
   const lock = await acquirePublishLock(parent, final.absolutePath, finalName);
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     const existing = parent.descriptor === undefined
       ? await lstatIfPresent(final.absolutePath)
@@ -600,10 +951,15 @@ async function publishStagedBundle(
       );
     }
     await syncBundleDirectory(parent);
-  } finally {
-    await releasePublishLock(lock);
-    await syncBundleDirectory(parent);
+  } catch (error) {
+    operationError = error;
+    hasOperationError = true;
   }
+  const cleanupErrors: unknown[] = [];
+  await attemptCleanup(cleanupErrors, () => releasePublishLock(lock));
+  await attemptCleanup(cleanupErrors, () => syncBundleDirectory(parent));
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to publish ${paths.root}`);
+  throwCleanupOnly(cleanupErrors, `Unable to release publication resources for ${paths.root}`);
 }
 
 async function openValidatedBundleFile(repositoryRoot: string, artifactPath: ArtifactPath): Promise<OpenedBundleFile> {
@@ -612,18 +968,34 @@ async function openValidatedBundleFile(repositoryRoot: string, artifactPath: Art
     const parentArtifactPath = artifactPathSchema.parse(artifactPath.slice(0, artifactPath.lastIndexOf("/")));
     const parent = await openBundleDirectory(repositoryRoot, parentArtifactPath, false);
     let descriptor: BundleFileHandle | undefined;
+    let result: OpenedBundleFile | undefined;
+    let operationError: unknown;
+    let hasOperationError = false;
     try {
+      const expectedFileStat = resolved.componentStats[resolved.componentStats.length - 1];
+      if (expectedFileStat === undefined) {
+        throw new Error(`Brownfield assessment artifact is missing: ${artifactPath}`);
+      }
       descriptor = await openRelativeFile(parent.descriptor!, path.basename(artifactPath), fsConstants.O_RDONLY);
       const openedStat = await descriptor.stat();
       if (!openedStat.isFile()) throw new Error(`Brownfield assessment artifact is not a regular file: ${artifactPath}`);
+      assertSameFileIdentity(expectedFileStat, openedStat, artifactPath);
       if (openedStat.size > MAX_BUNDLE_FILE_BYTES) throw boundedReadError(artifactPath);
-      return { descriptor, openedStat };
+      result = { descriptor, openedStat };
     } catch (error) {
-      await descriptor?.close().catch(() => undefined);
-      throw error;
-    } finally {
-      await closeBundleDirectory(parent);
+      operationError = error;
+      hasOperationError = true;
     }
+    const cleanupErrors: unknown[] = [];
+    if (hasOperationError && descriptor !== undefined) await attemptCleanup(cleanupErrors, () => descriptor!.close());
+    await attemptCleanup(cleanupErrors, () => closeBundleDirectory(parent));
+    if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to open ${artifactPath}`);
+    if (cleanupErrors.length > 0 && result !== undefined) {
+      await attemptCleanup(cleanupErrors, () => result!.descriptor.close());
+      result = undefined;
+    }
+    throwCleanupOnly(cleanupErrors, `Unable to close ${artifactPath}`);
+    return result!;
   }
 
   await assertStableFallbackPath(resolved, artifactPath, false);
@@ -633,6 +1005,9 @@ async function openValidatedBundleFile(repositoryRoot: string, artifactPath: Art
   if (!linkStat.isFile()) throw new Error(`Brownfield assessment artifact is not a regular file: ${artifactPath}`);
 
   const descriptor = await open(resolved.absolutePath, fsConstants.O_RDONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG);
+  let result: OpenedBundleFile | undefined;
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     const openedStat = await descriptor.stat();
     if (!openedStat.isFile()) throw new Error(`Brownfield assessment artifact is not a regular file: ${artifactPath}`);
@@ -640,11 +1015,16 @@ async function openValidatedBundleFile(repositoryRoot: string, artifactPath: Art
     if (identity === false) throw new Error(`Brownfield assessment artifact changed while opening: ${artifactPath}`);
     if (openedStat.size > MAX_BUNDLE_FILE_BYTES) throw boundedReadError(artifactPath);
     await assertStableFallbackPath(resolved, artifactPath, false);
-    return { descriptor, openedStat };
+    result = { descriptor, openedStat };
   } catch (error) {
-    await descriptor.close().catch(() => undefined);
-    throw error;
+    operationError = error;
+    hasOperationError = true;
   }
+  const cleanupErrors: unknown[] = [];
+  if (hasOperationError) await attemptCleanup(cleanupErrors, () => descriptor.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to open ${artifactPath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${artifactPath}`);
+  return result!;
 }
 
 async function readBoundedBundleText(
@@ -673,15 +1053,25 @@ async function readBoundedBundleText(
 
 async function readBundleJson(repositoryRoot: string, artifactPath: ArtifactPath): Promise<unknown> {
   const opened = await openValidatedBundleFile(repositoryRoot, artifactPath);
+  let result: unknown;
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     const text = await readBoundedBundleText(opened.descriptor, opened.openedStat, artifactPath);
-    return JSON.parse(text);
+    result = JSON.parse(text);
   } catch (error) {
-    if (isNodeErrorCode(error, "ERR_BROWNFIELD_BUNDLE_SIZE") || String(error).includes("changed while reading")) throw error;
-    throw new Error(`Brownfield assessment artifact is not valid JSON: ${artifactPath}`, { cause: error });
-  } finally {
-    await opened.descriptor.close();
+    if (isNodeErrorCode(error, "ERR_BROWNFIELD_BUNDLE_SIZE") || String(error).includes("changed while reading")) {
+      operationError = error;
+    } else {
+      operationError = new Error(`Brownfield assessment artifact is not valid JSON: ${artifactPath}`, { cause: error });
+    }
+    hasOperationError = true;
   }
+  const cleanupErrors: unknown[] = [];
+  await attemptCleanup(cleanupErrors, () => opened.descriptor.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to read ${artifactPath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${artifactPath}`);
+  return result;
 }
 
 async function assertCompleteBundle(repositoryRoot: string, paths: BrownfieldAssessmentPaths): Promise<void> {
@@ -690,6 +1080,8 @@ async function assertCompleteBundle(repositoryRoot: string, paths: BrownfieldAss
     throw error;
   });
   if (root.descriptor !== undefined) {
+    let operationError: unknown;
+    let hasOperationError = false;
     try {
       let entries;
       try {
@@ -705,20 +1097,40 @@ async function assertCompleteBundle(repositoryRoot: string, paths: BrownfieldAss
         if (!entry.isFile() || entry.isSymbolicLink()) {
           throw new Error(`Brownfield assessment bundle contains an unsafe file: ${paths.root}/${entry.name}`);
         }
+        const filePath = descriptorChildPath(root.descriptor, entry.name);
+        const preStat = await lstatIfPresent(filePath);
+        if (preStat === undefined || preStat.isSymbolicLink() || !preStat.isFile()) {
+          throw new Error(`Brownfield assessment bundle contains an unsafe file: ${paths.root}/${entry.name}`);
+        }
         const descriptor = await openRelativeFile(root.descriptor, entry.name, fsConstants.O_RDONLY);
+        let fileOperationError: unknown;
+        let hasFileOperationError = false;
         try {
           const fileStat = await descriptor.stat();
           if (!fileStat.isFile()) throw new Error(`Brownfield assessment bundle contains an unsafe file: ${paths.root}/${entry.name}`);
-        } finally {
-          await descriptor.close();
+          assertSameFileIdentity(preStat, fileStat, `${paths.root}/${entry.name}`);
+        } catch (error) {
+          fileOperationError = error;
+          hasFileOperationError = true;
         }
+        const fileCleanupErrors: unknown[] = [];
+        await attemptCleanup(fileCleanupErrors, () => descriptor.close());
+        if (hasFileOperationError) throwWithCleanup(fileOperationError, fileCleanupErrors, `Unable to inspect ${filePath}`);
+        throwCleanupOnly(fileCleanupErrors, `Unable to close ${filePath}`);
       }
-    } finally {
-      await closeBundleDirectory(root);
+    } catch (error) {
+      operationError = error;
+      hasOperationError = true;
     }
+    const cleanupErrors: unknown[] = [];
+    await attemptCleanup(cleanupErrors, () => closeBundleDirectory(root));
+    if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to validate ${paths.root}`);
+    throwCleanupOnly(cleanupErrors, `Unable to close ${paths.root}`);
     return;
   }
 
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     const rootStat = await lstatIfPresent(root.absolutePath);
     if (rootStat === undefined) throw new Error(`Brownfield assessment bundle is missing: ${paths.root}`);
@@ -743,9 +1155,14 @@ async function assertCompleteBundle(repositoryRoot: string, paths: BrownfieldAss
       const artifactPath = paths[fileName.slice(0, -5) as "state" | "signals" | "assumptions" | "findings" | "synthesis" | "review"];
       await resolveSafeBundlePath(repositoryRoot, artifactPath);
     }
-  } finally {
-    await closeBundleDirectory(root);
+  } catch (error) {
+    operationError = error;
+    hasOperationError = true;
   }
+  const cleanupErrors: unknown[] = [];
+  await attemptCleanup(cleanupErrors, () => closeBundleDirectory(root));
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to validate ${paths.root}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${paths.root}`);
 }
 
 function parseScope(scope: string): string {
@@ -922,16 +1339,31 @@ async function bundleRootStatus(repositoryRoot: string, paths: BrownfieldAssessm
     if (isNodeErrorCode(error, "ENOENT")) return "missing";
     throw error;
   }
+  let result: "missing" | "existing";
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
-    if (root.descriptor !== undefined) return "existing";
-    const rootStat = await lstatIfPresent(root.absolutePath);
-    if (rootStat === undefined) return "missing";
-    if (rootStat.isSymbolicLink()) throw new Error(`Brownfield assessment bundle root must not be a symbolic link: ${paths.root}`);
-    if (!rootStat.isDirectory()) throw new Error(`Brownfield assessment bundle root is not a directory: ${paths.root}`);
-    return "existing";
-  } finally {
-    await closeBundleDirectory(root);
+    if (root.descriptor !== undefined) {
+      result = "existing";
+    } else {
+      const rootStat = await lstatIfPresent(root.absolutePath);
+      if (rootStat === undefined) {
+        result = "missing";
+      } else {
+        if (rootStat.isSymbolicLink()) throw new Error(`Brownfield assessment bundle root must not be a symbolic link: ${paths.root}`);
+        if (!rootStat.isDirectory()) throw new Error(`Brownfield assessment bundle root is not a directory: ${paths.root}`);
+        result = "existing";
+      }
+    }
+  } catch (error) {
+    operationError = error;
+    hasOperationError = true;
   }
+  const cleanupErrors: unknown[] = [];
+  await attemptCleanup(cleanupErrors, () => closeBundleDirectory(root));
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to inspect ${paths.root}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${paths.root}`);
+  return result!;
 }
 
 async function writeInitialBundle(input: {
@@ -942,8 +1374,18 @@ async function writeInitialBundle(input: {
   const parentArtifactPath = artifactPathSchema.parse(ASSESSMENT_ROOT);
   let parent = await openBundleDirectory(input.repositoryRoot, parentArtifactPath, true);
   if (parent.descriptor === undefined) {
-    await mkdir(parent.absolutePath, { recursive: true });
-    await closeBundleDirectory(parent);
+    let operationError: unknown;
+    let hasOperationError = false;
+    try {
+      await mkdir(parent.absolutePath, { recursive: true });
+    } catch (error) {
+      operationError = error;
+      hasOperationError = true;
+    }
+    const cleanupErrors: unknown[] = [];
+    await attemptCleanup(cleanupErrors, () => closeBundleDirectory(parent));
+    if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to create ${parent.absolutePath}`);
+    throwCleanupOnly(cleanupErrors, `Unable to close ${parent.absolutePath}`);
     parent = await openBundleDirectory(input.repositoryRoot, parentArtifactPath, false);
   }
 
@@ -959,39 +1401,67 @@ async function writeInitialBundle(input: {
   const stageName = `.${path.basename(input.paths.root)}.${process.pid}.${randomUUID()}.staging`;
   const stagedPath = path.join(parent.absolutePath, stageName);
   let stageDirectory: OpenedBundleDirectory | undefined;
+  let stageIdentity: BundleStat | undefined;
   let staged = false;
+  let operationError: unknown;
+  let hasOperationError = false;
   try {
     if (parent.descriptor === undefined) {
       await assertStableFallbackPath(
-        { repositoryRoot: parent.repositoryRoot, repositoryPath: parentArtifactPath, absolutePath: parent.absolutePath },
+        { absolutePath: parent.absolutePath },
         parentArtifactPath,
         false
       );
       await mkdir(stagedPath, { mode: 0o700 });
+      staged = true;
+      const createdStageStat = await lstat(stagedPath);
+      if (createdStageStat.isSymbolicLink() || !createdStageStat.isDirectory()) {
+        throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      }
+      stageIdentity = createdStageStat;
       stageDirectory = { repositoryRoot: parent.repositoryRoot, absolutePath: stagedPath };
     } else {
       await mkdirRelative(parent.descriptor, stageName);
+      staged = true;
+      const preStageStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, stageName));
+      if (preStageStat === undefined || preStageStat.isSymbolicLink() || !preStageStat.isDirectory()) {
+        throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      }
+      stageIdentity = preStageStat;
+      const stageDescriptor = await openRelativeDirectory(parent.descriptor, stageName);
       stageDirectory = {
         repositoryRoot: parent.repositoryRoot,
         absolutePath: stagedPath,
-        descriptor: await openRelativeDirectory(parent.descriptor, stageName)
+        descriptor: stageDescriptor
       };
+      const stageStat = await stageDescriptor.stat();
+      if (!stageStat.isDirectory()) {
+        throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      }
+      assertSameFileIdentity(preStageStat, stageStat, stagedPath);
     }
-    staged = true;
     for (const fileName of BUNDLE_FILE_NAMES) {
       await writeStagedText(stagedPath, fileName, contentByFile[fileName], stageDirectory.descriptor);
     }
     await syncBundleDirectory(stageDirectory);
     await publishStagedBundle(input.paths, stagedPath, parent);
     staged = false;
-  } finally {
-    await closeBundleDirectory(stageDirectory);
-    if (staged) {
-      if (parent.descriptor === undefined) await rm(stagedPath, { recursive: true, force: true }).catch(() => undefined);
-      else await removeRelative(parent.descriptor, stageName).catch(() => undefined);
-    }
-    await closeBundleDirectory(parent);
+  } catch (error) {
+    operationError = error;
+    hasOperationError = true;
   }
+  const cleanupErrors: unknown[] = [];
+  await attemptCleanup(cleanupErrors, () => closeBundleDirectory(stageDirectory));
+  if (staged && stageIdentity !== undefined) {
+    if (parent.descriptor === undefined) {
+      await attemptCleanup(cleanupErrors, () => removePathIfOwned(stagedPath, stageIdentity!));
+    } else {
+      await attemptCleanup(cleanupErrors, () => removeRelativeIfOwned(parent.descriptor!, stageName, stageIdentity!));
+    }
+  }
+  await attemptCleanup(cleanupErrors, () => closeBundleDirectory(parent));
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to write ${input.paths.root}`);
+  throwCleanupOnly(cleanupErrors, `Unable to clean up ${input.paths.root}`);
 }
 
 export async function createBrownfieldAssessment(input: {
