@@ -19,6 +19,7 @@ import {
   type CodeIndexSnapshot,
   type CodeIndexSourcePath
 } from "@legion/protocol";
+import { resolveProjectArtifactPath } from "@legion/artifacts";
 import { fingerprintSourceFiles } from "./codebase-map.js";
 import {
   AUTHORED_BUILD_CONFIGURATION,
@@ -112,14 +113,33 @@ function structuralFactEvidence(
 }
 
 
-function isTestFile(sourcePath: string): boolean {
+function testNamingConventions(sourcePath: string): readonly string[] {
   const parts = sourcePath.split("/");
   const basename = parts.at(-1) ?? sourcePath;
   const extension = path.posix.extname(basename);
   const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
-  return parts.slice(0, -1).some((part) => TEST_DIRECTORY_NAMES.has(part.toLowerCase())) ||
-    /(?:^|[._-])(test|spec)(?:$|[._-])/iu.test(stem) ||
-    /(?:Tests?|Spec)$/u.test(stem);
+  const conventions: string[] = [];
+  if (parts.slice(0, -1).some((part) => TEST_DIRECTORY_NAMES.has(part.toLowerCase()))) {
+    conventions.push("directory");
+  }
+  if (/(?:[._-])(test|spec)$/iu.test(stem)) {
+    conventions.push("delimiter suffix");
+  }
+  if (/(?:Tests?|Spec)$/u.test(stem)) {
+    conventions.push("CamelCase suffix");
+  }
+  if (/^test[._-]/iu.test(stem)) {
+    conventions.push("prefix");
+  }
+  return conventions.slice(0, 4);
+}
+
+function isTestFile(sourcePath: string): boolean {
+  if (testNamingConventions(sourcePath).length > 0) return true;
+  const basename = path.posix.basename(sourcePath);
+  const extension = path.posix.extname(basename);
+  const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
+  return /(?:^|[._-])(test|spec)(?:$|[._-])/iu.test(stem);
 }
 
 function sourceStem(sourcePath: string): string {
@@ -263,7 +283,8 @@ async function artifactPathForSqlite(
     throw new Error(`SQLite path ${sqlitePath} does not match the validated snapshot path ${expected}.`);
   }
 
-  const descriptor = await openValidatedArtifact(absolute, "SQLite materialization");
+  const resolved = await resolveProjectArtifactPath({ repositoryRoot: root, artifactPath: parsed });
+  const descriptor = await openValidatedArtifact(resolved.absolutePath, "SQLite materialization");
   try {
     const actualSha256 = await hashFile(descriptor);
     if (actualSha256 !== expectedSha256) {
@@ -416,9 +437,9 @@ async function expectedSourceHashes(
   sqliteArtifactPath: ArtifactPath,
   snapshot: CodeIndexSnapshot
 ): Promise<ReadonlyMap<string, CodeIndexSha256>> {
-  const sqliteAbsolutePath = path.join(repositoryRoot, ...sqliteArtifactPath.split("/"));
-  const mapAbsolutePath = path.join(path.dirname(sqliteAbsolutePath), "map.json");
-  const mapDocument = await readBoundedMapDocument(mapAbsolutePath);
+  const mapArtifactPath = artifactPathSchema.parse(`${path.posix.dirname(sqliteArtifactPath)}/map.json`);
+  const mapResolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: mapArtifactPath });
+  const mapDocument = await readBoundedMapDocument(mapResolved.absolutePath);
   if (mapDocument["schemaVersion"] !== 1 || mapDocument["kind"] !== "codebase_map") {
     throw new Error("Snapshot source hash inventory has invalid map identity.");
   }
@@ -575,10 +596,12 @@ function findTestLinks(
       }
     }
     if (sourcePath === undefined) continue;
+    const conventions = testNamingConventions(testPath);
+    if (conventions.length === 0) continue;
     links.push({
       testPath,
       sourcePath,
-      reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
+      reason: `parsed, supported, non-generated test-convention path; conventions: ${conventions.join(", ")}; heuristic filename/path match; low confidence`
     });
   }
   return links;
@@ -877,7 +900,7 @@ export async function collectBrownfieldSignals(input: {
       .map((coverage) => coverage.path),
     compareStrings
   );
-  const sourceFiles = sourcePaths.filter((sourcePath) => !isTestFile(sourcePath));
+  const riskScanFiles = sourcePaths.filter((sourcePath) => !isTestFile(sourcePath) || isManifestOrCi(sourcePath));
   const eligibleTestNeighborSources = new Set(
     input.snapshot.coverage
       .filter((coverage) => !isTestFile(coverage.path) && isEligibleSourceForTestNeighbor(coverage))
@@ -898,7 +921,7 @@ export async function collectBrownfieldSignals(input: {
   }));
   const riskSignals = sortSignals(await collectRiskSignals({
     observations,
-    sourceFiles,
+    sourceFiles: riskScanFiles,
     testFiles,
     testLinks: testToSourceLinks,
     eligibleTestNeighborSources

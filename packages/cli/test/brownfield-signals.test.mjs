@@ -142,7 +142,7 @@ test("collects deterministic architecture, dependency, test, documentation, and 
     assert.deepEqual(first.testToSourceLinks, [{
       testPath: "src/build-&-config.test.ts",
       sourcePath: "src/build-&-config.ts",
-      reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
+      reason: "parsed, supported, non-generated test-convention path; conventions: delimiter suffix; heuristic filename/path match; low confidence"
     }]);
     assert.ok(first.dependencyEdges.some((edge) =>
       edge.from === "src/build-&-config.ts" && edge.to === "../shared/util.js"
@@ -292,7 +292,7 @@ test("links test files only to parsed, supported, non-generated source candidate
     assert.deepEqual(result.testToSourceLinks.find((link) => link.testPath === "src/feature.test.ts"), {
       testPath: "src/feature.test.ts",
       sourcePath: "src/feature.ts",
-      reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
+      reason: "parsed, supported, non-generated test-convention path; conventions: delimiter suffix; heuristic filename/path match; low confidence"
     });
     assert.deepEqual(result.testFiles, [
       "ci/code-target.test.ts",
@@ -310,6 +310,12 @@ test("links test files only to parsed, supported, non-generated source candidate
       "tests/test-feature.py",
       "tests/test_feature.py"
     ]);
+    const expectedLinkConventions = new Map([
+      ["src/feature.test.ts", "delimiter suffix"],
+      ["tests/FooTest.py", "directory, CamelCase suffix"],
+      ["tests/test-feature.py", "directory, prefix"],
+      ["tests/test_feature.py", "directory, prefix"]
+    ]);
     for (const [testPath, sourcePath] of [
       ["src/feature.test.ts", "src/feature.ts"],
       ["tests/FooTest.py", "src/Foo.py"],
@@ -319,7 +325,7 @@ test("links test files only to parsed, supported, non-generated source candidate
       assert.deepEqual(result.testToSourceLinks.find((link) => link.testPath === testPath), {
         testPath,
         sourcePath,
-        reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
+        reason: `parsed, supported, non-generated test-convention path; conventions: ${expectedLinkConventions.get(testPath)}; heuristic filename/path match; low confidence`
       });
     }
     for (const inventoryPath of ["src/FooTest.java", "src/FooTests.swift", "src/FeatureSpec.scala"]) {
@@ -334,7 +340,7 @@ test("links test files only to parsed, supported, non-generated source candidate
     assert.deepEqual(result.testToSourceLinks.find((link) => link.testPath === "ci/code-target.test.ts"), {
       testPath: "ci/code-target.test.ts",
       sourcePath: "ci/code-target.ts",
-      reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
+      reason: "parsed, supported, non-generated test-convention path; conventions: delimiter suffix; heuristic filename/path match; low confidence"
     });
     assert.equal(result.testToSourceLinks.some((link) => link.testPath === "tests/ambiguous.test.ts"), false);
     assert.equal(result.testToSourceLinks.some((link) => link.testPath === "tests/main_test.go"), false);
@@ -352,6 +358,27 @@ test("links test files only to parsed, supported, non-generated source candidate
     ]) {
       assert.equal(result.testToSourceLinks.some((link) => link.testPath === excludedTestPath), false, excludedTestPath);
     }
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("classifies test-looking CI paths as verification risk without inventorying them as tests", async () => {
+  const fixture = await makeFixture([
+    [".github/workflows/ci.test.yml", "name: test CI\njobs:\n  verify:\n    runs-on: ubuntu-latest\n"]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    assert.equal(result.testFiles.includes(".github/workflows/ci.test.yml"), false);
+    const verificationSignals = result.riskSignals.filter((signal) => signal.code === "verification-evidence-missing");
+    assert.ok(verificationSignals.some((signal) => signal.evidence.some((evidence) =>
+      evidence.kind === "source-file" && evidence.path === ".github/workflows/ci.test.yml" &&
+      evidence.note.includes("Manifest or CI source file")
+    )));
+    const ordinaryTestPath = "src/build-&-config.test.ts";
+    assert.equal(result.riskSignals
+      .filter((signal) => signal.code !== "verification-evidence-missing")
+      .some((signal) => signal.evidence.some((evidence) => evidence.kind === "source-file" && evidence.path === ordinaryTestPath)), false);
   } finally {
     await fixture.cleanup();
   }
@@ -474,6 +501,32 @@ test("fails closed when a direct SQLite or map artifact is a symlink", async (t)
     );
   } finally {
     await mapFixture.cleanup();
+  }
+});
+
+test("fails closed when an artifact parent symlink escapes the repository", async (t) => {
+  const fixture = await makeFixture();
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-outside-"));
+  try {
+    const repositoryLegionRoot = path.join(fixture.repositoryRoot, ".legion");
+    const externalLegionRoot = path.join(outsideRoot, ".legion");
+    await rename(repositoryLegionRoot, externalLegionRoot);
+    try {
+      await symlink(externalLegionRoot, repositoryLegionRoot, "dir");
+    } catch (error) {
+      if (["EPERM", "EACCES", "UNKNOWN", "ENOTSUP", "EOPNOTSUPP"].includes(error?.code)) {
+        t.skip(`directory symlinks unavailable: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    await assert.rejects(
+      () => collectBrownfieldSignals(fixture),
+      /escapes repository root through a symlink|unsafe|symbolic link/u
+    );
+  } finally {
+    await fixture.cleanup();
+    await rm(outsideRoot, { recursive: true, force: true });
   }
 });
 
