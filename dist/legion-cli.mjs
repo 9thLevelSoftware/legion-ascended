@@ -17168,13 +17168,29 @@ var assessmentSpecialistSchema = _enum2([
 var assessmentIdSchema = string2().regex(/^assess_[a-f0-9]{24}$/, "Invalid brownfield assessment ID").brand();
 var assessmentAssumptionIdSchema = string2().regex(/^asm_[a-f0-9]{24}$/, "Invalid brownfield assessment assumption ID").brand();
 var assessmentFindingIdSchema = string2().regex(/^af_[a-f0-9]{24}$/, "Invalid brownfield assessment finding ID").brand();
-var assessmentEvidenceRefSchema = strictObject({
-  kind: assessmentEvidenceKindSchema,
+var assessmentArtifactEvidenceFields = {
   path: artifactPathSchema,
-  sha256: codeIndexSha256Schema.optional(),
-  factId: codeIndexFactIdSchema.optional(),
   note: string2().min(1).max(512)
-});
+};
+var assessmentEvidenceRefSchema = discriminatedUnion("kind", [
+  strictObject({
+    kind: literal("structural-fact"),
+    ...assessmentArtifactEvidenceFields,
+    sha256: codeIndexSha256Schema.optional(),
+    factId: codeIndexFactIdSchema
+  }),
+  strictObject({
+    kind: literal("source-file"),
+    path: codeIndexSourcePathSchema,
+    sha256: codeIndexSha256Schema,
+    note: assessmentArtifactEvidenceFields.note
+  }),
+  strictObject({ kind: literal("manifest"), ...assessmentArtifactEvidenceFields }),
+  strictObject({ kind: literal("test-result"), ...assessmentArtifactEvidenceFields }),
+  strictObject({ kind: literal("command-result"), ...assessmentArtifactEvidenceFields }),
+  strictObject({ kind: literal("git-metadata"), ...assessmentArtifactEvidenceFields }),
+  strictObject({ kind: literal("user-input"), ...assessmentArtifactEvidenceFields })
+]);
 var assessmentAssumptionSchema = strictObject({
   id: assessmentAssumptionIdSchema,
   statement: string2().min(1).max(2e3),
@@ -17223,6 +17239,47 @@ var brownfieldAssessmentSchema = strictObject({
   assumptions: array(assessmentAssumptionSchema).max(256),
   findings: array(assessmentFindingSchema).max(2e3),
   nextActions: array(string2().min(1).max(1e3)).max(64)
+}).describe("Runtime validation requires unique assumption and finding IDs; every finding assumption reference must resolve to an assumption in the same assessment and must not repeat within a finding.").superRefine((assessment, context) => {
+  const assumptionIds = /* @__PURE__ */ new Set();
+  for (const [index, assumption] of assessment.assumptions.entries()) {
+    if (assumptionIds.has(assumption.id)) {
+      context.addIssue({
+        code: "custom",
+        message: "Brownfield assessment assumption IDs must be unique.",
+        path: ["assumptions", index, "id"]
+      });
+    }
+    assumptionIds.add(assumption.id);
+  }
+  const findingIds = /* @__PURE__ */ new Set();
+  for (const [index, finding] of assessment.findings.entries()) {
+    if (findingIds.has(finding.id)) {
+      context.addIssue({
+        code: "custom",
+        message: "Brownfield assessment finding IDs must be unique.",
+        path: ["findings", index, "id"]
+      });
+    }
+    findingIds.add(finding.id);
+    const assumptionRefs = /* @__PURE__ */ new Set();
+    for (const [assumptionIndex, assumptionId] of finding.assumptions.entries()) {
+      if (assumptionRefs.has(assumptionId)) {
+        context.addIssue({
+          code: "custom",
+          message: "Finding assumption references must be unique within a finding.",
+          path: ["findings", index, "assumptions", assumptionIndex]
+        });
+      }
+      if (!assumptionIds.has(assumptionId)) {
+        context.addIssue({
+          code: "custom",
+          message: "Finding assumption references must resolve within the same assessment.",
+          path: ["findings", index, "assumptions", assumptionIndex]
+        });
+      }
+      assumptionRefs.add(assumptionId);
+    }
+  }
 });
 
 // packages/protocol/dist/entities/change.js
