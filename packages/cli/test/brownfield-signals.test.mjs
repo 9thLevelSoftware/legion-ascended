@@ -19,7 +19,7 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-async function makeFixture(extraFiles = []) {
+async function makeFixture(extraFiles = [], coverageStatusOverrides = {}) {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-signals-"));
   const files = new Map([
     ["src/build-&-config.ts", [
@@ -85,6 +85,26 @@ async function makeFixture(extraFiles = []) {
     ...draft,
     sqlite: { path: sqliteRelativePath, sha256: sha256(sqliteBytes) }
   });
+  snapshot.coverage = snapshot.coverage.map((coverage) => coverageStatusOverrides[coverage.path] === undefined
+    ? coverage
+    : { ...coverage, status: coverageStatusOverrides[coverage.path] });
+  await writeFile(path.join(path.dirname(sqlitePath), "map.json"), JSON.stringify({
+    schemaVersion: 1,
+    kind: "codebase_map",
+    generatedAt: "2026-08-26T12:00:00.000Z",
+    scope: ".",
+    sourceFingerprint: HASH,
+    sourceFileCount: files.size,
+    files: [...files.entries()].map(([relativePath, text]) => ({
+      path: relativePath,
+      sha256: sha256(text),
+      sizeBytes: Buffer.byteLength(text),
+      lineCount: text.split("\\n").length,
+      symbols: [],
+      headings: [],
+      summary: "fixture"
+    }))
+  }), "utf8");
 
   return {
     repositoryRoot,
@@ -190,15 +210,38 @@ test("does not mark exports orphan when an import resolves to the exported modul
   }
 });
 
-test("links test files only to unique or convention-compatible source candidates", async () => {
+test("links test files only to parsed, supported, non-generated source candidates", async () => {
   const fixture = await makeFixture([
     ["src/feature.py", "def feature():\n    return 1\n"],
     ["src/feature.ts", "export function feature() { return 1; }\n"],
     ["src/feature.test.ts", "test(\"feature\", () => feature());\n"],
     ["src/ambiguous.ts", "export const source = 1;\n"],
     ["lib/ambiguous.ts", "export const source = 2;\n"],
-    ["tests/ambiguous.test.ts", "test(\"ambiguous\", () => source);\n"]
-  ]);
+    ["tests/ambiguous.test.ts", "test(\"ambiguous\", () => source);\n"],
+    ["generated/only-target.ts", "export const generated = 1;\n"],
+    ["generated/only-target.test.ts", "test(\"generated\", () => onlyTarget);\n"],
+    ["src/parser-only.ts", "export function broken( {\n"],
+    ["src/parser-only.test.ts", "test(\"parser\", () => broken());\n"],
+    ["src/blob.bin", "opaque source\n"],
+    ["src/blob.test.bin", "test fixture\n"],
+    ["src/opaque-target.ts", "opaque target\n"],
+    ["src/opaque-target.test.ts", "test(\"opaque\", () => opaqueTarget);\n"],
+    ["src/size-target.ts", "size-limited target\n"],
+    ["src/size-target.test.ts", "test(\"size\", () => sizeTarget);\n"],
+    ["package.test.json", "{\"test\":true}\n"],
+    [".github/workflows/ci.test.yml", "name: test CI\n"],
+    ["ci/build.yml", "name: build\n"],
+    ["ci/build.test.yml", "name: test build\n"],
+    ["ci/code-target.ts", "export const ciCode = 1;\n"],
+    ["ci/code-target.test.ts", "test(\"ci code\", () => ciCode);\n"],
+    ["docs/code-target.ts", "export const docsCode = 1;\n"],
+    ["docs/code-target.test.ts", "test(\"docs code\", () => docsCode);\n"],
+    ["docs/guide-target.md", "# Guide\n"],
+    ["docs/guide-target.test.md", "# Test guide\n"]
+  ], {
+    "src/opaque-target.ts": "opaque",
+    "src/size-target.ts": "size-limited"
+  });
   try {
     const result = await collectBrownfieldSignals(fixture);
     assert.deepEqual(result.testToSourceLinks.find((link) => link.testPath === "src/feature.test.ts"), {
@@ -207,6 +250,85 @@ test("links test files only to unique or convention-compatible source candidates
       reason: "heuristic filename/path match; low confidence"
     });
     assert.equal(result.testToSourceLinks.some((link) => link.testPath === "tests/ambiguous.test.ts"), false);
+    for (const excludedTestPath of [
+      "generated/only-target.test.ts",
+      "src/parser-only.test.ts",
+      "src/blob.test.bin",
+      "src/opaque-target.test.ts",
+      "src/size-target.test.ts",
+      "package.test.json",
+      ".github/workflows/ci.test.yml",
+      "ci/build.test.yml",
+      "ci/code-target.test.ts",
+      "docs/code-target.test.ts",
+      "docs/guide-target.test.md"
+    ]) {
+      assert.equal(result.testToSourceLinks.some((link) => link.testPath === excludedTestPath), false, excludedTestPath);
+    }
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("keeps ambiguous JavaScript-to-TypeScript module resolution conservative", async () => {
+  const fixture = await makeFixture([
+    ["src/ambiguous-resolution.ts", "export function typescriptCandidate() { return 1; }\n"],
+    ["src/ambiguous-resolution.tsx", "export function tsxCandidate() { return 2; }\n"],
+    ["src/ambiguous-resolution-consumer.ts", "import { typescriptCandidate } from \"./ambiguous-resolution.js\";\nexport const consumed = typescriptCandidate;\n"],
+    ["src/unreferenced-module.ts", "export const onlyHere = 1;\n"]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const orphanSourcePaths = result.architectureSignals
+      .filter((signal) => signal.code === "orphan-export")
+      .flatMap((signal) => signal.evidence)
+      .filter((evidence) => evidence.kind === "source-file")
+      .map((evidence) => evidence.path);
+    assert.equal(orphanSourcePaths.includes("src/ambiguous-resolution.ts"), false);
+    assert.equal(orphanSourcePaths.includes("src/ambiguous-resolution.tsx"), false);
+    const unreferencedSignal = result.architectureSignals.find((signal) =>
+      signal.code === "orphan-export" && signal.statement.includes("src/unreferenced-module.ts")
+    );
+    assert.ok(unreferencedSignal);
+    assert.match(unreferencedSignal.statement, /unreferenced module-level export heuristic/u);
+    assert.doesNotMatch(unreferencedSignal.statement, /matching persisted import name/u);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("fails closed when the validated SQLite materialization is missing or tampered", async () => {
+  const missing = await makeFixture();
+  try {
+    await rm(missing.sqlitePath);
+    await assert.rejects(
+      () => collectBrownfieldSignals(missing),
+      /SQLite materialization is missing or unreadable|ENOENT/u
+    );
+  } finally {
+    await missing.cleanup();
+  }
+
+  const tampered = await makeFixture();
+  try {
+    await writeFile(tampered.sqlitePath, "tampered sqlite", "utf8");
+    await assert.rejects(
+      () => collectBrownfieldSignals(tampered),
+      /SQLite materialization hash does not match/u
+    );
+  } finally {
+    await tampered.cleanup();
+  }
+});
+
+test("fails closed when a coverage-only source file changes after the snapshot", async () => {
+  const fixture = await makeFixture();
+  try {
+    await writeFile(path.join(fixture.repositoryRoot, "README.md"), "# Changed after snapshot\n", "utf8");
+    await assert.rejects(
+      () => collectBrownfieldSignals(fixture),
+      /Source file README\.md changed after the validated structural snapshot/u
+    );
   } finally {
     await fixture.cleanup();
   }

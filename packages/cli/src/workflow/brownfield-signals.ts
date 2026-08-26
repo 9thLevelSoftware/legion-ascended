@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { open, stat } from "node:fs/promises";
+import { open, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -8,6 +8,7 @@ import {
   assessmentSeveritySchema,
   codeIndexFactIdSchema,
   codeIndexSha256Schema,
+  codeIndexSourcePathSchema,
   type ArtifactPath,
   type AssessmentEvidenceRef,
   type AssessmentSeverity,
@@ -19,6 +20,7 @@ import {
 } from "@legion/protocol";
 
 const MAX_BOUNDED_SOURCE_BYTES = 256 * 1024;
+const MAX_BOUNDED_MAP_BYTES = 16 * 1024 * 1024;
 const TEST_DIRECTORY_NAMES = new Set(["test", "tests", "spec", "__tests__"]);
 const MANIFEST_NAMES = new Set([
   "package.json",
@@ -146,7 +148,8 @@ function isGeneratedPath(sourcePath: string): boolean {
 }
 
 function isEligibleSourceForTestNeighbor(coverage: CodeIndexSnapshot["coverage"][number]): boolean {
-  return coverage.status === "parsed" && SOURCE_CODE_EXTENSIONS.has(sourceExtension(coverage.path)) && !isGeneratedPath(coverage.path);
+  return coverage.status === "parsed" && SOURCE_CODE_EXTENSIONS.has(sourceExtension(coverage.path)) &&
+    !isGeneratedPath(coverage.path) && !isDocumentation(coverage.path) && !isManifestOrCi(coverage.path);
 }
 
 function topLevelRoot(sourcePath: string): string {
@@ -154,9 +157,11 @@ function topLevelRoot(sourcePath: string): string {
 }
 
 function isManifestOrCi(sourcePath: string): boolean {
+  const normalizedPath = sourcePath.toLowerCase();
   const basename = path.posix.basename(sourcePath).toLowerCase();
   return MANIFEST_NAMES.has(basename) || CI_FILE_NAMES.has(basename) ||
-    (sourcePath.startsWith(".github/workflows/") && sourcePath.split("/").length > 2);
+    normalizedPath.startsWith("ci/") ||
+    (normalizedPath.startsWith(".github/workflows/") && normalizedPath.split("/").length > 2);
 }
 
 function isDocumentation(sourcePath: string): boolean {
@@ -184,13 +189,31 @@ function sortSignals(signals: readonly Signal[]): Signal[] {
   );
 }
 
-function artifactPathForSqlite(repositoryRoot: string, sqlitePath: string, expected: string): ArtifactPath {
+async function artifactPathForSqlite(
+  repositoryRoot: string,
+  sqlitePath: string,
+  expected: string,
+  expectedSha256: CodeIndexSha256
+): Promise<ArtifactPath> {
   const root = path.resolve(repositoryRoot);
   const absolute = path.resolve(root, sqlitePath);
   const relative = path.relative(root, absolute).split(path.sep).join("/");
   const parsed = artifactPathSchema.parse(relative);
   if (parsed !== expected) {
     throw new Error(`SQLite path ${sqlitePath} does not match the validated snapshot path ${expected}.`);
+  }
+
+  let fileStat;
+  try {
+    fileStat = await stat(absolute);
+  } catch (error) {
+    throw new Error(`SQLite materialization is missing or unreadable at ${parsed}.`, { cause: error });
+  }
+  if (!fileStat.isFile()) throw new Error(`SQLite materialization is not a regular file at ${parsed}.`);
+
+  const actualSha256 = await hashFile(absolute);
+  if (actualSha256 !== expectedSha256) {
+    throw new Error(`SQLite materialization hash does not match the snapshot: expected ${expectedSha256}, got ${actualSha256}.`);
   }
   return parsed;
 }
@@ -231,30 +254,100 @@ async function inspectSourceFile(
   if (!fileStat.isFile()) throw new Error(`Snapshot source path is not a regular file: ${sourcePath}.`);
   const sha256 = await hashFile(absolutePath);
   const expectedHash = expectedHashes.get(sourcePath);
-  if (expectedHash !== undefined && expectedHash !== sha256) {
+  if (expectedHash === undefined) {
+    throw new Error(`Snapshot source path ${sourcePath} has no validated source hash.`);
+  }
+  if (expectedHash !== sha256) {
     throw new Error(`Source file ${sourcePath} changed after the validated structural snapshot.`);
   }
   const text = await readBoundedSource(absolutePath);
   return { path: sourcePath, sha256, text };
 }
 
-function expectedSourceHashes(snapshot: CodeIndexSnapshot): ReadonlyMap<string, CodeIndexSha256> {
+async function readBoundedMapDocument(absolutePath: string): Promise<Record<string, unknown>> {
+  let fileStat;
+  try {
+    fileStat = await stat(absolutePath);
+  } catch (error) {
+    throw new Error(`Snapshot source hash inventory is missing or unreadable at ${absolutePath}.`, { cause: error });
+  }
+  if (!fileStat.isFile()) throw new Error(`Snapshot source hash inventory is not a regular file at ${absolutePath}.`);
+  if (fileStat.size > MAX_BOUNDED_MAP_BYTES) {
+    throw new Error(`Snapshot source hash inventory exceeds the bounded metadata limit at ${absolutePath}.`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(absolutePath, "utf8"));
+  } catch (error) {
+    throw new Error(`Snapshot source hash inventory is not valid JSON at ${absolutePath}.`, { cause: error });
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`Snapshot source hash inventory must be an object at ${absolutePath}.`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+/**
+ * Structural facts carry source hashes individually, but coverage-only files do
+ * not have facts. The sibling v1 map.json is produced by the same map run and
+ * carries the complete path/hash inventory; its fingerprint binds that inventory
+ * to this structural snapshot before source evidence is emitted.
+ */
+async function expectedSourceHashes(
+  repositoryRoot: string,
+  sqliteArtifactPath: ArtifactPath,
+  snapshot: CodeIndexSnapshot
+): Promise<ReadonlyMap<string, CodeIndexSha256>> {
+  const sqliteAbsolutePath = path.join(repositoryRoot, ...sqliteArtifactPath.split("/"));
+  const mapAbsolutePath = path.join(path.dirname(sqliteAbsolutePath), "map.json");
+  const mapDocument = await readBoundedMapDocument(mapAbsolutePath);
+  if (mapDocument["sourceFingerprint"] !== snapshot.sourceFingerprint) {
+    throw new Error("Snapshot source hash inventory does not match the validated structural snapshot fingerprint.");
+  }
+  const files = mapDocument["files"];
+  if (!Array.isArray(files)) throw new Error("Snapshot source hash inventory has no file entries.");
+
+  const sourceHashes = new Map<string, CodeIndexSha256>();
+  for (const file of files) {
+    if (file === null || typeof file !== "object" || Array.isArray(file)) {
+      throw new Error("Snapshot source hash inventory contains an invalid file entry.");
+    }
+    const record = file as Record<string, unknown>;
+    const sourcePath = codeIndexSourcePathSchema.parse(record["path"]);
+    const sourceSha256 = codeIndexSha256Schema.parse(record["sha256"]);
+    if (sourceHashes.has(sourcePath)) throw new Error(`Snapshot source hash inventory contains a duplicate path: ${sourcePath}.`);
+    sourceHashes.set(sourcePath, sourceSha256);
+  }
+
   const result = new Map<string, CodeIndexSha256>();
+  for (const coverage of snapshot.coverage) {
+    const sourceSha256 = sourceHashes.get(coverage.path);
+    if (sourceSha256 === undefined) {
+      throw new Error(`Snapshot source hash inventory has no hash for coverage path ${coverage.path}.`);
+    }
+    result.set(coverage.path, sourceSha256);
+  }
   for (const fact of [...snapshot.symbols, ...snapshot.imports, ...snapshot.exports]) {
-    const existing = result.get(fact.path);
-    if (existing !== undefined && existing !== fact.sourceSha256) {
+    const sourceSha256 = result.get(fact.path);
+    if (sourceSha256 === undefined) {
+      throw new Error(`Structural fact path ${fact.path} is absent from snapshot coverage.`);
+    }
+    if (sourceSha256 !== fact.sourceSha256) {
       throw new Error(`Structural snapshot has inconsistent source hashes for ${fact.path}.`);
     }
-    result.set(fact.path, fact.sourceSha256);
   }
   return result;
 }
 
 function findTestLinks(
   testFiles: readonly CodeIndexSourcePath[],
-  sourceFiles: readonly CodeIndexSourcePath[]
+  coverage: readonly CodeIndexSnapshot["coverage"][number][]
 ): BrownfieldSignals["testToSourceLinks"] {
-  const sourceCandidates = sourceFiles.filter((sourcePath) => !isTestFile(sourcePath));
+  const sourceCandidates = coverage
+    .filter((entry) => !isTestFile(entry.path) && isEligibleSourceForTestNeighbor(entry))
+    .map((entry) => entry.path);
+
   const links: BrownfieldSignals["testToSourceLinks"][number][] = [];
   for (const testPath of sorted(testFiles, compareStrings)) {
     const testStem = sourceBasename(testPath);
@@ -284,6 +377,11 @@ function findTestLinks(
   return links;
 }
 
+/**
+ * Resolve relative imports to every compatible repository path. When more than
+ * one candidate exists, retain all candidates so the orphan heuristic remains
+ * conservative instead of inventing a single module resolution.
+ */
 function importTargetPaths(
   fact: CodeIndexImport,
   availablePaths: ReadonlySet<string>
@@ -303,7 +401,7 @@ function importTargetPaths(
   return candidates.filter((candidate, index) => availablePaths.has(candidate) && candidates.indexOf(candidate) === index);
 }
 
-function importedModulePaths(snapshot: CodeIndexSnapshot): ReadonlySet<string> {
+function modulesWithResolvedImports(snapshot: CodeIndexSnapshot): ReadonlySet<string> {
   const availablePaths = new Set(snapshot.coverage.map((coverage) => coverage.path));
   const importedPaths = new Set<string>();
   for (const fact of snapshot.imports) {
@@ -377,15 +475,15 @@ function collectArchitectureSignals(input: {
     );
   }
 
-  const importedPaths = importedModulePaths(snapshot);
+  const modulesWithImports = modulesWithResolvedImports(snapshot);
   for (const fact of snapshot.exports) {
-    if (!fact.name || importedPaths.has(fact.path)) continue;
+    if (!fact.name || modulesWithImports.has(fact.path)) continue;
     const observation = sourceObservationFor(observations, fact.path);
     addSignal(
       signals,
       "orphan-export",
       "minor",
-      `Exported symbol ${fact.name} in ${fact.path} has no matching persisted import name; this is a structural orphan heuristic, not proof of unused behavior.`,
+      `Exported symbol ${fact.name} in ${fact.path} has no resolved relative import to its module; this is an unreferenced module-level export heuristic, not symbol-level import matching or proof of unused behavior.`,
       [sourceEvidence(observation, "Source file containing the exported symbol."), structuralFactEvidence(sqliteArtifactPath, sqliteSha256, fact, "Persisted export fact used for orphan-export heuristic.")]
     );
   }
@@ -518,9 +616,14 @@ export async function collectBrownfieldSignals(input: {
   readonly sqlitePath: string;
 }): Promise<BrownfieldSignals> {
   if (input.snapshot.profile !== "structural") throw new Error("Brownfield signals require a structural CodeIndexSnapshot.");
-  const sqliteArtifactPath = artifactPathForSqlite(input.repositoryRoot, input.sqlitePath, input.snapshot.sqlite.path);
+  const sqliteArtifactPath = await artifactPathForSqlite(
+    input.repositoryRoot,
+    input.sqlitePath,
+    input.snapshot.sqlite.path,
+    input.snapshot.sqlite.sha256
+  );
   const sourcePaths = sorted(input.snapshot.coverage.map((coverage) => coverage.path), compareStrings);
-  const expectedHashes = expectedSourceHashes(input.snapshot);
+  const expectedHashes = await expectedSourceHashes(input.repositoryRoot, sqliteArtifactPath, input.snapshot);
   const observations = new Map<string, SourceObservation>();
   for (const sourcePath of sourcePaths) {
     const observation = await inspectSourceFile(input.repositoryRoot, sourcePath, expectedHashes);
@@ -534,7 +637,7 @@ export async function collectBrownfieldSignals(input: {
       .filter((coverage) => !isTestFile(coverage.path) && isEligibleSourceForTestNeighbor(coverage))
       .map((coverage) => coverage.path)
   );
-  const testToSourceLinks = findTestLinks(testFiles, sourcePaths);
+  const testToSourceLinks = findTestLinks(testFiles, input.snapshot.coverage);
   const dependencyEdges = sorted(input.snapshot.imports, (left, right) =>
     compareStrings(left.path, right.path) || compareStrings(left.specifier, right.specifier) || compareStrings(left.id, right.id)
   ).map((fact) => ({
