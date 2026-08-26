@@ -1,12 +1,12 @@
 ---
 name: legion:map
 description: Generate, refresh, check, or query the Legion codebase map and semantic index
-argument-hint: "[--check] [--refresh] [--scope <path>] [--query <text>]"
+argument-hint: "[--check] [--refresh] [--profile inventory|structural] [--scope <path>] [--query <text>] [--why <fact-id>]"
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
 <objective>
-Create and maintain Legion's canonical codebase documentation and retrieval index. Produce the architecture document this command's analysis is for, and let the CLI own the file dataset underneath it. `legion map --refresh` writes `codebase.md`, `index.jsonl`, `symbols.json`, `search.md` and `map.json` under the run directory it reports; the analysis is written separately, because the two are different documents that have historically been confused for each other.
+Create and maintain Legion's canonical codebase documentation and retrieval index. Produce the architecture document this command's analysis is for, and let the CLI own the file dataset underneath it. `legion map --refresh` defaults to `--profile structural`: it preserves the v1 `codebase.md`, `index.jsonl`, `symbols.json`, `search.md` and `map.json` artifacts and adds a hash-pinned `semantic-index.json` plus `semantic-index.sqlite` under the reported run directory. `--profile inventory` writes only the v1 artifacts. The architecture analysis is written separately, because the two are different documents that have historically been confused for each other.
 </objective>
 
 <execution_context>
@@ -17,31 +17,51 @@ skills/codebase-mapper/SKILL.md
 <context>
 The CLI owns the artifact set and reports where it wrote them.
 
-    legion map --json
+    legion map --refresh --profile structural --json
+    legion map --refresh --profile inventory --json
+    legion map --check --profile structural --json
+    legion map --query "<text>" --profile structural --json
+    legion map --why sym_<fact-id> --json
 
 If `legion` is not found, use `npx legion-ascended` instead.
 
-`legion map --refresh --json` returns `mapArtifactPath`; the run directory beside
-it holds `codebase.md`, `index.jsonl`, `symbols.json`, `search.md` and
-`map.json`.
+`legion map --refresh --profile structural --json` returns `mapArtifactPath`,
+`semanticIndexArtifactPath`, and `semanticSqliteArtifactPath`; the run directory
+beside them holds the v1 `codebase.md`, `index.jsonl`, `symbols.json`, `search.md`
+and `map.json`. An inventory refresh returns only the v1 paths.
 </context>
 
 <authority>
-The CLI owns the derivable state. `legion map --json` reports freshness —
-`fresh`, `stale`, `partial` or `absent` — and writes nothing; `--refresh`
-regenerates the artifacts; `--query` searches the stored map.
+The CLI owns the derivable state. `legion map --check` and the bare command report
+freshness — `fresh`, `stale`, `partial` or `absent` — and write nothing;
+`--refresh` regenerates the artifacts. Refresh defaults to the structural profile;
+the inventory profile is the v1-only compatibility path. A structural check validates
+the newest structural snapshot, its SQLite materialization, and the bound v1 `map.json`
+before serving status, while an inventory check validates the v1 map. `--query` reads
+an existing index and `--why <fact-id>` reads one structural fact; neither read mode
+writes a workflow run.
 
-What stays here is the analysis: the architecture narrative, the dependency
-graph, the API surface, the coverage map, and the ranked risk hotspots. The
-verb's artifact is a file inventory, so rendering its payload would replace an
-architecture document with a histogram.
+The structural `semantic-index.json` is the durable authority for parsed coverage
+and facts; `semantic-index.sqlite` is a local FTS5 acceleration of that snapshot,
+not a second source of truth. Before a structural check, query, or why read serves
+those artifacts, discovery validates the bound v1 `map.json`: its scope, source
+fingerprint, source-file count, and exact path set match the snapshot and run;
+generatedAt timestamps match the run and snapshot; and its exact content hash
+(`mapArtifactSha256`) matches the run. Structural query results carry the fact ID,
+source path, source hash, extractor version, and exact range. What stays here is the
+analysis: the architecture narrative, the dependency graph, the API surface, the
+coverage map, and the ranked risk hotspots. The verb's v1 artifact is a file inventory,
+so rendering either payload would replace an architecture document with a histogram.
 
 **Write the analysis to its own file — never over the CLI's artifact set.** The
-CLI's `codebase.md` is a generated file inventory and `map.json` is the document
-`legion map --check` and `--query` read. Overwriting either with the
-codebase-mapper's formats makes the stored map unreadable to the verb that owns
-it; not writing anywhere leaves the analysis unpersisted. `CODEBASE.md` at the
-repository root is the analysis; the run directory is the CLI's.
+`codebase.md` is a generated file inventory. Inventory checks and fallback
+queries read `map.json`; structural checks, queries, and why reads consume the
+validated `semantic-index.json` and its hash-matched SQLite materialization only
+after discovery validates the bound v1 `map.json`. Overwriting any of these with
+the codebase-mapper's formats makes the stored map unreadable to the verb that
+owns it; not writing anywhere leaves the analysis unpersisted.
+The repository's `.planning` directory contains `CODEBASE.md`, the architecture
+analysis; the run directory is the CLI's.
 </authority>
 
 <process>
@@ -50,24 +70,28 @@ repository root is the analysis; the run directory is the CLI's.
    - Supported flags:
      - `--check`: inspect map freshness and artifact completeness only. Do not write files.
      - `--refresh`: force a rebuild even when the current map is fresh.
+     - `--profile inventory|structural`: select the v1 inventory or structural index profile.
      - `--scope <path>`: limit analysis to a file or directory. Scope must exist and must stay inside the current project.
      - `--query <text>`: search the existing map dataset and report matching map chunks plus source files to read next.
+     - `--why <fact-id>`: explain one structural fact from a fresh snapshot.
    - Invalid flag combinations:
      - `--check` with `--refresh`: print usage and exit.
      - `--query` with `--refresh`: print usage and exit; query uses an existing dataset only.
-   - If no flags are present: run a full map only when there is no fresh complete dataset; otherwise summarize the current dataset and offer refresh via AskUserQuestion.
+   - If no flags are present: summarize the current inventory dataset and offer refresh via AskUserQuestion. Refresh is explicit; it is never inferred from a read.
 
 2. SOURCE CODE DETECTION
    - Follow codebase-mapper Section 1 Source Code Detection Heuristic.
-   - Exclude Legion state/runtime folders: `.legion/`, `.claude/`, `.codex/`, `.cursor/`, `.windsurf/`, `.gemini/`, `.opencode/`, `.aider/`, `.kilo/`, `.kilocode/`, `.legion/`, `.git/`, dependency/build output directories.
+   - Exclude Legion state/runtime folders: `.legion/`, `.claude/`, `.codex/`, `.cursor/`, `.windsurf/`, `.gemini/`, `.opencode/`, `.aider/`, `.kilo/`, `.kilocode/`, `.git/`, dependency/build output directories.
    - If no source code is detected:
      - In `--query`: continue to Query Mode; query reads an existing map dataset and does not require current source detection.
      - In `--check`: report `status: absent`, `reason: no source files detected`, and exit 0.
-     - In default/full map mode: display "No source code detected, so no codebase map was generated." and exit without writing files.
+     - In refresh mode: display "No source code detected, so no codebase map was generated." and exit without writing files.
 
 3. CHECK MODE
-   - `legion map --check --json` is the freshness answer. It reads the newest map
-     run's `map.json`; the other four artifacts are outputs, not inputs to the check.
+   - `legion map --check --profile <profile> --json` is the freshness answer. An
+     inventory check reads the newest valid v1 map's `map.json`; a structural check
+     validates the newest structural snapshot, its SQLite hash, and the bound v1
+     `map.json` integrity before serving the structural status.
    - Report from its payload:
      - `status`, `scope`, `sourceFileCount`, `sourceFingerprint`, `generatedAt`
    - The CLI's four states, as it defines them:
@@ -79,18 +103,47 @@ repository root is the analysis; the run directory is the CLI's.
    - Do not write files in `--check`.
 
 4. QUERY MODE
-   - `legion map --query <text> --json` searches the stored map. It reads the newest
-     `map.json` and ranks its `files` entries; `index.jsonl` and `symbols.json` are not
-     consulted by the verb.
+   - `legion map --query <text> --json` discovers and validates the newest structural
+     snapshot and its bound v1 `map.json`, then queries the snapshot's local SQLite
+     FTS5 index. Use `--profile structural` to require structural query behavior; if
+     no structural snapshot exists and no profile was specified, the CLI falls back
+     to the legacy v1 `map.json` lexical query. `--profile inventory` is valid only
+     for inventory refreshes and freshness checks, not structural query mode.
+   - Structural matches include the fact ID, fact kind/name or import specifier,
+     source path, source hash, snapshot ID, extractor version, and exact byte/line
+     range. Inventory matches retain the v1 `path`, `score`, `symbols`, and `summary`.
    - If it reports no map, display: "No map exists. Run `/legion:map --refresh` first." and exit.
    - Follow codebase-mapper Section 18 Semantic Search Protocol over the returned matches:
      - Normalize the query into keywords, path hints, symbol hints, and domain hints.
-     - Rank and group the `matches` the verb returned, each carrying `path`, `score` and `summary`.
+     - Rank and group the `matches` the verb returned, preserving the structural provenance fields when present.
      - Report the top 5 with why each matched, and name the source files to read next.
-   - Never answer from the ranking alone. It is a lexical score over generated summaries, so acting on it without opening the file is how a caller edits the wrong one.
+   - Never answer from the ranking or a structural fact alone. The index is provenance
+     and retrieval context, not behavioral proof; open the cited source and verify its
+     behavior before acting.
 
-5. FULL MAP OR REFRESH MODE
-   - `legion map --refresh --json` creates the run directory and writes the artifact set; do not create directories yourself.
+5. WHY MODE
+   - `legion map --why <fact-id> --json` looks up a symbol, import, or export fact in
+     the newest fresh structural snapshot. It does not accept `--scope`, query, check,
+     refresh, or an inventory profile.
+   - The response identifies the snapshot, fact, source hash, extractor version, and
+     exact range; the returned fact contains no raw source text, although freshness
+     validation reads current source metadata and fingerprints before serving it.
+     An unknown or stale fact blocks with a refresh action. Treat the result as
+     provenance only, never as behavioral proof.
+
+6. FULL MAP OR REFRESH MODE
+   - `legion map --refresh --profile structural --json` creates the run directory,
+     writes the unchanged v1 artifact set, and materializes `semantic-index.sqlite`
+     followed by the hash-pinned `semantic-index.json`; do not create directories yourself.
+   - `legion map --refresh --profile inventory --json` creates the same v1 artifact
+     set without structural snapshot or SQLite fields.
+   - Structural coverage reports one status per collected file. The statuses are:
+     `parsed` (supported grammar parsed), `metadata-only` (files with the `.md` or
+     `.mdx` Markdown extensions are collected without AST facts), `size-limited` (source exceeds the parser limit), `opaque`
+     (source text was unavailable), `parser-error` (the grammar rejected the source),
+     and `unsupported` (the extension has no structural grammar). Parser errors are
+     retained in the snapshot and make the refresh report blocked; they are not silently
+     treated as parsed.
    - Run the full codebase-mapper protocol:
      - Architecture narrative and module structure.
      - Functionality/feature inventory.
@@ -103,18 +156,21 @@ repository root is the analysis; the run directory is the CLI's.
      - Setup/runbook.
      - Pattern library and conventions.
      - Monorepo package map, if applicable.
-   - Write the analysis to `CODEBASE.md` at the repository root — the architecture
+   - Write the analysis to `CODEBASE.md` in the repository's `.planning` directory — the architecture
      narrative, dependency graph, API surface, coverage map and risk hotspots. It is a
      separate document from the CLI's generated `codebase.md`, and conflating the two is
      how the analysis gets silently replaced by a file histogram.
-   - `--scope <path>` still writes the same artifact set, but metadata must include `scope: <path>` and the report must say that the dataset is scoped, not full-project.
+   - `--scope <path>` on refresh still writes the same profile-specific artifact set,
+     but metadata must include `scope: <path>` and the report must say that the dataset
+     is scoped, not full-project. Query and why read the stored scope and refuse a new
+     scope on the read command.
 
-6. COMPLETION REPORT
+7. COMPLETION REPORT
    - Show:
      - Map status: generated or refreshed.
      - Source files analyzed.
      - Languages/frameworks detected.
-     - Required artifacts written.
+     - Required artifacts written, including semantic paths for structural refreshes.
      - Top risks or `_None detected_`.
      - Next suggested command:
        - `/legion:start` if no project exists.
@@ -125,16 +181,16 @@ repository root is the analysis; the run directory is the CLI's.
 <decision_matrix>
 | Situation | Action |
 |-----------|--------|
-| Fresh complete dataset and no `--refresh` | Summarize freshness and ask whether to refresh or keep current |
+| Fresh complete dataset and no `--refresh` | Summarize the selected profile's freshness and ask whether to refresh or keep current |
 | Stored map covers a different scope than the one checked | The CLI reports `partial`; say the comparison is not like for like and offer a scoped refresh |
 | Fingerprint mismatch | Treat as `stale`; recommend `/legion:map --refresh` |
-| Query requested without dataset | Do not improvise search; tell user to run `/legion:map` first |
+| Structural query or why requested without a valid structural dataset | Do not improvise search; tell user to run `/legion:map --refresh --profile structural` first |
 | Scope path outside project | Block with an escalation; never analyze outside the workspace by accident |
 </decision_matrix>
 
 <completion_gate>
-- `legion map --json` reports a status other than `absent`.
-- The architecture analysis was written to `CODEBASE.md`, not over the CLI's artifacts.
-- The CLI's run directory still parses: `legion map --check --json` succeeds after the run.
-- The final report names every artifact written and any degraded sections.
+- `legion map --check --profile <profile>` reports a status other than `absent` for the requested profile.
+- The architecture analysis was written to `CODEBASE.md` in the repository's `.planning` directory, not over the CLI's artifacts.
+- The CLI's run directory still parses: `legion map --check --profile structural --json` succeeds after a structural run.
+- A structural run has both `semantic-index.json` and `semantic-index.sqlite`, and the final report names every artifact written and any degraded sections.
 </completion_gate>

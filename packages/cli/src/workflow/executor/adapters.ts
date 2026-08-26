@@ -26,6 +26,8 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 300_000;
 const DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 900_000;
 const DEFAULT_HERMES_EXEC_TIMEOUT_MS = 600_000;
+const DEFAULT_GROK_EXEC_TIMEOUT_MS = 600_000;
+const GROK_VERSION_RE = /^grok\s+(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\s+\([0-9A-Za-z-]+\))?(?:\s+\[[A-Za-z0-9.-]+\])?\s*$/u;
 
 // Claude Code has no OS-level sandbox flag, so a read-only run is enforced by
 // denying every tool that can mutate the repository. The guarded execution
@@ -69,17 +71,40 @@ export function codexExecArgs(input: {
   ];
 }
 
+/**
+ * Grok Build's headless JSON surface takes the prompt from a file. Keep the
+ * path as one argv entry so quotes, shell metacharacters, and newlines in an
+ * artifact path are never interpreted by a shell.
+ */
+export function grokExecArgs(input: {
+  readonly repositoryRoot: string;
+  readonly prompt: string;
+  readonly readOnly?: boolean;
+}): readonly string[] {
+  return [
+    "--prompt-file",
+    input.prompt,
+    "--cwd",
+    input.repositoryRoot,
+    "--output-format",
+    "json",
+    "--permission-mode",
+    "bypassPermissions",
+    ...(input.readOnly ? ["--sandbox", "read-only"] : [])
+  ];
+}
+
 export async function selectExecutionAdapterKind(explicit: string | undefined): Promise<ExecutionAdapterKind | {
   readonly ok: false;
   readonly diagnostic: { readonly code: string; readonly message: string };
 }> {
   if (explicit !== undefined) {
-    if (explicit === "claude" || explicit === "codex" || explicit === "hermes" || explicit === "manual" || explicit === "fake") return explicit;
+    if (explicit === "claude" || explicit === "codex" || explicit === "hermes" || explicit === "grok" || explicit === "manual" || explicit === "fake") return explicit;
     return {
       ok: false,
       diagnostic: {
         code: "invalid_executor",
-        message: `Unsupported executor "${explicit}". Use claude, codex, hermes, manual, or fake.`
+        message: `Unsupported executor "${explicit}". Use claude, codex, hermes, grok, manual, or fake.`
       }
     };
   }
@@ -89,6 +114,7 @@ export async function selectExecutionAdapterKind(explicit: string | undefined): 
   if (!runningInsideClaudeCode() && await claudeAvailable()) return "claude";
   if (await codexAvailable()) return "codex";
   if (await hermesAvailable()) return "hermes";
+  if (!runningInsideGrokBuild() && await grokAvailable()) return "grok";
   return "manual";
 }
 
@@ -111,6 +137,16 @@ function runningInsideClaudeCode(): boolean {
   return marker !== undefined && marker.length > 0 && marker !== "0";
 }
 
+function runningInsideGrokBuild(): boolean {
+  return activeSessionMarker(process.env["GROK_AGENT"]) || activeSessionMarker(process.env["GROK_SESSION_ID"]);
+}
+
+function activeSessionMarker(marker: string | undefined): boolean {
+  if (marker === undefined) return false;
+  const normalized = marker.trim().toLowerCase();
+  return normalized.length > 0 && normalized !== "0" && normalized !== "false" && normalized !== "no";
+}
+
 export function adapterForKind(kind: ExecutionAdapterKind): ExecutionAdapter {
   switch (kind) {
     case "claude":
@@ -119,6 +155,8 @@ export function adapterForKind(kind: ExecutionAdapterKind): ExecutionAdapter {
       return codexAdapter;
     case "hermes":
       return hermesAdapter;
+    case "grok":
+      return grokAdapter;
     case "manual":
       return manualAdapter;
     case "fake":
@@ -167,6 +205,20 @@ async function hermesAvailable(): Promise<boolean> {
   }
 }
 
+export async function grokAvailable(): Promise<boolean> {
+  try {
+    const invocation = grokInvocation(["--version"]);
+    const result = await execFileAsync(invocation.command, invocation.args, {
+      timeout: 5_000,
+      windowsHide: true
+    });
+    const versionOutput = [String(result.stdout), String(result.stderr)].join("\n");
+    return GROK_VERSION_RE.test(versionOutput);
+  } catch {
+    return false;
+  }
+}
+
 function hermesInvocation(args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
   if (process.platform !== "win32") {
     return { command: "hermes", args };
@@ -177,11 +229,28 @@ function hermesInvocation(args: readonly string[]): { readonly command: string; 
   };
 }
 
+function grokInvocation(args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
+  if (process.platform !== "win32") {
+    return { command: "grok", args };
+  }
+  return {
+    command: "cmd.exe",
+    args: ["/d", "/s", "/c", "grok", ...args]
+  };
+}
+
 function hermesExecTimeoutMs(): number {
   const configured = process.env["LEGION_HERMES_EXEC_TIMEOUT_MS"];
   if (configured === undefined) return DEFAULT_HERMES_EXEC_TIMEOUT_MS;
   const parsed = Number.parseInt(configured, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_HERMES_EXEC_TIMEOUT_MS;
+}
+
+function grokExecTimeoutMs(): number {
+  const configured = process.env["LEGION_GROK_EXEC_TIMEOUT_MS"];
+  if (configured === undefined) return DEFAULT_GROK_EXEC_TIMEOUT_MS;
+  const parsed = Number.parseInt(configured, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GROK_EXEC_TIMEOUT_MS;
 }
 
 const hermesAdapter: ExecutionAdapter = {
@@ -241,6 +310,188 @@ const hermesAdapter: ExecutionAdapter = {
     return result;
   }
 };
+
+interface GrokEnvelopeSuccess {
+  readonly ok: true;
+  readonly text: string;
+  readonly result: Record<string, unknown>;
+}
+
+interface GrokEnvelopeFailure {
+  readonly ok: false;
+  readonly message: string;
+}
+
+const grokAdapter: ExecutionAdapter = {
+  kind: "grok",
+  async run(request) {
+    const timeoutMs = grokExecTimeoutMs();
+    const args = grokExecArgs({
+      repositoryRoot: request.repositoryRoot,
+      prompt: request.promptAbsolutePath,
+      readOnly: request.readOnly
+    });
+    const invocation = grokInvocation(args);
+    let processResult: Awaited<ReturnType<typeof spawnWithoutInput>>;
+    try {
+      processResult = await spawnWithoutInput(
+        invocation.command,
+        invocation.args,
+        request.repositoryRoot,
+        timeoutMs
+      );
+    } catch {
+      // An explicitly selected but missing executable is a failed execution,
+      // not a thrown adapter error that would discard the task-run artifacts.
+      processResult = {
+        exitCode: 127,
+        stdout: "",
+        stderr: "Grok Build executable could not be started.",
+        timedOut: false,
+        timeoutMs
+      };
+    }
+
+    const rawOutput = [processResult.stdout, processResult.stderr]
+      .filter((entry) => entry.length > 0)
+      .join("\n");
+    const envelope = parseGrokEnvelope(processResult.stdout);
+    const processStatus: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : processResult.exitCode !== 0
+        ? "failed"
+        : envelope.ok
+          ? "succeeded"
+          : "failed";
+    const parsed = envelope.ok ? envelope.result : undefined;
+    const normalized = normalizeExecutionResult(parsed, {
+      status: processStatus,
+      summary: processResult.timedOut
+        ? `Grok Build executor timed out after ${timeoutMs}ms.`
+        : processResult.exitCode !== 0
+          ? "Grok Build executor failed."
+          : envelope.ok
+            ? "Grok Build executor completed."
+            : "Grok Build executor returned an invalid result envelope.",
+      rawOutput,
+      exitCode: processResult.exitCode
+    });
+    // Process status outranks model-reported status. A nonzero child cannot
+    // become a success merely because its last JSON body said `succeeded`.
+    const resultStatus: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : processResult.exitCode !== 0 || !envelope.ok
+        ? "failed"
+        : normalized.status;
+    const findings: ExecutionFinding[] = [];
+    if (!envelope.ok) {
+      findings.push({
+        id: "grok-executor-invalid-output",
+        title: "Grok Build returned an invalid result",
+        body: envelope.message,
+        severity: "blocking"
+      });
+    }
+    if (processResult.timedOut) {
+      findings.push({
+        id: "grok-executor-timeout",
+        title: "Grok Build executor timed out",
+        body: `Grok Build did not complete within ${timeoutMs}ms. Check Grok auth/configuration, raise LEGION_GROK_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    } else if (processResult.exitCode !== 0) {
+      findings.push({
+        id: "grok-executor-failed",
+        title: "Grok Build executor exited unsuccessfully",
+        body: `Grok Build exited with code ${processResult.exitCode}. Check the raw and redacted executor logs before retrying.`,
+        severity: "blocking"
+      });
+    }
+    const withEnvelope: ExecutionResult = envelope.ok
+      ? { ...normalized, structuredOutput: envelope.text }
+      : normalized;
+    const result: ExecutionResult = {
+      ...withEnvelope,
+      ok: resultStatus === "succeeded",
+      status: resultStatus,
+      findings: [...withEnvelope.findings, ...findings]
+    };
+
+    const redacted = redactTranscript(rawOutput);
+    await writeProjectTextFile({
+      repositoryRoot: request.repositoryRoot,
+      artifactPath: request.rawLogArtifactPath,
+      text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n`
+    });
+    await writeProjectTextFile({
+      repositoryRoot: request.repositoryRoot,
+      artifactPath: request.redactedLogArtifactPath,
+      text: redacted.length > 0 ? redacted : `${result.summary}\n`
+    });
+    await writeProjectExecutionResult({
+      repositoryRoot: request.repositoryRoot,
+      artifactPath: request.resultArtifactPath,
+      result
+    });
+    return result;
+  }
+};
+
+function parseGrokEnvelope(stdout: string): GrokEnvelopeSuccess | GrokEnvelopeFailure {
+  const trimmed = stdout.trim();
+  if (trimmed.length === 0) return { ok: false, message: "Grok Build produced no JSON output." };
+  let value: unknown;
+  try {
+    value = JSON.parse(trimmed);
+  } catch {
+    return { ok: false, message: "Grok Build output was not one complete JSON envelope." };
+  }
+  if (!isRecordValue(value)) return { ok: false, message: "Grok Build output was not a JSON object envelope." };
+  if (value["type"] === "error") return { ok: false, message: "Grok Build reported an error envelope." };
+  const text = value["text"];
+  if (typeof text !== "string" || text.trim().length === 0) {
+    return { ok: false, message: "Grok Build result envelope is missing non-empty text." };
+  }
+  if (typeof value["stopReason"] !== "string" || value["stopReason"].length === 0) {
+    return { ok: false, message: "Grok Build result envelope is missing stopReason." };
+  }
+  if (typeof value["sessionId"] !== "string" || value["sessionId"].length === 0) {
+    return { ok: false, message: "Grok Build result envelope is missing sessionId." };
+  }
+  if (typeof value["requestId"] !== "string" || value["requestId"].length === 0) {
+    return { ok: false, message: "Grok Build result envelope is missing requestId." };
+  }
+
+  let result: unknown;
+  try {
+    // Parse only the envelope's text field. In particular, do not use the
+    // permissive transcript extractor here: ACP streaming-json is NDJSON and
+    // must never be mistaken for one completed ExecutionResult.
+    result = JSON.parse(text.trim());
+  } catch {
+    return { ok: false, message: "Grok Build envelope text was not one complete JSON result." };
+  }
+  if (!isCompleteGrokResult(result)) {
+    return { ok: false, message: "Grok Build envelope text was an incomplete ExecutionResult." };
+  }
+  return { ok: true, text, result };
+}
+
+function isCompleteGrokResult(value: unknown): value is Record<string, unknown> {
+  if (!isRecordValue(value)) return false;
+  return (
+    (value["status"] === "succeeded" || value["status"] === "failed" || value["status"] === "blocked") &&
+    typeof value["summary"] === "string" &&
+    value["summary"].length > 0 &&
+    Array.isArray(value["filesChanged"]) &&
+    Array.isArray(value["commandsRun"]) &&
+    Array.isArray(value["findings"])
+  );
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 const fakeAdapter: ExecutionAdapter = {
   kind: "fake",
@@ -610,6 +861,61 @@ async function spawnWithInput(command: string, args: readonly string[], input: s
       settle(timedOut ? 124 : code ?? 1);
     });
     child.stdin.end(input);
+  });
+}
+
+async function spawnWithoutInput(command: string, args: readonly string[], cwd: string, timeoutMs: number): Promise<{
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly timedOut: boolean;
+  readonly timeoutMs: number;
+}> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      windowsHide: true,
+      // Grok consumes the prompt from --prompt-file. `ignore` is deliberate:
+      // Legion neither writes a prompt to stdin nor leaves a pipe for a child
+      // to mistake for an interactive session.
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timedOut = false;
+
+    const settle = (exitCode: number) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({ exitCode, stdout, stderr, timedOut, timeoutMs });
+    };
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      stderr += `${stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`;
+      terminateProcessTree(child.pid);
+      setTimeout(() => settle(124), 1_000).unref();
+    }, timeoutMs);
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      settle(timedOut ? 124 : code ?? 1);
+    });
   });
 }
 

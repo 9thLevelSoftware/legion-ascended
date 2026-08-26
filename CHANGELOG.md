@@ -2,6 +2,52 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.3.0] - GA-pending
+
+### Added
+- Grok Build is now a first-class Legion install target and executor. The managed
+  installer writes the native `/legion` Agent Skill to
+  `$PROJECT/.grok/skills/legion/SKILL.md` for local installs or
+  `$GROK_HOME/skills/legion/SKILL.md` for global installs, with `<home>/.grok`
+  as the global fallback when `GROK_HOME` is unset.
+- `legion build --executor grok` and `legion review --executor grok` use Grok's
+  bounded, argv-only headless JSON contract:
+  `grok --prompt-file <promptAbsolutePath> --cwd <repositoryRoot>
+  --output-format json --permission-mode bypassPermissions`. Completed JSON
+  envelopes are normalized into Legion execution evidence; malformed, partial,
+  error, non-zero, and timeout responses fail closed.
+- Release smoke coverage proves Grok detection, native local/global install
+  lifecycle, executor result normalization, command help, package contents, and
+  production-dependency packed-install execution with a credential-free fake
+  Grok executable.
+
+### Changed
+- Grok Build is included in the recommended target list and automatic executor
+  order after Hermes and before manual execution. Grok owns browser/API-key
+  authentication; Legion only performs a bounded `grok --version` probe and
+  never reads or transmits `XAI_API_KEY`.
+- Grok execution remains sequential because the upstream CLI exposes no native
+  parallel-subagent primitive. The verified Grok Build CLI is still an upstream
+  alpha, so the adapter retains an explicit alpha compatibility caveat despite
+  the first-class Legion install/executor support.
+
+## [9.2.1] - GA-pending
+
+### Added
+- Semantic Map v2: the default structural map profile now emits a hash-pinned
+  `semantic-index.json` snapshot and its local FTS5 `semantic-index.sqlite`
+  acceleration alongside the preserved v1 inventory artifacts.
+- Published Tree-sitter WASM runtime assets for JavaScript, TypeScript, TSX,
+  Python, JSON, and YAML structural extraction so the packaged CLI can build
+  the same deterministic index after npm installation.
+
+### Changed
+- `legion map` now documents explicit `structural` and legacy-compatible
+  `inventory` profiles, read-only freshness/query/why modes, scope rules, and
+  provenance boundaries in the CLI and user documentation.
+- Refreshed the README and static product site with current install/update
+  commands, Semantic Map v2 examples, and the human-review workflow.
+
 ## [9.2.0] - GA-pending
 
 ### Added

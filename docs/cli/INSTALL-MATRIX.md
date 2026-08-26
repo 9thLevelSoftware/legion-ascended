@@ -28,6 +28,7 @@ Install first-class targets with:
 
 ```powershell
 legion install --target codex --local
+legion install --target grok --local
 ```
 
 Use `--global` for a user-wide install and `--dry-run` to preview writes.
@@ -45,7 +46,43 @@ these entry points at those files.
 | `antigravity` | Antigravity CLI | `/legion` | Yes | Yes | Native plugin with command aliases |
 | `opencode` | OpenCode | `/legion` | Yes | Yes | Single Legion command plus compatibility command aliases and a subagent |
 | `hermes` | Hermes Agent | `/legion` | Yes | Yes | Native Legion skill with parallel delegation, kanban tracking, and gateway delivery |
+| `grok` | Grok Build | `/legion` | Yes | Yes | Native Agent Skill plus bounded headless JSON executor; sequential only |
 | `kilocode` | Kilo Code Plugin | Legion mode or `/legion` | Yes | Yes | Legion mode, workflow, compatibility workflows, and the Legion skill |
+
+### Grok Build
+
+Grok Build is a first-class Legion target in 9.3.0. Verify the installed upstream
+CLI, then preview or apply the managed native skill install:
+
+```powershell
+grok --version
+legion install --target grok --local --dry-run
+legion install --target grok --local
+```
+
+The verified native skill paths are `$PROJECT/.grok/skills/legion/SKILL.md`
+for local scope and `$GROK_HOME/skills/legion/SKILL.md` for global scope. When
+`GROK_HOME` is unset, global scope falls back to `<home>/.grok`. Legion owns
+only these managed skill files and its manifest; Grok owns browser login and
+API-key authentication. Legion never reads or transmits `XAI_API_KEY`.
+
+For headless build or review execution, Legion invokes Grok with argv values,
+not a shell string:
+
+```text
+grok --prompt-file <promptAbsolutePath> --cwd <repositoryRoot> --output-format json --permission-mode bypassPermissions
+```
+
+Use `legion build --executor grok` or `legion review --executor grok` to select
+it explicitly. Grok's upstream CLI is alpha and does not provide a native
+parallel-subagent primitive, so Legion runs this executor sequentially. The
+release's fake-Grok smoke covers success, error, malformed, non-zero, timeout,
+install lifecycle, and packed production-install paths without credentials.
+
+Official references: [Grok Build overview and installation](https://docs.x.ai/build/overview),
+[CLI reference](https://docs.x.ai/build/cli/reference),
+[headless scripting and ACP](https://docs.x.ai/build/cli/headless-scripting), and
+[skills, plugins, and marketplaces](https://docs.x.ai/build/features/skills-plugins-marketplaces).
 
 ## Compatibility And Legacy Targets
 

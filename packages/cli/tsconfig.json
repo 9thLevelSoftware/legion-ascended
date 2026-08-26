@@ -8,6 +8,7 @@
   },
   "references": [
     { "path": "../protocol" },
+    { "path": "../index-store" },
     { "path": "../artifacts" },
     { "path": "../board" },
     { "path": "../board-store" },

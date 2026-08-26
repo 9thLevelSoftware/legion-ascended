@@ -17,13 +17,46 @@ The CLI preserves the original Legion workflow verbs while routing them through 
 
 `legion build` executes the latest typed taskgraph through an executor adapter and records pending evidence. `legion review` submits structured review decisions, and `legion review --accept` is the default human approval boundary before `legion ship` reports readiness.
 
-Guidance commands are also workflow-first. `legion explore`, `legion advise`, `legion council`, and `legion retro` create executor-backed workflow runs with markdown output, prompts, results, and redacted logs when an executor is used. `legion map --refresh` writes `codebase.md`, `index.jsonl`, `symbols.json`, `search.md`, and `map.json` under `.legion/project/workflow/map/<runId>/`; `legion map --check` reports freshness, and `legion map --query <text>` searches the latest map. `legion learn` updates `.legion/project/workflow/learn/knowledge-index.json`, while `legion milestone` manages `.legion/project/workflow/milestone/milestones.json`.
+Guidance commands are also workflow-first. `legion explore`, `legion advise`, `legion council`, and `legion retro` create executor-backed workflow runs with markdown output, prompts, results, and redacted logs when an executor is used. `legion map --refresh` defaults to the structural profile: it writes the v1 `codebase.md`, `index.jsonl`, `symbols.json`, `search.md`, and `map.json` artifacts under `.legion/project/workflow/map/<runId>/`, then adds `semantic-index.json` and `semantic-index.sqlite` in that same run directory. `legion map --check` reports freshness, and `legion map --query <text>` searches the latest valid structural index. With no explicit profile, it falls back to the v1 lexical map only when no structural run is present; a broken latest structural run blocks instead of silently falling back. `legion learn` updates `.legion/project/workflow/learn/knowledge-index.json`, while `legion milestone` manages `.legion/project/workflow/milestone/milestones.json`.
+
+### Codebase map profiles
+
+`legion map --refresh` selects the `structural` profile by default. Both profiles preserve the v1 inventory artifacts; `--profile inventory` is the compatibility path that writes only `codebase.md`, `index.jsonl`, `symbols.json`, `search.md`, and `map.json`. Use `--profile structural` explicitly when a script or operator run must require the structural index. The host-side architecture narrative remains separate at `.planning/CODEBASE.md`.
+
+```powershell
+legion map --refresh --profile structural --json
+legion map --refresh --profile inventory --json
+legion map --check --profile structural --json
+```
+
+A structural refresh reports `semanticIndexArtifactPath` and `semanticSqliteArtifactPath` alongside the v1 paths. `semantic-index.json` is the durable snapshot of parsed coverage and facts; `semantic-index.sqlite` is its local SQLite FTS5 acceleration and is not a second source of truth. Structural coverage can report `parsed`, `metadata-only` for `.md`/`.mdx` Markdown files, `size-limited`, `opaque`, `parser-error`, or `unsupported`.
+
+`legion map --query <text>` is read-only. When a valid structural snapshot exists, the query uses its SQLite FTS5 index and returns fact provenance such as the fact ID, fact kind, source path, source SHA-256, extractor version, and exact source range. Pass `--profile structural` to require this mode. `--profile inventory` is not a structural query mode; an inventory refresh can still be queried through the default legacy fallback when no structural snapshot exists.
+
+`legion map --why <fact-id>` is also read-only and explains one symbol, import, or export fact from the newest fresh structural snapshot. Fact IDs use the `sym_`, `imp_`, or `exp_` prefix forms; `idx_` is reserved for snapshot IDs and is rejected here. It returns the fact, snapshot ID, source SHA-256, extractor version, and exact range; the returned fact contains no raw source text, although freshness validation reads current source metadata and fingerprints before serving it. It rejects `--scope`, `--refresh`, `--check`, `--query`, snapshot IDs, and `--profile inventory`. If the snapshot is missing, stale, corrupt, or the fact is unknown, it blocks and recommends `legion map --refresh --profile structural`.
 
 Ad-hoc commands prepare real work instead of mutating code directly. `legion quick <task>` and `legion polish [target]` create typed changes and taskgraphs, then route to `legion build`.
 
 ## Install Targets
 
-Installer support is tiered by host parity. The default target prompt and `legion install --list-targets` show only first-class targets: Claude Code, Codex, GitHub Copilot CLI, Antigravity, OpenCode, and Kilo Code Plugin.
+Installer support is tiered by host parity. The default target prompt and `legion install --list-targets` show only eight first-class targets: Claude Code, Codex, GitHub Copilot CLI, Antigravity, OpenCode, Hermes Agent, Grok Build, and Kilo Code Plugin.
+
+Grok Build is first-class Legion support through a managed native skill and a bounded headless JSON executor. The upstream Grok CLI is alpha, so this first-class label describes Legion's integration and install lifecycle, not upstream stability or full parity. Verify the upstream CLI, then preview or apply the managed skill install:
+
+```powershell
+grok --version
+legion install --target grok --local --dry-run
+legion install --target grok --local
+```
+
+For headless build or review execution, select Grok explicitly. Its native surface does not provide parallel subagents, so Legion runs this executor sequentially:
+
+```powershell
+legion build --executor grok
+legion review --executor grok
+```
+
+The managed skill is installed at `$PROJECT/.grok/skills/legion/SKILL.md` for local scope and `$GROK_HOME/skills/legion/SKILL.md` for global scope; when `GROK_HOME` is unset, global scope falls back to `<home>/.grok`. Legion owns only the managed skill and manifest files, while Grok owns authentication.
 
 ```powershell
 legion install --list-targets

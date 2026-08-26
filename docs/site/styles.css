@@ -197,6 +197,20 @@ h1 span { color: var(--blood); }
   letter-spacing: 0.05em;
 }
 
+.release-pill {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 999px;
+  background: rgba(212, 175, 55, 0.08);
+  color: var(--gold);
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .divider {
   display: flex;
   align-items: center;
@@ -354,6 +368,123 @@ h2 {
   transform: translateY(-5px) scale(1.04);
   box-shadow: 0 0 40px rgba(255, 34, 34, 0.55);
 }
+
+.grimoire-btn:focus-visible,
+.copy-btn:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 4px;
+}
+
+.semantic-map-section {
+  position: relative;
+  padding: 3rem 2rem;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(13, 13, 20, 0.98) 0%, rgba(139, 0, 0, 0.12) 50%, rgba(13, 13, 20, 0.98) 100%);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+
+.map-kicker {
+  margin-bottom: 0.75rem;
+  color: var(--gold-dim);
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.map-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 2rem 0 1.5rem;
+}
+
+.map-profile-card {
+  padding: 1.25rem;
+  border: 1px solid rgba(139, 0, 0, 0.35);
+  border-radius: 10px;
+  background: rgba(5, 5, 8, 0.6);
+}
+
+.map-profile-card h3 {
+  margin-bottom: 0.5rem;
+  color: var(--gold);
+  font-size: 1.1rem;
+}
+
+.map-profile-card p,
+.map-notes p {
+  color: var(--ash);
+  font-size: 0.95rem;
+}
+
+.map-profile-card code,
+.map-notes code {
+  color: var(--bone);
+  font-family: "Courier New", monospace;
+  font-size: 0.86em;
+}
+
+.map-command-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+  border: 1px solid rgba(139, 0, 0, 0.35);
+  border-radius: 10px;
+  background: var(--abyss);
+}
+
+.map-command-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid rgba(139, 0, 0, 0.16);
+}
+
+.map-command-line:last-child { border-bottom: 0; }
+
+.map-command-line code {
+  color: var(--bone);
+  font-family: "Courier New", monospace;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.copy-btn {
+  flex: 0 0 auto;
+  min-width: 4.5rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--gold-dim);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--gold);
+  cursor: pointer;
+  font-family: "Courier New", monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.copy-btn:hover {
+  background: var(--gold);
+  color: var(--void);
+}
+
+.map-notes {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.5rem;
+}
+
+.map-notes strong { color: var(--gold); }
 
 .features,
 .division-grid {
@@ -592,9 +723,16 @@ footer a:hover { color: var(--gold); }
   .sub-tagline,
   .intro-text { font-size: 1rem; }
   .grimoire-section,
+  .semantic-map-section,
   .tithe-section { padding: 2rem 1rem; }
   .ritual-code { padding: 1rem; }
   .ritual-code pre { font-size: 0.78rem; }
+  .map-profile-grid { grid-template-columns: 1fr; }
+  .map-command-line {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .copy-btn { align-self: flex-end; }
   .command-table {
     display: block;
     overflow-x: auto;

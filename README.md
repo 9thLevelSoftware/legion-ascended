@@ -42,6 +42,7 @@ Requires Node.js `>=24 <26`.
 package from a throwaway cache each time:
 
 ```powershell
+npx legion-ascended
 npx legion-ascended install --list-targets
 npx legion-ascended install --target codex --local
 ```
@@ -50,7 +51,7 @@ npx legion-ascended install --target codex --local
 `legion` on `PATH`:
 
 ```powershell
-npm i -g legion-ascended
+npm i -g legion-ascended@latest
 legion install --list-targets
 ```
 
@@ -61,6 +62,11 @@ legion install --list-targets --all-targets
 legion install --target codex --explain
 legion install --target codex --local --dry-run
 legion install --target codex --local
+
+# Grok Build: verify the host CLI, preview, then install its native Legion skill
+grok --version
+legion install --target grok --local --dry-run
+legion install --target grok --local
 ```
 
 Note that `--global` here means "install the adapter files into your home directory instead of the
@@ -87,6 +93,7 @@ Recommended first-class targets:
 | `antigravity` | Antigravity CLI | `/legion` |
 | `opencode` | OpenCode | `/legion` |
 | `hermes` | Hermes Agent | `/legion` |
+| `grok` | Grok Build | `/legion` |
 | `kilocode` | Kilo Code Plugin | Legion mode or `/legion` |
 
 Compatibility, legacy, and manual-only targets are documented too, but they are not the default happy
@@ -103,6 +110,99 @@ for the current list:
 Claude Desktop is documented in the install matrix but is **not an installable target** —
 `legion install --target claude-desktop` reports an unknown target. It needs MCP or desktop-extension
 packaging first. Claude Desktop is not Claude Code; the `claude` target above is Claude Code.
+
+## Semantic Map v2
+
+The `map` command gives the workflow a deterministic, inspectable view of a repository before a human
+plans or reviews a change. Release `9.3.0` ships Semantic Map v2 and the first-class Grok Build
+install target and executor in the npm package, including the
+published Tree-sitter WASM grammars used by the structural profile. It requires Node.js `>=24 <26`.
+
+Install or update the global CLI with the current package:
+
+```powershell
+npm i -g legion-ascended@latest
+```
+
+Or run the packaged CLI without a global install:
+
+```powershell
+npx legion-ascended map --refresh --profile structural
+```
+
+### Refresh profiles and artifacts
+
+`legion map --refresh` defaults to the `structural` profile. Both profiles preserve the legacy v1
+file-inventory artifacts under `.legion/project/workflow/map/<runId>/`:
+
+- `codebase.md` — human-readable file inventory
+- `index.jsonl` — one v1 file record per line
+- `symbols.json` — v1 symbol listing
+- `search.md` — v1 search-oriented rendering
+- `map.json` — the v1 machine-readable map and its source fingerprint
+
+A structural refresh adds two Semantic Map v2 artifacts in that same run directory:
+
+- `semantic-index.json` — the hash-pinned structural snapshot and durable authority for parsed coverage
+  and facts
+- `semantic-index.sqlite` — a local FTS5 acceleration of that snapshot, not a second source of truth
+
+Use the inventory profile when a v1-only artifact set is required:
+
+```powershell
+legion map --refresh --profile structural
+legion map --refresh --profile inventory
+```
+
+Structural extraction reports coverage per file, including `parsed`, `metadata-only`, `size-limited`,
+`opaque`, `parser-error`, and `unsupported`. Parser errors remain visible and block the structural
+refresh; they are not silently reported as parsed. The host-side architecture narrative is separate
+from these CLI artifacts and belongs in `.planning/CODEBASE.md`.
+
+### Check, query, and explain
+
+`map --check`, `map --query`, and `map --why` are read-only. They do not append workflow runs or
+rewrite map artifacts. They may read current source metadata and fingerprints to verify freshness.
+Only `map --refresh` writes a new map run.
+
+```powershell
+# Check the legacy inventory profile by default; select structural explicitly when needed.
+legion map --check
+legion map --check --profile structural
+
+# Search the newest valid structural index (the default when one exists).
+legion map --query "resolve asset"
+legion map --query "resolve asset" --profile structural
+
+# Explain one structural symbol, import, or export fact.
+legion map --why sym_<fact-id>
+```
+
+`map --check` reports `fresh`, `stale`, `partial`, or `absent`. Structural checks validate the
+snapshot, its SQLite materialization, and the bound v1 `map.json` before reporting freshness. A
+`map --query` uses the newest valid structural snapshot when one exists; if no structural snapshot
+exists, it can fall back to the legacy v1 lexical query. Passing `--profile structural` requires a
+valid structural snapshot. `--profile inventory` is valid only for inventory refreshes and inventory
+freshness checks, not structural query or `--why` mode.
+
+`map --why <fact-id>` requires a fresh structural snapshot. Fact IDs use `sym_`, `imp_`, or `exp_`
+prefixes; `idx_` snapshot IDs are not fact IDs and are rejected. The response carries provenance such
+as the snapshot, source path, source SHA-256, extractor version, and exact source range, but no raw
+source text.
+
+### Scope and review boundary
+
+Use `--scope <path>` with refresh, check, or a bare summary when you need a scoped dataset. The
+path must exist and remain inside the current project. A scoped refresh records that scope in the
+artifacts; later query and why reads use the stored dataset and refuse `--scope`, so refresh with the
+desired scope instead. `--why` also rejects `--refresh`, `--check`, `--query`, and inventory selection,
+and each map invocation accepts only one mode.
+
+A map result is **provenance and retrieval context, not behavioral proof**. It tells a human which
+source bytes, symbols, imports, exports, and ranges were indexed. Open the cited files and verify
+actual behavior before planning, changing, approving, or reviewing work. The human-review boundary
+remains the workflow: use the map to focus inspection, then let `legion plan`, `legion build`,
+`legion review`, and explicit human acceptance produce the evidence that `legion ship` evaluates.
 
 ## Quickstart
 
@@ -229,7 +329,7 @@ These enrich the core loop without bypassing it. Runs write artifacts under
 | Command | Purpose |
 | --- | --- |
 | `legion explore <topic>` | Write a design discovery artifact; can seed an intake session |
-| `legion map --refresh \| --check \| --query <text>` | Generate, verify, and search deterministic codebase context |
+| `legion map --refresh \| --check \| --query <text> \| --why <fact-id> [--profile inventory|structural]` | Generate, verify, search, and explain deterministic codebase context |
 | `legion quick <task>` | One ad-hoc task with a task record and risk classification |
 | `legion advise <topic>` | Read-only advisory analysis |
 | `legion polish [target]` | Scoped cleanup as an ad-hoc workflow |
@@ -257,11 +357,33 @@ Typed internals live under `legion dev` (`project`, `change`, `board`, `migrate`
 
 ## Executors
 
+`--executor` selects the driver that does the work. With the flag omitted, the first installed one wins:
+`claude`, then `codex`, `hermes`, `grok`, then `manual`.
+
 | Executor | Use |
 | --- | --- |
+| `claude` | Live execution and review through Claude Code's headless JSON surface |
 | `codex` | Live execution and review through `codex exec` with workspace-write sandboxing |
+| `hermes` | Live execution and review through `hermes chat -q` |
+| `grok` | Grok Build headless JSON through `grok --prompt-file <promptAbsolutePath> --cwd <repositoryRoot> --output-format json --permission-mode bypassPermissions` |
 | `manual` | Prompt, context, and evidence preparation without running an agent |
 | `fake` | Deterministic tests and dogfood runs |
+
+Grok Build authentication remains owned by Grok: Legion only performs the bounded `grok --version`
+detection probe and never stores, reads, or transmits browser login state or `XAI_API_KEY`. The verified
+Grok CLI is an upstream alpha, so this release keeps that caveat explicit even though the Legion install
+and executor are first-class. Grok has no native parallel-subagent primitive; the execution mode is
+sequential, so `legion build --executor grok` and `legion review --executor grok` run one bounded
+process at a time.
+
+Install and invoke it explicitly:
+
+```powershell
+grok --version
+legion install --target grok --local
+legion build --executor grok
+legion review --executor grok
+```
 
 Every writable dispatch goes through one guarded path. Control artifacts under `.legion/project` are
 snapshotted before the run and restored afterwards; a run that modifies them is blocked and told

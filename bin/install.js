@@ -148,6 +148,7 @@ Runtime (first-class targets are shown by default):
   --antigravity Antigravity CLI
   --opencode    OpenCode
   --hermes      Hermes Agent
+  --grok        Grok Build (first-class Legion skill; upstream CLI alpha)
   --kilo-code   Kilo Code Plugin
   --kilocode    Alias for --kilo-code
 
@@ -158,7 +159,7 @@ Compatibility, legacy, and manual-only targets:
   --amazon-q    Deprecated alias for --kiro
   --windsurf    Windsurf
   --kilo        Kilo CLI
-  --aider       Aider (manual-only guidance; native install disabled)
+  --aider        Aider (manual-only guidance; native install disabled)
 
   You can also use --target <runtime>, for example --target codex.
   If no runtime flag is given, you'll be prompted to select a first-class target.
@@ -285,6 +286,7 @@ function commandForRuntime(runtimeKey) {
     hermes: 'hermes',
     kilo: 'kilo',
     kilocode: 'code',
+    grok: 'grok',
     aider: 'aider'
   }[runtimeKey];
 }
@@ -301,13 +303,32 @@ function commandExists(commandName) {
   return result.status === 0;
 }
 
+function grokVersionDetected(commandName) {
+  const result = spawnSync(commandName, ['--version'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+    timeout: 3000,
+    maxBuffer: 64 * 1024
+  });
+  if (result.error || result.status !== 0) return false;
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
+  return /^grok(?:\s+build)?\s+v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?(?:\s|$)/i.test(output);
+}
+
+function commandDetected(runtimeKey, commandName) {
+  return runtimeKey === 'grok'
+    ? grokVersionDetected(commandName)
+    : commandExists(commandName);
+}
+
 function printDetectedTargets(includeAll = false) {
   const keys = targetListKeys(includeAll);
   console.log('\nDetected Legion targets\n');
   for (const runtimeKey of keys) {
     const runtime = RUNTIME_METADATA[runtimeKey];
     const commandName = commandForRuntime(runtimeKey);
-    const detected = commandExists(commandName);
+    const detected = commandDetected(runtimeKey, commandName);
     console.log(`${runtimeKey.padEnd(12, ' ')} ${detected ? 'detected ' : 'missing  '} ${commandName || 'n/a'} (${runtime.supportTier})`);
   }
   console.log('\nDetection only checks common executable names on PATH. It does not authenticate or launch runtimes.');
@@ -352,23 +373,34 @@ function resolveHome() {
   return normalizePath(home);
 }
 
-function resolveTemplatePath(template, scope, home) {
-  if (!template) return null;
-  const projectDir = normalizePath(process.cwd());
-  return normalizePath(
-    template
-      .replace(/\$PROJECT/g, projectDir)
-      .replace(/\$HOME/g, home)
-      .replace(/\$SCOPE/g, scope)
-  );
+function resolveGrokHome(home) {
+  const configured = process.env.GROK_HOME;
+  if (!configured) return normalizePath(joinPath(home, '.grok'));
+  if (!path.isAbsolute(configured)) {
+    throw new Error('GROK_HOME must be an absolute path when set.');
+  }
+  return normalizePath(configured);
 }
 
-function resolveNativeSurfaces(runtimeKey, scope, home) {
+function resolveTemplatePath(template, runtimeKey, scope, home, grokHome = null) {
+  if (!template) return null;
+  const projectDir = normalizePath(process.cwd());
+  let resolved = template
+    .replace(/\$PROJECT/g, projectDir)
+    .replace(/\$HOME/g, home)
+    .replace(/\$SCOPE/g, scope);
+  if (runtimeKey === 'grok') {
+    resolved = resolved.replace(/\$GROK_HOME/g, grokHome || resolveGrokHome(home));
+  }
+  return normalizePath(resolved);
+}
+
+function resolveNativeSurfaces(runtimeKey, scope, home, grokHome = null) {
   const runtime = RUNTIME_METADATA[runtimeKey];
   return runtime.nativeSurfaces
     .map((surface) => {
       const template = scope === 'local' ? surface.localPath : surface.globalPath;
-      const resolvedPath = resolveTemplatePath(template, scope, home);
+      const resolvedPath = resolveTemplatePath(template, runtimeKey, scope, home, grokHome);
       if (!resolvedPath) return null;
       return {
         ...surface,
@@ -396,8 +428,11 @@ function getNativeSurface(paths, surfaceKey) {
 
 function resolvePaths(runtime, scope, home, legacyPrompts = false) {
   const rt = RUNTIME_METADATA[runtime];
-  const base = scope === 'local' ? normalizePath(process.cwd()) : home;
-  const nativeSurfaces = resolveNativeSurfaces(runtime, scope, home);
+  const grokHome = runtime === 'grok' ? resolveGrokHome(home) : null;
+  const base = scope === 'local'
+    ? normalizePath(process.cwd())
+    : (runtime === 'grok' ? grokHome : home);
+  const nativeSurfaces = resolveNativeSurfaces(runtime, scope, home, grokHome);
 
   let manifestDir;
   let agentsDir;
@@ -423,6 +458,14 @@ function resolvePaths(runtime, scope, home, legacyPrompts = false) {
     adaptersDir = joinPath(legionSkillDir, 'adapters');
     manifestDir = legionSkillDir;
     manifestFile = joinPath(legionSkillDir, 'manifest.json');
+  } else if (rt.storageLayout === 'grok') {
+    const root = scope === 'local' ? joinPath(base, '.grok') : grokHome;
+    agentsDir = joinPath(root, 'legion/agents');
+    commandsDir = joinPath(root, 'legion/commands');
+    skillsDir = joinPath(root, 'legion/skills');
+    adaptersDir = joinPath(root, 'legion/adapters');
+    manifestDir = joinPath(root, 'legion');
+    manifestFile = joinPath(manifestDir, 'manifest.json');
   } else {
     const root = scope === 'local' ? joinPath(base, '.legion') : joinPath(home, '.legion');
     agentsDir = joinPath(root, 'agents');
@@ -437,6 +480,8 @@ function resolvePaths(runtime, scope, home, legacyPrompts = false) {
   const codexBridge = getNativeSurface({ nativeSurfaces }, 'codex-bridge');
 
   return {
+    runtimeKey: runtime,
+    scope,
     // Every generator below already receives `paths`, so the legacy decision
     // rides along with it rather than being threaded through a dozen signatures.
     legacyPrompts,
@@ -725,6 +770,13 @@ Legacy host-specific aliases can remain installed, but they must route back to t
 // The default install ships no prompt bundle, so the router's job is to drive
 // the `legion` binary and act on what it returns -- not to locate and read a
 // markdown workflow definition that is not on disk.
+function legacyPromptGuardrail(paths) {
+  if (paths.runtimeKey === 'grok') {
+    return `  To refresh this native skill, run \`legion update --target grok --${paths.scope}\`; for a clean reinstall, run \`legion install --target grok --${paths.scope}\`. Grok's native skill surface does not use the legacy prompt bundle.`;
+  }
+  return '  If the user wants that surface back, it is `legion install --legacy-prompts`.';
+}
+
 function generateCliRouterBody(paths, runtimeLabel, argumentHint = '$ARGUMENTS') {
   return `# Legion
 
@@ -796,7 +848,7 @@ projections.
 - This install ships no Legion agent personas, prompt bundle, or skill library.
   Do not look for \`.md\` workflow definitions under the Legion directories and do
   not claim \`/legion:*\` aliases exist unless the host actually resolves them.
-  If the user wants that surface back, it is \`legion install --legacy-prompts\`.
+${legacyPromptGuardrail(paths)}
 - \`${paths.manifestFile}\` records what this install wrote. Read it when you need
   to resolve installed paths.
 `;
@@ -1640,7 +1692,15 @@ function printInstallPlan(runtimeKey, scope, verify, paths) {
   console.log('\nDry run only. No files were written.\n');
 }
 
+function assertLegacyPromptsSupported(runtimeKey, legacyPrompts) {
+  if (runtimeKey === 'grok' && legacyPrompts === true) {
+    throw new Error('Grok Build supports only the native skill surface; --legacy-prompts is out of scope.');
+  }
+}
+
 function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompts = false, versionOverride = null) {
+  assertLegacyPromptsSupported(runtimeKey, legacyPrompts);
+
   const home = resolveHome();
   const paths = resolvePaths(runtimeKey, scope, home, legacyPrompts);
   const src = resolveSourceRoot();
@@ -2132,6 +2192,15 @@ function install(runtimeKey, scope, verify = false, dryRun = false, legacyPrompt
         break;
       }
 
+      case 'grok-skill': {
+        const backedUp = writeManagedFile(surface.path, generateLegionSkill(paths, 'Grok Build'), nativeArtifacts);
+        if (backedUp) {
+          console.log(`  ${surface.key}: backed up ${path.basename(surface.path)}.bak`);
+        }
+        console.log(`  ${surface.key}: ${surface.path}`);
+        break;
+      }
+
       default:
         throw new Error(`Unsupported native surface type: ${surface.type}`);
     }
@@ -2528,6 +2597,8 @@ function installFromTargetPackage(packageName, targetVersion, runtimeKey, scope,
 }
 
 async function update(runtimeKey, scope, verify = false, legacyPrompts = null) {
+  assertLegacyPromptsSupported(runtimeKey, legacyPrompts);
+
   const home = resolveHome();
   const paths = resolvePaths(runtimeKey, scope, home);
   const manifest = readManifest(paths.manifestFile);

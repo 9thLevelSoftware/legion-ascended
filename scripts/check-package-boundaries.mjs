@@ -29,6 +29,13 @@ const DEFAULT_PACKAGES = [
     allowedWorkspaceImports: ["@legion/protocol"]
   },
   {
+    name: "@legion/index-store",
+    root: "packages/index-store",
+    src: "packages/index-store/src",
+    allowedWorkspaceImports: ["@legion/protocol"],
+    allowedProviderOrStorageImports: ["node:sqlite"]
+  },
+  {
     name: "@legion/store-sqlite",
     root: "packages/store-sqlite",
     src: "packages/store-sqlite/src",
@@ -57,6 +64,7 @@ const DEFAULT_PACKAGES = [
       "@legion/board",
       "@legion/board-store",
       "@legion/core",
+      "@legion/index-store",
       "@legion/legacy-bridge",
       "@legion/store-sqlite"
     ]

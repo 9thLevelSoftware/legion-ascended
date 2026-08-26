@@ -80,6 +80,73 @@ test("legion map --query still works without --scope", async (t) => {
   assert.equal(payload.mode, "query");
 });
 
+test("legion map --why refuses write and ambiguous combinations", async (t) => {
+  const { run } = await scratchRepo(t);
+  const combinations = [
+    ["--refresh"],
+    ["--check"],
+    ["--query", "resolveAsset"],
+    ["--scope", "src"]
+  ];
+  for (const extra of combinations) {
+    const result = await run("map", "--why", "sym_ffffffffffffffffffffffff", ...extra, "--json");
+    assert.notEqual(result.exitCode, 0, `--why ${extra.join(" ")} must be rejected`);
+    assert.match(`${result.stdout}${result.stderr}`, /--why|one mode|--scope/);
+  }
+
+  const ambiguous = await run("map", "--query", "resolveAsset", "--profile", "inventory", "--json");
+  assert.notEqual(ambiguous.exitCode, 0);
+  assert.match(`${ambiguous.stdout}${ambiguous.stderr}`, /profile|inventory/);
+});
+
+test("default map query blocks when the newest structural run is broken instead of falling back lexically", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const first = await run("map", "--refresh", "--profile", "structural", "--json");
+  assert.equal(first.exitCode, 0, first.stderr);
+  const latest = await run("map", "--refresh", "--profile", "structural", "--json");
+  assert.equal(latest.exitCode, 0, latest.stderr);
+  const latestPayload = parseJsonOutput(latest);
+  const runPath = path.join(root, ...latestPayload.artifactPath.split("/"));
+  const runRecord = JSON.parse(await readFile(runPath, "utf8"));
+  runRecord.status = "blocked";
+  await writeFile(runPath, `${JSON.stringify(runRecord)}\n`, "utf8");
+
+  const query = await run("map", "--query", "resolveAsset", "--json");
+  assert.equal(query.exitCode, 1);
+  const payload = parseJsonOutput(query);
+  assert.equal(payload.status, "blocked");
+  assert.equal(payload.matches, undefined);
+  assert.equal(payload.nextAction.command, "legion map --refresh --profile structural");
+  assert.ok(payload.diagnostics.some(({ code }) => code === "map_structural_latest_failure"));
+  assert.ok(payload.diagnostics.some(({ message }) => message.includes(latestPayload.runId)));
+});
+
+test("structural map read modes preserve run count and inventory query uses lexical fallback", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const structural = await run("map", "--refresh", "--profile", "structural", "--json");
+  assert.equal(structural.exitCode, 0, structural.stderr);
+  const structuralPayload = parseJsonOutput(structural);
+  const structuralQuery = await run("map", "--query", "resolveAsset", "--profile", "structural", "--json");
+  assert.equal(structuralQuery.exitCode, 0, structuralQuery.stderr);
+  const factId = parseJsonOutput(structuralQuery).matches[0].id;
+  const before = await guidanceRunCount(root);
+  assert.equal((await run("map", "--check", "--profile", "structural", "--json")).exitCode, 0);
+  assert.equal((await run("map", "--query", "resolveAsset", "--profile", "structural", "--json")).exitCode, 0);
+  assert.equal((await run("map", "--why", factId, "--json")).exitCode, 0);
+  assert.equal(await guidanceRunCount(root), before, "structural read modes must not append runs");
+
+  const inventoryRepo = await scratchRepo(t);
+  const inventory = await inventoryRepo.run("map", "--refresh", "--profile", "inventory", "--json");
+  assert.equal(inventory.exitCode, 0, inventory.stderr);
+  const inventoryQuery = await inventoryRepo.run("map", "--query", "resolveAsset", "--json");
+  assert.equal(inventoryQuery.exitCode, 0, inventoryQuery.stderr);
+  const inventoryPayload = parseJsonOutput(inventoryQuery);
+  assert.equal(inventoryPayload.matches[0].path, "src/asset.ts");
+  assert.equal(Object.hasOwn(inventoryPayload, "snapshotId"), false);
+  assert.equal(Object.hasOwn(inventoryPayload, "indexProfile"), false);
+  assert.equal(structuralPayload.indexProfile, "structural");
+});
+
 test("legion milestone status writes nothing", async (t) => {
   const { root, run } = await scratchRepo(t);
   const defined = await run("milestone", "--define", "MVP", "--phases", "1-3", "--json");

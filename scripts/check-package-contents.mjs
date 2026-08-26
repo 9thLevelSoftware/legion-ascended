@@ -22,6 +22,16 @@ export const ROOT_ROUTER_PACKAGE_PATHS = Object.freeze([
   "dist/legion-cli.mjs.map"
 ]);
 
+export const STRUCTURAL_RUNTIME_PACKAGE_PATHS = Object.freeze([
+  "dist/web-tree-sitter.wasm",
+  "dist/tree-sitter-javascript.wasm",
+  "dist/tree-sitter-typescript.wasm",
+  "dist/tree-sitter-tsx.wasm",
+  "dist/tree-sitter-python.wasm",
+  "dist/tree-sitter-json.wasm",
+  "dist/tree-sitter-yaml.wasm"
+]);
+
 /**
  * Command markdown added after the v8 pack baseline was frozen.
  *
@@ -42,6 +52,7 @@ export const POST_V8_COMMAND_PATHS = Object.freeze([
 ]);
 
 export const CLI_RUNTIME_PACKAGE_FILES = Object.freeze([
+  "adapters/grok-build.md",
   "adapters/hermes-agent.md",
   "evals/baseline/corpus-manifest.yaml",
   "evals/baseline/fixture-hashes.sha256",
@@ -219,6 +230,7 @@ export function computeChecksumMap(root, paths) {
   const checksums = new Map();
 
   for (const filePath of uniqueSorted(paths)) {
+    if (STRUCTURAL_RUNTIME_PACKAGE_PATHS.includes(filePath)) continue;
     const absolutePath = path.join(root, filePath);
     if (!existsSync(absolutePath)) continue;
     checksums.set(filePath, sha256FileNormalized(absolutePath));
@@ -284,6 +296,7 @@ export async function checkLegacyPackageContents(input = {}) {
     currentPaths: current.files,
     approvedExtraPaths: [
       ...ROOT_ROUTER_PACKAGE_PATHS,
+      ...STRUCTURAL_RUNTIME_PACKAGE_PATHS,
       ...CLI_RUNTIME_PACKAGE_FILES,
       ...POST_V8_COMMAND_PATHS
     ],

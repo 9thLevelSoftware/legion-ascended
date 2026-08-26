@@ -16,3 +16,4 @@ export * from "./releases/index.js";
 export * from "./traceability/index.js";
 export * from "./invalidation/index.js";
 export * from "./archive/index.js";
+export * from "./code-index/index.js";

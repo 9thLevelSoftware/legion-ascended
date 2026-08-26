@@ -25,7 +25,7 @@ import {
 } from "../packages/cli/dist/workflow/intake/lifecycle.js";
 import { handleStageDraft } from "../packages/cli/dist/workflow/intake/driver.js";
 import { allocateSessionId, createSession, listSessions, recordAnswer, rollbackSessionCreation, saveSession } from "../packages/cli/dist/workflow/intake/session.js";
-import { initProject } from "../packages/artifacts/dist/index.js";
+import { initProject, intakePreflightStateSchema } from "../packages/artifacts/dist/index.js";
 
 async function scratch(t) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-intake-lifecycle-"));
@@ -848,6 +848,25 @@ test("a changed codebase-map source fingerprint returns the draft to review", as
   const persisted = JSON.parse(await readFile(path.join(root, ".legion/project/intake/drafts/itd_asset-mapper.json"), "utf8"));
   assert.equal(persisted.status, "invalidated");
   assert.deepEqual(persisted.proposedAnswers, draft.proposedAnswers);
+});
+
+test("inventory map state round-trips through the strict intake preflight schema", async (t) => {
+  const root = await scratch(t);
+  await mkdir(path.join(root, "src"));
+  await writeFile(path.join(root, "src/main.ts"), "export const value = 1;\n", "utf8");
+
+  const preflight = await prepareIntakePreflight({
+    repositoryRoot: root,
+    createdAt: "2026-08-08T14:00:00.000Z",
+    explicitGoal: "Keep the inventory map compatible",
+    withoutExploration: true
+  });
+  const persisted = JSON.parse(await readFile(path.join(root, ".legion/project/intake/preflight.json"), "utf8"));
+
+  assert.equal(preflight.map.indexProfile, undefined);
+  assert.equal(preflight.map.snapshotId, undefined);
+  assert.equal(intakePreflightStateSchema.safeParse(persisted).success, true);
+  assert.deepEqual(intakePreflightStateSchema.parse(persisted), persisted);
 });
 
 test("preflight is durable before session creation and resumes draft review", async (t) => {

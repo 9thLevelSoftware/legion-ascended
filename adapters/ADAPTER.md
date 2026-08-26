@@ -107,6 +107,7 @@ adapters/
   kiro-cli.md         — Kiro CLI (formerly Amazon Q Developer CLI)
   windsurf.md         — Windsurf (Codeium)
   opencode.md         — OpenCode
+  grok-build.md       — Grok Build
   aider.md            — Aider
 ```
 

@@ -1,9 +1,11 @@
 ---
 name: legion:build
 description: Execute current phase plans with parallel agent teams
-argument-hint: "[--phase N] [--dry-run]"
+argument-hint: "[--phase N] [--executor claude|codex|hermes|grok|manual|fake] [--dry-run]"
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, Agent, TeamCreate, TeamDelete, TaskCreate, TaskUpdate, TaskList, SendMessage, AskUserQuestion]
 ---
+
+The CLI executor selector is `--executor claude|codex|hermes|grok|manual|fake`; use `grok` for the bounded headless Grok Build adapter. Grok has no native parallel-subagent primitive, so that path executes plans sequentially.
 
 <objective>
 Execute all plans for the current (or specified) phase. Spawn agents with full personality injection, execute waves in parallel, track progress, and commit completed work.

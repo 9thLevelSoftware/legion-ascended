@@ -12,12 +12,14 @@ const { RUNTIME_METADATA, RUNTIME_ORDER } = require('../../bin/runtime-metadata'
 const ROOT = path.resolve(__dirname, '..', '..');
 const INSTALLER = path.join(ROOT, 'bin', 'install.js');
 
+// Grok is native-skill-only; its lifecycle is covered by the dedicated
+// installer-matrix test rather than this v8 --legacy-prompts contract.
 const LOCAL_INSTALLABLE_RUNTIMES = RUNTIME_ORDER.filter((runtimeKey) => {
-  return RUNTIME_METADATA[runtimeKey].scopeSupport.local;
+  return runtimeKey !== 'grok' && RUNTIME_METADATA[runtimeKey].scopeSupport.local;
 });
 
 const GLOBAL_INSTALLABLE_RUNTIMES = RUNTIME_ORDER.filter((runtimeKey) => {
-  return RUNTIME_METADATA[runtimeKey].scopeSupport.global;
+  return runtimeKey !== 'grok' && RUNTIME_METADATA[runtimeKey].scopeSupport.global;
 });
 
 // This file is the v8 prompt-surface contract: every assertion below is about

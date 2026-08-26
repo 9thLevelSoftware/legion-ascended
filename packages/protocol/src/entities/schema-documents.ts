@@ -3,6 +3,7 @@ import * as z from "zod";
 import { approvalSchema } from "./approval.js";
 import { attestationSchema } from "./attestation.js";
 import { changeSchema } from "./change.js";
+import { codeIndexSnapshotSchema } from "./code-index.js";
 import { decisionSchema } from "./decision.js";
 import { evidenceBundleSchema } from "./evidence.js";
 import { explorationSchema } from "./exploration.js";
@@ -104,6 +105,11 @@ export const entityJsonSchemas = {
     "https://schemas.9thlevelsoftware.com/legion/entities/change.schema.json",
     "Legion protocol change entity schema",
     changeSchema
+  ),
+  codeIndex: jsonSchemaDocument(
+    "https://schemas.9thlevelsoftware.com/legion/entities/code-index.schema.json",
+    "Legion protocol code index snapshot entity schema",
+    codeIndexSnapshotSchema
   ),
   requirement: jsonSchemaDocument(
     "https://schemas.9thlevelsoftware.com/legion/entities/requirement.schema.json",

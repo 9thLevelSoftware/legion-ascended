@@ -64,18 +64,18 @@ import {
 } from "../../workflow/run-artifacts.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 
-const BUILD_HELP = `legion build [--executor claude|codex|manual|fake] [--allow-dirty] [--dry-run]
+const BUILD_HELP = `legion build [--executor claude|codex|hermes|grok|manual|fake] [--allow-dirty] [--dry-run]
 
 Execute the latest typed taskgraph through a workflow executor and collect pending build evidence.
 
 With no --executor, the first installed driver runs the work: claude, then
-codex, then manual. The manual executor writes an instruction prompt and blocks
+codex, hermes, grok, then manual. The manual executor writes an instruction prompt and blocks
 rather than doing nothing quietly.
 
 Examples:
   legion build --dry-run --json
   legion build --executor fake --allow-dirty
-  legion build --executor claude --allow-dirty`;
+  legion build --executor grok --allow-dirty`;
 
 /**
  * @param changeId When given, build this change instead of the newest one.
@@ -1787,6 +1787,8 @@ function modelManifestForExecutor(executor: ExecutionAdapterKind): ModelManifest
         return { provider: "openai", id: "codex-cli" };
       case "hermes":
         return { provider: "nous", id: "hermes-agent" };
+      case "grok":
+        return { provider: "xai", id: "grok-build" };
       case "manual":
       case "fake":
         return { provider: "legion", id: executor };

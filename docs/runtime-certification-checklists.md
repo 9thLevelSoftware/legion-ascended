@@ -83,6 +83,64 @@ Use these checklists for manual verification when CI cannot prove runtime-native
 - Restart Hermes and verify the `legion` skill loads (test with `/skill legion` or `hermes -s legion`).
 - Verify `delegate_task` can be used for parallel plan execution.
 
+## Grok Build
+
+Grok Build is a first-class **Legion** target in 9.3.0 because the managed
+installer, bounded detection, headless executor, and packed-install smoke are
+covered. This does not upgrade the upstream CLI's support tier: the verified
+upstream CLI is `grok 1.0.10 (5992780042ca) [alpha]`, and the alpha caveat must
+remain in the certification record.
+
+### Install and detection
+
+- [ ] Run `grok --version` as the bounded, read-only availability probe and
+  record a successful exit plus the reported version.
+- [ ] For a local install, preview and apply the managed skill at
+  `$PROJECT/.grok/skills/legion/SKILL.md`.
+- [ ] For a global install, preview and apply the managed skill at
+  `$GROK_HOME/skills/legion/SKILL.md`; when `GROK_HOME` is unset, verify the
+  fallback path `<home>/.grok/skills/legion/SKILL.md`.
+- [ ] Confirm the generated skill is named `legion` and appears to Grok as the
+  `/legion` user-invocable entry point.
+- [ ] Optionally run `grok inspect --json` to verify the discovered project or
+  user skill path without starting a prompt, TUI, or login flow.
+- [ ] Verify update, uninstall, and manifest rollback remove only Legion-managed
+  Grok skill files and leave unrelated `.grok` content untouched.
+
+### Executor and authentication boundaries
+
+- [ ] Run `legion build --executor grok` or `legion review --executor grok`
+  against the fixture repository and verify the executor passes this argv array,
+  not a shell string:
+
+  ```text
+  grok --prompt-file <path> --cwd <repo> --output-format json --permission-mode bypassPermissions
+  ```
+
+- [ ] Confirm `--prompt-file` points to the temporary prompt, `--cwd` is the
+  repository root, and the executor accepts one completed `json` result envelope.
+- [ ] Confirm `streaming-json` (newline-delimited session updates) is not parsed
+  as the completed executor result, and that `grok agent stdio` remains the
+  separate ACP JSON-RPC surface.
+- [ ] Confirm Grok owns browser authentication and API-key configuration. Legion
+  must never run `grok login`, inspect credential files, read `XAI_API_KEY`, or
+  transmit an API key through installation, detection, or execution.
+- [ ] Record an authentication failure as a Grok diagnostic rather than as an
+  installer success or a Legion credential-handling failure.
+
+### Dispatch and packed-install smoke
+
+- [ ] Confirm Grok has no native parallel-subagent primitive and that Legion
+  executes build and review waves sequentially with a maximum concurrency of one.
+- [ ] From a packed production install, run the credential-free fake-Grok smoke
+  and record PASS for detection, local/global install lifecycle, executor result
+  normalization, command help, package contents, and packed production-install
+  execution.
+- [ ] Include failure-path coverage for malformed, partial, error, non-zero, and
+  timeout responses; none may be certified as a successful executor result.
+- [ ] Keep the upstream `1.0.10` alpha caveat attached to the certification
+  record even when every Legion-managed smoke item passes.
+
 ## Kilo CLI
 
 - Confirm `.kilo/commands/legion.md` or `~/.config/kilo/commands/legion.md` exists.

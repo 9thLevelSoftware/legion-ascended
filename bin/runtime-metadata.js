@@ -55,6 +55,7 @@ const LEGION_CLI_COMMANDS = [
 
 const SUPPORT_TIERS = ['first-class', 'compatible', 'legacy', 'manual-only', 'unsupported'];
 const VERIFIED_ON = '2026-06-23';
+const GROK_VERIFIED_ON = '2026-08-25';
 const MANAGED_INSTALL_LIFECYCLE = Object.freeze({
   install: 'managed',
   update: 'managed',
@@ -609,6 +610,62 @@ const RUNTIME_METADATA = {
       },
     ],
   },
+  grok: {
+    key: 'grok',
+    flag: '--grok',
+    aliases: ['--grok-build'],
+    label: 'Grok Build',
+    adapterFile: 'grok-build.md',
+    supportTier: 'first-class',
+    disposition: 'headless-cli-with-native-skill',
+    installSurface: 'native Legion skill for Grok Build project and user scopes',
+    canonicalEntrypoint: { local: '/legion', global: '/legion' },
+    parityGaps: [
+      'The verified local Grok Build CLI is alpha (1.0.10); parity claims are limited to the documented skill and inspection surface.'
+    ],
+    lastVerified: GROK_VERIFIED_ON,
+    smokeTestStatus: 'covered',
+    installLifecycle: MANAGED_INSTALL_LIFECYCLE,
+    scopeSupport: { local: true, global: true },
+    storageLayout: 'grok',
+    allowedTools: null,
+    supportsAtRefs: false,
+    nativeSurfaces: [
+      {
+        key: 'grok-skill',
+        type: 'grok-skill',
+        pathKind: 'file',
+        localPath: '$PROJECT/.grok/skills/legion/SKILL.md',
+        globalPath: '$GROK_HOME/skills/legion/SKILL.md',
+      },
+    ],
+    entrypoints: {
+      local: '/legion',
+      global: '/legion',
+    },
+    evidence: [
+      {
+        title: 'Grok Build overview and installation',
+        url: 'https://docs.x.ai/build/overview',
+        verifiedOn: GROK_VERIFIED_ON,
+      },
+      {
+        title: 'Grok Build CLI reference',
+        url: 'https://docs.x.ai/build/cli/reference',
+        verifiedOn: GROK_VERIFIED_ON,
+      },
+      {
+        title: 'Grok Build headless scripting and ACP',
+        url: 'https://docs.x.ai/build/cli/headless-scripting',
+        verifiedOn: GROK_VERIFIED_ON,
+      },
+      {
+        title: 'Grok Build skills, plugins, and marketplaces',
+        url: 'https://docs.x.ai/build/features/skills-plugins-marketplaces',
+        verifiedOn: GROK_VERIFIED_ON,
+      },
+    ],
+  },
   kilo: {
     key: 'kilo',
     flag: '--kilo',
@@ -818,6 +875,7 @@ const RUNTIME_ORDER = [
   'windsurf',
   'opencode',
   'hermes',
+  'grok',
   'kilo',
   'kilocode',
   'aider',

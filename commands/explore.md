@@ -3,6 +3,7 @@ name: legion:explore
 description: Research and clarify a product idea, then produce a design document before project initialization
 mode: inline-persona
 inline_persona: polymath
+argument-hint: "<topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor claude|codex|hermes|grok|manual|fake]"
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
@@ -39,6 +40,17 @@ value of this command — the verb runs one pass against fixed sections and shar
 that implementation with `legion council`, so rendering its payload would
 replace a design discussion with a single artifact. Exploration is the one step
 where wide latitude is correct, because nothing it produces is authoritative.
+
+<executor_guidance>
+The CLI accepts `--executor claude|codex|hermes|grok|manual|fake`; use the same
+selector in the recorded command when the discovery pass must run through a
+specific driver. Verify Grok Build first with `grok --version`: Grok is a
+first-class Legion target in this release for managed installation, detection,
+and bounded execution, while the upstream Grok CLI remains an alpha and is not
+a first-class upstream parity claim. Its native surface does not provide
+parallel subagents, so `--executor grok` runs the bounded headless workflow
+sequentially and must not be described as native parallel delegation.
+</executor_guidance>
 </authority>
 
 <process>

@@ -10,15 +10,22 @@ Use a first-class target unless you have a specific compatibility need:
 legion install --list-targets
 legion install --target codex --local --dry-run
 legion install --target codex --local
+
+# Grok Build is a first-class Legion target; the upstream CLI remains alpha
+# Verify the installed CLI before installing Legion's native skill surface
+grok --version
+legion install --target grok --local --dry-run
+legion install --target grok --local
 ```
 
-First-class targets expose one primary Legion entry point: `legion <command>` in the terminal, or a single `legion` skill/command/mode in the host. Compatibility, legacy, and manual-only targets are documented in `docs/cli/INSTALL-MATRIX.md` and shown with `legion install --list-targets --all-targets`.
+First-class targets, including Grok Build, expose one primary Legion entry point: `legion <command>` in the terminal, or a single `legion` skill/command/mode in the host. Compatibility, legacy, and manual-only targets are documented in `docs/cli/INSTALL-MATRIX.md` and shown with `legion install --list-targets --all-targets`.
 
 ## First Project Setup
 
 ```powershell
 legion status
 legion explore "clarify the first release slice" --executor fake
+legion explore "compare the implementation options" --executor grok
 legion start --goal "Metadata authoring and deterministic asset resolution"
 legion map --refresh --scope .                 # only when start returns map_refresh_required
 legion start --stage-draft .legion/var/intake-drafts/intake-draft.json # ignored host input from the review contract
@@ -51,16 +58,21 @@ Guidance runs write `workflow-run.json` plus command-specific markdown under `.l
 
 ## Executors
 
-`--executor` selects the driver that does the work. With the flag omitted, the first installed one wins: `claude`, then `codex`, then `manual`.
+`--executor` selects the driver that does the work. With the flag omitted, the first installed one wins: `claude`, then `codex`, `hermes`, `grok`, then `manual`.
 
 | Executor | What runs the task |
 | --- | --- |
 | `claude` | Claude Code, headless (`claude --print --output-format json`). `LEGION_CLAUDE_EXEC_TIMEOUT_MS` overrides the 15-minute cap. |
 | `codex` | Codex CLI (`codex exec`). `LEGION_CODEX_EXEC_TIMEOUT_MS` overrides the 5-minute cap. |
+| `hermes` | Hermes Agent (`hermes chat -q`). `LEGION_HERMES_EXEC_TIMEOUT_MS` overrides the 10-minute cap. |
+| `grok` | Grok Build headless JSON (`grok --prompt-file <promptAbsolutePath> --cwd <repositoryRoot> --output-format json --permission-mode bypassPermissions`). `LEGION_GROK_EXEC_TIMEOUT_MS` overrides the 10-minute cap. The upstream Grok CLI is alpha, but the Legion install target and executor are first-class. Grok has no native parallel-subagent primitive, so Legion runs this path sequentially. |
 | `manual` | Nothing. It writes the instruction prompt, records `blocked`, and leaves the work to you. |
 | `fake` | A scripted in-memory adapter, for tests. |
 
 Two things worth knowing before relying on the default:
+
+- **Grok owns authentication.** Legion only runs the bounded `grok --version` detection probe and never reads or transmits browser login state or `XAI_API_KEY`. Local installs write `.grok/skills/legion/SKILL.md`; global installs write `$GROK_HOME/skills/legion/SKILL.md`, falling back to `<home>/.grok` when `GROK_HOME` is unset.
+- **Grok execution is sequential.** `legion build --executor grok` and `legion review --executor grok` invoke one bounded headless process at a time. The completed `--output-format json` envelope is normalized by Legion; `streaming-json`/ACP NDJSON is not treated as a Legion result in this release.
 
 - **Inside a Claude Code session, auto-selection skips `claude`.** The installed `/legion` entry point runs `legion build` from within such a session, and auto-selecting there would spawn a second agent with permissions bypassed to do work the agent that asked for it could do itself. You get `manual` instead, whose prompt artifact hands the task to the session you are already in. `--executor claude` is still honored when you ask for it by name.
 - **`--executor claude` runs with `--permission-mode bypassPermissions`,** matching the codex adapter's `approval_policy="never"` — there is no human attached to answer a prompt. A read-only run additionally denies `Edit`, `Write`, and `NotebookEdit`. Claude Code has no OS-level sandbox flag, so unlike codex's `--sandbox read-only` a `Bash` command that writes is not refused; the guarded-execution harness is what keeps such a write out of the evidence.
@@ -71,6 +83,7 @@ Ad-hoc work still goes through the normal evidence gate:
 legion quick "fix the failing validation"
 legion polish packages/cli
 legion build --executor codex
+legion build --executor grok
 ```
 
 ## Approving Delta Specs
@@ -116,7 +129,7 @@ legion review --executor codex
 legion review --accept --approver dasbl
 ```
 
-`--executor` takes `claude`, `codex`, `manual`, or `fake`; see [Executors](#executors) above for what each one runs and what the default probes. Omitting `--approver` on the accept still exits 0 but records no human, which costs `whole_change_acceptance_evidence` at ship.
+`--executor` takes `claude`, `codex`, `hermes`, `grok`, `manual`, or `fake`; see [Executors](#executors) above for what each one runs and what the default probes. Omitting `--approver` on the accept still exits 0 but records no human, which costs `whole_change_acceptance_evidence` at ship.
 
 `legion build` blocks on a dirty git worktree unless you pass `--allow-dirty`. Use that override only when the current uncommitted state is intentional.
 

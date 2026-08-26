@@ -1,6 +1,6 @@
 {
   "name": "legion-ascended",
-  "version": "9.2.0",
+  "version": "9.3.0",
   "description": "Guided execution layer for AI-assisted software work.",
   "packageManager": "pnpm@11.4.0",
   "publishConfig": {
@@ -38,6 +38,13 @@
     "bin/",
     "dist/legion-cli.mjs",
     "dist/legion-cli.mjs.map",
+    "dist/web-tree-sitter.wasm",
+    "dist/tree-sitter-javascript.wasm",
+    "dist/tree-sitter-typescript.wasm",
+    "dist/tree-sitter-tsx.wasm",
+    "dist/tree-sitter-python.wasm",
+    "dist/tree-sitter-json.wasm",
+    "dist/tree-sitter-yaml.wasm",
     "agents/",
     "commands/",
     "skills/",

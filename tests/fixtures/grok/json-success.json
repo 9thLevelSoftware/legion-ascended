@@ -1,0 +1,6 @@
+{
+  "text": "{\"status\":\"succeeded\",\"summary\":\"Fake Grok completed the resolver task.\",\"filesChanged\":[\"src/resolve-asset.ts\"],\"commandsRun\":[{\"command\":\"pnpm\",\"args\":[\"test\"],\"exitCode\":0}],\"findings\":[],\"reviewVerdicts\":{\"specification\":\"pass\",\"integration\":\"pass\",\"evidence\":\"pass\"}}",
+  "stopReason": "completed",
+  "sessionId": "session_fake_grok",
+  "requestId": "request_fake_grok"
+}

@@ -1,6 +1,7 @@
 ---
 name: legion:milestone
 description: Milestone management — status, definition, completion, and archiving
+argument-hint: "--status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>"
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
