@@ -802,6 +802,78 @@ test("redacts credential-bearing external import specifiers from serialized sign
   }
 });
 
+test("redacts percent-encoded URI, userinfo, and query secrets from serialized signals", async () => {
+  const encodedUri = "./https%3A%2F%2Fexample.test%2Fpkg";
+  const encodedCredentials = "./service%3A%2F%2Falice%3Asuper-secret%40example.test%2Fpkg%3Fapi_key%3Danother-secret%26password%3Dsuper-secret";
+  const encodedBoundary = "../service%3A%2F%2Falice%3Asuper-secret%40example.test%2Fpkg%3Fapi_key%3Danother-secret";
+  const fixture = await makeFixture([
+    ["src/encoded-uri-a.ts", `import \"${encodedUri}\";\n`],
+    ["src/encoded-uri-b.ts", `import \"${encodedUri}\";\n`],
+    ["src/encoded-credentials-a.ts", `import \"${encodedCredentials}\";\n`],
+    ["src/encoded-credentials-b.ts", `import \"${encodedCredentials}\";\n`],
+    ["src/encoded-boundary.ts", `import \"${encodedBoundary}\";\n`]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const serialized = JSON.stringify(result);
+    assert.doesNotMatch(serialized, /super-secret|another-secret|alice|api_key|password|https/u);
+    assert.match(serialized, /opaque external import specifier \(redacted\)/u);
+    assert.ok(result.dependencyEdges.filter((edge) => edge.to === "opaque external import specifier (redacted)").length >= 5);
+    assert.ok(result.architectureSignals.some((signal) =>
+      signal.code === "fan-in-hotspot" && signal.statement.includes("opaque external import specifier (redacted)")
+    ));
+    assert.ok(result.architectureSignals.some((signal) =>
+      signal.code === "cross-boundary-import" && signal.statement.includes("opaque external import specifier (redacted)")
+    ));
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("recognizes case-sensitive CamelCase test prefixes and links unique source neighbors", async () => {
+  const fixture = await makeFixture([
+    ["src/Foo.java", "class Foo {}\n"],
+    ["src/Foo.cs", "class Foo {}\n"],
+    ["src/TestFoo.java", "class TestFoo {}\n"],
+    ["src/TestFoo.cs", "class TestFoo {}\n"],
+    ["src/Bar.java", "class Bar {}\n"],
+    ["src/TestsBar.java", "class TestsBar {}\n"],
+    ["src/Baz.cs", "class Baz {}\n"],
+    ["src/SpecBaz.cs", "class SpecBaz {}\n"],
+    ["src/Contest.java", "class Contest {}\n"]
+  ], {
+    "src/Foo.java": "parsed",
+    "src/Foo.cs": "parsed",
+    "src/TestFoo.java": "parsed",
+    "src/TestFoo.cs": "parsed",
+    "src/Bar.java": "parsed",
+    "src/TestsBar.java": "parsed",
+    "src/Baz.cs": "parsed",
+    "src/SpecBaz.cs": "parsed"
+  });
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const expectedTestPaths = ["src/SpecBaz.cs", "src/TestFoo.cs", "src/TestFoo.java", "src/TestsBar.java"];
+    for (const testPath of expectedTestPaths) assert.ok(result.testFiles.includes(testPath), testPath);
+    assert.equal(result.testFiles.includes("src/Contest.java"), false);
+    assert.deepEqual(
+      result.testToSourceLinks.filter((link) => expectedTestPaths.includes(link.testPath)),
+      [
+        ["src/SpecBaz.cs", "src/Baz.cs"],
+        ["src/TestFoo.cs", "src/Foo.cs"],
+        ["src/TestFoo.java", "src/Foo.java"],
+        ["src/TestsBar.java", "src/Bar.java"]
+      ].map(([testPath, sourcePath]) => ({
+        testPath,
+        sourcePath,
+        reason: "parsed, supported, non-generated test-convention path; conventions: prefix; heuristic filename/path match; low confidence"
+      }))
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("bounds source evidence and transient reads for large polyglot inventories", async () => {
   const bulkTests = Array.from({ length: 1_025 }, (_, index) => [
     `tests/polyglot-${String(index).padStart(4, "0")}.test.ts`,

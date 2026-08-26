@@ -129,6 +129,9 @@ function testNamingConventions(sourcePath: string): readonly string[] {
   if (/(?:Tests?|Spec)$/u.test(stem)) {
     conventions.push("CamelCase suffix");
   }
+  if (/^(?:Tests?|Spec)[A-Z]/u.test(stem)) {
+    conventions.push("prefix");
+  }
   if (/^test[._-]/iu.test(stem)) {
     conventions.push("prefix");
   }
@@ -150,6 +153,7 @@ function sourceStem(sourcePath: string): string {
   return stem
     .replace(/(?:[._-])(test|spec)$/iu, "")
     .replace(/(?:Tests?|Spec)$/u, "")
+    .replace(/^(?:Tests?|Spec)(?=[A-Z])/u, "")
     .replace(/^test[._-]/iu, "");
 }
 
@@ -690,10 +694,32 @@ function isRelativeImportSpecifier(specifier: string): boolean {
   return specifier === "." || specifier === ".." || specifier.startsWith("./") || specifier.startsWith("../");
 }
 
+function decodedImportSpecifier(specifier: string): string | undefined {
+  if (!specifier.includes("%")) return undefined;
+  let decoded = specifier;
+  for (let depth = 0; depth < 3 && /%[0-9A-Fa-f]{2}/u.test(decoded); depth += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      return undefined;
+    }
+  }
+  return decoded;
+}
+
 function isOpaqueImportSpecifier(specifier: string): boolean {
-  return !isRelativeImportSpecifier(specifier) ||
-    /(?:^|\/)\p{L}[\p{L}\d+.-]*:/u.test(specifier) ||
-    /(?:^|\/)[^/?#\s:@]+:[^/?#\s@]+@/u.test(specifier);
+  if (!isRelativeImportSpecifier(specifier)) return true;
+  const decoded = decodedImportSpecifier(specifier);
+  if (specifier.includes("%") && decoded === undefined) return true;
+  return /(?:^|\/)\p{L}[\p{L}\d+.-]*:/u.test(specifier) ||
+    /(?:^|\/)[^/?#\s:@]+:[^/?#\s@]+@/u.test(specifier) ||
+    (decoded !== undefined && (
+      /(?:^|\/)\p{L}[\p{L}\d+.-]*:/u.test(decoded) ||
+      /(?:^|\/)[^/?#\s:@]+:[^/?#\s@]+@/u.test(decoded) ||
+      /[?#]/u.test(decoded)
+    ));
 }
 
 function safeImportSpecifier(specifier: string): string {
