@@ -213,7 +213,7 @@ test("discloses bounded fan-out and fan-in hotspot evidence samples", async () =
     assert.ok(fanOut);
     assert.match(fanOut.statement, /bounded sample/iu);
     assert.ok(fanOut.evidence.length <= 64);
-    assert.ok(fanOut.evidence.every((evidence) => /bounded sample/iu.test(evidence.note)));
+    assert.ok(fanOut.evidence.every((evidence) => /first 8 hotspot facts; global evidence cap is 64 references/iu.test(evidence.note)));
 
     const fanIn = result.architectureSignals.find((signal) =>
       signal.code === "fan-in-hotspot" && signal.statement.includes("./shared.ts")
@@ -221,7 +221,7 @@ test("discloses bounded fan-out and fan-in hotspot evidence samples", async () =
     assert.ok(fanIn);
     assert.match(fanIn.statement, /bounded sample/iu);
     assert.ok(fanIn.evidence.length <= 64);
-    assert.ok(fanIn.evidence.every((evidence) => /bounded sample/iu.test(evidence.note)));
+    assert.ok(fanIn.evidence.every((evidence) => /first 8 hotspot facts; global evidence cap is 64 references/iu.test(evidence.note)));
   } finally {
     await fixture.cleanup();
   }
@@ -287,6 +287,7 @@ test("links test files only to parsed, supported, non-generated source candidate
       reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
     });
     assert.deepEqual(result.testFiles, [
+      "ci/code-target.test.ts",
       "src/build-&-config.test.ts",
       "src/feature.test.ts",
       "src/opaque-target.test.ts",
@@ -295,7 +296,11 @@ test("links test files only to parsed, supported, non-generated source candidate
       "tests/ambiguous.test.ts",
       "tests/main_test.go"
     ]);
-    assert.ok(result.testFiles.includes("tests/main_test.go"));
+    assert.deepEqual(result.testToSourceLinks.find((link) => link.testPath === "ci/code-target.test.ts"), {
+      testPath: "ci/code-target.test.ts",
+      sourcePath: "ci/code-target.ts",
+      reason: "parsed, supported, non-generated test-convention path; heuristic filename/path match; low confidence"
+    });
     assert.equal(result.testToSourceLinks.some((link) => link.testPath === "tests/ambiguous.test.ts"), false);
     assert.equal(result.testToSourceLinks.some((link) => link.testPath === "tests/main_test.go"), false);
     for (const excludedTestPath of [
@@ -307,7 +312,6 @@ test("links test files only to parsed, supported, non-generated source candidate
       "package.test.json",
       ".github/workflows/ci.test.yml",
       "ci/build.test.yml",
-      "ci/code-target.test.ts",
       "docs/code-target.test.ts",
       "docs/guide-target.test.md"
     ]) {
@@ -444,7 +448,8 @@ test("does not emit missing-test-neighbor for non-code or generated coverage", a
     ["src/config.yml", "setting: true\n"],
     ["src/opaque.bin", "opaque content\n"],
     ["docs/guide.md", "# Guide\n"],
-    ["ci/build.yml", "name: build\n"]
+    ["ci/build.yml", "name: build\n"],
+    ["ci/untested.ts", "export const ciUntested = 1;\n"]
   ]);
   try {
     const result = await collectBrownfieldSignals(fixture);
@@ -454,6 +459,7 @@ test("does not emit missing-test-neighbor for non-code or generated coverage", a
       .filter((evidence) => evidence.kind === "source-file")
       .map((evidence) => evidence.path);
     assert.ok(missingTestPaths.includes("src/untested.ts"));
+    assert.ok(missingTestPaths.includes("ci/untested.ts"));
     for (const excludedPath of [
       "generated/output.ts",
       "src/config.json",
@@ -472,7 +478,9 @@ test("does not emit missing-test-neighbor for non-code or generated coverage", a
 test("redacts credential-bearing external import specifiers from serialized signals", async () => {
   const fixture = await makeFixture([
     ["src/external-a.ts", "import \"https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"],
-    ["src/external-b.ts", "import \"https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"]
+    ["src/external-b.ts", "import \"https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"],
+    ["src/relative-external-a.ts", "import \"./https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"],
+    ["src/relative-external-b.ts", "import \"./https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"]
   ]);
   try {
     const result = await collectBrownfieldSignals(fixture);
@@ -492,19 +500,31 @@ test("redacts credential-bearing external import specifiers from serialized sign
 
 test("bounds source evidence and transient reads for large polyglot inventories", async () => {
   const bulkTests = Array.from({ length: 1_025 }, (_, index) => [
-    `tests/polyglot-${String(index).padStart(4, "0")}_test.go`,
-    "package polyglot\n\nfunc TestPolyglot() {}\n"
+    `tests/polyglot-${String(index).padStart(4, "0")}.test.ts`,
+    "test(\"polyglot\", () => polyglot());\n"
+  ]);
+  const bulkSources = Array.from({ length: 1_025 }, (_, index) => [
+    `src/polyglot-${String(index).padStart(4, "0")}.ts`,
+    `export const polyglot${index} = ${index};\n`
   ]);
   const fixture = await makeFixture([
     ...bulkTests,
+    ...bulkSources,
     ["src/large.ts", `// ${"x".repeat(400_000)}\nexport const large = 1;\n`]
   ]);
   try {
+    const startedAt = performance.now();
     const result = await collectBrownfieldSignals(fixture);
+    const elapsedMs = performance.now() - startedAt;
+    assert.ok(elapsedMs < 10_000, `collector took ${elapsedMs.toFixed(0)}ms for 1,025 source/test candidates`);
     assert.ok(result.summary.testFiles >= 1_025);
     assert.equal(result.testFiles.length, result.summary.testFiles);
-    assert.ok(result.testFiles.includes("tests/polyglot-1024_test.go"));
+    assert.ok(result.testFiles.includes("tests/polyglot-1024.test.ts"));
     assert.ok(result.testFiles.every((testPath) => testPath.endsWith(".go") || testPath.endsWith(".ts")));
+    assert.equal(result.testToSourceLinks.filter((link) => link.testPath.startsWith("tests/polyglot-")).length, 1_025);
+    assert.ok(result.testToSourceLinks.some((link) =>
+      link.testPath === "tests/polyglot-1024.test.ts" && link.sourcePath === "src/polyglot-1024.ts"
+    ));
 
     for (const signal of [...result.architectureSignals, ...result.riskSignals]) {
       assert.ok(signal.evidence.length <= 64, signal.code);
@@ -524,7 +544,7 @@ test("bounds source evidence and transient reads for large polyglot inventories"
   }
 });
 
-test("keeps bounded source text inside the ephemeral risk scanner", async () => {
+test("retains only source metadata and risk booleans from one opened read", async () => {
   const implementation = await readFile(new URL("../src/workflow/brownfield-signals.ts", import.meta.url), "utf8");
   const riskCollectorStart = implementation.indexOf("async function collectRiskSignals");
   const publicCollectorStart = implementation.indexOf("export async function collectBrownfieldSignals");
@@ -532,7 +552,14 @@ test("keeps bounded source text inside the ephemeral risk scanner", async () => 
   assert.ok(publicCollectorStart > riskCollectorStart);
   const riskCollector = implementation.slice(riskCollectorStart, publicCollectorStart);
 
-  assert.match(implementation, /async function scanBoundedSourceFile/u);
-  assert.doesNotMatch(riskCollector, /readBoundedSource|const text\s*=/u);
+  assert.match(implementation, /async function inspectSourceFile/u);
+  assert.match(implementation, /patternMatches: RiskPatternMatches/u);
+  assert.match(riskCollector, /observation\.patternMatches/u);
+  assert.doesNotMatch(riskCollector, /scanBoundedSourceFile|readBoundedSource|repositoryRoot/u);
   assert.doesNotMatch(implementation, /readonly text:\s*string/u);
+});
+
+test("wires the collector regression suite into the CLI package test script", async () => {
+  const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(packageJson.scripts?.test, "node --test \"test/**/*.test.mjs\"");
 });

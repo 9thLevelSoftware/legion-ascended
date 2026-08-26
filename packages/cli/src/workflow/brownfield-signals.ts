@@ -19,34 +19,21 @@ import {
   type CodeIndexSourcePath
 } from "@legion/protocol";
 import { fingerprintSourceFiles } from "./codebase-map.js";
+import {
+  AUTHORED_BUILD_CONFIGURATION,
+  AUTHORED_DEPENDENCY_MANIFESTS,
+  AUTHORED_SOURCE_EXTENSIONS
+} from "./authored-source.js";
 
 const MAX_BOUNDED_SOURCE_BYTES = 256 * 1024;
 const MAX_BOUNDED_MAP_BYTES = 16 * 1024 * 1024;
 const MAX_SIGNAL_EVIDENCE = 64;
+const HOTSPOT_FACT_SAMPLE_SIZE = 8;
 const BOUNDED_SAMPLE_NOTE = `Bounded sample: first ${MAX_SIGNAL_EVIDENCE} deterministic evidence references.`;
+const BOUNDED_HOTSPOT_SAMPLE_NOTE = `Bounded hotspot sample: first ${HOTSPOT_FACT_SAMPLE_SIZE} hotspot facts; global evidence cap is ${MAX_SIGNAL_EVIDENCE} references.`;
 const OPAQUE_IMPORT_SPECIFIER = "opaque external import specifier (redacted)";
 const TEST_DIRECTORY_NAMES = new Set(["test", "tests", "spec", "__tests__"]);
-const MANIFEST_NAMES = new Set([
-  "package.json",
-  "package-lock.json",
-  "pnpm-lock.yaml",
-  "yarn.lock",
-  "bun.lockb",
-  "cargo.toml",
-  "cargo.lock",
-  "pyproject.toml",
-  "poetry.lock",
-  "requirements.txt",
-  "go.mod",
-  "go.sum",
-  "gemfile",
-  "gemfile.lock",
-  "pom.xml",
-  "build.gradle",
-  "build.gradle.kts"
-]);
 const CI_FILE_NAMES = new Set(["jenkinsfile", ".gitlab-ci.yml", ".gitlab-ci.yaml", "azure-pipelines.yml"]);
-const SOURCE_CODE_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".py"]);
 const BINARY_EXTENSIONS = new Set([
   ".a", ".bin", ".class", ".dll", ".dylib", ".exe", ".gif", ".gz", ".ico", ".jar", ".jpeg", ".jpg", ".mov", ".mp3",
   ".mp4", ".o", ".pdf", ".png", ".so", ".tar", ".ttf", ".wasm", ".wav", ".webp", ".woff", ".woff2", ".zip"
@@ -84,6 +71,7 @@ type Signal = BrownfieldSignals["architectureSignals"][number];
 type SourceObservation = {
   readonly path: CodeIndexSourcePath;
   readonly sha256: CodeIndexSha256;
+  readonly patternMatches: RiskPatternMatches;
 };
 
 function compareStrings(left: string, right: string): number {
@@ -155,7 +143,7 @@ function isGeneratedPath(sourcePath: string): boolean {
 }
 
 function isEligibleSourceForTestNeighbor(coverage: CodeIndexSnapshot["coverage"][number]): boolean {
-  return coverage.status === "parsed" && SOURCE_CODE_EXTENSIONS.has(sourceExtension(coverage.path)) &&
+  return coverage.status === "parsed" && AUTHORED_SOURCE_EXTENSIONS.has(sourceExtension(coverage.path)) &&
     !isGeneratedPath(coverage.path) && !isDocumentation(coverage.path) && !isManifestOrCi(coverage.path);
 }
 
@@ -166,10 +154,12 @@ function topLevelRoot(sourcePath: string): string {
 function isManifestOrCi(sourcePath: string): boolean {
   const normalizedPath = sourcePath.toLowerCase();
   const basename = path.posix.basename(sourcePath).toLowerCase();
-  return MANIFEST_NAMES.has(basename) ||
+  const isCiConfig = normalizedPath.startsWith("ci/") && !AUTHORED_SOURCE_EXTENSIONS.has(sourceExtension(sourcePath));
+  return AUTHORED_DEPENDENCY_MANIFESTS.has(basename) ||
+    AUTHORED_BUILD_CONFIGURATION.has(basename) ||
     (basename.startsWith("package.") && basename.endsWith(".json")) ||
     CI_FILE_NAMES.has(basename) ||
-    normalizedPath.startsWith("ci/") ||
+    isCiConfig ||
     (normalizedPath.startsWith(".github/workflows/") && normalizedPath.split("/").length > 2);
 }
 
@@ -193,7 +183,8 @@ function addSignal(
   severity: AssessmentSeverity,
   statement: string,
   evidence: readonly AssessmentEvidenceRef[],
-  boundedSample = false
+  boundedSample = false,
+  boundedSampleNote = BOUNDED_SAMPLE_NOTE
 ): void {
   if (evidence.length === 0) throw new Error(`Brownfield signal ${code} has no evidence.`);
   const isBoundedSample = boundedSample || evidence.length > MAX_SIGNAL_EVIDENCE;
@@ -201,7 +192,7 @@ function addSignal(
   const finalEvidence = isBoundedSample
     ? sampledEvidence.map((reference) => ({
       ...reference,
-      note: `${reference.note.slice(0, Math.max(0, 512 - BOUNDED_SAMPLE_NOTE.length - 1))} ${BOUNDED_SAMPLE_NOTE}`
+      note: `${reference.note.slice(0, Math.max(0, 512 - boundedSampleNote.length - 1))} ${boundedSampleNote}`
     }))
     : sampledEvidence;
   const finalStatement = isBoundedSample
@@ -253,26 +244,6 @@ async function hashFile(absolutePath: string): Promise<CodeIndexSha256> {
   return codeIndexSha256Schema.parse(digest.digest("hex"));
 }
 
-async function readBoundedSource(absolutePath: string): Promise<string> {
-  const descriptor = await open(absolutePath, "r");
-  try {
-    const sizeBytes = (await descriptor.stat()).size;
-    const bytesToRead = Math.min(sizeBytes, MAX_BOUNDED_SOURCE_BYTES);
-    const buffer = Buffer.alloc(bytesToRead);
-    let offset = 0;
-    while (offset < bytesToRead) {
-      const result = await descriptor.read(buffer, offset, bytesToRead - offset, offset);
-      if (result.bytesRead === 0) break;
-      offset += result.bytesRead;
-    }
-    const bytes = buffer.subarray(0, offset);
-    if (bytes.includes(0)) return "";
-    return bytes.toString("utf8");
-  } finally {
-    await descriptor.close();
-  }
-}
-
 type RiskPatternMatches = {
   readonly todoFixme: boolean;
   readonly emptyFunction: boolean;
@@ -282,12 +253,20 @@ type RiskPatternMatches = {
 };
 
 /**
- * Scan one bounded source read and return only booleans to the caller. Keeping
- * the text local to this helper prevents the risk collector from retaining a
- * source string in its loop state, signals, or closures.
+ * Scan the bounded prefix from the same opened source bytes that were hashed.
+ * Only booleans leave the scanner, so no source text is retained in evidence.
  */
-async function scanBoundedSourceFile(absolutePath: string): Promise<RiskPatternMatches> {
-  const text = await readBoundedSource(absolutePath);
+function scanBoundedSource(bytes: Buffer): RiskPatternMatches {
+  if (bytes.includes(0)) {
+    return {
+      todoFixme: false,
+      emptyFunction: false,
+      catchAndIgnore: false,
+      credentialLikeString: false,
+      unboundedInput: false
+    };
+  }
+  const text = bytes.toString("utf8");
   return {
     todoFixme: /\b(?:TODO|FIXME)\b/iu.test(text),
     emptyFunction: /(?:\bfunction\s+[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\{\s*\}|=>\s*\{\s*\})/u.test(text),
@@ -303,17 +282,44 @@ async function inspectSourceFile(
   expectedHashes: ReadonlyMap<string, CodeIndexSha256>
 ): Promise<SourceObservation> {
   const absolutePath = path.join(repositoryRoot, ...sourcePath.split("/"));
-  const fileStat = await stat(absolutePath);
-  if (!fileStat.isFile()) throw new Error(`Snapshot source path is not a regular file: ${sourcePath}.`);
-  const sha256 = await hashFile(absolutePath);
   const expectedHash = expectedHashes.get(sourcePath);
   if (expectedHash === undefined) {
     throw new Error(`Snapshot source path ${sourcePath} has no validated source hash.`);
   }
-  if (expectedHash !== sha256) {
-    throw new Error(`Source file ${sourcePath} changed after the validated structural snapshot.`);
+
+  const descriptor = await open(absolutePath, "r");
+  try {
+    const fileStat = await descriptor.stat();
+    if (!fileStat.isFile()) throw new Error(`Snapshot source path is not a regular file: ${sourcePath}.`);
+
+    const prefix = Buffer.alloc(Math.min(fileStat.size, MAX_BOUNDED_SOURCE_BYTES));
+    const digest = createHash("sha256");
+    const chunk = Buffer.allocUnsafe(64 * 1024);
+    let prefixBytes = 0;
+    while (true) {
+      const result = await descriptor.read(chunk, 0, chunk.length, null);
+      if (result.bytesRead === 0) break;
+      const bytes = chunk.subarray(0, result.bytesRead);
+      digest.update(bytes);
+      if (prefixBytes < prefix.length) {
+        const bytesToCopy = Math.min(bytes.length, prefix.length - prefixBytes);
+        bytes.copy(prefix, prefixBytes, 0, bytesToCopy);
+        prefixBytes += bytesToCopy;
+      }
+    }
+
+    const sha256 = codeIndexSha256Schema.parse(digest.digest("hex"));
+    if (expectedHash !== sha256) {
+      throw new Error(`Source file ${sourcePath} changed after the validated structural snapshot.`);
+    }
+    return {
+      path: sourcePath,
+      sha256,
+      patternMatches: scanBoundedSource(prefix.subarray(0, prefixBytes))
+    };
+  } finally {
+    await descriptor.close();
   }
-  return { path: sourcePath, sha256 };
 }
 
 async function readBoundedMapDocument(absolutePath: string): Promise<Record<string, unknown>> {
@@ -450,12 +456,19 @@ function findTestLinks(
   testFiles: readonly CodeIndexSourcePath[],
   coverage: readonly CodeIndexSnapshot["coverage"][number][]
 ): BrownfieldSignals["testToSourceLinks"] {
-  const sourceCandidates = coverage
-    .filter((entry) => !isTestFile(entry.path) && isEligibleSourceForTestNeighbor(entry))
-    .map((entry) => entry.path);
+  const sourceCandidatesByBasename = new Map<string, CodeIndexSourcePath[]>();
+  for (const entry of coverage) {
+    if (isTestFile(entry.path) || !isEligibleSourceForTestNeighbor(entry)) continue;
+    const candidates = sourceCandidatesByBasename.get(sourceBasename(entry.path)) ?? [];
+    candidates.push(entry.path);
+    sourceCandidatesByBasename.set(sourceBasename(entry.path), candidates);
+  }
+  for (const candidates of sourceCandidatesByBasename.values()) candidates.sort(compareStrings);
+
+  const testFileSet = new Set(testFiles);
   const eligibleTestPaths = new Set(
     coverage
-      .filter((entry) => testFiles.includes(entry.path) && isEligibleSourceForTestNeighbor(entry))
+      .filter((entry) => testFileSet.has(entry.path) && isEligibleSourceForTestNeighbor(entry))
       .map((entry) => entry.path)
   );
 
@@ -464,7 +477,7 @@ function findTestLinks(
     if (!eligibleTestPaths.has(testPath)) continue;
     const testStem = sourceBasename(testPath);
     const testDirectory = path.posix.dirname(testPath);
-    const candidates = sourceCandidates.filter((sourcePath) => sourceBasename(sourcePath) === testStem);
+    const candidates = sourceCandidatesByBasename.get(testStem) ?? [];
     if (candidates.length === 0) continue;
 
     let sourcePath: CodeIndexSourcePath | undefined;
@@ -499,8 +512,14 @@ function isRelativeImportSpecifier(specifier: string): boolean {
   return specifier === "." || specifier === ".." || specifier.startsWith("./") || specifier.startsWith("../");
 }
 
+function isOpaqueImportSpecifier(specifier: string): boolean {
+  return !isRelativeImportSpecifier(specifier) ||
+    /(?:^|\/)\p{L}[\p{L}\d+.-]*:/u.test(specifier) ||
+    /(?:^|\/)[^/?#\s:@]+:[^/?#\s@]+@/u.test(specifier);
+}
+
 function safeImportSpecifier(specifier: string): string {
-  if (!isRelativeImportSpecifier(specifier)) return OPAQUE_IMPORT_SPECIFIER;
+  if (isOpaqueImportSpecifier(specifier)) return OPAQUE_IMPORT_SPECIFIER;
   const pathOnly = specifier.split(/[?#]/u, 1)[0] ?? ".";
   const normalized = path.posix.normalize(pathOnly);
   const relative = normalized === "." || normalized === ".." || normalized.startsWith("../")
@@ -583,8 +602,9 @@ function collectArchitectureSignals(input: {
       "fan-out-hotspot",
       "moderate",
       `File ${sourcePath} contains ${facts.length} persisted import facts; this is a structural fan-out hotspot, not a resolved dependency claim.`,
-      [sourceEvidence(observation, "Source file for persisted import fan-out."), ...facts.slice(0, 8).map((fact) => importFactEvidence(sqliteArtifactPath, sqliteSha256, fact))],
-      facts.length > 8
+      [sourceEvidence(observation, "Source file for persisted import fan-out."), ...facts.slice(0, HOTSPOT_FACT_SAMPLE_SIZE).map((fact) => importFactEvidence(sqliteArtifactPath, sqliteSha256, fact))],
+      facts.length > HOTSPOT_FACT_SAMPLE_SIZE,
+      BOUNDED_HOTSPOT_SAMPLE_NOTE
     );
   }
 
@@ -596,7 +616,7 @@ function collectArchitectureSignals(input: {
   }
   for (const [specifier, facts] of [...importsBySpecifier.entries()].sort(([left], [right]) => compareStrings(left, right))) {
     if (facts.length < 2) continue;
-    const observationsForFacts = facts.slice(0, 8).map((fact) => sourceEvidence(
+    const observationsForFacts = facts.slice(0, HOTSPOT_FACT_SAMPLE_SIZE).map((fact) => sourceEvidence(
       sourceObservationFor(observations, fact.path),
       "Source file containing a repeated persisted import specifier."
     ));
@@ -605,8 +625,9 @@ function collectArchitectureSignals(input: {
       "fan-in-hotspot",
       "moderate",
       `Import specifier ${safeImportSpecifier(specifier)} appears in ${facts.length} persisted import facts; the collector does not resolve it to a module.`,
-      [...observationsForFacts, ...facts.slice(0, 8).map((fact) => importFactEvidence(sqliteArtifactPath, sqliteSha256, fact))],
-      facts.length > 8
+      [...observationsForFacts, ...facts.slice(0, HOTSPOT_FACT_SAMPLE_SIZE).map((fact) => importFactEvidence(sqliteArtifactPath, sqliteSha256, fact))],
+      facts.length > HOTSPOT_FACT_SAMPLE_SIZE,
+      BOUNDED_HOTSPOT_SAMPLE_NOTE
     );
   }
 
@@ -698,14 +719,13 @@ function collectArchitectureSignals(input: {
 
 
 async function collectRiskSignals(input: {
-  readonly repositoryRoot: string;
   readonly observations: ReadonlyMap<string, SourceObservation>;
   readonly sourceFiles: readonly CodeIndexSourcePath[];
   readonly testFiles: readonly CodeIndexSourcePath[];
   readonly testLinks: BrownfieldSignals["testToSourceLinks"];
   readonly eligibleTestNeighborSources: ReadonlySet<string>;
 }): Promise<Signal[]> {
-  const { repositoryRoot, observations, sourceFiles, testFiles, testLinks, eligibleTestNeighborSources } = input;
+  const { observations, sourceFiles, testFiles, testLinks, eligibleTestNeighborSources } = input;
   const signals: Signal[] = [];
   const linkedSources = new Set(testLinks.map((link) => link.sourcePath));
   const verificationEvidence = testFiles.slice(0, MAX_SIGNAL_EVIDENCE - 1).map((testPath) => sourceEvidence(
@@ -716,8 +736,7 @@ async function collectRiskSignals(input: {
 
   for (const sourcePath of sourceFiles) {
     const observation = sourceObservationFor(observations, sourcePath);
-    const absolutePath = path.join(repositoryRoot, ...sourcePath.split("/"));
-    const patternMatches = await scanBoundedSourceFile(absolutePath);
+    const patternMatches = observation.patternMatches;
     if (patternMatches.todoFixme) {
       addSignal(signals, "todo-fixme", "informational", `Static TODO/FIXME marker present in ${sourcePath}; marker presence is not proof of an unfinished behavior.`, [sourceEvidence(observation, "Bounded source read containing TODO/FIXME marker.")]);
     }
@@ -796,7 +815,6 @@ export async function collectBrownfieldSignals(input: {
     sqliteArtifactPath
   }));
   const riskSignals = sortSignals(await collectRiskSignals({
-    repositoryRoot: input.repositoryRoot,
     observations,
     sourceFiles,
     testFiles,
