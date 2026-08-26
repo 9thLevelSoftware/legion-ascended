@@ -5,6 +5,17 @@ import { artifactPathSchema, utcTimestampSchema } from "../primitives/values.js"
 
 const CODE_INDEX_FACT_ID_PATTERN = /^(idx|sym|imp|exp)_[a-f0-9]{24}$/;
 const CODE_INDEX_SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const codeIndexSourcePathPattern = /^(?!\/)(?![A-Za-z]:)(?!.*\\)(?!.*\/\/)(?!.*(?:^|\/)\.{1,2}(?:\/|$))(?!.*[\u0000-\u001F\u007F])[^/]+(?:\/[^/]+)*$/u;
+
+export const codeIndexSourcePathSchema = z
+  .string()
+  .min(1)
+  .max(512)
+  .regex(codeIndexSourcePathPattern, "Invalid code index source path")
+  .brand<"CodeIndexSourcePath">()
+  .describe("Relative POSIX repository source path with no traversal, backslashes, empty segments, or control characters.");
+
+export type CodeIndexSourcePath = z.infer<typeof codeIndexSourcePathSchema>;
 
 export const codeIndexProfileSchema = z.enum(["inventory", "structural"]);
 
@@ -25,7 +36,7 @@ const codeIndexLanguageSchema = z.string().min(1).max(64);
 const codeIndexDiagnosticSchema = z.string().max(512);
 
 export const codeIndexFileCoverageSchema = z.strictObject({
-  path: artifactPathSchema,
+  path: codeIndexSourcePathSchema,
   status: codeIndexCoverageStatusSchema,
   language: codeIndexLanguageSchema.optional(),
   diagnostics: z.array(codeIndexDiagnosticSchema).max(32).optional()
@@ -98,7 +109,7 @@ const codeIndexKindSchema = z.string().min(1).max(128);
 const codeIndexSpecifierSchema = z.string().min(1).max(1_024);
 
 const codeIndexFactBaseSchema = {
-  path: artifactPathSchema,
+  path: codeIndexSourcePathSchema,
   sourceSha256: codeIndexSha256Schema,
   range: codeIndexSourceRangeSchema,
   extractorVersion: codeIndexExtractorVersionSchema
@@ -141,7 +152,7 @@ const codeIndexSqliteSchema = z.strictObject({
   sha256: codeIndexSha256Schema
 });
 
-const codeIndexScopeSchema = z.union([z.literal("."), artifactPathSchema]);
+const codeIndexScopeSchema = z.union([z.literal("."), codeIndexSourcePathSchema]);
 
 function compareFacts(
   left: { readonly path: string; readonly range: { readonly startByte: number }; readonly id: string },

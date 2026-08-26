@@ -104,6 +104,35 @@ test("code index coverage rejects invalid statuses and paths", () => {
   assert.equal(codeIndexSnapshotSchema.safeParse(invalidPath).success, false);
 });
 
+test("code index source paths accept safe ampersand and Unicode names but reject traversal and controls", () => {
+  const sourcePath = "src/build-&-config-配置.ts";
+  const accepted = validSnapshot();
+  accepted.coverage = [{ path: sourcePath, status: "parsed", language: "typescript" }];
+  accepted.symbols = [symbol("sym_000000000000000000000001", sourcePath)];
+
+  const parsed = codeIndexSnapshotSchema.safeParse(accepted);
+  assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+  if (parsed.success) {
+    assert.equal(parsed.data.coverage[0].path, sourcePath);
+    assert.equal(parsed.data.symbols[0].path, sourcePath);
+  }
+
+  for (const invalidPath of [
+    "../outside.ts",
+    "src/../outside.ts",
+    "src\\outside.ts",
+    "/absolute.ts",
+    "C:/outside.ts",
+    "src//empty-segment.ts",
+    "src/./same-file.ts",
+    "src/with-\u0000-nul.ts"
+  ]) {
+    const invalid = validSnapshot();
+    invalid.coverage = [{ path: invalidPath, status: "parsed", language: "typescript" }];
+    assert.equal(codeIndexSnapshotSchema.safeParse(invalid).success, false, invalidPath);
+  }
+});
+
 test("code index coverage rejects duplicate repository-relative paths", () => {
   const snapshot = validSnapshot();
   snapshot.coverage = [

@@ -2,6 +2,16 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.3.1] - GA-pending
+
+### Fixed
+- Structural maps now index source filenames containing `&` and safe Unicode for
+  both Grok and Codex workflows.
+- Dedicated source-path validation preserves traversal and control-character
+  protections while allowing valid source filenames.
+- Generated code-index schemas and structural-map regression tests now cover the
+  corrected path handling.
+
 ## [9.3.0] - GA-pending
 
 ### Added

@@ -264,6 +264,34 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
   }
 });
 
+test("structural map refresh accepts ampersand source paths and records exact semantic coverage", async () => {
+  const root = await tempRepo();
+  try {
+    const sourcePath = "src/build-&-config.ts";
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, ...sourcePath.split("/")), "export const configured = true;\n", "utf8");
+
+    const refresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:02:00.000Z",
+      "--json"
+    ]);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
+    const payload = parseJsonOutput(refresh);
+    await assertFile(root, payload.semanticIndexArtifactPath);
+    await assertFile(root, payload.semanticSqliteArtifactPath);
+
+    const map = await readJson(root, payload.mapArtifactPath);
+    const snapshot = await readJson(root, payload.semanticIndexArtifactPath);
+    assert.equal(map.files.some((file) => file.path === sourcePath), true);
+    assert.equal(snapshot.coverage.some((coverage) => coverage.path === sourcePath), true);
+    assert.equal(snapshot.symbols.some((symbol) => symbol.path === sourcePath && symbol.name === "configured"), true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("structural queries accept one-character Unicode identifiers", async () => {
   const root = await tempRepo();
   try {

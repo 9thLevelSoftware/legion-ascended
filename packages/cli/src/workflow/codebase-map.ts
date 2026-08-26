@@ -11,9 +11,9 @@ import {
   verifyCodeIndexSqlite
 } from "@legion/artifacts";
 import {
-  artifactPathSchema,
   codeIndexFactIdSchema,
   codeIndexSha256Schema,
+  codeIndexSourcePathSchema,
   codeIndexSnapshotIdSchema,
   formatEntityId,
   utcTimestampSchema,
@@ -251,7 +251,7 @@ export async function refreshStructuralCodeIndex(input: {
     scope: input.scope,
     sourceFingerprint: codeIndexSha256Schema.parse(input.sourceFingerprint),
     files: input.files.map((file) => ({
-      path: artifactPathSchema.parse(file.path),
+      path: codeIndexSourcePathSchema.parse(file.path),
       sha256: codeIndexSha256Schema.parse(file.sha256),
       ...(file.text === undefined ? {} : { text: file.text })
     }))
@@ -274,7 +274,7 @@ export async function refreshStructuralCodeIndex(input: {
     schemaVersion: 1,
     kind: "code_index_snapshot",
     ...draft,
-    scope: draft.scope === "." ? "." : artifactPathSchema.parse(draft.scope),
+    scope: draft.scope === "." ? "." : codeIndexSourcePathSchema.parse(draft.scope),
     coverage: [...draft.coverage],
     symbols: [...draft.symbols],
     imports: [...draft.imports],
@@ -720,16 +720,10 @@ function exactObject(value: unknown, keys: readonly string[], label: string): Re
 }
 
 function safeMapRelativePath(value: unknown, options: { readonly allowDot?: boolean } = {}): string {
-  if (typeof value !== "string" || value.length === 0 || value.includes("\\") || value.includes("\0") ||
-      value.startsWith("/") || path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
-    throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${String(value)}`);
-  }
   if (options.allowDot === true && value === ".") return value;
-  const segments = value.split("/");
-  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..") || path.posix.normalize(value) !== value) {
-    throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${value}`);
-  }
-  return value;
+  const parsed = codeIndexSourcePathSchema.safeParse(value);
+  if (!parsed.success) throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${String(value)}`);
+  return parsed.data;
 }
 
 function stringArray(value: unknown, label: string): readonly string[] {

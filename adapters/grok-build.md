@@ -26,7 +26,7 @@ known_quirks:
 Grok Build is an xAI CLI with a native Agent Skills surface and a bounded headless
 JSON mode. Legion installs one generated skill named `legion`, which Grok exposes
 as `/legion` when the project or user skill is discovered. The Legion installer and
-executor are first-class in 9.3.0, with install, detection, executor, and
+executor are first-class in 9.3.1, with install, detection, executor, and
 packed-install smoke coverage. The verified local Grok CLI was `grok 1.0.10
 (5992780042ca) [alpha]`; the upstream alpha status remains an explicit caveat and
 this adapter therefore remains `experimental` in the adapter catalog.

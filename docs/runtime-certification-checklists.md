@@ -85,7 +85,7 @@ Use these checklists for manual verification when CI cannot prove runtime-native
 
 ## Grok Build
 
-Grok Build is a first-class **Legion** target in 9.3.0 because the managed
+Grok Build is a first-class **Legion** target in 9.3.1 because the managed
 installer, bounded detection, headless executor, and packed-install smoke are
 covered. This does not upgrade the upstream CLI's support tier: the verified
 upstream CLI is `grok 1.0.10 (5992780042ca) [alpha]`, and the alpha caveat must

@@ -51,7 +51,7 @@ these entry points at those files.
 
 ### Grok Build
 
-Grok Build is a first-class Legion target in 9.3.0. Verify the installed upstream
+Grok Build is a first-class Legion target in 9.3.1. Verify the installed upstream
 CLI, then preview or apply the managed native skill install:
 
 ```powershell

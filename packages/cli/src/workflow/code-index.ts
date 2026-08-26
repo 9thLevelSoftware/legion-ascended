@@ -6,7 +6,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  artifactPathSchema,
   codeIndexExportIdSchema,
   codeIndexExportSchema,
   codeIndexFileCoverageSchema,
@@ -14,6 +13,7 @@ import {
   codeIndexImportSchema,
   codeIndexProfileSchema,
   codeIndexSha256Schema,
+  codeIndexSourcePathSchema,
   codeIndexSnapshotIdSchema,
   codeIndexSourceRangeSchema,
   codeIndexSymbolIdSchema,
@@ -794,7 +794,7 @@ function validateDraft(draft: CodeIndexSnapshotDraft): CodeIndexSnapshotDraft {
   runIdSchema.parse(draft.mapRunId);
   utcTimestampSchema.parse(draft.generatedAt);
   codeIndexProfileSchema.parse(draft.profile);
-  if (draft.scope !== ".") artifactPathSchema.parse(draft.scope);
+  if (draft.scope !== ".") codeIndexSourcePathSchema.parse(draft.scope);
   codeIndexSha256Schema.parse(draft.sourceFingerprint);
   for (const coverage of draft.coverage) codeIndexFileCoverageSchema.parse(coverage);
   for (const symbol of draft.symbols) {
@@ -894,7 +894,7 @@ function validateInputMetadata(input: StructuralCodeIndexInput): ValidatedStruct
   const mapRunId = runIdSchema.parse(input.mapRunId);
   const generatedAt = utcTimestampSchema.parse(input.generatedAt);
   codeIndexProfileSchema.parse("structural");
-  const scope = input.scope === "." ? input.scope : artifactPathSchema.parse(input.scope);
+  const scope = input.scope === "." ? input.scope : codeIndexSourcePathSchema.parse(input.scope);
   const sourceFingerprint = codeIndexSha256Schema.parse(input.sourceFingerprint);
 
   if (!Array.isArray(input.files)) throw new TypeError("input.files must be an array.");
@@ -905,7 +905,7 @@ function validateInputMetadata(input: StructuralCodeIndexInput): ValidatedStruct
     if (typeof file !== "object" || file === null || Array.isArray(file)) {
       throw new TypeError(`input.files[${index}] must be an object.`);
     }
-    const parsedPath = artifactPathSchema.parse(file.path);
+    const parsedPath = codeIndexSourcePathSchema.parse(file.path);
     const parsedSha256 = codeIndexSha256Schema.parse(file.sha256);
     const text = file.text;
     if (text !== undefined && typeof text !== "string") {
