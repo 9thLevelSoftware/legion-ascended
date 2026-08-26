@@ -177,7 +177,7 @@ async function assertStableAbsolutePath(absolutePath: string, displayPath: strin
 
 async function assertStableFallbackPath(
   resolved: Pick<ResolvedBundlePath, "absolutePath">,
-  artifactPath: ArtifactPath,
+  artifactPath: string,
   allowMissingFinal = true
 ): Promise<void> {
   await assertStableAbsolutePath(resolved.absolutePath, artifactPath, allowMissingFinal);
@@ -210,11 +210,47 @@ async function removeRelativeIfOwned(
   await removeRelative(parent, name);
 }
 
+async function removeRelativeIfOwnedAndToken(
+  parent: BundleFileHandle,
+  name: string,
+  expectedIdentity: BundleStat,
+  expectedToken?: string
+): Promise<boolean> {
+  const absolutePath = descriptorChildPath(parent, name);
+  const currentStat = await lstatIfPresent(absolutePath);
+  if (currentStat === undefined || currentStat.isSymbolicLink() || !currentStat.isDirectory() ||
+    sameFileIdentity(expectedIdentity, currentStat) !== true) return false;
+  if (expectedToken !== undefined && lockMetadataToken(await readLockMetadata(absolutePath)) !== expectedToken) return false;
+  const finalStat = await lstatIfPresent(absolutePath);
+  if (finalStat === undefined || finalStat.isSymbolicLink() || !finalStat.isDirectory() ||
+    sameFileIdentity(expectedIdentity, finalStat) !== true) return false;
+  if (expectedToken !== undefined && lockMetadataToken(await readLockMetadata(absolutePath)) !== expectedToken) return false;
+  await rm(absolutePath, { recursive: true, force: true });
+  return true;
+}
+
 async function removePathIfOwned(absolutePath: string, expectedIdentity: BundleStat): Promise<void> {
   const currentStat = await lstatIfPresent(absolutePath);
   if (currentStat === undefined || currentStat.isSymbolicLink() ||
     sameFileIdentity(expectedIdentity, currentStat) === false) return;
   await rm(absolutePath, { recursive: true, force: true });
+}
+
+async function removePathIfOwnedAndToken(
+  absolutePath: string,
+  expectedIdentity: BundleStat,
+  expectedToken?: string
+): Promise<boolean> {
+  const currentStat = await lstatIfPresent(absolutePath);
+  if (currentStat === undefined || currentStat.isSymbolicLink() || !currentStat.isDirectory() ||
+    sameFileIdentity(expectedIdentity, currentStat) !== true) return false;
+  if (expectedToken !== undefined && lockMetadataToken(await readLockMetadata(absolutePath)) !== expectedToken) return false;
+  const finalStat = await lstatIfPresent(absolutePath);
+  if (finalStat === undefined || finalStat.isSymbolicLink() || !finalStat.isDirectory() ||
+    sameFileIdentity(expectedIdentity, finalStat) !== true) return false;
+  if (expectedToken !== undefined && lockMetadataToken(await readLockMetadata(absolutePath)) !== expectedToken) return false;
+  await rm(absolutePath, { recursive: true, force: true });
+  return true;
 }
 
 async function openBundleDirectory(
@@ -257,8 +293,8 @@ async function openBundleDirectory(
         }
         next = await openRelativeDirectory(current, component);
       }
-      const nextStat = await next.stat();
       handles.push(next);
+      const nextStat = await next.stat();
       if (!nextStat.isDirectory()) {
         throw new Error(`Brownfield assessment artifact path contains a non-directory component: ${artifactPath}`);
       }
@@ -599,10 +635,47 @@ async function lockIsOwned(lock: PublishLock): Promise<boolean> {
     ? lockPathStat
     : await lock.lockDescriptor.stat();
   if (lockPathStat === undefined || lockStat === undefined || lockPathStat.isSymbolicLink() || !lockPathStat.isDirectory() ||
-    !lockStat.isDirectory()) return false;
-  if (sameFileIdentity(lock.lockIdentity, lockPathStat) === false ||
-    sameFileIdentity(lock.lockIdentity, lockStat) === false) return false;
-  return lockMetadataToken(await readLockMetadata(lock.absolutePath, lock.lockDescriptor)) === lock.metadataToken;
+    !lockStat.isDirectory() || sameFileIdentity(lock.lockIdentity, lockPathStat) !== true ||
+    sameFileIdentity(lock.lockIdentity, lockStat) !== true) return false;
+  const token = lockMetadataToken(await readLockMetadata(lock.absolutePath, lock.lockDescriptor));
+  const finalPathStat = lock.parentDescriptor === undefined
+    ? await lstatIfPresent(lock.absolutePath)
+    : await lstatIfPresent(descriptorChildPath(lock.parentDescriptor, lock.name));
+  const finalLockStat = lock.lockDescriptor === undefined
+    ? finalPathStat
+    : await lock.lockDescriptor.stat();
+  return finalPathStat !== undefined && finalLockStat !== undefined && !finalPathStat.isSymbolicLink() &&
+    finalPathStat.isDirectory() && finalLockStat.isDirectory() &&
+    sameFileIdentity(lock.lockIdentity, finalPathStat) === true &&
+    sameFileIdentity(lock.lockIdentity, finalLockStat) === true && token === lock.metadataToken;
+}
+
+// Node does not expose an unlinkat/renameat primitive that compares an expected
+// inode in the same syscall. Revalidate the held descriptor, named entry, and
+// owner token immediately before mutation. A post-rename mismatch is restored
+// and never recursively removed, so an unverified replacement is preserved.
+// The final recursive removal is still path-based because Node exposes no
+// descriptor-relative recursive delete; the identity/token checks are therefore
+// best-effort on that last syscall and the fallback path remains race-detecting,
+// not race-proof. Callers preserve the primary error and surface cleanup failure.
+async function restoreQuarantinedLock(input: {
+  readonly parentDescriptor?: BundleFileHandle;
+  readonly lockName: string;
+  readonly lockPath: string;
+  readonly quarantineName: string;
+  readonly quarantinePath: string;
+}): Promise<void> {
+  const sourcePath = input.parentDescriptor === undefined
+    ? input.lockPath
+    : descriptorChildPath(input.parentDescriptor, input.lockName);
+  const quarantinePath = input.parentDescriptor === undefined
+    ? input.quarantinePath
+    : descriptorChildPath(input.parentDescriptor, input.quarantineName);
+  const sourceStat = await lstatIfPresent(sourcePath);
+  const quarantineStat = await lstatIfPresent(quarantinePath);
+  if (sourceStat === undefined && quarantineStat !== undefined && !quarantineStat.isSymbolicLink() && quarantineStat.isDirectory()) {
+    await rename(quarantinePath, sourcePath);
+  }
 }
 
 async function removeLockIfOwned(
@@ -610,28 +683,110 @@ async function removeLockIfOwned(
   lockName: string,
   lockPath: string,
   expectedIdentity: BundleStat,
-  expectedToken?: string
+  expectedToken?: string,
+  heldLockDescriptor?: BundleFileHandle
 ): Promise<void> {
-  let lockDescriptor: BundleFileHandle | undefined;
-  let shouldRemove = false;
+  const quarantineName = `${lockName}.release-${process.pid}-${randomUUID()}`;
+  const quarantinePath = path.join(path.dirname(lockPath), quarantineName);
+  let lockDescriptor = heldLockDescriptor;
+  let ownsLockDescriptor = false;
   let operationError: unknown;
   let hasOperationError = false;
   try {
-    const currentStat = parentDescriptor === undefined
-      ? await lstatIfPresent(lockPath)
-      : await lstatIfPresent(descriptorChildPath(parentDescriptor, lockName));
-    if (currentStat !== undefined && !currentStat.isSymbolicLink() && currentStat.isDirectory() &&
-      sameFileIdentity(expectedIdentity, currentStat) !== false) {
+    let ownsLock = false;
+    if (parentDescriptor === undefined) {
+      const currentStat = await lstatIfPresent(lockPath);
+      if (currentStat !== undefined && !currentStat.isSymbolicLink() && currentStat.isDirectory() &&
+        sameFileIdentity(expectedIdentity, currentStat) === true) {
+        const currentToken = expectedToken === undefined ? undefined : lockMetadataToken(await readLockMetadata(lockPath));
+        const finalStat = await lstatIfPresent(lockPath);
+        const finalToken = expectedToken === undefined ? undefined : lockMetadataToken(await readLockMetadata(lockPath));
+        ownsLock = finalStat !== undefined && !finalStat.isSymbolicLink() && finalStat.isDirectory() &&
+          sameFileIdentity(expectedIdentity, finalStat) === true &&
+          (expectedToken === undefined || (currentToken === expectedToken && finalToken === expectedToken));
+      }
+    } else {
+      if (lockDescriptor === undefined) {
+        lockDescriptor = await openRelativeDirectory(parentDescriptor, lockName);
+        ownsLockDescriptor = true;
+      }
+      const heldStat = await lockDescriptor.stat();
+      const namedStat = await lstatIfPresent(descriptorChildPath(parentDescriptor, lockName));
+      if (heldStat.isDirectory() && namedStat !== undefined && !namedStat.isSymbolicLink() && namedStat.isDirectory() &&
+        sameFileIdentity(expectedIdentity, heldStat) === true && sameFileIdentity(expectedIdentity, namedStat) === true) {
+        const currentToken = expectedToken === undefined
+          ? undefined
+          : lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor));
+        const finalHeldStat = await lockDescriptor.stat();
+        const finalNamedStat = await lstatIfPresent(descriptorChildPath(parentDescriptor, lockName));
+        const finalToken = expectedToken === undefined
+          ? undefined
+          : lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor));
+        ownsLock = finalHeldStat.isDirectory() && finalNamedStat !== undefined && !finalNamedStat.isSymbolicLink() &&
+          finalNamedStat.isDirectory() && sameFileIdentity(expectedIdentity, finalHeldStat) === true &&
+          sameFileIdentity(expectedIdentity, finalNamedStat) === true &&
+          (expectedToken === undefined || (currentToken === expectedToken && finalToken === expectedToken));
+      }
+    }
+
+    if (ownsLock) {
+      const quarantineEntryPath = parentDescriptor === undefined
+        ? quarantinePath
+        : descriptorChildPath(parentDescriptor, quarantineName);
+      if (await lstatIfPresent(quarantineEntryPath) !== undefined) {
+        throw new Error(`Brownfield assessment lock cleanup quarantine already exists: ${quarantineEntryPath}`);
+      }
       if (parentDescriptor === undefined) {
-        if (expectedToken === undefined || lockMetadataToken(await readLockMetadata(lockPath)) === expectedToken) {
-          shouldRemove = true;
+        await assertStableAbsolutePath(path.dirname(lockPath), path.dirname(lockPath), false);
+        await rename(lockPath, quarantinePath);
+      } else {
+        await rename(
+          descriptorChildPath(parentDescriptor, lockName),
+          descriptorChildPath(parentDescriptor, quarantineName)
+        );
+      }
+
+      const movedStat = await lstatIfPresent(quarantineEntryPath);
+      const movedToken = expectedToken === undefined
+        ? undefined
+        : lockMetadataToken(await readLockMetadata(quarantineEntryPath, lockDescriptor));
+      const heldMovedStat = lockDescriptor === undefined ? movedStat : await lockDescriptor.stat();
+      const movedOwned = movedStat !== undefined && !movedStat.isSymbolicLink() && movedStat.isDirectory() &&
+        heldMovedStat !== undefined && heldMovedStat.isDirectory() &&
+        sameFileIdentity(expectedIdentity, movedStat) === true &&
+        sameFileIdentity(expectedIdentity, heldMovedStat) === true &&
+        (expectedToken === undefined || movedToken === expectedToken);
+      if (!movedOwned) {
+        await restoreQuarantinedLock({
+          ...(parentDescriptor === undefined ? {} : { parentDescriptor }),
+          lockName,
+          lockPath,
+          quarantineName,
+          quarantinePath
+        });
+        throw new Error(`Brownfield assessment publication lock changed while removing: ${lockPath}`);
+      }
+      if (parentDescriptor === undefined) {
+        const removed = await removePathIfOwnedAndToken(quarantinePath, expectedIdentity, expectedToken);
+        if (!removed) {
+          await restoreQuarantinedLock({
+            ...(parentDescriptor === undefined ? {} : { parentDescriptor }),
+            lockName,
+            lockPath,
+            quarantineName,
+            quarantinePath
+          });
         }
       } else {
-        lockDescriptor = await openRelativeDirectory(parentDescriptor, lockName);
-        const openedStat = await lockDescriptor.stat();
-        if (openedStat.isDirectory() && sameFileIdentity(expectedIdentity, openedStat) !== false &&
-          (expectedToken === undefined || lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor)) === expectedToken)) {
-          shouldRemove = true;
+        const removed = await removeRelativeIfOwnedAndToken(parentDescriptor, quarantineName, expectedIdentity, expectedToken);
+        if (!removed) {
+          await restoreQuarantinedLock({
+            parentDescriptor,
+            lockName,
+            lockPath,
+            quarantineName,
+            quarantinePath
+          });
         }
       }
     }
@@ -642,19 +797,9 @@ async function removeLockIfOwned(
     }
   }
   const cleanupErrors: unknown[] = [];
-  if (shouldRemove) {
-    try {
-      if (parentDescriptor !== undefined) {
-        await removeRelative(parentDescriptor, lockName);
-      } else {
-        await rm(lockPath, { recursive: true, force: true });
-      }
-    } catch (error) {
-      operationError = error;
-      hasOperationError = true;
-    }
+  if (ownsLockDescriptor && lockDescriptor !== undefined) {
+    await attemptCleanup(cleanupErrors, () => lockDescriptor!.close());
   }
-  if (lockDescriptor !== undefined) await attemptCleanup(cleanupErrors, () => lockDescriptor!.close());
   if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to remove ${lockPath}`);
   throwCleanupOnly(cleanupErrors, `Unable to close ${lockPath}`);
 }
@@ -664,7 +809,14 @@ async function releasePublishLock(lock: PublishLock): Promise<void> {
   let hasOperationError = false;
   try {
     if (await lockIsOwned(lock)) {
-      await removeLockIfOwned(lock.parentDescriptor, lock.name, lock.absolutePath, lock.lockIdentity, lock.metadataToken);
+      await removeLockIfOwned(
+        lock.parentDescriptor,
+        lock.name,
+        lock.absolutePath,
+        lock.lockIdentity,
+        lock.metadataToken,
+        lock.lockDescriptor
+      );
     }
   } catch (error) {
     operationError = error;
@@ -691,53 +843,71 @@ async function quarantineStaleLock(
   let operationError: unknown;
   let hasOperationError = false;
   try {
+    const namedLockPath = parent.descriptor === undefined
+      ? lockPath
+      : descriptorChildPath(parent.descriptor, lockName);
+    const namedQuarantinePath = parent.descriptor === undefined
+      ? quarantinePath
+      : descriptorChildPath(parent.descriptor, quarantineName);
     if (parent.descriptor === undefined) {
       await assertStableAbsolutePath(parent.absolutePath, parent.absolutePath, false);
-      const currentStat = await lstatIfPresent(lockPath);
-      if (currentStat === undefined || currentStat.isSymbolicLink() || !currentStat.isDirectory() ||
-        sameFileIdentity(observed.lockIdentity, currentStat) === false) {
-        result = false;
-      } else {
-        const currentToken = lockMetadataToken(await readLockMetadata(lockPath));
-        const finalStat = await lstatIfPresent(lockPath);
-        if (finalStat === undefined || finalStat.isSymbolicLink() || !finalStat.isDirectory() ||
-          sameFileIdentity(observed.lockIdentity, finalStat) === false || currentToken !== observed.metadataToken) {
-          result = false;
-        } else {
-          await rename(lockPath, quarantinePath);
+      const currentStat = await lstatIfPresent(namedLockPath);
+      if (currentStat !== undefined && !currentStat.isSymbolicLink() && currentStat.isDirectory() &&
+        sameFileIdentity(observed.lockIdentity, currentStat) === true) {
+        const currentToken = lockMetadataToken(await readLockMetadata(namedLockPath));
+        const finalStat = await lstatIfPresent(namedLockPath);
+        const finalToken = lockMetadataToken(await readLockMetadata(namedLockPath));
+        if (finalStat !== undefined && !finalStat.isSymbolicLink() && finalStat.isDirectory() &&
+          sameFileIdentity(observed.lockIdentity, finalStat) === true &&
+          currentToken === observed.metadataToken && finalToken === observed.metadataToken) {
           result = true;
         }
       }
     } else {
-      try {
-        lockDescriptor = await openRelativeDirectory(parent.descriptor, lockName);
-      } catch (error) {
-        if (isNodeErrorCode(error, "ENOENT") || isNodeErrorCode(error, "ELOOP")) {
-          result = false;
-        } else {
-          throw error;
+      lockDescriptor = await openRelativeDirectory(parent.descriptor, lockName);
+      const heldStat = await lockDescriptor.stat();
+      const namedStat = await lstatIfPresent(namedLockPath);
+      if (heldStat.isDirectory() && namedStat !== undefined && !namedStat.isSymbolicLink() && namedStat.isDirectory() &&
+        sameFileIdentity(observed.lockIdentity, heldStat) === true && sameFileIdentity(observed.lockIdentity, namedStat) === true) {
+        const currentToken = lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor));
+        const finalHeldStat = await lockDescriptor.stat();
+        const finalNamedStat = await lstatIfPresent(namedLockPath);
+        const finalToken = lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor));
+        if (finalHeldStat.isDirectory() && finalNamedStat !== undefined && !finalNamedStat.isSymbolicLink() &&
+          finalNamedStat.isDirectory() && sameFileIdentity(observed.lockIdentity, finalHeldStat) === true &&
+          sameFileIdentity(observed.lockIdentity, finalNamedStat) === true &&
+          currentToken === observed.metadataToken && finalToken === observed.metadataToken) {
+          result = true;
         }
       }
-      if (lockDescriptor !== undefined) {
-        const currentStat = await lockDescriptor.stat();
-        if (!currentStat.isDirectory() || sameFileIdentity(observed.lockIdentity, currentStat) === false) {
-          result = false;
-        } else {
-          const currentToken = lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor));
-          const finalStat = await lockDescriptor.stat();
-          const namedStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, lockName));
-          if (namedStat === undefined || namedStat.isSymbolicLink() || !namedStat.isDirectory() ||
-            !finalStat.isDirectory() || sameFileIdentity(observed.lockIdentity, finalStat) === false ||
-            sameFileIdentity(observed.lockIdentity, namedStat) === false || currentToken !== observed.metadataToken) {
-            result = false;
-          } else {
-            await rename(
-              descriptorChildPath(parent.descriptor, lockName),
-              descriptorChildPath(parent.descriptor, quarantineName)
-            );
-            result = true;
-          }
-        }
+    }
+
+    if (result) {
+      if (await lstatIfPresent(namedQuarantinePath) !== undefined) {
+        throw new Error(`Brownfield assessment stale-lock quarantine already exists: ${namedQuarantinePath}`);
+      }
+      if (parent.descriptor === undefined) {
+        await rename(namedLockPath, namedQuarantinePath);
+      } else {
+        await rename(namedLockPath, namedQuarantinePath);
+      }
+      const movedStat = await lstatIfPresent(namedQuarantinePath);
+      const movedToken = lockMetadataToken(await readLockMetadata(namedQuarantinePath, lockDescriptor));
+      const heldMovedStat = lockDescriptor === undefined ? movedStat : await lockDescriptor.stat();
+      const movedOwned = movedStat !== undefined && !movedStat.isSymbolicLink() && movedStat.isDirectory() &&
+        heldMovedStat !== undefined && heldMovedStat.isDirectory() &&
+        sameFileIdentity(observed.lockIdentity, movedStat) === true &&
+        sameFileIdentity(observed.lockIdentity, heldMovedStat) === true &&
+        movedToken === observed.metadataToken;
+      if (!movedOwned) {
+        await restoreQuarantinedLock({
+          ...(parent.descriptor === undefined ? {} : { parentDescriptor: parent.descriptor }),
+          lockName,
+          lockPath,
+          quarantineName,
+          quarantinePath
+        });
+        throw new Error(`Brownfield assessment publication lock changed while quarantining: ${lockPath}`);
       }
     }
   } catch (error) {
@@ -752,9 +922,20 @@ async function quarantineStaleLock(
   if (lockDescriptor !== undefined) await attemptCleanup(cleanupErrors, () => lockDescriptor!.close());
   if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to quarantine ${lockPath}`);
   if (result) {
-    await attemptCleanup(cleanupErrors, parent.descriptor === undefined
-      ? () => removePathIfOwned(quarantinePath, observed.lockIdentity)
-      : () => removeRelativeIfOwned(parent.descriptor!, quarantineName, observed.lockIdentity));
+    await attemptCleanup(cleanupErrors, async () => {
+      const removed = parent.descriptor === undefined
+        ? await removePathIfOwnedAndToken(quarantinePath, observed.lockIdentity, observed.metadataToken)
+        : await removeRelativeIfOwnedAndToken(parent.descriptor!, quarantineName, observed.lockIdentity, observed.metadataToken);
+      if (!removed) {
+        await restoreQuarantinedLock({
+          ...(parent.descriptor === undefined ? {} : { parentDescriptor: parent.descriptor }),
+          lockName,
+          lockPath,
+          quarantineName,
+          quarantinePath
+        });
+      }
+    });
   }
   throwCleanupOnly(cleanupErrors, `Unable to remove quarantined lock ${quarantinePath}`);
   return result;
@@ -923,10 +1104,80 @@ async function syncBundleDirectory(directory: OpenedBundleDirectory): Promise<vo
   await fsyncDirectoryIfSupported(directory.absolutePath);
 }
 
+function assertOwnedFileIdentity(expected: BundleStat, actual: BundleStat, displayPath: string): void {
+  if (sameFileIdentity(expected, actual) !== true) {
+    throw new Error(`Brownfield assessment filesystem identity changed while mutating: ${displayPath}`);
+  }
+}
+
+async function revalidateStagedDirectory(input: {
+  readonly parent: OpenedBundleDirectory;
+  readonly stagedPath: string;
+  readonly stagedName: string;
+  readonly stageIdentity: BundleStat;
+  readonly stageDescriptor?: BundleFileHandle;
+}): Promise<void> {
+  const { parent, stagedPath, stagedName, stageIdentity, stageDescriptor } = input;
+  if (!samePath(path.dirname(stagedPath), parent.absolutePath)) {
+    throw new Error(`Brownfield assessment staging path has an unexpected parent: ${stagedPath}`);
+  }
+  if (stageDescriptor !== undefined) {
+    const heldStat = await stageDescriptor.stat();
+    if (!heldStat.isDirectory()) throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+    assertOwnedFileIdentity(stageIdentity, heldStat, stagedPath);
+    const namedStat = await lstatIfPresent(descriptorChildPath(parent.descriptor!, stagedName));
+    if (namedStat === undefined || namedStat.isSymbolicLink() || !namedStat.isDirectory()) {
+      throw new Error(`Brownfield assessment staging path changed while publishing: ${stagedPath}`);
+    }
+    assertOwnedFileIdentity(stageIdentity, namedStat, stagedPath);
+    const finalHeldStat = await stageDescriptor.stat();
+    assertOwnedFileIdentity(stageIdentity, finalHeldStat, stagedPath);
+    return;
+  }
+
+  await assertStableFallbackPath({ absolutePath: stagedPath }, stagedPath, false);
+  const currentStat = await lstatIfPresent(stagedPath);
+  if (currentStat === undefined || currentStat.isSymbolicLink() || !currentStat.isDirectory()) {
+    throw new Error(`Brownfield assessment staging path changed while publishing: ${stagedPath}`);
+  }
+  assertOwnedFileIdentity(stageIdentity, currentStat, stagedPath);
+  await assertStableFallbackPath({ absolutePath: stagedPath }, stagedPath, false);
+  const finalStat = await lstatIfPresent(stagedPath);
+  if (finalStat === undefined || finalStat.isSymbolicLink() || !finalStat.isDirectory()) {
+    throw new Error(`Brownfield assessment staging path changed while publishing: ${stagedPath}`);
+  }
+  assertOwnedFileIdentity(stageIdentity, finalStat, stagedPath);
+}
+
+async function assertPublishedStagedDirectory(input: {
+  readonly parent: OpenedBundleDirectory;
+  readonly finalPath: string;
+  readonly finalName: string;
+  readonly stageIdentity: BundleStat;
+  readonly stageDescriptor?: BundleFileHandle;
+}): Promise<void> {
+  const { parent, finalPath, finalName, stageIdentity, stageDescriptor } = input;
+  const publishedStat = parent.descriptor === undefined
+    ? await lstatIfPresent(finalPath)
+    : await lstatIfPresent(descriptorChildPath(parent.descriptor, finalName));
+  if (publishedStat === undefined || publishedStat.isSymbolicLink() || !publishedStat.isDirectory()) {
+    throw new Error(`Brownfield assessment publication did not produce the staged directory: ${finalPath}`);
+  }
+  assertOwnedFileIdentity(stageIdentity, publishedStat, finalPath);
+  if (stageDescriptor !== undefined) {
+    const heldStat = await stageDescriptor.stat();
+    if (!heldStat.isDirectory()) throw new Error(`Brownfield assessment publication did not produce the staged directory: ${finalPath}`);
+    assertOwnedFileIdentity(stageIdentity, heldStat, finalPath);
+    assertOwnedFileIdentity(heldStat, publishedStat, finalPath);
+  }
+}
+
 async function publishStagedBundle(
   paths: BrownfieldAssessmentPaths,
   stagedPath: string,
-  parent: OpenedBundleDirectory
+  parent: OpenedBundleDirectory,
+  stageIdentity: BundleStat,
+  stageDescriptor?: BundleFileHandle
 ): Promise<void> {
   const final = await resolveSafeBundlePath(parent.repositoryRoot, paths.root);
   const finalName = path.basename(final.absolutePath);
@@ -943,6 +1194,15 @@ async function publishStagedBundle(
     }
     if (parent.descriptor === undefined) {
       await assertStableFallbackPath(final, paths.root, true);
+    }
+    await revalidateStagedDirectory({
+      parent,
+      stagedPath,
+      stagedName,
+      stageIdentity: stageIdentity!,
+      ...(stageDescriptor === undefined ? {} : { stageDescriptor })
+    });
+    if (parent.descriptor === undefined) {
       await rename(stagedPath, final.absolutePath);
     } else {
       await rename(
@@ -950,6 +1210,13 @@ async function publishStagedBundle(
         descriptorChildPath(parent.descriptor, finalName)
       );
     }
+    await assertPublishedStagedDirectory({
+      parent,
+      finalPath: final.absolutePath,
+      finalName,
+      stageIdentity: stageIdentity!,
+      ...(stageDescriptor === undefined ? {} : { stageDescriptor })
+    });
     await syncBundleDirectory(parent);
   } catch (error) {
     operationError = error;
@@ -1401,6 +1668,7 @@ async function writeInitialBundle(input: {
   const stageName = `.${path.basename(input.paths.root)}.${process.pid}.${randomUUID()}.staging`;
   const stagedPath = path.join(parent.absolutePath, stageName);
   let stageDirectory: OpenedBundleDirectory | undefined;
+  let stageDescriptor: BundleFileHandle | undefined;
   let stageIdentity: BundleStat | undefined;
   let staged = false;
   let operationError: unknown;
@@ -1428,13 +1696,14 @@ async function writeInitialBundle(input: {
         throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
       }
       stageIdentity = preStageStat;
-      const stageDescriptor = await openRelativeDirectory(parent.descriptor, stageName);
+      const openedStageDescriptor = await openRelativeDirectory(parent.descriptor, stageName);
+      stageDescriptor = openedStageDescriptor;
       stageDirectory = {
         repositoryRoot: parent.repositoryRoot,
         absolutePath: stagedPath,
-        descriptor: stageDescriptor
+        descriptor: openedStageDescriptor
       };
-      const stageStat = await stageDescriptor.stat();
+      const stageStat = await openedStageDescriptor.stat();
       if (!stageStat.isDirectory()) {
         throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
       }
@@ -1444,14 +1713,16 @@ async function writeInitialBundle(input: {
       await writeStagedText(stagedPath, fileName, contentByFile[fileName], stageDirectory.descriptor);
     }
     await syncBundleDirectory(stageDirectory);
-    await publishStagedBundle(input.paths, stagedPath, parent);
+    await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity!, stageDescriptor);
     staged = false;
   } catch (error) {
     operationError = error;
     hasOperationError = true;
   }
   const cleanupErrors: unknown[] = [];
-  await attemptCleanup(cleanupErrors, () => closeBundleDirectory(stageDirectory));
+  if (stageDescriptor !== undefined) {
+    await attemptCleanup(cleanupErrors, () => stageDescriptor!.close());
+  }
   if (staged && stageIdentity !== undefined) {
     if (parent.descriptor === undefined) {
       await attemptCleanup(cleanupErrors, () => removePathIfOwned(stagedPath, stageIdentity!));

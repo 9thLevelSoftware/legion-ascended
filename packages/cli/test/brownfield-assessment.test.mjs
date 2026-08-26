@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile as execFileCallback, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { watch as watchDirectory } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -138,7 +139,7 @@ async function expectDiagnostic(action, pattern) {
   });
 }
 
-async function runAssessmentChild(repositoryRoot, snapshot) {
+async function runAssessmentChild(repositoryRoot, snapshot, onSpawn) {
   const moduleUrl = new URL("../dist/workflow/brownfield-assessment.js", import.meta.url).href;
   const child = spawn(process.execPath, [
     "--input-type=module",
@@ -161,6 +162,7 @@ async function runAssessmentChild(repositoryRoot, snapshot) {
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
+  onSpawn?.(child);
   let stdout = "";
   let stderr = "";
   child.stdout.setEncoding("utf8");
@@ -323,6 +325,91 @@ test("concurrent creators publish one complete bundle without overwriting state"
   }
 });
 
+test("does not publish a replacement staging directory", async () => {
+  const fixture = await writeMapFixture();
+  let children = [];
+  let watcher;
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    const bundlePath = path.join(fixture.repositoryRoot, ...created.paths.root.split("/"));
+    const parentPath = path.dirname(bundlePath);
+    await rm(bundlePath, { recursive: true, force: true });
+
+    const replacementTemplate = path.join(parentPath, ".replacement-stage-template");
+    await mkdir(replacementTemplate);
+    for (const fileName of ["state.json", "signals.json", "assumptions.json", "findings.json", "synthesis.json", "review.json"]) {
+      await writeFile(path.join(replacementTemplate, fileName), fileName === "state.json" ? "replacement-stage\n" : "[]\n", "utf8");
+    }
+
+    let stagePath;
+    let swapped = false;
+    let swapError;
+    const observingCandidates = new Set();
+    let pauseResolve;
+    const pauseReady = new Promise((resolve) => {
+      pauseResolve = resolve;
+    });
+    watcher = watchDirectory(parentPath, (_eventType, entryName) => {
+      if (stagePath !== undefined || entryName === null) return;
+      const candidate = String(entryName);
+      if (!candidate.startsWith(`.${path.basename(bundlePath)}.`) || !candidate.endsWith(".staging") ||
+        observingCandidates.has(candidate)) return;
+      observingCandidates.add(candidate);
+      const candidatePath = path.join(parentPath, candidate);
+      void (async () => {
+        for (let attempt = 0; attempt < 1_000 && stagePath === undefined; attempt += 1) {
+          try {
+            const stageEntries = await readdir(candidatePath);
+            if (stageEntries.length === 6 && children.length > 0) {
+              stagePath = candidatePath;
+              for (const child of children) child.kill("SIGSTOP");
+              await new Promise((resolve) => setTimeout(resolve, 10));
+              try {
+                await rename(candidatePath, `${candidatePath}.hidden`);
+                await cp(replacementTemplate, candidatePath, { recursive: true });
+                swapped = true;
+              } catch (error) {
+                swapError = error;
+              } finally {
+                watcher?.close();
+                for (const child of children) child.kill("SIGCONT");
+                pauseResolve();
+              }
+              return;
+            }
+          } catch {
+            return;
+          }
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+      })().catch(() => undefined);
+    });
+
+    const childResults = Array.from({ length: 16 }, () => runAssessmentChild(
+      fixture.repositoryRoot,
+      fixture.record,
+      (processHandle) => children.push(processHandle)
+    ));
+    await Promise.race([pauseReady, Promise.all(childResults)]);
+    assert.ok(stagePath !== undefined, "did not observe a complete staging directory");
+    await pauseReady;
+    assert.equal(swapError, undefined);
+    assert.equal(swapped, true);
+    await Promise.all(childResults);
+
+    const entries = await readdir(parentPath);
+    if (entries.includes(path.basename(bundlePath))) {
+      assert.notEqual(await readFile(path.join(bundlePath, "state.json"), "utf8"), "replacement-stage\n");
+    }
+  } finally {
+    watcher?.close();
+    for (const child of children) {
+      child.kill("SIGCONT");
+      child.kill("SIGKILL");
+    }
+    await fixture.cleanup();
+  }
+});
 test("recovers a stale publication lock owned by a dead process", async () => {
   const fixture = await writeMapFixture();
   try {
