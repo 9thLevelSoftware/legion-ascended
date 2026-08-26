@@ -43,8 +43,8 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-          "description": "Relative POSIX artifact path inside an approved artifact root."
+          "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.{1,2}(?:\\/|$))(?!.*[\\u0000-\\u001F\\u007F])[^/]+(?:\\/[^/]+)*$",
+          "description": "Relative POSIX repository source path with no traversal, backslashes, empty segments, or control characters."
         }
       ]
     },
@@ -103,8 +103,8 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 512,
-            "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-            "description": "Relative POSIX artifact path inside an approved artifact root."
+            "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.{1,2}(?:\\/|$))(?!.*[\\u0000-\\u001F\\u007F])[^/]+(?:\\/[^/]+)*$",
+            "description": "Relative POSIX repository source path with no traversal, backslashes, empty segments, or control characters."
           },
           "status": {
             "type": "string",
@@ -151,8 +151,8 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 512,
-            "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-            "description": "Relative POSIX artifact path inside an approved artifact root."
+            "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.{1,2}(?:\\/|$))(?!.*[\\u0000-\\u001F\\u007F])[^/]+(?:\\/[^/]+)*$",
+            "description": "Relative POSIX repository source path with no traversal, backslashes, empty segments, or control characters."
           },
           "sourceSha256": {
             "type": "string",
@@ -247,8 +247,8 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 512,
-            "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-            "description": "Relative POSIX artifact path inside an approved artifact root."
+            "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.{1,2}(?:\\/|$))(?!.*[\\u0000-\\u001F\\u007F])[^/]+(?:\\/[^/]+)*$",
+            "description": "Relative POSIX repository source path with no traversal, backslashes, empty segments, or control characters."
           },
           "sourceSha256": {
             "type": "string",
@@ -333,8 +333,8 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 512,
-            "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-            "description": "Relative POSIX artifact path inside an approved artifact root."
+            "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.{1,2}(?:\\/|$))(?!.*[\\u0000-\\u001F\\u007F])[^/]+(?:\\/[^/]+)*$",
+            "description": "Relative POSIX repository source path with no traversal, backslashes, empty segments, or control characters."
           },
           "sourceSha256": {
             "type": "string",

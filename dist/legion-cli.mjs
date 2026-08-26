@@ -17058,6 +17058,8 @@ var changeSchema = schemaMetadataSchema.extend({
 // packages/protocol/dist/entities/code-index.js
 var CODE_INDEX_FACT_ID_PATTERN = /^(idx|sym|imp|exp)_[a-f0-9]{24}$/;
 var CODE_INDEX_SHA256_PATTERN = /^[0-9a-f]{64}$/;
+var codeIndexSourcePathPattern = /^(?!\/)(?![A-Za-z]:)(?!.*\\)(?!.*\/\/)(?!.*(?:^|\/)\.{1,2}(?:\/|$))(?!.*[\u0000-\u001F\u007F])[^/]+(?:\/[^/]+)*$/u;
+var codeIndexSourcePathSchema = string2().min(1).max(512).regex(codeIndexSourcePathPattern, "Invalid code index source path").brand().describe("Relative POSIX repository source path with no traversal, backslashes, empty segments, or control characters.");
 var codeIndexProfileSchema = _enum2(["inventory", "structural"]);
 var codeIndexCoverageStatusSchema = _enum2([
   "parsed",
@@ -17070,7 +17072,7 @@ var codeIndexCoverageStatusSchema = _enum2([
 var codeIndexLanguageSchema = string2().min(1).max(64);
 var codeIndexDiagnosticSchema = string2().max(512);
 var codeIndexFileCoverageSchema = strictObject({
-  path: artifactPathSchema,
+  path: codeIndexSourcePathSchema,
   status: codeIndexCoverageStatusSchema,
   language: codeIndexLanguageSchema.optional(),
   diagnostics: array(codeIndexDiagnosticSchema).max(32).optional()
@@ -17102,7 +17104,7 @@ var codeIndexNameSchema = string2().min(1).max(256);
 var codeIndexKindSchema = string2().min(1).max(128);
 var codeIndexSpecifierSchema = string2().min(1).max(1024);
 var codeIndexFactBaseSchema = {
-  path: artifactPathSchema,
+  path: codeIndexSourcePathSchema,
   sourceSha256: codeIndexSha256Schema,
   range: codeIndexSourceRangeSchema,
   extractorVersion: codeIndexExtractorVersionSchema
@@ -17133,7 +17135,7 @@ var codeIndexSqliteSchema = strictObject({
   path: artifactPathSchema,
   sha256: codeIndexSha256Schema
 });
-var codeIndexScopeSchema = union([literal("."), artifactPathSchema]);
+var codeIndexScopeSchema = union([literal("."), codeIndexSourcePathSchema]);
 function compareFacts(left, right) {
   if (left.path < right.path)
     return -1;
@@ -46630,7 +46632,7 @@ function validateDraft(draft) {
   runIdSchema.parse(draft.mapRunId);
   utcTimestampSchema.parse(draft.generatedAt);
   codeIndexProfileSchema.parse(draft.profile);
-  if (draft.scope !== ".") artifactPathSchema.parse(draft.scope);
+  if (draft.scope !== ".") codeIndexSourcePathSchema.parse(draft.scope);
   codeIndexSha256Schema.parse(draft.sourceFingerprint);
   for (const coverage of draft.coverage) codeIndexFileCoverageSchema.parse(coverage);
   for (const symbol2 of draft.symbols) {
@@ -46711,7 +46713,7 @@ function validateInputMetadata(input) {
   const mapRunId = runIdSchema.parse(input.mapRunId);
   const generatedAt = utcTimestampSchema.parse(input.generatedAt);
   codeIndexProfileSchema.parse("structural");
-  const scope = input.scope === "." ? input.scope : artifactPathSchema.parse(input.scope);
+  const scope = input.scope === "." ? input.scope : codeIndexSourcePathSchema.parse(input.scope);
   const sourceFingerprint = codeIndexSha256Schema.parse(input.sourceFingerprint);
   if (!Array.isArray(input.files)) throw new TypeError("input.files must be an array.");
   if (input.files.length > MAX_FILES) throw new RangeError(`input.files exceeds maximum of ${MAX_FILES} files.`);
@@ -46720,7 +46722,7 @@ function validateInputMetadata(input) {
     if (typeof file2 !== "object" || file2 === null || Array.isArray(file2)) {
       throw new TypeError(`input.files[${index}] must be an object.`);
     }
-    const parsedPath = artifactPathSchema.parse(file2.path);
+    const parsedPath = codeIndexSourcePathSchema.parse(file2.path);
     const parsedSha256 = codeIndexSha256Schema.parse(file2.sha256);
     const text = file2.text;
     if (text !== void 0 && typeof text !== "string") {
@@ -46883,7 +46885,7 @@ async function refreshStructuralCodeIndex(input) {
     scope: input.scope,
     sourceFingerprint: codeIndexSha256Schema.parse(input.sourceFingerprint),
     files: input.files.map((file2) => ({
-      path: artifactPathSchema.parse(file2.path),
+      path: codeIndexSourcePathSchema.parse(file2.path),
       sha256: codeIndexSha256Schema.parse(file2.sha256),
       ...file2.text === void 0 ? {} : { text: file2.text }
     }))
@@ -46905,7 +46907,7 @@ async function refreshStructuralCodeIndex(input) {
     schemaVersion: 1,
     kind: "code_index_snapshot",
     ...draft,
-    scope: draft.scope === "." ? "." : artifactPathSchema.parse(draft.scope),
+    scope: draft.scope === "." ? "." : codeIndexSourcePathSchema.parse(draft.scope),
     coverage: [...draft.coverage],
     symbols: [...draft.symbols],
     imports: [...draft.imports],
@@ -47231,15 +47233,10 @@ function exactObject(value, keys, label) {
   return record2;
 }
 function safeMapRelativePath(value, options = {}) {
-  if (typeof value !== "string" || value.length === 0 || value.includes("\\") || value.includes("\0") || value.startsWith("/") || path35.posix.isAbsolute(value) || path35.win32.isAbsolute(value)) {
-    throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${String(value)}`);
-  }
   if (options.allowDot === true && value === ".") return value;
-  const segments = value.split("/");
-  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..") || path35.posix.normalize(value) !== value) {
-    throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${value}`);
-  }
-  return value;
+  const parsed = codeIndexSourcePathSchema.safeParse(value);
+  if (!parsed.success) throw new MapCandidateValidationError("map_artifact_unsafe_path", `unsafe map path ${String(value)}`);
+  return parsed.data;
 }
 function stringArray(value, label) {
   if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {

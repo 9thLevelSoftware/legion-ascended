@@ -68,6 +68,23 @@ test('extracts TypeScript imports, symbols, direct exports, and exact source ran
   assert.equal(result.extractor.version, '0.26.13');
 });
 
+test('preserves ampersand and Unicode source paths in coverage and extracted facts', async () => {
+  const sourcePath = 'src/build-&-config-配置.ts';
+  const text = 'import { helper } from "./dep.js";\nexport function configure() { return helper(); }\n';
+  const result = await buildStructuralCodeIndex(input([file(sourcePath, text)]));
+
+  assert.deepEqual(result.coverage, [{ path: sourcePath, status: 'parsed', language: 'typescript' }]);
+  assert.deepEqual(result.imports.map(({ path: filePath, specifier }) => ({ path: filePath, specifier })), [
+    { path: sourcePath, specifier: './dep.js' }
+  ]);
+  assert.deepEqual(result.symbols.map(({ path: filePath, name }) => ({ path: filePath, name })), [
+    { path: sourcePath, name: 'configure' }
+  ]);
+  assert.deepEqual(result.exports.map(({ path: filePath, name }) => ({ path: filePath, name })), [
+    { path: sourcePath, name: 'configure' }
+  ]);
+});
+
 test('converts Tree-sitter UTF-16 offsets to UTF-8 byte ranges', async () => {
   const text = '// π\nimport { helper } from "./dep.js";\nexport function greet() { return helper(); }\n';
   const result = await buildStructuralCodeIndex(input([file('src/greet.ts', text)]));
