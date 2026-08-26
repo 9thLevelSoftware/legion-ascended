@@ -26,8 +26,8 @@ import {
 } from "./codebase-map.js";
 
 const ASSESSMENT_ROOT = ".legion/project/assessment";
-// artifactPathSchema intentionally rejects a dot-only path. Keep the root
-// representation relative and host-independent while remaining schema-valid.
+// artifactPathSchema rejects literal ".". Persist "repository" as a
+// schema-valid, repository-relative sentinel for the repository root.
 const SAFE_REPOSITORY_ROOT = "repository";
 const REFRESH_ACTION = "legion map --refresh --profile structural";
 const BUNDLE_FILE_NAMES = [
@@ -168,7 +168,7 @@ async function assertStableFallbackPath(resolved: ResolvedBundlePath, artifactPa
 }
 
 async function openRelativeDirectory(parent: BundleFileHandle, name: string): Promise<BundleFileHandle> {
-  return open(descriptorChildPath(parent, name), fsConstants.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG);
+  return open(descriptorChildPath(parent, name), fsConstants.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG | NONBLOCK_FLAG);
 }
 
 async function openRelativeFile(parent: BundleFileHandle, name: string, flags: number, mode?: number): Promise<BundleFileHandle> {
@@ -196,7 +196,10 @@ async function openBundleDirectory(
 
   const handles: BundleFileHandle[] = [];
   try {
-    const root = await open(resolved.repositoryRoot, fsConstants.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG);
+    const root = await open(
+      resolved.repositoryRoot,
+      fsConstants.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG | NONBLOCK_FLAG
+    );
     handles.push(root);
     const rootStat = await root.stat();
     if (!rootStat.isDirectory()) {
@@ -304,7 +307,14 @@ async function lstatIfPresent(absolutePath: string): Promise<Awaited<ReturnType<
 async function fsyncDirectoryIfSupported(directory: string): Promise<void> {
   let handle;
   try {
-    handle = await open(directory, fsConstants.O_RDONLY);
+    const directoryStat = await lstat(directory);
+    if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) return;
+    handle = await open(
+      directory,
+      fsConstants.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG | NONBLOCK_FLAG
+    );
+    const openedStat = await handle.stat();
+    if (!openedStat.isDirectory()) return;
     await handle.sync();
   } catch (error) {
     if (isNodeErrorCode(error, "EACCES") || isNodeErrorCode(error, "EBADF") ||
@@ -368,11 +378,16 @@ function processIsAlive(pid: number): boolean {
 async function readLockMetadata(lockPath: string, lockDescriptor?: BundleFileHandle): Promise<string | undefined> {
   let descriptor: BundleFileHandle | undefined;
   try {
+    const metadataPath = path.join(lockPath, PUBLISH_LOCK_METADATA);
+    const fallbackStat = lockDescriptor === undefined ? await lstatIfPresent(metadataPath) : undefined;
+    if (fallbackStat !== undefined && (fallbackStat.isSymbolicLink() || !fallbackStat.isFile())) return undefined;
     descriptor = lockDescriptor === undefined
-      ? await open(path.join(lockPath, PUBLISH_LOCK_METADATA), fsConstants.O_RDONLY | NOFOLLOW_FLAG)
+      ? await open(metadataPath, fsConstants.O_RDONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG)
       : await openRelativeFile(lockDescriptor, PUBLISH_LOCK_METADATA, fsConstants.O_RDONLY);
     const metadataStat = await descriptor.stat();
-    if (!metadataStat.isFile() || Number(metadataStat.size) > MAX_PUBLISH_LOCK_METADATA_BYTES) return undefined;
+    if (!metadataStat.isFile() ||
+      (fallbackStat !== undefined && sameFileIdentity(fallbackStat, metadataStat) === false) ||
+      Number(metadataStat.size) > MAX_PUBLISH_LOCK_METADATA_BYTES) return undefined;
     const chunks: Buffer[] = [];
     let totalBytes = 0;
     while (true) {
@@ -533,7 +548,7 @@ async function writeStagedText(
   try {
     if (stageDescriptor === undefined) await assertStableAbsolutePath(stageDirectory, stageDirectory, false);
     stagedHandle = stageDescriptor === undefined
-      ? await open(stagedPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | NOFOLLOW_FLAG, 0o600)
+      ? await open(stagedPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG, 0o600)
       : await openRelativeFile(stageDescriptor, fileName, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, 0o600);
     await stagedHandle.writeFile(text, "utf8");
     await stagedHandle.sync();

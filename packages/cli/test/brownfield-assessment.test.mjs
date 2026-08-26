@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { execFile as execFileCallback, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
+
+const execFile = promisify(execFileCallback);
 
 import { formatEntityId } from "@legion/protocol";
 import { hashContent, stableProtocolJson } from "@legion/artifacts";
@@ -131,6 +135,57 @@ async function expectDiagnostic(action, pattern) {
   await assert.rejects(action, (error) => {
     assert.match(String(error?.message ?? error), pattern);
     return true;
+  });
+}
+
+async function runAssessmentChild(repositoryRoot, snapshot) {
+  const moduleUrl = new URL("../dist/workflow/brownfield-assessment.js", import.meta.url).href;
+  const child = spawn(process.execPath, [
+    "--input-type=module",
+    "-e",
+    `
+      const { createBrownfieldAssessment } = await import(${JSON.stringify(moduleUrl)});
+      const result = await createBrownfieldAssessment({
+        repositoryRoot: process.env.BROWNFIELD_REPOSITORY_ROOT,
+        effort: 1,
+        scope: ".",
+        snapshot: JSON.parse(process.env.BROWNFIELD_SNAPSHOT)
+      });
+      process.stdout.write(result.assessmentId);
+    `
+  ], {
+    env: {
+      ...process.env,
+      BROWNFIELD_REPOSITORY_ROOT: repositoryRoot,
+      BROWNFIELD_SNAPSHOT: JSON.stringify(snapshot)
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+
+  return await new Promise((resolve, reject) => {
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, 1_500);
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once("close", (code, signal) => {
+      clearTimeout(timeout);
+      if (timedOut) {
+        reject(new Error(`assessment child timed out; stderr: ${stderr}`));
+        return;
+      }
+      resolve({ code, signal, stdout, stderr });
+    });
   });
 }
 
@@ -288,6 +343,40 @@ test("recovers a stale publication lock owned by a dead process", async () => {
     await fixture.cleanup();
   }
 });
+
+test("does not block on FIFO publication lock metadata in the fallback path", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("mkfifo is not available on Windows");
+    return;
+  }
+  const fixture = await writeMapFixture();
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    const bundlePath = path.join(fixture.repositoryRoot, ...created.paths.root.split("/"));
+    const parentPath = path.dirname(bundlePath);
+    await rm(bundlePath, { recursive: true, force: true });
+    const lockPath = path.join(parentPath, `.${path.basename(bundlePath)}.publish-lock`);
+    const ownerPath = path.join(lockPath, "owner.json");
+    await mkdir(lockPath, { mode: 0o700 });
+    try {
+      await execFile("mkfifo", [ownerPath]);
+    } catch {
+      t.skip("mkfifo is unavailable or unsupported on this platform");
+      return;
+    }
+    const staleTime = new Date(Date.now() - 120_000);
+    await utimes(lockPath, staleTime, staleTime);
+
+    const result = await runAssessmentChild(fixture.repositoryRoot, fixture.record);
+    assert.equal(result.code, 0, result.stderr || result.stdout);
+    assert.equal(result.signal, null);
+    assert.equal(result.stdout, created.assessmentId);
+    assert.deepEqual(await readdir(parentPath), [path.basename(bundlePath)]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("fails closed when persisted effort no longer matches the assessment identity", async () => {
   const fixture = await writeMapFixture();
   try {
