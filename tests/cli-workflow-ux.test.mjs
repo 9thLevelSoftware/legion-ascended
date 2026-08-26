@@ -538,6 +538,8 @@ async function withGrokShim(options, run) {
       ? `${binDir}${path.delimiter}${previousPath ?? ""}`
       : binDir;
     if (options.timeoutMs !== undefined) process.env.LEGION_GROK_EXEC_TIMEOUT_MS = String(options.timeoutMs);
+    delete process.env.GROK_AGENT;
+    delete process.env.GROK_SESSION_ID;
     return await run(root, binDir);
   } finally {
     if (previousPath === undefined) delete process.env.PATH;
