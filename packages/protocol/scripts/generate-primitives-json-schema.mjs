@@ -23,6 +23,7 @@ const schemaFileNames = {
   fixtureCorpus: "fixture-corpus",
   compatibilityFixture: "compatibility-fixture",
   codeIndex: "code-index",
+  brownfieldAssessment: "brownfield-assessment",
   commandEnvelope: "command-envelope",
   commandResult: "command-result",
   queryRequest: "query-request",

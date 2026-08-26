@@ -2,6 +2,7 @@ import * as z from "zod";
 
 import { approvalSchema } from "./approval.js";
 import { attestationSchema } from "./attestation.js";
+import { brownfieldAssessmentSchema } from "./brownfield-assessment.js";
 import { changeSchema } from "./change.js";
 import { codeIndexSnapshotSchema } from "./code-index.js";
 import { decisionSchema } from "./decision.js";
@@ -110,6 +111,11 @@ export const entityJsonSchemas = {
     "https://schemas.9thlevelsoftware.com/legion/entities/code-index.schema.json",
     "Legion protocol code index snapshot entity schema",
     codeIndexSnapshotSchema
+  ),
+  brownfieldAssessment: jsonSchemaDocument(
+    "https://schemas.9thlevelsoftware.com/legion/entities/brownfield-assessment.schema.json",
+    "Legion protocol brownfield assessment entity schema",
+    brownfieldAssessmentSchema
   ),
   requirement: jsonSchemaDocument(
     "https://schemas.9thlevelsoftware.com/legion/entities/requirement.schema.json",
