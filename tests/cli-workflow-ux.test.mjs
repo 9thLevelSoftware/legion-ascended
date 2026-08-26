@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { test } from "node:test";
 
 import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
 import { requireFileSymlink } from "./helpers/symlink-capability.mjs";
+
+const execFileAsync = promisify(execFile);
+const TEST_ROOT = process.cwd();
+const LEGION_BIN = path.join(TEST_ROOT, "bin", "legion.js");
+const GROK_FIXTURE_ROOT = path.join(TEST_ROOT, "tests", "fixtures", "grok");
 
 async function tempRepo() {
   return mkdtemp(path.join(tmpdir(), "legion-workflow-ux-"));
@@ -545,6 +551,136 @@ async function withGrokShim(options, run) {
     await rm(root, { recursive: true, force: true });
   }
 }
+
+async function installFixtureGrok(root, {
+  responseFile,
+  recordPath,
+  mode = "success",
+  sleepMs = 0
+} = {}) {
+  const binDir = path.join(root, "fake-grok-bin");
+  await mkdir(binDir, { recursive: true });
+  const fixture = path.join(GROK_FIXTURE_ROOT, "fake-grok.cjs");
+  if (process.platform === "win32") {
+    await writeFile(
+      path.join(binDir, "grok.cmd"),
+      `@echo off\r\n"${process.execPath}" "${fixture}" %*\r\nexit /b %errorlevel%\r\n`,
+      "utf8"
+    );
+  } else {
+    const shim = path.join(binDir, "grok");
+    await writeFile(shim, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(fixture)} "$@"\n`, "utf8");
+    await chmod(shim, 0o755);
+  }
+  return {
+    binDir,
+    env: {
+      FAKE_GROK_RESPONSE_FILE: responseFile,
+      FAKE_GROK_RECORD_FILE: recordPath,
+      FAKE_GROK_MODE: mode,
+      FAKE_GROK_SLEEP_MS: String(sleepMs)
+    }
+  };
+}
+
+async function withGrokFixture(root, options, run) {
+  const home = path.join(root, "home");
+  await mkdir(home, { recursive: true });
+  const recordPath = options.recordPath ?? path.join(root, "grok-invocations.jsonl");
+  const fake = await installFixtureGrok(root, { ...options, recordPath });
+  const pathValue = process.platform === "win32"
+    ? `${fake.binDir}${path.delimiter}${process.env.PATH ?? ""}`
+    : `${fake.binDir}${path.delimiter}/usr/bin${path.delimiter}/bin`;
+  const env = {
+    ...process.env,
+    ...fake.env,
+    HOME: home,
+    USERPROFILE: home,
+    PATH: pathValue,
+    NO_COLOR: "1"
+  };
+  delete env.XAI_API_KEY;
+  return run({ env, home, recordPath, fake });
+}
+
+test("installed Grok skill drives a real CLI build through the fake Grok executable", async () => {
+  const root = await tempRepo();
+  try {
+    await withGrokFixture(
+      root,
+      { responseFile: path.join(GROK_FIXTURE_ROOT, "json-success.json") },
+      async ({ env, recordPath }) => {
+        const install = await execFileAsync(
+          process.execPath,
+          [LEGION_BIN, "install", "--target", "grok", "--local"],
+          { cwd: root, env, encoding: "utf8", timeout: 30_000 }
+        );
+        assert.match(install.stdout, /Grok Build/);
+        const skillPath = path.join(root, ".grok", "skills", "legion", "SKILL.md");
+        assert.equal(existsSync(skillPath), true);
+        assert.match(await readFile(skillPath, "utf8"), /legion build --json/);
+
+        execFileSync("git", ["init", "-b", "main", root], { stdio: "ignore" });
+        git(root, ["config", "user.email", "legion@example.com"]);
+        git(root, ["config", "user.name", "Legion Test"]);
+        await initializeAssetMapperProject(root);
+        await writeValidRoadmap(root);
+        git(root, ["add", "-A"]);
+        git(root, ["commit", "-m", "initial workflow"]);
+        const plan = await execFileAsync(
+          process.execPath,
+          [LEGION_BIN, "plan", "1", "--from-roadmap", "ROADMAP.md", "--json"],
+          { cwd: root, env, encoding: "utf8", timeout: 30_000 }
+        );
+        assert.equal(plan.stderr, "");
+        git(root, ["add", "-A"]);
+        git(root, ["commit", "-m", "planned workflow"]);
+
+        const build = await execFileAsync(
+          process.execPath,
+          [LEGION_BIN, "build", "--executor", "grok", "--allow-dirty", "--json"],
+          { cwd: root, env, encoding: "utf8", timeout: 30_000 }
+        );
+        const buildPayload = JSON.parse(build.stdout.trim());
+        assert.equal(buildPayload.status, "executed");
+
+        const changeId = (await readdir(path.join(root, ".legion", "project", "changes")))[0];
+        const runId = (await readdir(path.join(root, ".legion", "project", "changes", changeId, "runs")))[0];
+        const result = JSON.parse(await readFile(
+          path.join(root, ".legion", "project", "changes", changeId, "runs", runId, "executor-result.json"),
+          "utf8"
+        ));
+        assert.equal(result.status, "succeeded");
+        assert.equal(result.summary, "Fake Grok completed the resolver task.");
+        assert.deepEqual(result.filesChanged, ["src/resolve-asset.ts"]);
+        assert.match(await readFile(path.join(root, ".legion", "project", "changes", changeId, "runs", runId, "executor-raw.log"), "utf8"), /session_fake_grok/);
+
+        const records = (await readFile(recordPath, "utf8"))
+          .trim()
+          .split(/\r?\n/)
+          .filter(Boolean)
+          .map((line) => JSON.parse(line));
+        assert.equal(records.length, 1);
+        const canonicalRoot = await realpath(root);
+        assert.deepEqual(records[0].args, [
+          "--prompt-file",
+          path.join(canonicalRoot, ".legion", "project", "changes", changeId, "runs", runId, "executor-prompt.md"),
+          "--cwd",
+          canonicalRoot,
+          "--output-format",
+          "json",
+          "--permission-mode",
+          "bypassPermissions"
+        ]);
+        assert.equal(records[0].stdinLength, 0);
+        assert.equal(records[0].xaiApiKeyPresent, false);
+      }
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 
 test("workflow grok executor args are argv-safe and add read-only sandboxing", async () => {
   const adapters = await importWorkflowModule("executor/adapters");
