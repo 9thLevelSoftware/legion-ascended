@@ -96,7 +96,7 @@ legacy, and manual-only targets.
 
 ### Grok Build
 
-Grok Build is a **first-class Legion target** for the 9.3.0 installer and
+Grok Build is a **first-class Legion target** for the 9.3.1 installer and
 executor matrix. That first-class Legion designation covers the managed native
 skill install, bounded `grok --version` detection, headless executor contract,
 and packed-install smoke coverage; it does **not** claim stable upstream parity.
