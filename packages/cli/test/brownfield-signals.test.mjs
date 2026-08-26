@@ -218,6 +218,8 @@ test("links test files only to parsed, supported, non-generated source candidate
     ["src/feature.py", "def feature():\n    return 1\n"],
     ["src/feature.ts", "export function feature() { return 1; }\n"],
     ["src/feature.test.ts", "test(\"feature\", () => feature());\n"],
+    ["src/main.ts", "export function main() { return 1; }\n"],
+    ["tests/main_test.go", "package main\n\nfunc TestMain(t *testing.T) {}\n"],
     ["src/ambiguous.ts", "export const source = 1;\n"],
     ["lib/ambiguous.ts", "export const source = 2;\n"],
     ["tests/ambiguous.test.ts", "test(\"ambiguous\", () => source);\n"],
@@ -258,9 +260,12 @@ test("links test files only to parsed, supported, non-generated source candidate
       "src/opaque-target.test.ts",
       "src/parser-only.test.ts",
       "src/size-target.test.ts",
-      "tests/ambiguous.test.ts"
+      "tests/ambiguous.test.ts",
+      "tests/main_test.go"
     ]);
+    assert.ok(result.testFiles.includes("tests/main_test.go"));
     assert.equal(result.testToSourceLinks.some((link) => link.testPath === "tests/ambiguous.test.ts"), false);
+    assert.equal(result.testToSourceLinks.some((link) => link.testPath === "tests/main_test.go"), false);
     for (const excludedTestPath of [
       "generated/only-target.test.ts",
       "src/parser-only.test.ts",
@@ -430,4 +435,72 @@ test("does not emit missing-test-neighbor for non-code or generated coverage", a
   } finally {
     await fixture.cleanup();
   }
+});
+
+test("redacts credential-bearing external import specifiers from serialized signals", async () => {
+  const fixture = await makeFixture([
+    ["src/external-a.ts", "import \"https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"],
+    ["src/external-b.ts", "import \"https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const serialized = JSON.stringify(result);
+    assert.doesNotMatch(serialized, /super-secret|another-secret|alice:|https:\/\/alice/u);
+    assert.match(serialized, /opaque external import specifier \(redacted\)/u);
+    assert.ok(result.dependencyEdges.some((edge) => edge.to === "opaque external import specifier (redacted)"));
+    const fanIn = result.architectureSignals.find((signal) =>
+      signal.code === "fan-in-hotspot" && signal.statement.includes("opaque external import specifier (redacted)")
+    );
+    assert.ok(fanIn);
+    assert.match(fanIn.statement, /opaque external import specifier \(redacted\)/u);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("bounds source evidence and transient reads for large polyglot inventories", async () => {
+  const bulkTests = Array.from({ length: 1_025 }, (_, index) => [
+    `tests/polyglot-${String(index).padStart(4, "0")}_test.go`,
+    "package polyglot\n\nfunc TestPolyglot() {}\n"
+  ]);
+  const fixture = await makeFixture([
+    ...bulkTests,
+    ["src/large.ts", `// ${"x".repeat(400_000)}\nexport const large = 1;\n`]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    assert.ok(result.summary.testFiles >= 1_025);
+    assert.equal(result.testFiles.length, result.summary.testFiles);
+    assert.ok(result.testFiles.includes("tests/polyglot-1024_test.go"));
+    assert.ok(result.testFiles.every((testPath) => testPath.endsWith(".go") || testPath.endsWith(".ts")));
+
+    for (const signal of [...result.architectureSignals, ...result.riskSignals]) {
+      assert.ok(signal.evidence.length <= 64, signal.code);
+      if (signal.statement.includes("bounded sample")) {
+        assert.ok(signal.evidence.length <= 64, signal.code);
+        assert.ok(signal.evidence.every((evidence) => /bounded sample/iu.test(evidence.note)), signal.code);
+      }
+    }
+    const verificationSignal = result.riskSignals.find((signal) => signal.code === "verification-evidence-missing");
+    assert.ok(verificationSignal);
+    assert.ok(verificationSignal.evidence.length <= 64);
+    assert.match(verificationSignal.statement, /bounded sample/u);
+    assert.doesNotMatch(JSON.stringify(result), /x{1000}/u);
+    assert.doesNotMatch(JSON.stringify(result), /source contents|text:/u);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("keeps bounded source text inside the ephemeral risk scanner", async () => {
+  const implementation = await readFile(new URL("../src/workflow/brownfield-signals.ts", import.meta.url), "utf8");
+  const riskCollectorStart = implementation.indexOf("async function collectRiskSignals");
+  const publicCollectorStart = implementation.indexOf("export async function collectBrownfieldSignals");
+  assert.ok(riskCollectorStart >= 0);
+  assert.ok(publicCollectorStart > riskCollectorStart);
+  const riskCollector = implementation.slice(riskCollectorStart, publicCollectorStart);
+
+  assert.match(implementation, /async function scanBoundedSourceFile/u);
+  assert.doesNotMatch(riskCollector, /readBoundedSource|const text\s*=/u);
+  assert.doesNotMatch(implementation, /readonly text:\s*string/u);
 });
