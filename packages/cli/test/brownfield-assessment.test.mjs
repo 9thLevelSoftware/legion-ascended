@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -268,6 +268,26 @@ test("concurrent creators publish one complete bundle without overwriting state"
   }
 });
 
+test("recovers a stale publication lock owned by a dead process", async () => {
+  const fixture = await writeMapFixture();
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    const bundlePath = path.join(fixture.repositoryRoot, ...created.paths.root.split("/"));
+    const parentPath = path.dirname(bundlePath);
+    await rm(bundlePath, { recursive: true, force: true });
+    const lockPath = path.join(parentPath, `.${path.basename(bundlePath)}.publish-lock`);
+    await mkdir(lockPath, { mode: 0o700 });
+    await writeFile(path.join(lockPath, "owner.json"), JSON.stringify({ pid: 99999999, acquiredAt: 0, token: "stale" }), "utf8");
+    const staleTime = new Date(Date.now() - 120_000);
+    await utimes(lockPath, staleTime, staleTime);
+
+    const recreated = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    assert.equal(recreated.assessmentId, created.assessmentId);
+    assert.deepEqual(await readdir(parentPath), [path.basename(bundlePath)]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
 test("fails closed when persisted effort no longer matches the assessment identity", async () => {
   const fixture = await writeMapFixture();
   try {
@@ -335,6 +355,70 @@ test("revalidates the latest structural snapshot on every read", async () => {
       /structural snapshot|SQLite|legion map --refresh --profile structural/iu
     );
   } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("rejects a bundle file beyond the bounded read limit", async () => {
+  const fixture = await writeMapFixture();
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    const signalsPath = path.join(fixture.repositoryRoot, ...created.paths.signals.split("/"));
+    const oversizedJson = `[${"0,".repeat(8 * 1024 * 1024)}0]`;
+    await writeFile(signalsPath, oversizedJson, "utf8");
+    await expectDiagnostic(
+      () => readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId }),
+      /bounded read limit/iu
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("does not read a bundle through an intermediate symlink swap", async () => {
+  const fixture = await writeMapFixture();
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-assessment-race-outside-"));
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    const bundlePath = path.join(fixture.repositoryRoot, ...created.paths.root.split("/"));
+    const outsideBundlePath = path.join(outsideRoot, path.basename(bundlePath));
+    await cp(bundlePath, outsideBundlePath, { recursive: true });
+    const outsideStatePath = path.join(outsideBundlePath, "state.json");
+    const outsideState = JSON.parse(await readFile(outsideStatePath, "utf8"));
+    outsideState.phase = "signals";
+    await writeFile(outsideStatePath, stableProtocolJson(outsideState), "utf8");
+
+    const assessmentParent = path.dirname(bundlePath);
+    const hiddenPath = `${assessmentParent}.race-hidden`;
+    let stop = false;
+    const mutator = (async () => {
+      while (!stop) {
+        try {
+          await rename(assessmentParent, hiddenPath);
+          await symlink(outsideRoot, assessmentParent);
+          await new Promise((resolve) => setImmediate(resolve));
+        } catch {
+          // Readers may transiently hold the path between the swap steps.
+        } finally {
+          await rm(assessmentParent, { recursive: true, force: true }).catch(() => undefined);
+          await rename(hiddenPath, assessmentParent).catch(() => undefined);
+        }
+      }
+    })();
+
+    const observations = await Promise.all(Array.from({ length: 64 }, async () => {
+      try {
+        const result = await readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId });
+        return result.state.phase;
+      } catch {
+        return "rejected";
+      }
+    }));
+    stop = true;
+    await mutator;
+    assert.ok(!observations.includes("signals"), `read bundle through swapped parent: ${observations.join(",")}`);
+  } finally {
+    await rm(outsideRoot, { recursive: true, force: true });
     await fixture.cleanup();
   }
 });
