@@ -588,6 +588,82 @@ test("fails closed when an artifact parent symlink escapes the repository", asyn
   }
 });
 
+test("fails closed when a validated source file is a symlink even when target bytes match its hash", async (t) => {
+  const fixture = await makeFixture();
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-source-outside-"));
+  try {
+    const sourcePath = "src/shared.ts";
+    const sourceAbsolutePath = path.join(fixture.repositoryRoot, ...sourcePath.split("/"));
+    const outsidePath = path.join(outsideRoot, "shared.ts");
+    const sourceBytes = await readFile(sourceAbsolutePath);
+    const expectedHash = sha256(sourceBytes);
+    await writeFile(outsidePath, sourceBytes);
+    await rm(sourceAbsolutePath);
+    try {
+      await symlink(outsidePath, sourceAbsolutePath, "file");
+    } catch (error) {
+      if (["EPERM", "EACCES", "UNKNOWN", "ENOTSUP", "EOPNOTSUPP"].includes(error?.code)) {
+        t.skip(`file symlinks unavailable: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    assert.equal(sha256(await readFile(outsidePath)), expectedHash);
+    await assert.rejects(
+      () => collectBrownfieldSignals(fixture),
+      /symbolic link|unsafe source path|outside repository/u
+    );
+  } finally {
+    await fixture.cleanup();
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("fails closed when a validated source parent is a symlink even when target bytes match their hashes", async (t) => {
+  const fixture = await makeFixture();
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-source-parent-outside-"));
+  try {
+    const repositorySourceRoot = path.join(fixture.repositoryRoot, "src");
+    const outsideSourceRoot = path.join(outsideRoot, "src");
+    const sourceBytes = await readFile(path.join(repositorySourceRoot, "shared.ts"));
+    const expectedHash = sha256(sourceBytes);
+    await rename(repositorySourceRoot, outsideSourceRoot);
+    assert.equal(sha256(await readFile(path.join(outsideSourceRoot, "shared.ts"))), expectedHash);
+    try {
+      await symlink(outsideSourceRoot, repositorySourceRoot, "dir");
+    } catch (error) {
+      if (["EPERM", "EACCES", "UNKNOWN", "ENOTSUP", "EOPNOTSUPP"].includes(error?.code)) {
+        t.skip(`directory symlinks unavailable: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    await assert.rejects(
+      () => collectBrownfieldSignals(fixture),
+      /symbolic link|unsafe source path|outside repository/u
+    );
+  } finally {
+    await fixture.cleanup();
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("fails closed when a validated source path is a non-regular file", async () => {
+  const fixture = await makeFixture();
+  try {
+    const sourcePath = "src/shared.ts";
+    const sourceAbsolutePath = path.join(fixture.repositoryRoot, ...sourcePath.split("/"));
+    await rm(sourceAbsolutePath, { recursive: true, force: true });
+    await mkdir(sourceAbsolutePath);
+    await assert.rejects(
+      () => collectBrownfieldSignals(fixture),
+      /not a regular file|unsafe source path/u
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("fails closed when a missing map inventory cannot be opened", async () => {
   const fixture = await makeFixture();
   try {

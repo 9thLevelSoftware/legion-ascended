@@ -274,6 +274,74 @@ async function openValidatedArtifact(absolutePath: string, label: string): Promi
   }
 }
 
+async function openValidatedSourceFile(repositoryRoot: string, sourcePath: CodeIndexSourcePath): Promise<FileHandle> {
+  const validatedSourcePath = codeIndexSourcePathSchema.parse(sourcePath);
+  const root = path.resolve(repositoryRoot);
+  const absolutePath = path.resolve(root, ...validatedSourcePath.split("/"));
+  const comparisonRoot = process.platform === "win32" ? root.toLowerCase() : root;
+  const comparisonPath = process.platform === "win32" ? absolutePath.toLowerCase() : absolutePath;
+  const relativePath = path.relative(comparisonRoot, comparisonPath);
+  if (relativePath === "" || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} escapes the repository root.`);
+  }
+
+  const components = validatedSourcePath.split("/");
+  let parentPath = root;
+  for (const component of components.slice(0, -1)) {
+    parentPath = path.join(parentPath, component);
+    let parentStat;
+    try {
+      parentStat = await lstat(parentPath);
+    } catch (error) {
+      throw new Error(`Snapshot source path ${validatedSourcePath} has a missing or unreadable parent.`, { cause: error });
+    }
+    if (parentStat.isSymbolicLink()) {
+      throw new Error(`Snapshot source path ${validatedSourcePath} has a symbolic link parent.`);
+    }
+    if (!parentStat.isDirectory()) {
+      throw new Error(`Snapshot source path ${validatedSourcePath} has a non-directory parent.`);
+    }
+  }
+
+  let linkStat;
+  try {
+    linkStat = await lstat(absolutePath);
+  } catch (error) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} is missing or unreadable.`, { cause: error });
+  }
+  if (linkStat.isSymbolicLink()) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} must not be a symbolic link.`);
+  }
+  if (!linkStat.isFile()) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} is not a regular file.`);
+  }
+
+  let descriptor: FileHandle;
+  try {
+    descriptor = await open(absolutePath, READ_ONLY_ARTIFACT_FLAGS);
+  } catch (error) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} is missing or unreadable.`, { cause: error });
+  }
+  try {
+    const openedStat = await descriptor.stat();
+    if (!openedStat.isFile()) {
+      throw new Error(`Snapshot source path ${validatedSourcePath} is not a regular file.`);
+    }
+    const linkIdentityAvailable = typeof linkStat.dev === "number" && typeof linkStat.ino === "number" &&
+      linkStat.dev !== 0 && linkStat.ino !== 0;
+    const openedIdentityAvailable = typeof openedStat.dev === "number" && typeof openedStat.ino === "number" &&
+      openedStat.dev !== 0 && openedStat.ino !== 0;
+    if (linkIdentityAvailable && openedIdentityAvailable &&
+      (linkStat.dev !== openedStat.dev || linkStat.ino !== openedStat.ino)) {
+      throw new Error(`Snapshot source path ${validatedSourcePath} changed while it was being opened.`);
+    }
+    return descriptor;
+  } catch (error) {
+    await descriptor.close().catch(() => undefined);
+    throw error;
+  }
+}
+
 async function artifactPathForSqlite(
   repositoryRoot: string,
   sqlitePath: string,
@@ -349,16 +417,16 @@ async function inspectSourceFile(
   sourcePath: CodeIndexSourcePath,
   expectedHashes: ReadonlyMap<string, CodeIndexSha256>
 ): Promise<SourceObservation> {
-  const absolutePath = path.join(repositoryRoot, ...sourcePath.split("/"));
-  const expectedHash = expectedHashes.get(sourcePath);
+  const validatedSourcePath = codeIndexSourcePathSchema.parse(sourcePath);
+  const expectedHash = expectedHashes.get(validatedSourcePath);
   if (expectedHash === undefined) {
-    throw new Error(`Snapshot source path ${sourcePath} has no validated source hash.`);
+    throw new Error(`Snapshot source path ${validatedSourcePath} has no validated source hash.`);
   }
 
-  const descriptor = await open(absolutePath, "r");
+  const descriptor = await openValidatedSourceFile(repositoryRoot, validatedSourcePath);
   try {
     const fileStat = await descriptor.stat();
-    if (!fileStat.isFile()) throw new Error(`Snapshot source path is not a regular file: ${sourcePath}.`);
+    if (!fileStat.isFile()) throw new Error(`Snapshot source path is not a regular file: ${validatedSourcePath}.`);
 
     const prefix = Buffer.alloc(Math.min(fileStat.size, MAX_BOUNDED_SOURCE_BYTES));
     const digest = createHash("sha256");
@@ -378,10 +446,10 @@ async function inspectSourceFile(
 
     const sha256 = codeIndexSha256Schema.parse(digest.digest("hex"));
     if (expectedHash !== sha256) {
-      throw new Error(`Source file ${sourcePath} changed after the validated structural snapshot.`);
+      throw new Error(`Source file ${validatedSourcePath} changed after the validated structural snapshot.`);
     }
     return {
-      path: sourcePath,
+      path: validatedSourcePath,
       sha256,
       patternMatches: scanBoundedSource(prefix.subarray(0, prefixBytes))
     };
