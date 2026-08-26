@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -141,6 +141,76 @@ function input(overrides = {}) {
     effort: 1,
     executor: "fake",
     ...overrides
+  };
+}
+
+function adapterModelResult(secret) {
+  return {
+    status: "succeeded",
+    summary: `password=${secret}`,
+    filesChanged: [`password=${secret}-claimed`],
+    commandsRun: [],
+    findings: []
+  };
+}
+
+function claudeShimSource(result, exitCode) {
+  const envelope = { type: "result", is_error: false, result: JSON.stringify(result) };
+  return `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(JSON.stringify(envelope))}, () => process.exit(${exitCode}));\n`;
+}
+
+function codexShimSource(result, exitCode) {
+  return `#!/usr/bin/env node\nconst fs = require("node:fs");\nconst index = process.argv.indexOf("--output-last-message");\nfs.writeFileSync(process.argv[index + 1], ${JSON.stringify(JSON.stringify(result))}, "utf8");\nprocess.exitCode = ${exitCode};\n`;
+}
+
+async function withExecutableShim(name, source, callback) {
+  const shimRoot = await mkdtemp(path.join(tmpdir(), `legion-${name}-shim-`));
+  const shimPath = path.join(shimRoot, name);
+  await writeFile(shimPath, source, "utf8");
+  await chmod(shimPath, 0o755);
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${shimRoot}${path.delimiter}${previousPath ?? ""}`;
+  try {
+    return await callback();
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    await rm(shimRoot, { recursive: true, force: true });
+  }
+}
+
+async function readAllFiles(root) {
+  const contents = [];
+  const entries = await readdir(root, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory()) contents.push(...await readAllFiles(entryPath));
+    else contents.push(await readFile(entryPath, "utf8"));
+  }
+  return contents;
+}
+
+function directAdapterRequest(repositoryRoot, executor) {
+  return {
+    repositoryRoot,
+    artifactRepositoryRoot: repositoryRoot,
+    changeId: "chg_fixture",
+    runId: "run_fixture",
+    task: {},
+    mode: "review",
+    executor,
+    readOnly: true,
+    prompt: "bounded specialist prompt",
+    contextPackArtifactPath: ".legion/project/context-pack.json",
+    contextPackAbsolutePath: path.join(repositoryRoot, ".legion/project/context-pack.json"),
+    promptArtifactPath: ".legion/project/executor-prompt.md",
+    promptAbsolutePath: path.join(repositoryRoot, ".legion/project/executor-prompt.md"),
+    resultArtifactPath: ".legion/project/executor-result.json",
+    resultAbsolutePath: path.join(repositoryRoot, ".legion/project/executor-result.json"),
+    rawLogArtifactPath: ".legion/project/executor-raw.log",
+    rawLogAbsolutePath: path.join(repositoryRoot, ".legion/project/executor-raw.log"),
+    redactedLogArtifactPath: ".legion/project/executor-redacted.log",
+    redactedLogAbsolutePath: path.join(repositoryRoot, ".legion/project/executor-redacted.log")
   };
 }
 
@@ -412,6 +482,81 @@ test("accepts Unicode and ampersands in source and test metadata paths", () => {
   assert.ok(pack.excerpts.some((excerpt) => excerpt.kind === "test-link" && excerpt.text.includes(`${testPath} -> ${sourcePath}`)));
   assert.ok(pack.evidence.some((entry) => entry.path === testPath));
   assert.ok(pack.evidence.some((entry) => entry.path === sourcePath));
+});
+
+test("preserves Unicode and ampersand source evidence in blocking assumptions after malformed effort two output", async () => {
+  const testPath = "test/über & only.test.ts";
+  const fixture = testInventoryInput({ testPath });
+  const result = await runBrownfieldSpecialists({
+    ...fixture,
+    effort: 2,
+    signals: {
+      ...fixture.signals,
+      summary: { ...fixture.signals.summary, testToSourceLinks: 0 },
+      testToSourceLinks: []
+    },
+    execute: async () => "not-json"
+  });
+  assert.equal(result.assumptions.length, 3);
+  assert.ok(result.assumptions.every((assumption) => assumption.confidence === "unknown" && assumption.blocking));
+  assert.ok(result.assumptions.some((assumption) => assumption.evidence.some((entry) =>
+    entry.kind === "user-input" && entry.path === testPath
+  )));
+});
+
+test("sanitizes direct Claude and Codex result artifacts before cleanup can fail", async () => {
+  for (const kind of ["claude", "codex"]) {
+    const repositoryRoot = await mkdtemp(path.join(tmpdir(), `legion-brownfield-${kind}-persistence-`));
+    const retainedRoots = [];
+    specialistModule.setBrownfieldSpecialistCleanupForTests(async (root) => {
+      retainedRoots.push(root);
+      throw new Error(`cleanup unavailable password=${kind}-cleanup-secret`);
+    });
+    try {
+      await withExecutableShim(kind, kind === "claude"
+        ? claudeShimSource(adapterModelResult(`${kind}-persistence-secret`), 0)
+        : codexShimSource(adapterModelResult(`${kind}-persistence-secret`), 0), async () => {
+        const result = await runBrownfieldSpecialists({
+          ...input({ repositoryRoot }),
+          executor: kind,
+          execute: undefined
+        });
+        assert.equal(result.ok, false);
+        assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
+      });
+      assert.ok(retainedRoots.length > 0);
+      for (const root of retainedRoots) {
+        const contents = await readAllFiles(root);
+        assert.ok(contents.length > 0);
+        assert.ok(contents.every((content) => !content.includes(`${kind}-persistence-secret`)));
+        assert.ok(contents.every((content) => !content.includes("password")));
+      }
+    } finally {
+      specialistModule.setBrownfieldSpecialistCleanupForTests(undefined);
+      for (const root of retainedRoots) await rm(root, { recursive: true, force: true });
+      await rm(repositoryRoot, { recursive: true, force: true });
+    }
+  }
+});
+
+test("does not let a nonzero Claude or Codex exit report a succeeded model envelope", async () => {
+  for (const kind of ["claude", "codex"]) {
+    const repositoryRoot = await mkdtemp(path.join(tmpdir(), `legion-brownfield-${kind}-exit-`));
+    try {
+      await withExecutableShim(kind, kind === "claude"
+        ? claudeShimSource(adapterModelResult(`${kind}-exit-secret`), 7)
+        : codexShimSource(adapterModelResult(`${kind}-exit-secret`), 7), async () => {
+        const result = await adapterModule.adapterForKind(kind).run(directAdapterRequest(repositoryRoot, kind));
+        assert.equal(result.ok, false);
+        assert.equal(result.status, "failed");
+        assert.equal(result.exitCode, 7);
+        assert.equal(result.structuredOutput, undefined);
+        assert.ok(result.findings.some((finding) => finding.id === `${kind}-executor-failed`));
+      });
+    } finally {
+      await rm(repositoryRoot, { recursive: true, force: true });
+    }
+  }
 });
 
 

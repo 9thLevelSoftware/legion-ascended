@@ -64,6 +64,7 @@ const MAX_SPECIALIST_FINDINGS = 2_000;
 const MAX_SPECIALIST_ASSUMPTIONS = 256;
 const DEFAULT_SPECIALIST_TIMEOUT_MS = 600_000;
 const EXECUTION_ARTIFACT_ROOT = ".legion/project/workflow/brownfield-specialists";
+const SOURCE_EVIDENCE_COMPATIBLE_ARTIFACT_PATH = `${EXECUTION_ARTIFACT_ROOT}/source-evidence.json`;
 const BOUNDED_EVIDENCE_NOTE = " [BOUNDED_EVIDENCE]";
 const BOUNDED_PROMPT_NOTE = "\n[BOUNDED_PROMPT_TRUNCATED]";
 
@@ -300,18 +301,53 @@ function evidenceSortKey(reference: AssessmentEvidenceRef): string {
   return [evidenceKey(reference), reference.note].join("\u0000");
 }
 
-function normalizedEvidenceReference(reference: AssessmentEvidenceRef): AssessmentEvidenceRef {
+function normalizedEvidenceReference(reference: unknown): AssessmentEvidenceRef {
   const parsed = assessmentEvidenceRefSchema.safeParse(reference);
   if (parsed.success) return parsed.data;
-  if (reference.kind === "user-input") {
-    const path = codeIndexSourcePathSchema.parse(reference.path);
-    return {
-      kind: "user-input",
-      path,
-      note: reference.note
-    } as unknown as AssessmentEvidenceRef;
+  if (isRecord(reference) && reference["kind"] === "user-input") {
+    const path = codeIndexSourcePathSchema.parse(reference["path"]);
+    // The shared assessment schema currently treats user-input evidence paths as
+    // control artifacts. Validate its strict shape with a safe placeholder,
+    // then retain the source path validated above in the specialist-local type.
+    const compatible = assessmentEvidenceRefSchema.parse({
+      ...reference,
+      path: artifactPathSchema.parse(SOURCE_EVIDENCE_COMPATIBLE_ARTIFACT_PATH)
+    });
+    return { ...compatible, path } as unknown as AssessmentEvidenceRef;
   }
   throw parsed.error;
+}
+
+function protocolCompatibleEvidence(reference: AssessmentEvidenceRef): AssessmentEvidenceRef {
+  if (reference.kind !== "user-input") return reference;
+  return {
+    ...reference,
+    path: artifactPathSchema.parse(SOURCE_EVIDENCE_COMPATIBLE_ARTIFACT_PATH)
+  } as unknown as AssessmentEvidenceRef;
+}
+
+function parseSpecialistAssumption(value: unknown): AssessmentAssumption {
+  if (!isRecord(value) || !Array.isArray(value["evidence"])) {
+    return assessmentAssumptionSchema.parse(value);
+  }
+  const evidence = value["evidence"].map((entry) => sanitizeEvidence(entry as AssessmentEvidenceRef));
+  const parsed = assessmentAssumptionSchema.parse({
+    ...value,
+    evidence: evidence.map(protocolCompatibleEvidence)
+  });
+  return { ...parsed, evidence } as AssessmentAssumption;
+}
+
+function parseSpecialistFinding(value: unknown): AssessmentFinding {
+  if (!isRecord(value) || !Array.isArray(value["evidence"])) {
+    return assessmentFindingSchema.parse(value);
+  }
+  const evidence = value["evidence"].map((entry) => sanitizeEvidence(entry as AssessmentEvidenceRef));
+  const parsed = assessmentFindingSchema.parse({
+    ...value,
+    evidence: evidence.map(protocolCompatibleEvidence)
+  });
+  return { ...parsed, evidence } as AssessmentFinding;
 }
 
 function sanitizeEvidence(reference: AssessmentEvidenceRef): AssessmentEvidenceRef {
@@ -823,10 +859,10 @@ function normalizeSpecialistOutput(input: {
   const assumptions: AssessmentAssumption[] = [];
   const assumptionIdMap = new Map<string, string>();
   for (const valueInput of assumptionInputs) {
-    const parsed = assessmentAssumptionSchema.parse(valueInput);
+    const parsed = parseSpecialistAssumption(valueInput);
     if (assumptionIdMap.has(parsed.id)) throw new Error("Specialist returned duplicate assumption IDs.");
     assertEvidenceClosure(parsed.evidence, support);
-    const sanitized = assessmentAssumptionSchema.parse({
+    const sanitized = parseSpecialistAssumption({
       ...parsed,
       statement: boundedText(parsed.statement, 2_000),
       resolution: boundedText(parsed.resolution, 1_000),
@@ -839,7 +875,7 @@ function normalizeSpecialistOutput(input: {
   const findings: AssessmentFinding[] = [];
   const findingIds = new Set<string>();
   for (const valueInput of findingInputs) {
-    const parsed = assessmentFindingSchema.parse(valueInput);
+    const parsed = parseSpecialistFinding(valueInput);
     if (parsed.specialist !== specialist.name) {
       throw new Error(`Specialist finding names ${parsed.specialist}, expected ${specialist.name}.`);
     }
@@ -855,7 +891,7 @@ function normalizeSpecialistOutput(input: {
       seenAssumptions.add(assumptionId);
       assumptionsForFinding.push(normalizedId);
     }
-    findings.push(assessmentFindingSchema.parse({
+    findings.push(parseSpecialistFinding({
       ...parsed,
       title: boundedText(parsed.title, 256),
       statement: boundedText(parsed.statement, 4_000),
@@ -902,7 +938,7 @@ function unknownAssumption(input: {
     .update([input.assessmentId, input.specialist.name, String(input.specialist.pass), input.diagnostic].join("\u0000"), "utf8")
     .digest("hex");
   const id = `asm_${idDigest.slice(0, 24)}`;
-  return assessmentAssumptionSchema.parse({
+  return parseSpecialistAssumption({
     id,
     statement: boundedText(`The ${input.specialist.name} specialist pass ${input.specialist.pass} could not establish a supported conclusion: ${input.diagnostic}`, 2_000),
     confidence: "unknown",

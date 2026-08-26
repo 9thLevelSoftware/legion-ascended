@@ -723,19 +723,24 @@ const claudeAdapter: ExecutionAdapter = {
     // fact: the process died, the harness reported its own error, or the model
     // stopped early. `is_error` is the envelope's own verdict and outranks a
     // zero exit code -- claude exits 0 on an API error it reports in-band.
-    const status: ExecutionStatus = processResult.timedOut
+    const processStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
       : processResult.exitCode !== 0 || envelope?.isError === true
         ? "failed"
         : "succeeded";
 
     const normalized = normalizeExecutionResult(parsed, {
-      status,
+      status: processStatus,
       summary: claudeFallbackSummary(processResult, envelope),
       rawOutput,
       exitCode: processResult.exitCode
     });
-    const withStructured: ExecutionResult = lastMessage.length > 0
+    const resultStatus: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : processResult.exitCode !== 0 || envelope?.isError === true
+        ? "failed"
+        : normalized.status;
+    const withStructured: ExecutionResult = lastMessage.length > 0 && resultStatus === "succeeded"
       ? { ...normalized, structuredOutput: lastMessage }
       : normalized;
 
@@ -745,6 +750,13 @@ const claudeAdapter: ExecutionAdapter = {
         id: "claude-executor-timeout",
         title: "Claude executor timed out",
         body: `Claude did not complete within ${processResult.timeoutMs}ms. Check Claude Code auth/configuration, raise LEGION_CLAUDE_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    } else if (processResult.exitCode !== 0) {
+      blockingFindings.push({
+        id: "claude-executor-failed",
+        title: "Claude executor exited unsuccessfully",
+        body: `Claude exited with code ${processResult.exitCode}. Check the raw and redacted executor logs before retrying.`,
         severity: "blocking"
       });
     }
@@ -760,19 +772,17 @@ const claudeAdapter: ExecutionAdapter = {
       });
     }
 
-    const result: ExecutionResult = blockingFindings.length === 0
-      ? withStructured
-      : {
-          ...withStructured,
-          ok: false,
-          status: processResult.timedOut ? "blocked" : "failed",
-          findings: [...withStructured.findings, ...blockingFindings]
-        };
+    const result: ExecutionResult = {
+      ...withStructured,
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0 ? resultStatus : processResult.timedOut ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
+    };
 
     const redacted = redactAdapterTranscript(rawOutput);
     await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}\n`) });
-    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
-    await writeProjectExecutionResult({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.resultArtifactPath, result });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -850,41 +860,62 @@ const codexAdapter: ExecutionAdapter = {
       processResult.stderr
     ].filter((entry) => entry.length > 0).join("\n");
     const lastMessage = await readOptionalText(outputLastMessagePath);
+    // Codex writes this file itself. Scrub it immediately after reading, before
+    // parsing or any later persistence can fail and reach the cleanup fence.
+    await writeProjectTextFile({
+      repositoryRoot: artifactRepositoryRoot(request),
+      artifactPath: outputLastMessageArtifactPath,
+      text: lastMessage.length > 0 ? redactAdapterTranscript(lastMessage) : ""
+    });
     const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
-    const status = processResult.timedOut ? "blocked" : processResult.exitCode === 0 ? "succeeded" : "failed";
+    const processStatus: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : processResult.exitCode === 0 ? "succeeded" : "failed";
     const normalized = normalizeExecutionResult(parsed, {
-      status,
+      status: processStatus,
       summary: processResult.timedOut
         ? `Codex executor timed out after ${processResult.timeoutMs}ms.`
         : processResult.exitCode === 0 ? "Codex executor completed." : "Codex executor failed.",
       rawOutput,
       exitCode: processResult.exitCode
     });
+    const resultStatus: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : processResult.exitCode !== 0
+        ? "failed"
+        : normalized.status;
     // Kept separate from rawOutput, which is process output. Downstream typed
     // parsing needs the reply the contract asked for, not the log around it.
-    const withStructured: ExecutionResult = lastMessage.length > 0
+    // Never claim a structured reply after a failed child process.
+    const withStructured: ExecutionResult = lastMessage.length > 0 && resultStatus === "succeeded"
       ? { ...normalized, structuredOutput: lastMessage }
       : normalized;
-    const result: ExecutionResult = processResult.timedOut
-      ? {
-          ...withStructured,
-          ok: false,
-          status: "blocked",
-          findings: [
-            ...normalized.findings,
-            {
-              id: "codex-executor-timeout",
-              title: "Codex executor timed out",
-              body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
-              severity: "blocking"
-            }
-          ]
-        }
-      : withStructured;
+    const blockingFindings: ExecutionFinding[] = [];
+    if (processResult.timedOut) {
+      blockingFindings.push({
+        id: "codex-executor-timeout",
+        title: "Codex executor timed out",
+        body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    } else if (processResult.exitCode !== 0) {
+      blockingFindings.push({
+        id: "codex-executor-failed",
+        title: "Codex executor exited unsuccessfully",
+        body: `Codex exited with code ${processResult.exitCode}. Check the raw and redacted executor logs before retrying.`,
+        severity: "blocking"
+      });
+    }
+    const result: ExecutionResult = {
+      ...withStructured,
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0 ? resultStatus : processResult.timedOut ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
+    };
     const redacted = redactAdapterTranscript(rawOutput);
     await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}\n`) });
-    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
-    await writeProjectExecutionResult({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.resultArtifactPath, result });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
