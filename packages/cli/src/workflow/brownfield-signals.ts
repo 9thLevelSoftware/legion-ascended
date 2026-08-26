@@ -40,6 +40,8 @@ const MANIFEST_NAMES = new Set([
   "build.gradle.kts"
 ]);
 const CI_FILE_NAMES = new Set(["jenkinsfile", ".gitlab-ci.yml", ".gitlab-ci.yaml", "azure-pipelines.yml"]);
+const SOURCE_CODE_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".py"]);
+const GENERATED_DIRECTORY_NAMES = new Set(["build", "dist", "generated", "gen", "out", "target", "__generated__"]);
 
 export interface BrownfieldSignals {
   readonly summary: AssessmentSignalSummary;
@@ -128,6 +130,23 @@ function sourceStem(sourcePath: string): string {
 
 function sourceBasename(sourcePath: string): string {
   return sourceStem(sourcePath).toLowerCase();
+}
+
+function sourceExtension(sourcePath: string): string {
+  return path.posix.extname(sourcePath).toLowerCase();
+}
+
+function isGeneratedPath(sourcePath: string): boolean {
+  const parts = sourcePath.toLowerCase().split("/");
+  const basename = path.posix.basename(sourcePath).toLowerCase();
+  const extension = path.posix.extname(basename);
+  const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
+  return parts.slice(0, -1).some((part) => GENERATED_DIRECTORY_NAMES.has(part)) ||
+    /(?:^|[._-])(?:generated|gen)(?:$|[._-])/u.test(stem);
+}
+
+function isEligibleSourceForTestNeighbor(coverage: CodeIndexSnapshot["coverage"][number]): boolean {
+  return coverage.status === "parsed" && SOURCE_CODE_EXTENSIONS.has(sourceExtension(coverage.path)) && !isGeneratedPath(coverage.path);
 }
 
 function topLevelRoot(sourcePath: string): string {
@@ -242,12 +261,19 @@ function findTestLinks(
     const testDirectory = path.posix.dirname(testPath);
     const candidates = sourceCandidates.filter((sourcePath) => sourceBasename(sourcePath) === testStem);
     if (candidates.length === 0) continue;
-    candidates.sort((left, right) => {
-      const leftSameDirectory = path.posix.dirname(left) === testDirectory ? 0 : 1;
-      const rightSameDirectory = path.posix.dirname(right) === testDirectory ? 0 : 1;
-      return leftSameDirectory - rightSameDirectory || compareStrings(left, right);
-    });
-    const sourcePath = candidates[0];
+
+    let sourcePath: CodeIndexSourcePath | undefined;
+    if (candidates.length === 1) {
+      sourcePath = candidates[0];
+    } else {
+      const compatibleCandidates = candidates.filter((candidate) => sourceExtension(candidate) === sourceExtension(testPath));
+      if (compatibleCandidates.length === 1) {
+        sourcePath = compatibleCandidates[0];
+      } else if (compatibleCandidates.length > 1) {
+        const sameDirectoryCandidates = compatibleCandidates.filter((candidate) => path.posix.dirname(candidate) === testDirectory);
+        if (sameDirectoryCandidates.length === 1) sourcePath = sameDirectoryCandidates[0];
+      }
+    }
     if (sourcePath === undefined) continue;
     links.push({
       testPath,
@@ -256,6 +282,34 @@ function findTestLinks(
     });
   }
   return links;
+}
+
+function importTargetPaths(
+  fact: CodeIndexImport,
+  availablePaths: ReadonlySet<string>
+): readonly string[] {
+  const specifier = fact.specifier;
+  if (!(specifier === "." || specifier === ".." || specifier.startsWith("./") || specifier.startsWith("../"))) return [];
+  const target = path.posix.normalize(path.posix.join(path.posix.dirname(fact.path), specifier));
+  const candidates = [target];
+  const extension = sourceExtension(target);
+  if (extension === ".js") candidates.push(`${target.slice(0, -extension.length)}.ts`, `${target.slice(0, -extension.length)}.tsx`);
+  else if (extension === ".jsx") candidates.push(`${target.slice(0, -extension.length)}.tsx`);
+  else if (extension.length === 0) {
+    for (const candidateExtension of [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".py"]) {
+      candidates.push(`${target}${candidateExtension}`);
+    }
+  }
+  return candidates.filter((candidate, index) => availablePaths.has(candidate) && candidates.indexOf(candidate) === index);
+}
+
+function importedModulePaths(snapshot: CodeIndexSnapshot): ReadonlySet<string> {
+  const availablePaths = new Set(snapshot.coverage.map((coverage) => coverage.path));
+  const importedPaths = new Set<string>();
+  for (const fact of snapshot.imports) {
+    for (const target of importTargetPaths(fact, availablePaths)) importedPaths.add(target);
+  }
+  return importedPaths;
 }
 
 function importFactEvidence(
@@ -323,12 +377,9 @@ function collectArchitectureSignals(input: {
     );
   }
 
-  const exportedNames = new Set(snapshot.imports.flatMap((fact) => {
-    const basename = path.posix.basename(fact.specifier).replace(/\.[^.]+$/u, "");
-    return [fact.specifier, basename];
-  }));
+  const importedPaths = importedModulePaths(snapshot);
   for (const fact of snapshot.exports) {
-    if (!fact.name || [...exportedNames].some((name) => name.includes(fact.name))) continue;
+    if (!fact.name || importedPaths.has(fact.path)) continue;
     const observation = sourceObservationFor(observations, fact.path);
     addSignal(
       signals,
@@ -418,8 +469,9 @@ function collectRiskSignals(input: {
   readonly sourceFiles: readonly CodeIndexSourcePath[];
   readonly testFiles: readonly CodeIndexSourcePath[];
   readonly testLinks: BrownfieldSignals["testToSourceLinks"];
+  readonly eligibleTestNeighborSources: ReadonlySet<string>;
 }): Signal[] {
-  const { observations, sourceFiles, testFiles, testLinks } = input;
+  const { observations, sourceFiles, testFiles, testLinks, eligibleTestNeighborSources } = input;
   const signals: Signal[] = [];
   const linkedSources = new Set(testLinks.map((link) => link.sourcePath));
   const verificationEvidence = testFiles.map((testPath) => sourceEvidence(
@@ -444,7 +496,7 @@ function collectRiskSignals(input: {
     if (/\b(?:req|request)\.(?:body|query|params)\b|\bprocess\.stdin\b/iu.test(observation.text)) {
       addSignal(signals, "unbounded-input", "major", `Potentially unbounded input access pattern present in ${sourcePath}; runtime validation and limits are not proven by static structure.`, [sourceEvidence(observation, "Bounded source read containing unbounded-input pattern.")]);
     }
-    if (!isTestFile(sourcePath) && !linkedSources.has(sourcePath) && sourcePath !== "package.json") {
+    if (eligibleTestNeighborSources.has(sourcePath) && !linkedSources.has(sourcePath)) {
       addSignal(signals, "missing-test-neighbor", "minor", `No conservative test-to-source neighbor was found for ${sourcePath}; static absence is not proof that no test exists.`, [sourceEvidence(observation, "Source file without a conservative test neighbor link.")]);
     }
     if (isManifestOrCi(sourcePath)) {
@@ -477,6 +529,11 @@ export async function collectBrownfieldSignals(input: {
 
   const testFiles = sourcePaths.filter(isTestFile);
   const sourceFiles = sourcePaths.filter((sourcePath) => !isTestFile(sourcePath));
+  const eligibleTestNeighborSources = new Set(
+    input.snapshot.coverage
+      .filter((coverage) => !isTestFile(coverage.path) && isEligibleSourceForTestNeighbor(coverage))
+      .map((coverage) => coverage.path)
+  );
   const testToSourceLinks = findTestLinks(testFiles, sourcePaths);
   const dependencyEdges = sorted(input.snapshot.imports, (left, right) =>
     compareStrings(left.path, right.path) || compareStrings(left.specifier, right.specifier) || compareStrings(left.id, right.id)
@@ -494,7 +551,8 @@ export async function collectBrownfieldSignals(input: {
     observations,
     sourceFiles,
     testFiles,
-    testLinks: testToSourceLinks
+    testLinks: testToSourceLinks,
+    eligibleTestNeighborSources
   }));
   const unsupportedSignals = architectureSignals.filter((signal) => signal.code === "unsupported-file").length;
   const highRiskSignals = riskSignals.filter((signal) => signal.severity === "critical" || signal.severity === "major").length;

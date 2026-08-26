@@ -19,7 +19,7 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-async function makeFixture() {
+async function makeFixture(extraFiles = []) {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-signals-"));
   const files = new Map([
     ["src/build-&-config.ts", [
@@ -45,6 +45,7 @@ async function makeFixture() {
     [".github/workflows/ci.yml", "name: CI\njobs:\n  build:\n    runs-on: ubuntu-latest\n"],
     ["README.md", "# Fixture\n\nArchitecture notes are intentionally bounded metadata only.\n"]
   ]);
+  for (const [relativePath, text] of extraFiles) files.set(relativePath, text);
 
   for (const [relativePath, text] of files) {
     const absolutePath = path.join(repositoryRoot, ...relativePath.split("/"));
@@ -165,6 +166,79 @@ test("collects deterministic architecture, dependency, test, documentation, and 
       assert.equal(assessmentEvidenceRefSchema.safeParse(edge.evidence).success, true);
       assert.equal(edge.evidence.kind, "structural-fact");
       assert.equal(edge.evidence.path, fixture.snapshot.sqlite.path);
+    }
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("does not mark exports orphan when an import resolves to the exported module", async () => {
+  const fixture = await makeFixture([
+    ["src/api.ts", "export function run() {}\nexport default function fallback() {}\n"],
+    ["src/api-consumer.ts", "import { run } from \"./api.js\";\nexport const consumed = run;\n"]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const orphanExportPaths = result.architectureSignals
+      .filter((signal) => signal.code === "orphan-export")
+      .flatMap((signal) => signal.evidence)
+      .filter((evidence) => evidence.kind === "source-file")
+      .map((evidence) => evidence.path);
+    assert.equal(orphanExportPaths.includes("src/api.ts"), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("links test files only to unique or convention-compatible source candidates", async () => {
+  const fixture = await makeFixture([
+    ["src/feature.py", "def feature():\n    return 1\n"],
+    ["src/feature.ts", "export function feature() { return 1; }\n"],
+    ["src/feature.test.ts", "test(\"feature\", () => feature());\n"],
+    ["src/ambiguous.ts", "export const source = 1;\n"],
+    ["lib/ambiguous.ts", "export const source = 2;\n"],
+    ["tests/ambiguous.test.ts", "test(\"ambiguous\", () => source);\n"]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    assert.deepEqual(result.testToSourceLinks.find((link) => link.testPath === "src/feature.test.ts"), {
+      testPath: "src/feature.test.ts",
+      sourcePath: "src/feature.ts",
+      reason: "heuristic filename/path match; low confidence"
+    });
+    assert.equal(result.testToSourceLinks.some((link) => link.testPath === "tests/ambiguous.test.ts"), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("does not emit missing-test-neighbor for non-code or generated coverage", async () => {
+  const fixture = await makeFixture([
+    ["src/untested.ts", "export const untested = 1;\n"],
+    ["generated/output.ts", "export const generated = 1;\n"],
+    ["src/config.json", "{\"setting\":true}\n"],
+    ["src/config.yml", "setting: true\n"],
+    ["src/opaque.bin", "opaque content\n"],
+    ["docs/guide.md", "# Guide\n"],
+    ["ci/build.yml", "name: build\n"]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const missingTestPaths = result.riskSignals
+      .filter((signal) => signal.code === "missing-test-neighbor")
+      .flatMap((signal) => signal.evidence)
+      .filter((evidence) => evidence.kind === "source-file")
+      .map((evidence) => evidence.path);
+    assert.ok(missingTestPaths.includes("src/untested.ts"));
+    for (const excludedPath of [
+      "generated/output.ts",
+      "src/config.json",
+      "src/config.yml",
+      "src/opaque.bin",
+      "docs/guide.md",
+      "ci/build.yml"
+    ]) {
+      assert.equal(missingTestPaths.includes(excludedPath), false, excludedPath);
     }
   } finally {
     await fixture.cleanup();
