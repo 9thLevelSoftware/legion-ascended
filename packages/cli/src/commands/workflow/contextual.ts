@@ -16,6 +16,7 @@ import {
 } from "../../runtime.js";
 import {
   currentCodebaseFingerprint,
+  deriveStructuralMapSummary,
   discoverLatestCodebaseMap,
   discoverLatestStructuralCodeIndex,
   findStructuralCodeIndexFact,
@@ -371,6 +372,13 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       files: source.files
     });
     const parserDiagnostics = semantic?.parserDiagnostics ?? [];
+    const structuralSummary = semantic === undefined
+      ? undefined
+      : deriveStructuralMapSummary({
+          snapshot: semantic.snapshot,
+          semanticIndexArtifactPath: semantic.semanticIndexArtifactPath
+        });
+    const structuralFields = structuralSummary ?? {};
     const status = parserDiagnostics.length === 0 ? "completed" : "blocked";
     const action = status === "completed"
       ? nextAction("legion plan 1", "Use refreshed map context when planning the next change.")
@@ -394,7 +402,8 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
             semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
             semanticIndexSha256: semantic.semanticIndexSha256,
             indexProfile: "structural",
-            snapshotId: semantic.snapshot.snapshotId
+            snapshotId: semantic.snapshot.snapshotId,
+            ...structuralFields
           })
     };
     await writeGuidanceRun({
@@ -426,7 +435,8 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
             semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
             semanticIndexSha256: semantic.semanticIndexSha256,
             indexProfile: "structural",
-            snapshotId: semantic.snapshot.snapshotId
+            snapshotId: semantic.snapshot.snapshotId,
+            ...structuralFields
           }),
       nextAction: action,
       diagnostics
@@ -437,6 +447,7 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
         : `Structural codebase map blocked by ${parserDiagnostics.length} parser diagnostic(s).`,
       `Artifact: ${artifacts.codebaseArtifactPath}`,
       ...(semantic === undefined ? [] : [`Semantic index: ${semantic.semanticIndexArtifactPath}`]),
+      ...(structuralSummary === undefined ? [] : renderStructuralMapSummary(structuralSummary)),
       renderNextAction(action)
     ].join("\n");
     return status === "completed" ? success(payload, human) : failure(payload, human);
@@ -571,6 +582,40 @@ async function mapWhy(context: CliContext, factId: string): Promise<CliResult> {
   );
 }
 
+function renderStructuralMapSummary(summary: ReturnType<typeof deriveStructuralMapSummary>): readonly string[] {
+  const statusBreakdown = Object.entries(summary.coverageStatusCounts)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([status, count]) => `${status}: ${count}`)
+    .join(", ");
+  return [
+    `Structural facts: ${summary.totalFactCount} total (symbols: ${summary.symbolCount}, imports: ${summary.importCount}, exports: ${summary.exportCount}).`,
+    `Structural coverage: ${summary.coverageCount} files.`,
+    `Coverage status counts: ${statusBreakdown || "none"}.`,
+    `Semantic index JSON: ${summary.semanticIndexArtifactPath}`,
+    `Semantic index SQLite: ${summary.semanticSqliteArtifactPath}`,
+    "Note: Structural source mapping, not behavioral proof."
+  ];
+}
+
+function structuralSummaryFromState(state: MapState): ReturnType<typeof deriveStructuralMapSummary> | undefined {
+  if (state.semanticIndexArtifactPath == null || state.semanticSqliteArtifactPath == null ||
+      state.coverageCount == null || state.coverageStatusCounts == null ||
+      state.symbolCount == null || state.importCount == null || state.exportCount == null ||
+      state.totalFactCount == null) {
+    return undefined;
+  }
+  return {
+    semanticIndexArtifactPath: state.semanticIndexArtifactPath,
+    semanticSqliteArtifactPath: state.semanticSqliteArtifactPath,
+    coverageCount: state.coverageCount,
+    coverageStatusCounts: state.coverageStatusCounts,
+    symbolCount: state.symbolCount,
+    importCount: state.importCount,
+    exportCount: state.exportCount,
+    totalFactCount: state.totalFactCount
+  };
+}
+
 function mapStatePayload(state: MapState, mode: "check" | "summary") {
   return {
     ok: true,
@@ -583,7 +628,18 @@ function mapStatePayload(state: MapState, mode: "check" | "summary") {
     latestSourceFingerprint: state.latestSourceFingerprint,
     generatedAt: state.generatedAt,
     ...(state.indexProfile === "structural"
-      ? { indexProfile: "structural", snapshotId: state.snapshotId }
+      ? {
+          indexProfile: "structural",
+          snapshotId: state.snapshotId,
+          semanticIndexArtifactPath: state.semanticIndexArtifactPath ?? null,
+          semanticSqliteArtifactPath: state.semanticSqliteArtifactPath ?? null,
+          coverageCount: state.coverageCount ?? null,
+          coverageStatusCounts: state.coverageStatusCounts ?? null,
+          symbolCount: state.symbolCount ?? null,
+          importCount: state.importCount ?? null,
+          exportCount: state.exportCount ?? null,
+          totalFactCount: state.totalFactCount ?? null
+        }
       : {}),
     diagnostics: state.diagnostics
   };
@@ -609,9 +665,14 @@ async function mapCheck(context: CliContext, scope: string | undefined, profile:
   if ("error" in state) return usageError(state.error);
 
   const action = mapStateAction(state);
+  const structuralSummary = profile === "structural" ? structuralSummaryFromState(state) : undefined;
   return success(
     { ...mapStatePayload(state, "check"), nextAction: action },
-    [`Codebase map (${profile}): ${state.freshness}. ${state.reason}`, renderNextAction(action)].join("\n")
+    [
+      `Codebase map (${profile}): ${state.freshness}. ${state.reason}`,
+      ...(structuralSummary === undefined ? [] : renderStructuralMapSummary(structuralSummary)),
+      renderNextAction(action)
+    ].join("\n")
   );
 }
 
@@ -623,12 +684,14 @@ async function mapSummary(context: CliContext, scope: string | undefined, profil
   if ("error" in state) return usageError(state.error);
 
   const action = mapStateAction(state);
+  const structuralSummary = profile === "structural" ? structuralSummaryFromState(state) : undefined;
   return success(
     { ...mapStatePayload(state, "summary"), nextAction: action },
     [
       `Codebase map: ${state.freshness}. ${state.reason}`,
       `Scope: ${state.scope}. Source files: ${state.sourceFileCount}.`,
       state.generatedAt === null ? "Never generated." : `Generated: ${state.generatedAt}.`,
+      ...(structuralSummary === undefined ? [] : renderStructuralMapSummary(structuralSummary)),
       renderNextAction(action)
     ].join("\n")
   );

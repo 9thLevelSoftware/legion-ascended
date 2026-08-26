@@ -19,6 +19,7 @@ import {
   utcTimestampSchema,
   type ArtifactPath,
   type ArtifactReference,
+  type CodeIndexCoverageStatus,
   type CodeIndexFact,
   type CodeIndexSnapshot,
   type CodeIndexSnapshotId,
@@ -228,6 +229,41 @@ export interface StructuralCodeIndexArtifacts {
   readonly semanticIndexSha256: CodeIndexSha256;
   readonly parserDiagnostics: readonly string[];
   readonly factCount: number;
+}
+
+export interface StructuralMapSummary {
+  readonly semanticIndexArtifactPath: ArtifactPath;
+  readonly semanticSqliteArtifactPath: ArtifactPath;
+  readonly coverageCount: number;
+  readonly coverageStatusCounts: Readonly<Record<string, number>>;
+  readonly symbolCount: number;
+  readonly importCount: number;
+  readonly exportCount: number;
+  readonly totalFactCount: number;
+}
+
+/** Derive display-only structural coverage from a validated semantic snapshot. */
+export function deriveStructuralMapSummary(input: {
+  readonly snapshot: CodeIndexSnapshot;
+  readonly semanticIndexArtifactPath: ArtifactPath;
+}): StructuralMapSummary {
+  const coverageStatusCounts: Partial<Record<CodeIndexCoverageStatus, number>> = {};
+  for (const coverage of input.snapshot.coverage) {
+    coverageStatusCounts[coverage.status] = (coverageStatusCounts[coverage.status] ?? 0) + 1;
+  }
+  const symbolCount = input.snapshot.symbols.length;
+  const importCount = input.snapshot.imports.length;
+  const exportCount = input.snapshot.exports.length;
+  return {
+    semanticIndexArtifactPath: input.semanticIndexArtifactPath,
+    semanticSqliteArtifactPath: input.snapshot.sqlite.path,
+    coverageCount: input.snapshot.coverage.length,
+    coverageStatusCounts,
+    symbolCount,
+    importCount,
+    exportCount,
+    totalFactCount: symbolCount + importCount + exportCount
+  };
 }
 
 /**
@@ -1148,6 +1184,14 @@ export interface MapState {
   readonly mapArtifact: ArtifactReference | null;
   readonly indexProfile?: MapProfile;
   readonly snapshotId?: string | null;
+  readonly semanticIndexArtifactPath?: ArtifactPath | null;
+  readonly semanticSqliteArtifactPath?: ArtifactPath | null;
+  readonly coverageCount?: number | null;
+  readonly coverageStatusCounts?: Readonly<Record<string, number>> | null;
+  readonly symbolCount?: number | null;
+  readonly importCount?: number | null;
+  readonly exportCount?: number | null;
+  readonly totalFactCount?: number | null;
   readonly diagnostics: readonly MapCandidateDiagnostic[];
 }
 
@@ -1172,6 +1216,21 @@ export async function resolveMapState(
   const structuralRecord = profile === "structural" ? (discovery as StructuralCodeIndexDiscovery).record : undefined;
   const inventoryRecord = profile === "inventory" ? (discovery as LatestCodebaseMapDiscovery).record : undefined;
   const latest = profile === "structural" ? structuralRecord?.snapshot : inventoryRecord?.map;
+  const structuralSummary = structuralRecord === undefined
+    ? {
+        semanticIndexArtifactPath: null,
+        semanticSqliteArtifactPath: null,
+        coverageCount: null,
+        coverageStatusCounts: null,
+        symbolCount: null,
+        importCount: null,
+        exportCount: null,
+        totalFactCount: null
+      }
+    : deriveStructuralMapSummary({
+        snapshot: structuralRecord.snapshot,
+        semanticIndexArtifactPath: structuralRecord.semanticIndexArtifactPath
+      });
   let current: Awaited<ReturnType<typeof currentCodebaseFingerprint>>;
   try {
     current = await currentCodebaseFingerprint({ repositoryRoot, ...(scope === undefined ? {} : { scope }) });
@@ -1190,7 +1249,11 @@ export async function resolveMapState(
       ? (structuralRecord?.snapshotArtifact ?? null)
       : (inventoryRecord?.artifact ?? null),
     ...(profile === "structural"
-      ? { indexProfile: "structural" as const, snapshotId: structuralRecord?.snapshot.snapshotId ?? null }
+      ? {
+          indexProfile: "structural" as const,
+          snapshotId: structuralRecord?.snapshot.snapshotId ?? null,
+          ...structuralSummary
+        }
       : {}),
     diagnostics: discovery.diagnostics
   };

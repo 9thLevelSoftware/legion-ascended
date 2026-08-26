@@ -16975,86 +16975,6 @@ var attestationSchema = schemaMetadataSchema.extend({
   }
 });
 
-// packages/protocol/dist/entities/change.js
-var changeStatusSchema = _enum2([
-  "draft",
-  "proposed",
-  "approved",
-  "planned",
-  "in_progress",
-  "verifying",
-  "accepted",
-  "rejected",
-  "blocked",
-  "archived"
-]);
-var acceptanceActorSchema = string2().min(1).max(128);
-var acceptanceReasonSchema = string2().min(1).max(2048);
-var acceptanceStateSchema = discriminatedUnion("status", [
-  strictObject({
-    status: literal("not_ready"),
-    acceptedAt: utcTimestampSchema.optional(),
-    acceptedBy: acceptanceActorSchema.optional(),
-    reason: acceptanceReasonSchema.optional()
-  }),
-  strictObject({
-    status: literal("ready"),
-    acceptedAt: utcTimestampSchema.optional(),
-    acceptedBy: acceptanceActorSchema.optional(),
-    reason: acceptanceReasonSchema.optional()
-  }),
-  strictObject({
-    status: literal("accepted"),
-    acceptedAt: utcTimestampSchema,
-    acceptedBy: acceptanceActorSchema,
-    reason: acceptanceReasonSchema.optional()
-  }),
-  strictObject({
-    status: literal("rejected"),
-    acceptedAt: utcTimestampSchema.optional(),
-    acceptedBy: acceptanceActorSchema.optional(),
-    reason: acceptanceReasonSchema
-  }),
-  strictObject({
-    status: literal("blocked"),
-    acceptedAt: utcTimestampSchema.optional(),
-    acceptedBy: acceptanceActorSchema.optional(),
-    reason: acceptanceReasonSchema
-  }),
-  strictObject({
-    status: literal("superseded"),
-    acceptedAt: utcTimestampSchema.optional(),
-    acceptedBy: acceptanceActorSchema.optional(),
-    reason: acceptanceReasonSchema.optional()
-  })
-]);
-var currentTruthSchema = strictObject({
-  specRefs: array(artifactReferenceSchema).min(1),
-  baseSpecHash: contentHashSchema,
-  baseGitSha: gitShaSchema,
-  requirementIds: array(requirementIdSchema)
-});
-var proposedTruthSchema = strictObject({
-  deltaSpecRefs: array(artifactReferenceSchema).min(1),
-  targetSpecHash: contentHashSchema,
-  requirementIds: array(requirementIdSchema)
-});
-var changeSchema = schemaMetadataSchema.extend({
-  kind: literal("change"),
-  id: changeIdSchema,
-  projectId: projectIdSchema,
-  title: string2().min(1).max(160),
-  summary: string2().min(1).max(2048),
-  status: changeStatusSchema,
-  currentTruth: currentTruthSchema,
-  proposedTruth: proposedTruthSchema,
-  artifactRevisions: array(artifactRevisionSchema).min(1),
-  risk: riskProfileSchema,
-  acceptance: acceptanceStateSchema,
-  decisionRefs: array(decisionIdSchema),
-  oracleRefs: array(oracleIdSchema)
-});
-
 // packages/protocol/dist/entities/code-index.js
 var CODE_INDEX_FACT_ID_PATTERN = /^(idx|sym|imp|exp)_[a-f0-9]{24}$/;
 var CODE_INDEX_SHA256_PATTERN = /^[0-9a-f]{64}$/;
@@ -17212,6 +17132,177 @@ var codeIndexSnapshotSchema = strictObject({
       }
     }
   }
+});
+
+// packages/protocol/dist/entities/brownfield-assessment.js
+var assessmentEffortSchema = number2().int().min(1).max(5);
+var assessmentPhaseSchema = _enum2([
+  "setup",
+  "signals",
+  "specialists",
+  "assumptions",
+  "synthesis",
+  "review",
+  "complete",
+  "blocked"
+]);
+var assessmentConfidenceSchema = _enum2(["high", "medium", "low", "unknown"]);
+var assessmentEvidenceKindSchema = _enum2([
+  "structural-fact",
+  "source-file",
+  "manifest",
+  "test-result",
+  "command-result",
+  "git-metadata",
+  "user-input"
+]);
+var assessmentSeveritySchema = _enum2(["critical", "major", "moderate", "minor", "informational"]);
+var assessmentSpecialistSchema = _enum2([
+  "architecture",
+  "code",
+  "tests",
+  "security",
+  "product-intent",
+  "documentation"
+]);
+var assessmentIdSchema = string2().regex(/^assess_[a-f0-9]{24}$/, "Invalid brownfield assessment ID").brand();
+var assessmentAssumptionIdSchema = string2().regex(/^asm_[a-f0-9]{24}$/, "Invalid brownfield assessment assumption ID").brand();
+var assessmentFindingIdSchema = string2().regex(/^af_[a-f0-9]{24}$/, "Invalid brownfield assessment finding ID").brand();
+var assessmentEvidenceRefSchema = strictObject({
+  kind: assessmentEvidenceKindSchema,
+  path: artifactPathSchema,
+  sha256: codeIndexSha256Schema.optional(),
+  factId: codeIndexFactIdSchema.optional(),
+  note: string2().min(1).max(512)
+});
+var assessmentAssumptionSchema = strictObject({
+  id: assessmentAssumptionIdSchema,
+  statement: string2().min(1).max(2e3),
+  confidence: assessmentConfidenceSchema,
+  blocking: boolean2(),
+  resolution: string2().min(1).max(1e3),
+  evidence: array(assessmentEvidenceRefSchema).min(1).max(64)
+});
+var assessmentFindingSchema = strictObject({
+  id: assessmentFindingIdSchema,
+  specialist: assessmentSpecialistSchema,
+  title: string2().min(1).max(256),
+  statement: string2().min(1).max(4e3),
+  severity: assessmentSeveritySchema,
+  confidence: assessmentConfidenceSchema,
+  evidence: array(assessmentEvidenceRefSchema).min(1).max(128),
+  assumptions: array(assessmentAssumptionIdSchema).max(32),
+  recommendation: string2().min(1).max(4e3)
+});
+var assessmentSignalSummarySchema = strictObject({
+  sourceFiles: number2().int().nonnegative(),
+  coverageFiles: number2().int().nonnegative(),
+  symbols: number2().int().nonnegative(),
+  imports: number2().int().nonnegative(),
+  exports: number2().int().nonnegative(),
+  testFiles: number2().int().nonnegative(),
+  testToSourceLinks: number2().int().nonnegative(),
+  dependencyEdges: number2().int().nonnegative(),
+  highRiskSignals: number2().int().nonnegative(),
+  unsupportedSignals: number2().int().nonnegative()
+});
+var brownfieldAssessmentSchema = strictObject({
+  schemaVersion: literal(1),
+  kind: literal("brownfield_assessment"),
+  assessmentId: assessmentIdSchema,
+  generatedAt: utcTimestampSchema,
+  effort: assessmentEffortSchema,
+  phase: assessmentPhaseSchema,
+  repositoryRoot: artifactPathSchema,
+  scope: union([literal("."), codeIndexSourcePathSchema]),
+  snapshotId: codeIndexSnapshotIdSchema,
+  sourceFingerprint: codeIndexSha256Schema,
+  semanticIndexSha256: codeIndexSha256Schema,
+  semanticSqliteSha256: codeIndexSha256Schema,
+  signals: assessmentSignalSummarySchema,
+  assumptions: array(assessmentAssumptionSchema).max(256),
+  findings: array(assessmentFindingSchema).max(2e3),
+  nextActions: array(string2().min(1).max(1e3)).max(64)
+});
+
+// packages/protocol/dist/entities/change.js
+var changeStatusSchema = _enum2([
+  "draft",
+  "proposed",
+  "approved",
+  "planned",
+  "in_progress",
+  "verifying",
+  "accepted",
+  "rejected",
+  "blocked",
+  "archived"
+]);
+var acceptanceActorSchema = string2().min(1).max(128);
+var acceptanceReasonSchema = string2().min(1).max(2048);
+var acceptanceStateSchema = discriminatedUnion("status", [
+  strictObject({
+    status: literal("not_ready"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema.optional()
+  }),
+  strictObject({
+    status: literal("ready"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema.optional()
+  }),
+  strictObject({
+    status: literal("accepted"),
+    acceptedAt: utcTimestampSchema,
+    acceptedBy: acceptanceActorSchema,
+    reason: acceptanceReasonSchema.optional()
+  }),
+  strictObject({
+    status: literal("rejected"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema
+  }),
+  strictObject({
+    status: literal("blocked"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema
+  }),
+  strictObject({
+    status: literal("superseded"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema.optional()
+  })
+]);
+var currentTruthSchema = strictObject({
+  specRefs: array(artifactReferenceSchema).min(1),
+  baseSpecHash: contentHashSchema,
+  baseGitSha: gitShaSchema,
+  requirementIds: array(requirementIdSchema)
+});
+var proposedTruthSchema = strictObject({
+  deltaSpecRefs: array(artifactReferenceSchema).min(1),
+  targetSpecHash: contentHashSchema,
+  requirementIds: array(requirementIdSchema)
+});
+var changeSchema = schemaMetadataSchema.extend({
+  kind: literal("change"),
+  id: changeIdSchema,
+  projectId: projectIdSchema,
+  title: string2().min(1).max(160),
+  summary: string2().min(1).max(2048),
+  status: changeStatusSchema,
+  currentTruth: currentTruthSchema,
+  proposedTruth: proposedTruthSchema,
+  artifactRevisions: array(artifactRevisionSchema).min(1),
+  risk: riskProfileSchema,
+  acceptance: acceptanceStateSchema,
+  decisionRefs: array(decisionIdSchema),
+  oracleRefs: array(oracleIdSchema)
 });
 
 // packages/protocol/dist/entities/decision.js
@@ -18124,6 +18215,7 @@ var entityJsonSchemas = {
   project: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/project.schema.json", "Legion protocol project entity schema", projectSchema),
   change: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/change.schema.json", "Legion protocol change entity schema", changeSchema),
   codeIndex: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/code-index.schema.json", "Legion protocol code index snapshot entity schema", codeIndexSnapshotSchema),
+  brownfieldAssessment: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/brownfield-assessment.schema.json", "Legion protocol brownfield assessment entity schema", brownfieldAssessmentSchema),
   requirement: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/requirement.schema.json", "Legion protocol requirement entity schema", requirementSchema),
   decision: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/decision.schema.json", "Legion protocol decision entity schema", decisionSchema),
   oracle: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/oracle.schema.json", "Legion protocol oracle entity schema", oracleSchema),
@@ -46875,6 +46967,25 @@ async function refreshCodebaseMap(input) {
     mapArtifactPath
   };
 }
+function deriveStructuralMapSummary(input) {
+  const coverageStatusCounts = {};
+  for (const coverage of input.snapshot.coverage) {
+    coverageStatusCounts[coverage.status] = (coverageStatusCounts[coverage.status] ?? 0) + 1;
+  }
+  const symbolCount = input.snapshot.symbols.length;
+  const importCount = input.snapshot.imports.length;
+  const exportCount = input.snapshot.exports.length;
+  return {
+    semanticIndexArtifactPath: input.semanticIndexArtifactPath,
+    semanticSqliteArtifactPath: input.snapshot.sqlite.path,
+    coverageCount: input.snapshot.coverage.length,
+    coverageStatusCounts,
+    symbolCount,
+    importCount,
+    exportCount,
+    totalFactCount: symbolCount + importCount + exportCount
+  };
+}
 async function refreshStructuralCodeIndex(input) {
   const snapshotId = structuralSnapshotId(input.paths.runId, input.sourceFingerprint);
   const mapRunId = structuralMapRunId(input.paths.runId);
@@ -47584,6 +47695,19 @@ async function resolveMapState(repositoryRoot, scope, now, profile = "inventory"
   const structuralRecord = profile === "structural" ? discovery.record : void 0;
   const inventoryRecord = profile === "inventory" ? discovery.record : void 0;
   const latest = profile === "structural" ? structuralRecord?.snapshot : inventoryRecord?.map;
+  const structuralSummary = structuralRecord === void 0 ? {
+    semanticIndexArtifactPath: null,
+    semanticSqliteArtifactPath: null,
+    coverageCount: null,
+    coverageStatusCounts: null,
+    symbolCount: null,
+    importCount: null,
+    exportCount: null,
+    totalFactCount: null
+  } : deriveStructuralMapSummary({
+    snapshot: structuralRecord.snapshot,
+    semanticIndexArtifactPath: structuralRecord.semanticIndexArtifactPath
+  });
   let current;
   try {
     current = await currentCodebaseFingerprint({ repositoryRoot, ...scope === void 0 ? {} : { scope } });
@@ -47598,7 +47722,11 @@ async function resolveMapState(repositoryRoot, scope, now, profile = "inventory"
     latestSourceFingerprint: latest?.sourceFingerprint ?? null,
     generatedAt: latest?.generatedAt ?? null,
     mapArtifact: profile === "structural" ? structuralRecord?.snapshotArtifact ?? null : inventoryRecord?.artifact ?? null,
-    ...profile === "structural" ? { indexProfile: "structural", snapshotId: structuralRecord?.snapshot.snapshotId ?? null } : {},
+    ...profile === "structural" ? {
+      indexProfile: "structural",
+      snapshotId: structuralRecord?.snapshot.snapshotId ?? null,
+      ...structuralSummary
+    } : {},
     diagnostics: discovery.diagnostics
   };
   if (latest === void 0) {
@@ -64162,6 +64290,11 @@ async function mapRefresh(context, scope, profile) {
       files: source.files
     });
     const parserDiagnostics2 = semantic?.parserDiagnostics ?? [];
+    const structuralSummary = semantic === void 0 ? void 0 : deriveStructuralMapSummary({
+      snapshot: semantic.snapshot,
+      semanticIndexArtifactPath: semantic.semanticIndexArtifactPath
+    });
+    const structuralFields = structuralSummary ?? {};
     const status2 = parserDiagnostics2.length === 0 ? "completed" : "blocked";
     const action = status2 === "completed" ? nextAction("legion plan 1", "Use refreshed map context when planning the next change.") : nextAction("legion map --refresh", "The structural parser reported errors; inspect snapshot coverage diagnostics before relying on this index.");
     const diagnostics = parserDiagnostics2.map((message) => ({ code: "map_parser_error", message }));
@@ -64181,7 +64314,8 @@ async function mapRefresh(context, scope, profile) {
         semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
         semanticIndexSha256: semantic.semanticIndexSha256,
         indexProfile: "structural",
-        snapshotId: semantic.snapshot.snapshotId
+        snapshotId: semantic.snapshot.snapshotId,
+        ...structuralFields
       }
     };
     await writeGuidanceRun({
@@ -64211,7 +64345,8 @@ async function mapRefresh(context, scope, profile) {
         semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
         semanticIndexSha256: semantic.semanticIndexSha256,
         indexProfile: "structural",
-        snapshotId: semantic.snapshot.snapshotId
+        snapshotId: semantic.snapshot.snapshotId,
+        ...structuralFields
       },
       nextAction: action,
       diagnostics
@@ -64220,6 +64355,7 @@ async function mapRefresh(context, scope, profile) {
       status2 === "completed" ? `Codebase map refreshed for ${artifacts.map.sourceFileCount} source files.` : `Structural codebase map blocked by ${parserDiagnostics2.length} parser diagnostic(s).`,
       `Artifact: ${artifacts.codebaseArtifactPath}`,
       ...semantic === void 0 ? [] : [`Semantic index: ${semantic.semanticIndexArtifactPath}`],
+      ...structuralSummary === void 0 ? [] : renderStructuralMapSummary(structuralSummary),
       renderNextAction(action)
     ].join("\n");
     return status2 === "completed" ? success2(payload, human) : failure(payload, human);
@@ -64350,6 +64486,32 @@ async function mapWhy(context, factId) {
     ].join("\n")
   );
 }
+function renderStructuralMapSummary(summary) {
+  const statusBreakdown = Object.entries(summary.coverageStatusCounts).sort(([left], [right]) => left.localeCompare(right)).map(([status2, count]) => `${status2}: ${count}`).join(", ");
+  return [
+    `Structural facts: ${summary.totalFactCount} total (symbols: ${summary.symbolCount}, imports: ${summary.importCount}, exports: ${summary.exportCount}).`,
+    `Structural coverage: ${summary.coverageCount} files.`,
+    `Coverage status counts: ${statusBreakdown || "none"}.`,
+    `Semantic index JSON: ${summary.semanticIndexArtifactPath}`,
+    `Semantic index SQLite: ${summary.semanticSqliteArtifactPath}`,
+    "Note: Structural source mapping, not behavioral proof."
+  ];
+}
+function structuralSummaryFromState(state) {
+  if (state.semanticIndexArtifactPath == null || state.semanticSqliteArtifactPath == null || state.coverageCount == null || state.coverageStatusCounts == null || state.symbolCount == null || state.importCount == null || state.exportCount == null || state.totalFactCount == null) {
+    return void 0;
+  }
+  return {
+    semanticIndexArtifactPath: state.semanticIndexArtifactPath,
+    semanticSqliteArtifactPath: state.semanticSqliteArtifactPath,
+    coverageCount: state.coverageCount,
+    coverageStatusCounts: state.coverageStatusCounts,
+    symbolCount: state.symbolCount,
+    importCount: state.importCount,
+    exportCount: state.exportCount,
+    totalFactCount: state.totalFactCount
+  };
+}
 function mapStatePayload(state, mode) {
   return {
     ok: true,
@@ -64361,7 +64523,18 @@ function mapStatePayload(state, mode) {
     sourceFileCount: state.sourceFileCount,
     latestSourceFingerprint: state.latestSourceFingerprint,
     generatedAt: state.generatedAt,
-    ...state.indexProfile === "structural" ? { indexProfile: "structural", snapshotId: state.snapshotId } : {},
+    ...state.indexProfile === "structural" ? {
+      indexProfile: "structural",
+      snapshotId: state.snapshotId,
+      semanticIndexArtifactPath: state.semanticIndexArtifactPath ?? null,
+      semanticSqliteArtifactPath: state.semanticSqliteArtifactPath ?? null,
+      coverageCount: state.coverageCount ?? null,
+      coverageStatusCounts: state.coverageStatusCounts ?? null,
+      symbolCount: state.symbolCount ?? null,
+      importCount: state.importCount ?? null,
+      exportCount: state.exportCount ?? null,
+      totalFactCount: state.totalFactCount ?? null
+    } : {},
     diagnostics: state.diagnostics
   };
 }
@@ -64380,9 +64553,14 @@ async function mapCheck(context, scope, profile) {
   const state = await resolveMapState(context.repositoryRoot, scope, createdAt, profile);
   if ("error" in state) return usageError(state.error);
   const action = mapStateAction(state);
+  const structuralSummary = profile === "structural" ? structuralSummaryFromState(state) : void 0;
   return success2(
     { ...mapStatePayload(state, "check"), nextAction: action },
-    [`Codebase map (${profile}): ${state.freshness}. ${state.reason}`, renderNextAction(action)].join("\n")
+    [
+      `Codebase map (${profile}): ${state.freshness}. ${state.reason}`,
+      ...structuralSummary === void 0 ? [] : renderStructuralMapSummary(structuralSummary),
+      renderNextAction(action)
+    ].join("\n")
   );
 }
 async function mapSummary(context, scope, profile) {
@@ -64391,12 +64569,14 @@ async function mapSummary(context, scope, profile) {
   const state = await resolveMapState(context.repositoryRoot, scope, createdAt, profile);
   if ("error" in state) return usageError(state.error);
   const action = mapStateAction(state);
+  const structuralSummary = profile === "structural" ? structuralSummaryFromState(state) : void 0;
   return success2(
     { ...mapStatePayload(state, "summary"), nextAction: action },
     [
       `Codebase map: ${state.freshness}. ${state.reason}`,
       `Scope: ${state.scope}. Source files: ${state.sourceFileCount}.`,
       state.generatedAt === null ? "Never generated." : `Generated: ${state.generatedAt}.`,
+      ...structuralSummary === void 0 ? [] : renderStructuralMapSummary(structuralSummary),
       renderNextAction(action)
     ].join("\n")
   );
