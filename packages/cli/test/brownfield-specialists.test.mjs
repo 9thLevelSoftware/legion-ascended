@@ -242,6 +242,20 @@ setTimeout(() => {}, 10_000);
 `;
 }
 
+function claudeNormalExitDescendantShimSource() {
+  const descendantSource = "const fs = require('node:fs'); const path = require('node:path'); setTimeout(() => fs.writeFileSync(path.join(process.cwd(), 'late-normal-exit-descendant.txt'), 'late descendant mutation\\n', 'utf8'), 500);";
+  return `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawn } = require("node:child_process");
+const descendant = spawn(process.execPath, ["-e", ${JSON.stringify(descendantSource)}], { detached: false, stdio: "ignore" });
+descendant.on("spawn", () => {
+  fs.writeFileSync(path.join(process.cwd(), "descendant.pid"), String(descendant.pid), "utf8");
+  process.stdout.write("normal-exit-descendant-ready\\n", () => process.exit(0));
+});
+`;
+}
+
 function claudeSymlinkTargetMutationShimSource() {
   return `#!/usr/bin/env node
 const fs = require("node:fs");
@@ -547,6 +561,26 @@ test("redacts encoded credential JSON after the bounded decode budget", () => {
   }
 });
 
+test("redacts literal, backslash-escaped, and deeply escaped credential JSON", () => {
+  const cases = [
+    String.raw`\{"password":"nested-secret"\}`,
+    String.raw`\{\"password\":\"quoted-secret\",\"nested\":\{\"apiKey\":\"deep-api-secret\"\}\}`,
+    JSON.stringify(JSON.stringify({ nested: { password: "deep-json-secret", secret: "deep-json-token" } })),
+    JSON.stringify(JSON.stringify(JSON.stringify({ deeper: { password: "deepest-json-secret" } }))),
+    encodeURIComponent(encodeURIComponent(String.raw`\{\"password\":\"percent-escaped-secret\"\}`))
+  ];
+  for (const redact of [redactBrownfieldSpecialistText, adapterModule.redactAdapterTranscript]) {
+    for (const value of cases) {
+      const redacted = redact(value);
+      for (const secret of ["nested-secret", "quoted-secret", "deep-api-secret", "deep-json-secret", "deep-json-token", "deepest-json-secret", "percent-escaped-secret"]) {
+        assert.equal(redacted.includes(secret), false, `${secret} leaked in ${JSON.stringify(redacted)}`);
+      }
+      for (const key of ["password", "apiKey", "secret"]) assert.equal(redacted.includes(key), false, `${key} leaked in ${JSON.stringify(redacted)}`);
+      assert.match(redacted, /REDACTED/iu);
+    }
+  }
+});
+
 test("times out an executor without losing a typed record", async () => {
   const result = await runBrownfieldSpecialists({
     ...input(),
@@ -742,6 +776,34 @@ test("sanitizes direct adapter artifacts even when no isolated artifact root is 
     if (previousPlan === undefined) delete process.env.LEGION_FAKE_EXECUTOR_PLAN;
     else process.env.LEGION_FAKE_EXECUTOR_PLAN = previousPlan;
     await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("sanitizes escaped credential JSON in direct Claude and Codex raw and result artifacts", async () => {
+  for (const kind of ["claude", "codex"]) {
+    const repositoryRoot = await mkdtemp(path.join(tmpdir(), `legion-brownfield-${kind}-escaped-json-`));
+    const secret = `${kind}-nested-json-secret`;
+    const deepSecret = `${kind}-deep-json-secret`;
+    const escapedJson = String.raw`\{\"nested\":\{\"password\":\"${secret}\",\"secret\":\"${deepSecret}\"\}\}`;
+    try {
+      await withExecutableShim(kind, kind === "claude"
+        ? claudeShimSource(adapterModelResult(escapedJson), 0)
+        : codexShimSource(adapterModelResult(escapedJson), 0), async () => {
+        const request = directAdapterRequest(repositoryRoot, kind);
+        const result = await adapterModule.adapterForKind(kind).run(request);
+        assert.equal(result.status, "succeeded", JSON.stringify(result));
+        const raw = await readFile(request.rawLogAbsolutePath, "utf8");
+        const persisted = await readFile(request.resultAbsolutePath, "utf8");
+        for (const content of [raw, persisted]) {
+          assert.equal(content.includes(secret), false, `${kind} leaked ${secret}`);
+          assert.equal(content.includes(deepSecret), false, `${kind} leaked ${deepSecret}`);
+          assert.equal(content.includes("password"), false, `${kind} leaked password`);
+          assert.equal(content.includes("secret"), false, `${kind} leaked secret`);
+        }
+      });
+    } finally {
+      await rm(repositoryRoot, { recursive: true, force: true });
+    }
   }
 });
 
@@ -1159,6 +1221,26 @@ test("kills a descendant in the POSIX process group before returning from timeou
   }
 });
 
+test("terminates a surviving descendant after a normal leader exit before returning", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-normal-exit-descendant-"));
+  try {
+    await withExecutableShim("claude", claudeNormalExitDescendantShimSource(), async () => {
+      const request = directAdapterRequest(repositoryRoot, "claude");
+      const result = await adapterModule.adapterForKind("claude").run(request);
+      assert.equal(result.ok, false);
+      assert.equal(result.status, "blocked");
+      assert.ok(result.findings.some((finding) => finding.id === "claude-executor-process-not-quiescent"));
+      const descendantPid = Number.parseInt(await readFile(path.join(repositoryRoot, "descendant.pid"), "utf8"), 10);
+      assert.ok(Number.isSafeInteger(descendantPid) && descendantPid > 0);
+      assert.throws(() => process.kill(descendantPid, 0), { code: "ESRCH" });
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await assert.rejects(readFile(path.join(repositoryRoot, "late-normal-exit-descendant.txt"), "utf8"), { code: "ENOENT" });
+    });
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
 test("blocks external specialist execution before a repository symlink can reach outside", async (t) => {
   if (!requireDirSymlink(t)) return;
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-symlink-repository-"));
@@ -1209,6 +1291,28 @@ test("blocks an in-process specialist callback before a repository symlink can r
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
     await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("returns a typed blocked result before spawning when process-group containment is unavailable", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-containment-capability-"));
+  const markerPath = path.join(repositoryRoot, "spawned.txt");
+  assert.equal(typeof adapterModule.setAdapterProcessContainmentForTests, "function");
+  try {
+    adapterModule.setAdapterProcessContainmentForTests(false);
+    await withExecutableShim("claude", `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync(${JSON.stringify(markerPath)}, "spawned\\n", "utf8");
+`, async () => {
+      const result = await adapterModule.adapterForKind("claude").run(directAdapterRequest(repositoryRoot, "claude"));
+      assert.equal(result.ok, false);
+      assert.equal(result.status, "blocked");
+      assert.ok(result.findings.some((finding) => finding.id === "claude-process-containment-unavailable"));
+      await assert.rejects(readFile(markerPath, "utf8"), { code: "ENOENT" });
+    });
+  } finally {
+    adapterModule.setAdapterProcessContainmentForTests(undefined);
+    await rm(repositoryRoot, { recursive: true, force: true });
   }
 });
 

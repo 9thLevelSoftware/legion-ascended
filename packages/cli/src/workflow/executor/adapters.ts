@@ -51,6 +51,13 @@ const PROCESS_TERM_GRACE_MS = 250;
 const PROCESS_QUIESCENCE_TIMEOUT_MS = 5_000;
 const PROCESS_QUIESCENCE_POLL_MS = 25;
 
+let adapterProcessContainmentOverride: boolean | undefined;
+
+/** Test-only seam for exercising the unsupported-platform policy. */
+export function setAdapterProcessContainmentForTests(available: boolean | undefined): void {
+  adapterProcessContainmentOverride = available;
+}
+
 function isAsciiAlpha(character: string | undefined): boolean {
   return character !== undefined && ((character >= "a" && character <= "z") || (character >= "A" && character <= "Z"));
 }
@@ -133,13 +140,26 @@ function decodeRepeatedly(value: string): { readonly decoded: string; readonly e
   return { decoded, exhausted: ENCODED_ESCAPE_RE.test(decoded) };
 }
 
+const ESCAPED_JSON_PUNCTUATION_RE = /\\+(?=[{}\[\],:"])/gu;
+
+function normalizeEscapedJsonRepresentation(value: string): string {
+  // Adapter envelopes and model messages can contain JSON serialized more than
+  // once. Remove every escape layer that protects JSON punctuation before the
+  // credential scanner runs, without decoding arbitrary backslash escapes.
+  return value.replace(ESCAPED_JSON_PUNCTUATION_RE, "");
+}
+
 function redactDirectText(value: string): string {
-  return redactUrls(value
+  const normalized = normalizeEscapedJsonRepresentation(value);
+  const redacted = redactUrls(normalized
     .replace(CONTROL_RE, "�")
     .replace(JSON_CREDENTIAL_RE, "[REDACTED_JSON_SECRET]")
     .replace(BEARER_RE, "Bearer [REDACTED_TOKEN]")
     .replace(SECRET_ASSIGNMENT_RE, "[REDACTED_SECRET]")
     .replace(TOKEN_RE, "[REDACTED_TOKEN]"));
+  // Preserve non-sensitive escaped text byte-for-byte. A changed normalized
+  // form is returned only when redaction or another direct sanitizer did work.
+  return redacted === normalized ? value : redacted;
 }
 
 export function redactAdapterTranscript(text: string): string {
@@ -444,9 +464,40 @@ export function hermesReadOnlyBlockedResult(): ExecutionResult {
   };
 }
 
+function processContainmentBlockedResult(kind: Exclude<ExecutionAdapterKind, "fake" | "manual">, label: string): ExecutionResult {
+  return {
+    ok: false,
+    status: "blocked",
+    summary: `${label} executor is unavailable because strict process-group containment is unsupported on this platform.`,
+    filesChanged: [],
+    commandsRun: [],
+    findings: [{
+      id: `${kind}-process-containment-unavailable`,
+      title: `${label} process containment is unavailable`,
+      body: `${label} was not spawned because Legion cannot guarantee strict process-group/session containment for external specialist execution on this platform.`,
+      severity: "blocking"
+    }]
+  };
+}
+
+async function processContainmentBlockedBeforeSpawn(
+  request: ExecutionRequest,
+  kind: Exclude<ExecutionAdapterKind, "fake" | "manual">,
+  label: string
+): Promise<ExecutionResult> {
+  const result = processContainmentBlockedResult(kind, label);
+  const artifactRoot = artifactRepositoryRoot(request);
+  const text = `${result.summary}\n`;
+  await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text });
+  await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text });
+  await persistExecutionResult(request, result);
+  return result;
+}
+
 const hermesAdapter: ExecutionAdapter = {
   kind: "hermes",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "hermes", "Hermes Agent");
     if (request.readOnly) {
       const result = hermesReadOnlyBlockedResult();
       const artifactRoot = artifactRepositoryRoot(request);
@@ -548,6 +599,7 @@ interface GrokEnvelopeFailure {
 const grokAdapter: ExecutionAdapter = {
   kind: "grok",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "grok", "Grok Build");
     const timeoutMs = grokExecTimeoutMs();
     const args = grokExecArgs({
       repositoryRoot: request.repositoryRoot,
@@ -844,6 +896,7 @@ const manualAdapter: ExecutionAdapter = {
 const claudeAdapter: ExecutionAdapter = {
   kind: "claude",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "claude", "Claude");
     const args = claudeExecArgs({ readOnly: request.readOnly });
     const invocation = claudeInvocation(args);
     const processResult = await spawnWithInput(
@@ -1001,6 +1054,7 @@ function claudeFallbackSummary(
 const codexAdapter: ExecutionAdapter = {
   kind: "codex",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "codex", "Codex");
     const outputLastMessageArtifactPath = artifactPathSchema.parse(request.resultArtifactPath.replace(/executor-result\.json$/u, "executor-last-message.txt"));
     const outputLastMessagePath = await prepareProjectTextFile({
       repositoryRoot: artifactRepositoryRoot(request),
@@ -1328,7 +1382,17 @@ async function spawnWithInput(
     });
     const settleAfterQuiescence = async (exitCode: number): Promise<void> => {
       if (settled || terminationPending) return;
-      quiescenceProven = await processQuiescenceProven(child.pid);
+      if (!supportsIsolatedProcessGroup()) {
+        quiescenceProven = false;
+      } else if (child.pid !== undefined && processGroupStillExists(child.pid)) {
+        // A normal leader exit is not a safe completion boundary when a
+        // descendant remains. Kill the entire group before settling so no late
+        // write can race repository reconciliation or artifact publication.
+        quiescenceProven = false;
+        await terminateProcessTree(child.pid).catch(() => false);
+      } else {
+        quiescenceProven = true;
+      }
       settle(exitCode);
     };
     child.on("close", (code) => {
@@ -1419,7 +1483,17 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
     });
     const settleAfterQuiescence = async (exitCode: number): Promise<void> => {
       if (settled || terminationPending) return;
-      quiescenceProven = await processQuiescenceProven(child.pid);
+      if (!supportsIsolatedProcessGroup()) {
+        quiescenceProven = false;
+      } else if (child.pid !== undefined && processGroupStillExists(child.pid)) {
+        // A normal leader exit is not a safe completion boundary when a
+        // descendant remains. Kill the entire group before settling so no late
+        // write can race repository reconciliation or artifact publication.
+        quiescenceProven = false;
+        await terminateProcessTree(child.pid).catch(() => false);
+      } else {
+        quiescenceProven = true;
+      }
       settle(exitCode);
     };
     child.on("close", (code) => {
@@ -1429,18 +1503,10 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
 }
 
 function supportsIsolatedProcessGroup(): boolean {
-  // The Node detached/session semantics used here are POSIX-specific. Keep an
-  // explicit direct-PID fallback for platforms where that guarantee is absent.
+  if (adapterProcessContainmentOverride !== undefined) return adapterProcessContainmentOverride;
+  // Node's detached/session semantics used here are POSIX-specific. External
+  // adapters are refused before spawn when this guarantee is unavailable.
   return process.platform !== "win32" && process.platform !== "android";
-}
-
-function processStillExists(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return !(error !== null && typeof error === "object" && "code" in error && error.code === "ESRCH");
-  }
 }
 
 function processGroupStillExists(pid: number): boolean {
@@ -1461,15 +1527,15 @@ async function waitForQuiescence(check: () => boolean, timeoutMs: number): Promi
 
 async function processQuiescenceProven(pid: number | undefined): Promise<boolean> {
   if (pid === undefined) return true;
-  const stillExists = () => supportsIsolatedProcessGroup()
-    ? processGroupStillExists(pid)
-    : processStillExists(pid);
+  if (!supportsIsolatedProcessGroup()) return false;
+  const stillExists = () => processGroupStillExists(pid);
   await waitForQuiescence(stillExists, PROCESS_QUIESCENCE_TIMEOUT_MS);
   return !stillExists();
 }
 
 async function terminateProcessTree(pid: number | undefined): Promise<boolean> {
   if (pid === undefined) return true;
+  if (!supportsIsolatedProcessGroup()) return false;
   if (process.platform === "win32") {
     // Fixed executable and fixed argv: no shell interpolation or user-provided
     // process-kill command is involved. `/t` covers the Windows child tree.
@@ -1483,38 +1549,19 @@ async function terminateProcessTree(pid: number | undefined): Promise<boolean> {
     });
     return processQuiescenceProven(pid);
   }
-  if (supportsIsolatedProcessGroup()) {
-    try {
-      process.kill(-pid, "SIGTERM");
-    } catch {
-      // The process group may have exited between timeout and termination.
-    }
-    await waitForQuiescence(() => processGroupStillExists(pid), PROCESS_TERM_GRACE_MS);
-    if (processGroupStillExists(pid)) {
-      try {
-        process.kill(-pid, "SIGKILL");
-      } catch {
-        // The process group may have exited between the probes.
-      }
-    }
-    // Do not let reconciliation run while a descendant remains in the group.
-    return processQuiescenceProven(pid);
-  }
-
-  // Explicit weaker fallback for unsupported platforms: only the direct child
-  // can be signalled safely without a platform process-tree primitive.
   try {
-    process.kill(pid, "SIGTERM");
+    process.kill(-pid, "SIGTERM");
   } catch {
-    // The process may have exited just before the timeout handler ran.
+    // The process group may have exited between timeout and termination.
   }
-  await waitForQuiescence(() => processStillExists(pid), PROCESS_TERM_GRACE_MS);
-  if (processStillExists(pid)) {
+  await waitForQuiescence(() => processGroupStillExists(pid), PROCESS_TERM_GRACE_MS);
+  if (processGroupStillExists(pid)) {
     try {
-      process.kill(pid, "SIGKILL");
+      process.kill(-pid, "SIGKILL");
     } catch {
-      // The process may already be gone.
+      // The process group may have exited between the probes.
     }
   }
+  // Do not let reconciliation run while a descendant remains in the group.
   return processQuiescenceProven(pid);
 }
