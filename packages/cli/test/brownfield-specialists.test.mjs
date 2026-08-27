@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -21,6 +21,7 @@ import {
 import * as specialistModule from "../dist/workflow/brownfield-specialists.js";
 import * as adapterModule from "../dist/workflow/executor/adapters.js";
 import { selectExecutionAdapterKind } from "../dist/workflow/executor/adapters.js";
+import { directoryLinkType, requireDirSymlink } from "../../../tests/helpers/symlink-capability.mjs";
 
 const SOURCE_SHA = "a".repeat(64);
 const SQLITE_SHA = "b".repeat(64);
@@ -216,7 +217,8 @@ process.stdin.on("end", () => {
 `;
 }
 
-function grokSpecialistShimSource() {
+function grokSpecialistShimSource(type = "result", includeType = true, directPayload = false) {
+  const typeField = includeType ? `type: ${JSON.stringify(type)}, ` : "";
   return `#!/usr/bin/env node
 const fs = require("node:fs");
 const args = process.argv;
@@ -224,9 +226,27 @@ const prompt = fs.readFileSync(args[args.indexOf("--prompt-file") + 1], "utf8");
 const specialist = /You are the ([a-z-]+) assessor/u.exec(prompt)?.[1] ?? "architecture";
 const id = specialist === "architecture" ? "af_111111111111111111111111" : "af_222222222222222222222222";
 const specialistOutput = { findings: [{ id, specialist, title: "Bounded fixture finding", statement: "The supplied structural evidence identifies a review point.", severity: "moderate", confidence: "medium", evidence: [{ kind: "source-file", path: "src/app.ts", sha256: ${JSON.stringify(SOURCE_SHA)}, note: "bounded source fixture" }], assumptions: [], recommendation: "Review the referenced evidence with an approved verification command." }], assumptions: [] };
-const result = { status: "succeeded", summary: "Grok completed.", filesChanged: [], commandsRun: [], findings: [], structuredOutput: JSON.stringify(specialistOutput) };
-const envelope = { type: "result", text: JSON.stringify(result), stopReason: "end_turn", sessionId: "session_fixture", requestId: "request_fixture" };
+const result = ${directPayload ? "specialistOutput" : "{ status: \"succeeded\", summary: \"Grok completed.\", filesChanged: [], commandsRun: [], findings: [], structuredOutput: JSON.stringify(specialistOutput) }"};
+const envelope = { ${typeField}text: JSON.stringify(result), stopReason: "end_turn", sessionId: "session_fixture", requestId: "request_fixture" };
 process.stdout.write(JSON.stringify(envelope));
+`;
+}
+
+function claudeDescendantShimSource() {
+  const descendantSource = "const fs = require('node:fs'); const path = require('node:path'); setTimeout(() => fs.writeFileSync(path.join(process.cwd(), 'late-descendant.txt'), 'late descendant mutation\\n', 'utf8'), 500);";
+  return `#!/usr/bin/env node
+const { spawn } = require("node:child_process");
+const descendant = spawn(process.execPath, ["-e", ${JSON.stringify(descendantSource)}], { detached: false, stdio: "ignore" });
+descendant.on("spawn", () => process.stdout.write("descendant-ready\\n"));
+setTimeout(() => {}, 10_000);
+`;
+}
+
+function claudeSymlinkTargetMutationShimSource() {
+  return `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+fs.writeFileSync(path.join(process.cwd(), "linked-outside", "pwned.txt"), "outside mutation\\n", "utf8");
 `;
 }
 
@@ -702,6 +722,29 @@ test("sanitizes direct Claude and Codex result artifacts before cleanup can fail
   }
 });
 
+test("sanitizes direct adapter artifacts even when no isolated artifact root is supplied", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-adapter-default-privacy-"));
+  const previousPlan = process.env.LEGION_FAKE_EXECUTOR_PLAN;
+  const secret = "default-artifact-secret";
+  process.env.LEGION_FAKE_EXECUTOR_PLAN = JSON.stringify({ status: "succeeded", summary: `password=${secret}` });
+  try {
+    const request = directAdapterRequest(repositoryRoot, "fake");
+    delete request.artifactRepositoryRoot;
+    const result = await adapterModule.adapterForKind("fake").run(request);
+    assert.equal(result.status, "succeeded");
+    const raw = await readFile(request.rawLogAbsolutePath, "utf8");
+    const persisted = await readFile(request.resultAbsolutePath, "utf8");
+    assert.equal(raw.includes(secret), false);
+    assert.equal(raw.includes("password"), false);
+    assert.equal(persisted.includes(secret), false);
+    assert.equal(persisted.includes("password"), false);
+  } finally {
+    if (previousPlan === undefined) delete process.env.LEGION_FAKE_EXECUTOR_PLAN;
+    else process.env.LEGION_FAKE_EXECUTOR_PLAN = previousPlan;
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
 test("does not let a nonzero Claude or Codex exit report a succeeded model envelope", async () => {
   for (const kind of ["claude", "codex"]) {
     const repositoryRoot = await mkdtemp(path.join(tmpdir(), `legion-brownfield-${kind}-exit-`));
@@ -1051,7 +1094,7 @@ test("contains external adapters that mutate repository files and directory mode
       assert.equal(result.ok, false);
       assert.equal(result.findings.length, 0);
       assert.equal(result.assumptions.length, 2);
-      assert.ok(result.executionRecords.every((record) => record.status === "failed"), JSON.stringify(result.executionRecords));
+      assert.ok(result.executionRecords.every((record) => record.status === "blocked"), JSON.stringify(result.executionRecords));
       assert.ok(result.executionRecords.every((record) => /read-only|mutat|changed|cleanup|restore/iu.test(record.diagnostic)));
     });
     await assert.rejects(readFile(path.join(repositoryRoot, "pwned.txt"), "utf8"), { code: "ENOENT" });
@@ -1096,7 +1139,119 @@ test("restores root and nested directory modes after an in-process callback chmo
   }
 });
 
-test("normalizes a valid Grok envelope's nested specialist payload and closes evidence", async () => {
+test("kills a descendant in the POSIX process group before returning from timeout", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-descendant-"));
+  const previousTimeout = process.env.LEGION_CLAUDE_EXEC_TIMEOUT_MS;
+  process.env.LEGION_CLAUDE_EXEC_TIMEOUT_MS = "150";
+  try {
+    await withExecutableShim("claude", claudeDescendantShimSource(), async () => {
+      const result = await adapterModule.adapterForKind("claude").run(directAdapterRequest(repositoryRoot, "claude"));
+      assert.equal(result.ok, false);
+      assert.equal(result.status, "blocked");
+      assert.ok(result.findings.some((finding) => finding.id === "claude-executor-timeout"));
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await assert.rejects(readFile(path.join(repositoryRoot, "late-descendant.txt"), "utf8"), { code: "ENOENT" });
+    });
+  } finally {
+    if (previousTimeout === undefined) delete process.env.LEGION_CLAUDE_EXEC_TIMEOUT_MS;
+    else process.env.LEGION_CLAUDE_EXEC_TIMEOUT_MS = previousTimeout;
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("blocks external specialist execution before a repository symlink can reach outside", async (t) => {
+  if (!requireDirSymlink(t)) return;
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-symlink-repository-"));
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-symlink-outside-"));
+  try {
+    await symlink(outsideRoot, path.join(repositoryRoot, "linked-outside"), directoryLinkType());
+    await withExecutableShim("claude", claudeSymlinkTargetMutationShimSource(), async () => {
+      const result = await runBrownfieldSpecialists({
+        ...input({ repositoryRoot }),
+        executor: "claude",
+        execute: undefined
+      });
+      assert.equal(result.ok, false);
+      assert.equal(result.findings.length, 0);
+      assert.equal(result.assumptions.length, 2);
+      assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
+      assert.ok(result.executionRecords.every((record) => /symlink/iu.test(record.diagnostic)));
+    });
+    await assert.rejects(readFile(path.join(outsideRoot, "pwned.txt"), "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("blocks an in-process specialist callback before a repository symlink can reach outside", async (t) => {
+  if (!requireDirSymlink(t)) return;
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-in-process-symlink-repository-"));
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-in-process-symlink-outside-"));
+  let callbackInvoked = false;
+  try {
+    await symlink(outsideRoot, path.join(repositoryRoot, "linked-outside"), directoryLinkType());
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: async (request) => {
+        callbackInvoked = true;
+        await writeFile(path.join(request.repositoryRoot, "linked-outside", "pwned.txt"), "outside mutation\\n", "utf8");
+        return executeFinding(request);
+      }
+    });
+    assert.equal(callbackInvoked, false);
+    assert.equal(result.ok, false);
+    assert.equal(result.findings.length, 0);
+    assert.equal(result.assumptions.length, 2);
+    assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
+    assert.ok(result.executionRecords.every((record) => /symlink/iu.test(record.diagnostic)));
+    await assert.rejects(readFile(path.join(outsideRoot, "pwned.txt"), "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("fails closed for unknown and missing Grok result discriminators", async () => {
+  for (const [label, type, includeType] of [["unknown", "bogus", true], ["missing", "result", false]]) {
+    const repositoryRoot = await mkdtemp(path.join(tmpdir(), `legion-brownfield-grok-${label}-type-`));
+    const request = directAdapterRequest(repositoryRoot, "grok");
+    try {
+      await mkdir(path.dirname(request.promptAbsolutePath), { recursive: true });
+      await writeFile(request.promptAbsolutePath, "bounded specialist prompt", "utf8");
+      await withExecutableShim("grok", grokSpecialistShimSource(type, includeType), async () => {
+        const result = await adapterModule.adapterForKind("grok").run(request);
+        assert.equal(result.ok, false);
+        assert.equal(result.status, "failed");
+        assert.ok(result.findings.some((finding) => /invalid result/iu.test(finding.title)));
+        assert.ok(result.findings.some((finding) => /discriminator|type/iu.test(finding.body)));
+      });
+    } finally {
+      await rm(repositoryRoot, { recursive: true, force: true });
+    }
+  }
+});
+
+test("accepts a valid Grok result envelope with direct specialist payload", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-grok-direct-payload-"));
+  const request = directAdapterRequest(repositoryRoot, "grok");
+  try {
+    await mkdir(path.dirname(request.promptAbsolutePath), { recursive: true });
+    await writeFile(request.promptAbsolutePath, "You are the architecture assessor.", "utf8");
+    await withExecutableShim("grok", grokSpecialistShimSource("result", true, true), async () => {
+      const result = await adapterModule.adapterForKind("grok").run(request);
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.status, "succeeded");
+      assert.equal(typeof result.structuredOutput, "string");
+      assert.equal(JSON.parse(result.structuredOutput).findings.length, 1);
+      assert.deepEqual(JSON.parse(result.structuredOutput).assumptions, []);
+    });
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("blocks external Grok specialist orchestration without strict containment", async () => {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-grok-"));
   try {
     await withExecutableShim("grok", grokSpecialistShimSource(), async () => {
@@ -1105,11 +1260,11 @@ test("normalizes a valid Grok envelope's nested specialist payload and closes ev
         executor: "grok",
         execute: undefined
       });
-      assert.equal(result.ok, true);
-      assert.equal(result.findings.length, 2);
-      assert.equal(result.assumptions.length, 0);
-      assert.ok(result.executionRecords.every((record) => record.status === "succeeded"));
-      assert.ok(result.findings.every((finding) => finding.evidence.some((entry) => entry.path === SOURCE_PATH)));
+      assert.equal(result.ok, false);
+      assert.equal(result.findings.length, 0);
+      assert.equal(result.assumptions.length, 2);
+      assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
+      assert.ok(result.executionRecords.every((record) => /strict OS-level read-only containment/iu.test(record.diagnostic)));
     });
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });

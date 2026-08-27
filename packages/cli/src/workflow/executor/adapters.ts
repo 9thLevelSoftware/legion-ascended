@@ -47,6 +47,9 @@ const MAX_URL_LENGTH = 64 * 1024;
 export const MAX_ADAPTER_OUTPUT_BYTES = 1 * 1024 * 1024;
 const ADAPTER_OUTPUT_TRUNCATION_MARKER = "\n[ADAPTER_OUTPUT_TRUNCATED]";
 const BOUNDED_READ_CHUNK_BYTES = 64 * 1024;
+const PROCESS_TERM_GRACE_MS = 250;
+const PROCESS_QUIESCENCE_TIMEOUT_MS = 5_000;
+const PROCESS_QUIESCENCE_POLL_MS = 25;
 
 function isAsciiAlpha(character: string | undefined): boolean {
   return character !== undefined && ((character >= "a" && character <= "z") || (character >= "A" && character <= "Z"));
@@ -158,11 +161,10 @@ export function redactAdapterTranscript(text: string): string {
   });
 }
 
-// Claude Code has no OS-level sandbox flag, so a read-only run is enforced by
-// denying every tool that can mutate the repository. The guarded execution
-// harness is the second line of defense for a tool that still writes despite
-// this list, but leaving Bash enabled would make the adapter's read-only claim
-// false by construction.
+// Claude Code has no OS-level sandbox flag. These disallowed-tool arguments
+// reduce accidental writes, but they are not sufficient containment for
+// specialist orchestration because a child can still spawn an uncontained
+// descendant. The orchestration boundary must gate this adapter separately.
 const CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"] as const;
 
 export function claudeExecArgs(input: {
@@ -297,12 +299,14 @@ function artifactRepositoryRoot(request: ExecutionRequest): string {
   return request.artifactRepositoryRoot ?? request.repositoryRoot;
 }
 
-function isolatedArtifactText(request: ExecutionRequest, text: string): string {
-  return request.artifactRepositoryRoot === undefined ? text : redactAdapterTranscript(text);
+function isolatedArtifactText(_request: ExecutionRequest, text: string): string {
+  // Adapter-owned artifacts are persistent outputs even when a caller does not
+  // request an isolated root. Never allow the compatibility fallback to write
+  // the raw transcript/result bytes.
+  return redactAdapterTranscript(text);
 }
 
-function isolatedExecutionResult(request: ExecutionRequest, result: ExecutionResult): ExecutionResult {
-  if (request.artifactRepositoryRoot === undefined) return result;
+function isolatedExecutionResult(_request: ExecutionRequest, result: ExecutionResult): ExecutionResult {
   return {
     ...(result.structuredOutput === undefined ? {} : { structuredOutput: redactAdapterTranscript(result.structuredOutput) }),
     ok: result.ok,
@@ -470,9 +474,11 @@ const hermesAdapter: ExecutionAdapter = {
     const parsed = parseResultFromText(rawOutput);
     const status: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.outputLimitExceeded || processResult.exitCode !== 0
-        ? "failed"
-        : "succeeded";
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0
+          ? "failed"
+          : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
       status,
       summary: processResult.exitCode === 0
@@ -481,6 +487,13 @@ const hermesAdapter: ExecutionAdapter = {
       rawOutput,
       exitCode: processResult.exitCode
     });
+    const resultStatus: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0
+          ? "failed"
+          : normalized.status;
     const hermesOutput = hermesStructuredOutput(parsed);
     const withStructured: ExecutionResult = hermesOutput === undefined
       ? normalized
@@ -496,14 +509,22 @@ const hermesAdapter: ExecutionAdapter = {
     } else if (processResult.outputLimitExceeded) {
       blockingFindings.push(outputLimitFinding("Hermes Agent", "hermes-executor-output-limit"));
     }
-    const result: ExecutionResult = blockingFindings.length === 0
-      ? withStructured
-      : {
-          ...withStructured,
-          ok: false,
-          status: processResult.timedOut ? "blocked" : "failed",
-          findings: [...withStructured.findings, ...blockingFindings]
-        };
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "hermes-executor-process-not-quiescent",
+        title: "Hermes executor descendants were not quiescent",
+        body: "Hermes exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
+    const result: ExecutionResult = {
+      ...withStructured,
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0
+        ? resultStatus
+        : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
+    };
     const redacted = redactAdapterTranscript(rawOutput);
     const artifactRoot = artifactRepositoryRoot(request);
     await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`) });
@@ -551,7 +572,8 @@ const grokAdapter: ExecutionAdapter = {
         stderr: "Grok Build executable could not be started.",
         timedOut: false,
         outputLimitExceeded: false,
-        timeoutMs
+        timeoutMs,
+        quiescenceProven: true
       };
     }
 
@@ -561,11 +583,13 @@ const grokAdapter: ExecutionAdapter = {
     const envelope = parseGrokEnvelope(processResult.stdout);
     const processStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.outputLimitExceeded || processResult.exitCode !== 0
-        ? "failed"
-        : envelope.ok
-          ? "succeeded"
-          : "failed";
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0
+          ? "failed"
+          : envelope.ok
+            ? "succeeded"
+            : "failed";
     const parsed = envelope.ok ? envelope.result : undefined;
     const normalized = normalizeExecutionResult(parsed, {
       status: processStatus,
@@ -583,12 +607,22 @@ const grokAdapter: ExecutionAdapter = {
     // become a success merely because its last JSON body said `succeeded`.
     const resultStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.outputLimitExceeded || processResult.exitCode !== 0 || !envelope.ok
-        ? "failed"
-        : normalized.status;
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0 || !envelope.ok
+          ? "failed"
+          : normalized.status;
     const findings: ExecutionFinding[] = [];
     if (processResult.outputLimitExceeded) {
       findings.push(outputLimitFinding("Grok Build", "grok-executor-output-limit"));
+    }
+    if (!processResult.quiescenceProven) {
+      findings.push({
+        id: "grok-executor-process-not-quiescent",
+        title: "Grok Build descendants were not quiescent",
+        body: "Grok Build exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
     }
     if (!envelope.ok) {
       findings.push({
@@ -649,7 +683,14 @@ function parseGrokEnvelope(stdout: string): GrokEnvelopeSuccess | GrokEnvelopeFa
     return { ok: false, message: "Grok Build output was not one complete JSON envelope." };
   }
   if (!isRecordValue(value)) return { ok: false, message: "Grok Build output was not a JSON object envelope." };
-  if (value["type"] === "error") return { ok: false, message: "Grok Build reported an error envelope." };
+  const discriminator = value["type"];
+  if (discriminator === "error") return { ok: false, message: "Grok Build reported an error envelope." };
+  if (discriminator !== "result") {
+    return { ok: false, message: "Grok Build result envelope has an unknown or missing type discriminator." };
+  }
+  if (!hasRequiredKeys(value, ["type", "text", "stopReason", "sessionId", "requestId"])) {
+    return { ok: false, message: "Grok Build result envelope is missing required core fields." };
+  }
   const text = value["text"];
   if (typeof text !== "string" || text.trim().length === 0) {
     return { ok: false, message: "Grok Build result envelope is missing non-empty text." };
@@ -680,6 +721,10 @@ function parseGrokEnvelope(stdout: string): GrokEnvelopeSuccess | GrokEnvelopeFa
 }
 
 function isCompleteGrokResult(value: unknown): value is Record<string, unknown> {
+  return isCompleteExecutionResult(value) || isCompleteSpecialistPayload(value);
+}
+
+function isCompleteExecutionResult(value: unknown): value is Record<string, unknown> {
   if (!isRecordValue(value)) return false;
   return (
     (value["status"] === "succeeded" || value["status"] === "failed" || value["status"] === "blocked") &&
@@ -689,6 +734,19 @@ function isCompleteGrokResult(value: unknown): value is Record<string, unknown> 
     Array.isArray(value["commandsRun"]) &&
     Array.isArray(value["findings"])
   );
+}
+
+function isCompleteSpecialistPayload(value: unknown): value is Record<string, unknown> {
+  if (!isRecordValue(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length > 0 &&
+    keys.every((key) => key === "findings" || key === "assumptions") &&
+    (value["findings"] === undefined || Array.isArray(value["findings"])) &&
+    (value["assumptions"] === undefined || Array.isArray(value["assumptions"]));
+}
+
+function hasRequiredKeys(value: Record<string, unknown>, required: readonly string[]): boolean {
+  return required.every((key) => Object.hasOwn(value, key));
 }
 
 function isRecordValue(value: unknown): value is Record<string, unknown> {
@@ -815,9 +873,11 @@ const claudeAdapter: ExecutionAdapter = {
     // zero exit code -- claude exits 0 on an API error it reports in-band.
     const processStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true
-        ? "failed"
-        : "succeeded";
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true
+          ? "failed"
+          : "succeeded";
 
     const normalized = normalizeExecutionResult(parsed, {
       status: processStatus,
@@ -827,9 +887,11 @@ const claudeAdapter: ExecutionAdapter = {
     });
     const resultStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true
-        ? "failed"
-        : normalized.status;
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true
+          ? "failed"
+          : normalized.status;
     const withStructured: ExecutionResult = lastMessage.length > 0 && resultStatus === "succeeded"
       ? { ...normalized, structuredOutput: lastMessage }
       : normalized;
@@ -852,6 +914,14 @@ const claudeAdapter: ExecutionAdapter = {
         severity: "blocking"
       });
     }
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "claude-executor-process-not-quiescent",
+        title: "Claude executor descendants were not quiescent",
+        body: "Claude exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
     // A denied permission is why a task can report success having done nothing,
     // so it is recorded as a finding rather than left in the transcript for a
     // human to notice.
@@ -867,7 +937,9 @@ const claudeAdapter: ExecutionAdapter = {
     const result: ExecutionResult = {
       ...withStructured,
       ok: resultStatus === "succeeded" && blockingFindings.length === 0,
-      status: blockingFindings.length === 0 ? resultStatus : processResult.timedOut ? "blocked" : "failed",
+      status: blockingFindings.length === 0
+        ? resultStatus
+        : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
       findings: [...withStructured.findings, ...blockingFindings]
     };
 
@@ -965,7 +1037,9 @@ const codexAdapter: ExecutionAdapter = {
     const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
     const processStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : "succeeded";
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
       status: processStatus,
       summary: processResult.timedOut
@@ -976,9 +1050,11 @@ const codexAdapter: ExecutionAdapter = {
     });
     const resultStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : outputLimitExceeded || processResult.exitCode !== 0
-        ? "failed"
-        : normalized.status;
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : outputLimitExceeded || processResult.exitCode !== 0
+          ? "failed"
+          : normalized.status;
     // Kept separate from rawOutput, which is process output. Downstream typed
     // parsing needs the reply the contract asked for, not the log around it.
     // Never claim a structured reply after a failed child process.
@@ -1003,10 +1079,20 @@ const codexAdapter: ExecutionAdapter = {
         severity: "blocking"
       });
     }
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "codex-executor-process-not-quiescent",
+        title: "Codex executor descendants were not quiescent",
+        body: "Codex exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
     const result: ExecutionResult = {
       ...withStructured,
       ok: resultStatus === "succeeded" && blockingFindings.length === 0,
-      status: blockingFindings.length === 0 ? resultStatus : processResult.timedOut ? "blocked" : "failed",
+      status: blockingFindings.length === 0
+        ? resultStatus
+        : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
       findings: [...withStructured.findings, ...blockingFindings]
     };
     const redacted = redactAdapterTranscript(rawOutput);
@@ -1146,6 +1232,16 @@ function outputLimitFinding(executorLabel: string, findingId: string): Execution
   };
 }
 
+interface SpawnedProcessResult {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly timedOut: boolean;
+  readonly outputLimitExceeded: boolean;
+  readonly timeoutMs: number;
+  readonly quiescenceProven: boolean;
+}
+
 async function spawnWithInput(
   command: string,
   args: readonly string[],
@@ -1153,46 +1249,59 @@ async function spawnWithInput(
   cwd: string,
   timeoutMs: number,
   executorLabel: string
-): Promise<{
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly timedOut: boolean;
-  readonly outputLimitExceeded: boolean;
-  readonly timeoutMs: number;
-}> {
+): Promise<SpawnedProcessResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
       windowsHide: true,
+      detached: supportsIsolatedProcessGroup(),
       stdio: ["pipe", "pipe", "pipe"]
     });
     const output = new BoundedOutputCapture();
     let settled = false;
     let timedOut = false;
     let outputLimitExceeded = false;
-    let outputLimitTimer: NodeJS.Timeout | undefined;
+    let terminationPending = false;
+    let terminationExitCode: number | undefined;
+    let terminationPromise: Promise<void> | undefined;
+    let spawnError: Error | undefined;
+    let quiescenceProven = true;
 
     const settle = (exitCode: number) => {
-      if (settled) return;
+      if (settled || terminationPending) return;
       settled = true;
       clearTimeout(timeout);
-      if (outputLimitTimer !== undefined) clearTimeout(outputLimitTimer);
+      if (spawnError !== undefined) {
+        reject(spawnError);
+        return;
+      }
       resolve({
         exitCode,
         stdout: output.stdout,
         stderr: output.stderr,
         timedOut,
         outputLimitExceeded,
-        timeoutMs
+        timeoutMs,
+        quiescenceProven
+      });
+    };
+
+    const requestTermination = (exitCode: number): void => {
+      if (terminationExitCode === undefined) terminationExitCode = exitCode;
+      if (terminationPromise !== undefined) return;
+      terminationPending = true;
+      terminationPromise = terminateProcessTree(child.pid).catch(() => false).then((proven) => {
+        quiescenceProven = proven;
+        terminationPending = false;
+        settle(terminationExitCode ?? exitCode);
       });
     };
 
     const timeout = setTimeout(() => {
+      if (settled) return;
       timedOut = true;
       output.append("stderr", `${output.stderr.length === 0 ? "" : "\n"}${executorLabel} executor timed out after ${timeoutMs}ms.`);
-      terminateProcessTree(child.pid);
-      setTimeout(() => settle(124), 1_000).unref();
+      requestTermination(124);
     }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
@@ -1200,8 +1309,7 @@ async function spawnWithInput(
       output.append("stdout", String(chunk));
       if (output.outputLimitExceeded && !outputLimitExceeded) {
         outputLimitExceeded = true;
-        terminateProcessTree(child.pid);
-        outputLimitTimer = setTimeout(() => settle(125), 1_000);
+        requestTermination(125);
       }
     });
     child.stderr.setEncoding("utf8");
@@ -1209,36 +1317,33 @@ async function spawnWithInput(
       output.append("stderr", String(chunk));
       if (output.outputLimitExceeded && !outputLimitExceeded) {
         outputLimitExceeded = true;
-        terminateProcessTree(child.pid);
-        outputLimitTimer = setTimeout(() => settle(125), 1_000);
+        requestTermination(125);
       }
     });
     child.stdin.on("error", () => {});
     child.on("error", (error) => {
       if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(error);
+      spawnError = error;
+      requestTermination(1);
     });
+    const settleAfterQuiescence = async (exitCode: number): Promise<void> => {
+      if (settled || terminationPending) return;
+      quiescenceProven = await processQuiescenceProven(child.pid);
+      settle(exitCode);
+    };
     child.on("close", (code) => {
-      settle(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
+      void settleAfterQuiescence(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
     });
     child.stdin.end(input);
   });
 }
 
-async function spawnWithoutInput(command: string, args: readonly string[], cwd: string, timeoutMs: number): Promise<{
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly timedOut: boolean;
-  readonly outputLimitExceeded: boolean;
-  readonly timeoutMs: number;
-}> {
+async function spawnWithoutInput(command: string, args: readonly string[], cwd: string, timeoutMs: number): Promise<SpawnedProcessResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
       windowsHide: true,
+      detached: supportsIsolatedProcessGroup(),
       // Grok consumes the prompt from --prompt-file. `ignore` is deliberate:
       // Legion neither writes a prompt to stdin nor leaves a pipe for a child
       // to mistake for an interactive session.
@@ -1248,28 +1353,47 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
     let settled = false;
     let timedOut = false;
     let outputLimitExceeded = false;
-    let outputLimitTimer: NodeJS.Timeout | undefined;
+    let terminationPending = false;
+    let terminationExitCode: number | undefined;
+    let terminationPromise: Promise<void> | undefined;
+    let spawnError: Error | undefined;
+    let quiescenceProven = true;
 
     const settle = (exitCode: number) => {
-      if (settled) return;
+      if (settled || terminationPending) return;
       settled = true;
       clearTimeout(timeout);
-      if (outputLimitTimer !== undefined) clearTimeout(outputLimitTimer);
+      if (spawnError !== undefined) {
+        reject(spawnError);
+        return;
+      }
       resolve({
         exitCode,
         stdout: output.stdout,
         stderr: output.stderr,
         timedOut,
         outputLimitExceeded,
-        timeoutMs
+        timeoutMs,
+        quiescenceProven
+      });
+    };
+
+    const requestTermination = (exitCode: number): void => {
+      if (terminationExitCode === undefined) terminationExitCode = exitCode;
+      if (terminationPromise !== undefined) return;
+      terminationPending = true;
+      terminationPromise = terminateProcessTree(child.pid).catch(() => false).then((proven) => {
+        quiescenceProven = proven;
+        terminationPending = false;
+        settle(terminationExitCode ?? exitCode);
       });
     };
 
     const timeout = setTimeout(() => {
+      if (settled) return;
       timedOut = true;
       output.append("stderr", `${output.stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`);
-      terminateProcessTree(child.pid);
-      setTimeout(() => settle(124), 1_000).unref();
+      requestTermination(124);
     }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
@@ -1277,8 +1401,7 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
       output.append("stdout", String(chunk));
       if (output.outputLimitExceeded && !outputLimitExceeded) {
         outputLimitExceeded = true;
-        terminateProcessTree(child.pid);
-        outputLimitTimer = setTimeout(() => settle(125), 1_000);
+        requestTermination(125);
       }
     });
     child.stderr.setEncoding("utf8");
@@ -1286,42 +1409,112 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
       output.append("stderr", String(chunk));
       if (output.outputLimitExceeded && !outputLimitExceeded) {
         outputLimitExceeded = true;
-        terminateProcessTree(child.pid);
-        outputLimitTimer = setTimeout(() => settle(125), 1_000);
+        requestTermination(125);
       }
     });
     child.on("error", (error) => {
       if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(error);
+      spawnError = error;
+      requestTermination(1);
     });
+    const settleAfterQuiescence = async (exitCode: number): Promise<void> => {
+      if (settled || terminationPending) return;
+      quiescenceProven = await processQuiescenceProven(child.pid);
+      settle(exitCode);
+    };
     child.on("close", (code) => {
-      settle(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
+      void settleAfterQuiescence(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
     });
   });
 }
 
-function terminateProcessTree(pid: number | undefined): void {
-  if (pid === undefined) return;
-  if (process.platform === "win32") {
-    const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
-      windowsHide: true,
-      stdio: "ignore"
-    });
-    killer.on("error", () => {});
-    return;
+function supportsIsolatedProcessGroup(): boolean {
+  // The Node detached/session semantics used here are POSIX-specific. Keep an
+  // explicit direct-PID fallback for platforms where that guarantee is absent.
+  return process.platform !== "win32" && process.platform !== "android";
+}
+
+function processStillExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !(error !== null && typeof error === "object" && "code" in error && error.code === "ESRCH");
   }
+}
+
+function processGroupStillExists(pid: number): boolean {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    return !(error !== null && typeof error === "object" && "code" in error && error.code === "ESRCH");
+  }
+}
+
+async function waitForQuiescence(check: () => boolean, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (check() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, PROCESS_QUIESCENCE_POLL_MS));
+  }
+}
+
+async function processQuiescenceProven(pid: number | undefined): Promise<boolean> {
+  if (pid === undefined) return true;
+  const stillExists = () => supportsIsolatedProcessGroup()
+    ? processGroupStillExists(pid)
+    : processStillExists(pid);
+  await waitForQuiescence(stillExists, PROCESS_QUIESCENCE_TIMEOUT_MS);
+  return !stillExists();
+}
+
+async function terminateProcessTree(pid: number | undefined): Promise<boolean> {
+  if (pid === undefined) return true;
+  if (process.platform === "win32") {
+    // Fixed executable and fixed argv: no shell interpolation or user-provided
+    // process-kill command is involved. `/t` covers the Windows child tree.
+    await new Promise<void>((resolve) => {
+      const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
+        windowsHide: true,
+        stdio: "ignore"
+      });
+      killer.on("error", () => resolve());
+      killer.on("close", () => resolve());
+    });
+    return processQuiescenceProven(pid);
+  }
+  if (supportsIsolatedProcessGroup()) {
+    try {
+      process.kill(-pid, "SIGTERM");
+    } catch {
+      // The process group may have exited between timeout and termination.
+    }
+    await waitForQuiescence(() => processGroupStillExists(pid), PROCESS_TERM_GRACE_MS);
+    if (processGroupStillExists(pid)) {
+      try {
+        process.kill(-pid, "SIGKILL");
+      } catch {
+        // The process group may have exited between the probes.
+      }
+    }
+    // Do not let reconciliation run while a descendant remains in the group.
+    return processQuiescenceProven(pid);
+  }
+
+  // Explicit weaker fallback for unsupported platforms: only the direct child
+  // can be signalled safely without a platform process-tree primitive.
   try {
     process.kill(pid, "SIGTERM");
   } catch {
     // The process may have exited just before the timeout handler ran.
   }
-  setTimeout(() => {
+  await waitForQuiescence(() => processStillExists(pid), PROCESS_TERM_GRACE_MS);
+  if (processStillExists(pid)) {
     try {
       process.kill(pid, "SIGKILL");
     } catch {
       // The process may already be gone.
     }
-  }, 1_000).unref();
+  }
+  return processQuiescenceProven(pid);
 }

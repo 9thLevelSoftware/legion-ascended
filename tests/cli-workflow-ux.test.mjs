@@ -518,6 +518,7 @@ function grokRunRequest(root, { readOnly = false, base = "chg_grok", run = "run_
 
 function grokEnvelope(text, overrides = {}) {
   return JSON.stringify({
+    type: "result",
     text,
     stopReason: "completed",
     sessionId: "sess_grok_test",
@@ -728,11 +729,11 @@ test("workflow grok executor normalizes the JSON envelope and never sends prompt
     findings: [],
     reviewVerdicts: { specification: "pass", integration: "pass", evidence: "pass" }
   });
-  await withGrokShim({ stdout: grokEnvelope(contract) }, async (root) => {
+  await withGrokShim({ stdout: grokEnvelope(contract, { costUsd: 0.01 }) }, async (root) => {
     const recordPath = path.join(root, "grok-record.json");
     // Install a second shim with a fixture-local record destination; this keeps
     // the invocation evidence inside the temporary repository.
-    const binDir = await installGrokShim(root, { stdout: grokEnvelope(contract), recordPath });
+    const binDir = await installGrokShim(root, { stdout: grokEnvelope(contract, { costUsd: 0.01 }), recordPath });
     process.env.PATH = process.platform === "win32" ? `${binDir}${path.delimiter}${process.env.PATH ?? ""}` : binDir;
     const result = await adapters.adapterForKind("grok").run(grokRunRequest(root));
 

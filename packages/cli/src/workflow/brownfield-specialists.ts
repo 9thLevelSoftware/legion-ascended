@@ -1067,6 +1067,34 @@ function cleanupFailureResult(error: unknown): ExecutionResult {
   };
 }
 
+function assertNoRepositorySymlinks(snapshot: RepositorySnapshot): void {
+  const symlinks = [...snapshot.entries()]
+    .filter(([, entry]) => entry.kind === "symlink")
+    .map(([relativePath]) => relativePath.length === 0 ? "repository root" : relativePath)
+    .sort(compareStrings);
+  if (symlinks.length === 0) return;
+  const error = new Error(
+    `Specialist execution is blocked because the repository contains symlinked paths: ${symlinks.slice(0, 8).join(", ")}${symlinks.length > 8 ? `, and ${symlinks.length - 8} more` : ""}.`
+  ) as Error & { code?: string };
+  error.code = "SPECIALIST_SYMLINK_BLOCKED";
+  throw error;
+}
+
+function specialistAdapterHasStrictReadOnlyContainment(executor: ExecutionAdapterKind): boolean {
+  // The generic Claude, Codex, Hermes, and Grok adapters expose CLI-level
+  // read-only flags, but none provides an OS-level boundary that contains
+  // detached or setsid descendants. Only non-process adapters are safe here.
+  return executor === "fake" || executor === "manual";
+}
+
+function externalAdapterContainmentError(executor: ExecutionAdapterKind): Error & { readonly code: string } {
+  const error = new Error(
+    `External ${executor} specialist execution is blocked because no strict OS-level read-only containment is available.`
+  ) as Error & { code: string };
+  error.code = "SPECIALIST_CONTAINMENT_UNAVAILABLE";
+  return error;
+}
+
 async function runWithExistingAdapter(input: {
   readonly repositoryRoot: string;
   readonly assessmentId: string;
@@ -1119,14 +1147,20 @@ async function runWithExistingAdapter(input: {
       redactedLogArtifactPath: redacted.parsed,
       redactedLogAbsolutePath: redacted.absolutePath
     };
-    // The adapter receives the real repository as its working directory. Its
-    // CLI flags are advisory, so snapshot the bounded tree before spawning and
-    // enforce the read-only contract independently of the adapter's report.
+    // The adapter receives the real repository as its working directory. CLI
+    // read-only flags are advisory, and snapshot/restore cannot contain a
+    // detached or setsid descendant. Refuse external adapters unless their
+    // implementation provides a strict OS-level boundary.
     repositoryBaseline = await snapshotRepository(input.repositoryRoot);
-    try {
-      adapterResult = await adapterForKind(input.executor).run(request);
-    } catch (error) {
-      executionFailure = { error };
+    assertNoRepositorySymlinks(repositoryBaseline);
+    if (!specialistAdapterHasStrictReadOnlyContainment(input.executor)) {
+      executionFailure = { error: externalAdapterContainmentError(input.executor) };
+    } else {
+      try {
+        adapterResult = await adapterForKind(input.executor).run(request);
+      } catch (error) {
+        executionFailure = { error };
+      }
     }
   } catch (error) {
     executionFailure = { error };
@@ -1636,6 +1670,7 @@ async function runReadOnlyInProcessCallback(input: {
   readonly baseline?: RepositorySnapshot;
 }): Promise<unknown> {
   const before = input.baseline ?? await snapshotRepository(input.repositoryRoot);
+  assertNoRepositorySymlinks(before);
   // Keep the callback promise alive after the observation timeout. An
   // in-process callback cannot be cancelled safely, so returning at the race
   // boundary would let it mutate the repository while the next specialist is
@@ -1771,7 +1806,16 @@ async function runOne(input: {
     outcome = { status: parsedEnvelope.status, raw, ...(parsedEnvelope.payload === undefined ? {} : { payload: parsedEnvelope.payload }), diagnostic: parsedEnvelope.diagnostic };
   } catch (error) {
     const diagnostic = safeDiagnostic(error);
-    outcome = { status: (error as { readonly code?: unknown })?.code === "SPECIALIST_TIMEOUT" ? "blocked" : "failed", raw: error, diagnostic };
+    const errorCode = (error as { readonly code?: unknown })?.code;
+    outcome = {
+      status: errorCode === "SPECIALIST_TIMEOUT" ||
+        errorCode === "SPECIALIST_SYMLINK_BLOCKED" ||
+        errorCode === "SPECIALIST_CONTAINMENT_UNAVAILABLE"
+        ? "blocked"
+        : "failed",
+      raw: error,
+      diagnostic
+    };
   }
 
   let parsed: ParsedSpecialistOutput | undefined;
