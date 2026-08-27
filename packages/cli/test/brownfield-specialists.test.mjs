@@ -1294,6 +1294,39 @@ test("blocks an in-process specialist callback before a repository symlink can r
   }
 });
 
+test("blocks an in-process specialist callback that creates a symlink mid-run", async (t) => {
+  if (!requireDirSymlink(t)) return;
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-mid-run-symlink-repository-"));
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-mid-run-outside-"));
+  let callbackInvoked = false;
+  try {
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: async (request) => {
+        callbackInvoked = true;
+        // The callback creates the symlink after the baseline snapshot, then
+        // writes through it to the outside target. Restoration removes the
+        // repository-side symlink, but the external write is already done.
+        await symlink(outsideRoot, path.join(request.repositoryRoot, "linked-outside"), directoryLinkType());
+        await writeFile(path.join(request.repositoryRoot, "linked-outside", "pwned.txt"), "outside mutation\n", "utf8");
+        return executeFinding(request);
+      }
+    });
+    assert.equal(callbackInvoked, true);
+    assert.equal(result.ok, false);
+    assert.equal(result.findings.length, 0);
+    assert.ok(result.assumptions.length > 0);
+    assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
+    assert.ok(result.executionRecords.every((record) => /symlink/iu.test(record.diagnostic)));
+    // The repository-side symlink is restored away; the outside write is the
+    // known residual risk of the test-only in-process seam and is documented.
+    assert.equal(await lstat(path.join(repositoryRoot, "linked-outside")).then(() => true, () => false), false);
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
 test("returns a typed blocked result before spawning when process-group containment is unavailable", async () => {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-containment-capability-"));
   const markerPath = path.join(repositoryRoot, "spawned.txt");

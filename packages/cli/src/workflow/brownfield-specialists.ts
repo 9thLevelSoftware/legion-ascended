@@ -1418,6 +1418,13 @@ function mutationDiagnostic(changed: readonly string[]): string | undefined {
   );
 }
 
+function addedSymlinkPaths(before: RepositorySnapshot, after: RepositorySnapshot): string[] {
+  return [...after.entries()]
+    .filter(([relativePath, entry]) => entry.kind === "symlink" && before.get(relativePath) === undefined)
+    .map(([relativePath]) => repositoryChangeLabel("added", relativePath))
+    .sort(compareStrings);
+}
+
 async function removeRepositoryEntry(root: string, relativePath: string): Promise<void> {
   if (relativePath.length === 0) throw new Error("Refusing to remove the in-process specialist repository root.");
   const absolutePath = repositoryAbsolutePath(root, relativePath);
@@ -1708,20 +1715,33 @@ async function runReadOnlyInProcessCallback(input: {
   }
   const mutation = mutationDiagnostic(changedRepositoryPaths(before, after));
   if (mutation !== undefined) {
+    // If the callback created a symlink during execution, restoration cannot
+    // undo writes that flowed through it to an outside target. Detect that
+    // before cleanup and mark the run blocked with an explicit symlink
+    // diagnostic; the repository snapshot is still restored below.
+    const createdSymlinks = addedSymlinkPaths(before, after);
+    let cleanupError: Error | undefined;
     try {
       await restoreRepository(input.repositoryRoot, before, after);
     } catch (error) {
-      const cleanupDiagnostic = safeDiagnostic(error);
-      const restoreError = new Error(`${mutation} Read-only repository cleanup failed: ${cleanupDiagnostic}.`) as Error & { code?: string };
+      cleanupError = error instanceof Error ? error : new Error(safeDiagnostic(error));
+    }
+    if (cleanupError !== undefined) {
+      const restoreError = new Error(`${mutation} Read-only repository cleanup failed: ${safeDiagnostic(cleanupError)}.`) as Error & { code?: string };
       restoreError.code = "READ_ONLY_RESTORE_FAILED";
       throw restoreError;
     }
-    const diagnostic = callbackError === undefined
+    const symlinkDiagnostic = createdSymlinks.length === 0
       ? mutation
-      : `${safeDiagnostic(callbackError)} ${mutation}`;
+      : `In-process specialist callback created repository symlink(s) during execution: ${createdSymlinks.slice(0, 8).join(", ")}${createdSymlinks.length > 8 ? `, and ${createdSymlinks.length - 8} more` : ""}. External writes through those links cannot be undone; the result is blocked and the repository was restored.`;
+    const diagnostic = callbackError === undefined
+      ? symlinkDiagnostic
+      : `${safeDiagnostic(callbackError)} ${symlinkDiagnostic}`;
     const mutationError = new Error(diagnostic) as Error & { code?: string };
     if (isRecord(callbackError) && typeof callbackError["code"] === "string") {
       mutationError.code = callbackError["code"];
+    } else if (createdSymlinks.length > 0) {
+      mutationError.code = "SPECIALIST_SYMLINK_BLOCKED";
     }
     throw mutationError;
   }
