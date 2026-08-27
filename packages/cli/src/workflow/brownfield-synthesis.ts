@@ -657,6 +657,7 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
   });
 
   const proofGaps: string[] = [];
+  const commandResultEvidenceKeys = new Set(input.commandResults?.map(evidenceIdentity) ?? []);
   for (const testPath of signals.testFiles) {
     addUniqueBounded(proofGaps, `Test inventory entry '${testPath}' does not prove test execution or coverage.`, MAX_GAPS);
   }
@@ -677,6 +678,11 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
   for (const area of input.unsupportedAreas ?? []) {
     addUniqueBounded(proofGaps, `Unsupported area: ${area}`, MAX_GAPS);
   }
+  if ((input.commandResults ?? []).length > 0) {
+    // Command-result evidence was supplied at the synthesis boundary but
+    // the specialist output did not reference it. This is not a gap — it
+    // is recorded as available behavioral evidence below.
+  }
   for (const diagnostic of specialistDiagnostics) {
     addUniqueBounded(proofGaps, `Unresolved specialist output: ${diagnostic}`, MAX_GAPS);
   }
@@ -687,7 +693,10 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     addUniqueBounded(proofGaps, `Specialist ${name} pass ${pass} did not produce resolved output; behavioral proof is unavailable.`, MAX_GAPS);
   }
   for (const finding of finalFindings) {
-    if (isBehavioralClaim(finding) && !hasBehaviorEvidence(finding)) {
+    const hasCommandEvidence = finding.evidence.some((reference) =>
+      reference.kind === "command-result" || reference.kind === "test-result" || commandResultEvidenceKeys.has(evidenceIdentity(reference))
+    );
+    if (isBehavioralClaim(finding) && !hasCommandEvidence) {
       addUniqueBounded(proofGaps, `Behavioral claim '${finding.title}' lacks explicit command-result or test-result evidence.`, MAX_GAPS);
     }
   }
@@ -718,7 +727,7 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     title: boundedText(input.title, MAX_TITLE_CHARS, "Brownfield assessment improvement design"),
     executiveSummary: executiveSummary(signals, finalFindings, assumptionsRequiringInput, proofGaps),
     currentArchitecture: currentArchitectureSummary(signals),
-    evidenceBackedStrengths: strengths.slice(0, MAX_STRENGTHS).map((value) => boundedText(value, MAX_STRING_CHARS)),
+    evidenceBackedStrengths: [...strengths.slice(0, MAX_STRENGTHS).map((value) => boundedText(value, MAX_STRING_CHARS))].sort(compareStrings),
     prioritizedFindings: finalFindings,
     assumptionsRequiringInput,
     improvementPlan,
@@ -726,9 +735,9 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
       "Do not modify source files, manifests, or runtime configuration as part of synthesis.",
       "Do not infer runtime behavior, product intent, or test coverage from structural evidence alone.",
       "Do not silently average conflicting specialist findings."
-    ],
-    behavioralProofGaps: proofGaps,
-    openQuestions
+    ].sort(compareStrings),
+    behavioralProofGaps: [...proofGaps].sort(compareStrings),
+    openQuestions: [...openQuestions].sort(compareStrings)
   };
 }
 

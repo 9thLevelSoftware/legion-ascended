@@ -151,6 +151,19 @@ test("ranks by severity, confidence, evidence count, source path, and fact id", 
   assert.ok(design.assumptionsRequiringInput.some((entry) => /needs-user-input/i.test(entry.statement)));
 });
 
+test("produces deterministic output regardless of input ordering", () => {
+  const base = signals({ architectureSignals: [], summary: { ...signals().summary, unsupportedSignals: 0 } });
+  const f1 = finding({ id: "af_aaaaaaaaaaaaaaaaaaaaaaaa", title: "Finding A", severity: "major", confidence: "high", evidence: [sourceEvidence("src/a.ts")], statement: "A" });
+  const f2 = finding({ id: "af_bbbbbbbbbbbbbbbbbbbbbbbb", title: "Finding B", severity: "minor", confidence: "medium", evidence: [sourceEvidence("src/b.ts")], statement: "B" });
+  const spec = specialists({ findings: [f1, f2] });
+  const forward = synthesizeBrownfieldDesign({ signals: base, specialists: spec, openQuestions: ["Q2", "Q1"], strengths: ["S2", "S1"], unrunCommands: ["cmd:beta", "cmd:alpha"] });
+  const reversed = synthesizeBrownfieldDesign({ signals: base, specialists: spec, openQuestions: ["Q1", "Q2"], strengths: ["S1", "S2"], unrunCommands: ["cmd:alpha", "cmd:beta"] });
+  assert.deepEqual(forward, reversed);
+  for (const key of ["evidenceBackedStrengths", "behavioralProofGaps", "openQuestions", "nonGoals"]) {
+    assert.deepEqual(forward[key].slice().sort(), forward[key]);
+  }
+});
+
 test("separates static inventory and unsupported areas from behavioral proof", () => {
   const behaviorClaim = finding({ id: "af_aaaaaaaaaaaaaaaaaaaaaaaa", title: "Runtime behavior", statement: "The integration executes safely at runtime.", severity: "major", confidence: "low" });
   const design = synthesizeBrownfieldDesign({ signals: signals(), specialists: specialists({ findings: [behaviorClaim], executionRecords: [{ specialist: { name: "tests", pass: 1, focus: "proof" }, status: "failed" }] }), unrunCommands: ["pnpm test --filter runtime"], unsupportedAreas: ["binary parser"] });

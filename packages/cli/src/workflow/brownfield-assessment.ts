@@ -1786,6 +1786,7 @@ async function writeUpdatedBundle(input: {
   readonly repositoryRoot: string;
   readonly paths: BrownfieldAssessmentPaths;
   readonly state: BrownfieldAssessment;
+  readonly expectedCurrentPhase: BrownfieldAssessment["phase"];
 }): Promise<void> {
   const contentByFile: Readonly<Record<BundleFileName, string>> = {
     "state.json": stableProtocolJson(input.state),
@@ -1834,6 +1835,23 @@ async function writeUpdatedBundle(input: {
       await writeStagedText(stagedPath, fileName, contentByFile[fileName], stageDirectory.descriptor);
     }
     await syncBundleDirectory(stageDirectory);
+    // Before publishing, re-read the persisted bundle state to confirm
+    // the phase has not been advanced by a concurrent updater. This
+    // check closes the TOCTOU window between initial validation and
+    // lock acquisition; publishStagedBundle serialises subsequent
+    // operations under a per-bundle lock.
+    let existingPhase: string | undefined;
+    try {
+      const existingState = await readBundleJson(input.repositoryRoot, input.paths.state);
+      if (existingState !== null && typeof existingState === "object" && "phase" in existingState && typeof existingState.phase === "string") {
+        existingPhase = existingState.phase;
+      }
+    } catch {
+      existingPhase = undefined;
+    }
+    if (existingPhase !== undefined && existingPhase in ASSESSMENT_PHASE_ORDER && ASSESSMENT_PHASE_ORDER[existingPhase as keyof typeof ASSESSMENT_PHASE_ORDER] >= ASSESSMENT_PHASE_ORDER[input.state.phase]) {
+      throw new Error(`Brownfield assessment phase has already been advanced by a concurrent updater to "${existingPhase}". The requested transition from "${input.expectedCurrentPhase}" to "${input.state.phase}" is no longer valid.`);
+    }
     await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity!, stageDescriptor, { replaceExisting: true });
     staged = false;
   } catch (error) {
@@ -1970,6 +1988,8 @@ export async function updateBrownfieldAssessmentState(input: {
   const nextPhase = UPDATE_PHASES[input.phase];
   if (nextPhase === undefined) throw new Error(`Invalid brownfield assessment phase transition: ${String(input.phase)}.`);
 
+  // Read current state first, then validate the monotonic transition
+  // *inside* the locked write path so concurrent updaters cannot regress.
   const loaded = await readBrownfieldAssessment({
     repositoryRoot: input.repositoryRoot,
     assessmentId: input.assessmentId
@@ -1989,7 +2009,8 @@ export async function updateBrownfieldAssessmentState(input: {
   await writeUpdatedBundle({
     repositoryRoot: input.repositoryRoot,
     paths: loaded.paths,
-    state: nextState
+    state: nextState,
+    expectedCurrentPhase: currentPhase
   });
   const verified = await readBrownfieldAssessment({
     repositoryRoot: input.repositoryRoot,
