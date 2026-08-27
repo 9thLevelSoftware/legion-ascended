@@ -1177,19 +1177,24 @@ async function publishStagedBundle(
   stagedPath: string,
   parent: OpenedBundleDirectory,
   stageIdentity: BundleStat,
-  stageDescriptor?: BundleFileHandle
+  stageDescriptor?: BundleFileHandle,
+  options: { readonly replaceExisting?: boolean } = {}
 ): Promise<void> {
+  const replaceExisting = options.replaceExisting === true;
   const final = await resolveSafeBundlePath(parent.repositoryRoot, paths.root);
   const finalName = path.basename(final.absolutePath);
   const stagedName = path.basename(stagedPath);
   const lock = await acquirePublishLock(parent, final.absolutePath, finalName);
+  let previousName: string | undefined;
+  let previousPath: string | undefined;
+  let previousMoved = false;
   let operationError: unknown;
   let hasOperationError = false;
   try {
     const existing = parent.descriptor === undefined
       ? await lstatIfPresent(final.absolutePath)
       : await lstatIfPresent(descriptorChildPath(parent.descriptor, finalName));
-    if (existing !== undefined) {
+    if (existing !== undefined && !replaceExisting) {
       throw errorWithCode("EEXIST", `Brownfield assessment bundle already exists: ${paths.root}`);
     }
     if (parent.descriptor === undefined) {
@@ -1202,6 +1207,20 @@ async function publishStagedBundle(
       stageIdentity: stageIdentity!,
       ...(stageDescriptor === undefined ? {} : { stageDescriptor })
     });
+    if (existing !== undefined) {
+      previousName = `.${finalName}.${process.pid}.${randomUUID()}.previous`;
+      previousPath = path.join(parent.absolutePath, previousName);
+      if (parent.descriptor === undefined) {
+        await assertStableFallbackPath(final, paths.root, false);
+        await rename(final.absolutePath, previousPath);
+      } else {
+        await rename(
+          descriptorChildPath(parent.descriptor, finalName),
+          descriptorChildPath(parent.descriptor, previousName)
+        );
+      }
+      previousMoved = true;
+    }
     if (parent.descriptor === undefined) {
       await rename(stagedPath, final.absolutePath);
     } else {
@@ -1217,10 +1236,38 @@ async function publishStagedBundle(
       stageIdentity: stageIdentity!,
       ...(stageDescriptor === undefined ? {} : { stageDescriptor })
     });
+    if (previousMoved && previousName !== undefined) {
+      if (parent.descriptor === undefined) await removePathIfOwned(previousPath!, await lstat(previousPath!));
+      else await removeRelative(parent.descriptor, previousName);
+      previousMoved = false;
+    }
     await syncBundleDirectory(parent);
   } catch (error) {
     operationError = error;
     hasOperationError = true;
+    if (previousMoved && previousName !== undefined) {
+      try {
+        const currentFinal = parent.descriptor === undefined
+          ? await lstatIfPresent(final.absolutePath)
+          : await lstatIfPresent(descriptorChildPath(parent.descriptor, finalName));
+        if (currentFinal !== undefined && sameFileIdentity(stageIdentity, currentFinal) === true) {
+          if (parent.descriptor === undefined) await removePathIfOwned(final.absolutePath, stageIdentity);
+          else await removeRelativeIfOwned(parent.descriptor, finalName, stageIdentity);
+        }
+        if (parent.descriptor === undefined) await rename(previousPath!, final.absolutePath);
+        else await rename(descriptorChildPath(parent.descriptor, previousName), descriptorChildPath(parent.descriptor, finalName));
+        previousMoved = false;
+      } catch (rollbackError) {
+        if (operationError instanceof Error) {
+          Object.defineProperty(operationError, "rollbackError", {
+            configurable: true,
+            enumerable: false,
+            value: rollbackError,
+            writable: false
+          });
+        }
+      }
+    }
   }
   const cleanupErrors: unknown[] = [];
   await attemptCleanup(cleanupErrors, () => releasePublishLock(lock));
@@ -1735,6 +1782,75 @@ async function writeInitialBundle(input: {
   throwCleanupOnly(cleanupErrors, `Unable to clean up ${input.paths.root}`);
 }
 
+async function writeUpdatedBundle(input: {
+  readonly repositoryRoot: string;
+  readonly paths: BrownfieldAssessmentPaths;
+  readonly state: BrownfieldAssessment;
+}): Promise<void> {
+  const contentByFile: Readonly<Record<BundleFileName, string>> = {
+    "state.json": stableProtocolJson(input.state),
+    "signals.json": stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.signals)),
+    "assumptions.json": stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.assumptions)),
+    "findings.json": stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.findings)),
+    "synthesis.json": stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.synthesis)),
+    "review.json": stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.review))
+  };
+  const parentArtifactPath = artifactPathSchema.parse(ASSESSMENT_ROOT);
+  const parent = await openBundleDirectory(input.repositoryRoot, parentArtifactPath, false);
+  const stageName = `.${path.basename(input.paths.root)}.${process.pid}.${randomUUID()}.staging`;
+  const stagedPath = path.join(parent.absolutePath, stageName);
+  let stageDirectory: OpenedBundleDirectory | undefined;
+  let stageDescriptor: BundleFileHandle | undefined;
+  let stageIdentity: BundleStat | undefined;
+  let staged = false;
+  let operationError: unknown;
+  let hasOperationError = false;
+  try {
+    if (parent.descriptor === undefined) {
+      await assertStableFallbackPath({ absolutePath: parent.absolutePath }, parentArtifactPath, false);
+      await mkdir(stagedPath, { mode: 0o700 });
+      staged = true;
+      const createdStageStat = await lstat(stagedPath);
+      if (createdStageStat.isSymbolicLink() || !createdStageStat.isDirectory()) {
+        throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      }
+      stageIdentity = createdStageStat;
+      stageDirectory = { repositoryRoot: parent.repositoryRoot, absolutePath: stagedPath };
+    } else {
+      await mkdirRelative(parent.descriptor, stageName);
+      staged = true;
+      const preStageStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, stageName));
+      if (preStageStat === undefined || preStageStat.isSymbolicLink() || !preStageStat.isDirectory()) {
+        throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      }
+      stageIdentity = preStageStat;
+      stageDescriptor = await openRelativeDirectory(parent.descriptor, stageName);
+      stageDirectory = { repositoryRoot: parent.repositoryRoot, absolutePath: stagedPath, descriptor: stageDescriptor };
+      const stageStat = await stageDescriptor.stat();
+      if (!stageStat.isDirectory()) throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      assertSameFileIdentity(preStageStat, stageStat, stagedPath);
+    }
+    for (const fileName of BUNDLE_FILE_NAMES) {
+      await writeStagedText(stagedPath, fileName, contentByFile[fileName], stageDirectory.descriptor);
+    }
+    await syncBundleDirectory(stageDirectory);
+    await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity!, stageDescriptor, { replaceExisting: true });
+    staged = false;
+  } catch (error) {
+    operationError = error;
+    hasOperationError = true;
+  }
+  const cleanupErrors: unknown[] = [];
+  if (stageDescriptor !== undefined) await attemptCleanup(cleanupErrors, () => stageDescriptor!.close());
+  if (staged && stageIdentity !== undefined) {
+    if (parent.descriptor === undefined) await attemptCleanup(cleanupErrors, () => removePathIfOwned(stagedPath, stageIdentity!));
+    else await attemptCleanup(cleanupErrors, () => removeRelativeIfOwned(parent.descriptor!, stageName, stageIdentity!));
+  }
+  await attemptCleanup(cleanupErrors, () => closeBundleDirectory(parent));
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to update ${input.paths.root}`);
+  throwCleanupOnly(cleanupErrors, `Unable to clean up ${input.paths.root}`);
+}
+
 export async function createBrownfieldAssessment(input: {
   readonly repositoryRoot: string;
   readonly effort: number;
@@ -1819,4 +1935,67 @@ export async function readBrownfieldAssessment(input: {
   };
   await validateFreshStructuralSnapshot({ repositoryRoot: input.repositoryRoot, expected });
   return { state, paths };
+}
+
+const UPDATE_PHASES = {
+  signals_complete: "signals",
+  specialists_complete: "specialists",
+  synthesis_complete: "synthesis",
+  review_complete: "review"
+} as const;
+
+const ASSESSMENT_PHASE_ORDER: Readonly<Record<BrownfieldAssessment["phase"], number>> = {
+  setup: 0,
+  signals: 1,
+  specialists: 2,
+  assumptions: 3,
+  synthesis: 4,
+  review: 5,
+  complete: 6,
+  // A blocked assessment is terminal and is handled explicitly below.
+  blocked: Number.MAX_SAFE_INTEGER
+};
+
+/**
+ * Persist one monotonic workflow checkpoint without touching source files.
+ * readBrownfieldAssessment performs the snapshot/provenance freshness check;
+ * writeUpdatedBundle then publishes a complete replacement bundle through the
+ * same staged, locked publication path used by initial creation.
+ */
+export async function updateBrownfieldAssessmentState(input: {
+  readonly repositoryRoot: string;
+  readonly assessmentId: string;
+  readonly phase: "signals_complete" | "specialists_complete" | "synthesis_complete" | "review_complete";
+}): Promise<void> {
+  const nextPhase = UPDATE_PHASES[input.phase];
+  if (nextPhase === undefined) throw new Error(`Invalid brownfield assessment phase transition: ${String(input.phase)}.`);
+
+  const loaded = await readBrownfieldAssessment({
+    repositoryRoot: input.repositoryRoot,
+    assessmentId: input.assessmentId
+  });
+  const currentPhase = loaded.state.phase;
+  if (currentPhase === "blocked") {
+    throw new Error(`Brownfield assessment phase transition is not allowed from terminal phase ${currentPhase}.`);
+  }
+  if (ASSESSMENT_PHASE_ORDER[nextPhase] <= ASSESSMENT_PHASE_ORDER[currentPhase]) {
+    throw new Error(`Brownfield assessment phase transition must be monotonic: ${currentPhase} -> ${nextPhase}.`);
+  }
+
+  const nextState = brownfieldAssessmentSchema.parse({
+    ...loaded.state,
+    phase: nextPhase
+  });
+  await writeUpdatedBundle({
+    repositoryRoot: input.repositoryRoot,
+    paths: loaded.paths,
+    state: nextState
+  });
+  const verified = await readBrownfieldAssessment({
+    repositoryRoot: input.repositoryRoot,
+    assessmentId: input.assessmentId
+  });
+  if (verified.state.phase !== nextPhase) {
+    throw new Error(`Brownfield assessment phase update was not persisted: expected ${nextPhase}.`);
+  }
 }
