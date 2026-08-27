@@ -1327,6 +1327,31 @@ test("blocks an in-process specialist callback that creates a symlink mid-run", 
   }
 });
 
+test("blocks with symlink status even when the mid-run callback also throws", async (t) => {
+  if (!requireDirSymlink(t)) return;
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-mid-run-symlink-error-repository-"));
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-mid-run-symlink-error-outside-"));
+  try {
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: async (request) => {
+        await symlink(outsideRoot, path.join(request.repositoryRoot, "linked-outside"), directoryLinkType());
+        await writeFile(path.join(request.repositoryRoot, "linked-outside", "pwned.txt"), "outside mutation\n", "utf8");
+        throw new Error("callback failed");
+      }
+    });
+    assert.equal(result.ok, false);
+    // The symlink violation is the most severe failure; the record must be
+    // blocked with a symlink diagnostic, not downgraded to a generic failure.
+    assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
+    assert.ok(result.executionRecords.every((record) => /symlink/iu.test(record.diagnostic)));
+    assert.equal(await lstat(path.join(repositoryRoot, "linked-outside")).then(() => true, () => false), false);
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
 test("returns a typed blocked result before spawning when process-group containment is unavailable", async () => {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-containment-capability-"));
   const markerPath = path.join(repositoryRoot, "spawned.txt");

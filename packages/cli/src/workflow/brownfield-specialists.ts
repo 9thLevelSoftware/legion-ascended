@@ -1734,14 +1734,18 @@ async function runReadOnlyInProcessCallback(input: {
     const symlinkDiagnostic = createdSymlinks.length === 0
       ? mutation
       : `In-process specialist callback created repository symlink(s) during execution: ${createdSymlinks.slice(0, 8).join(", ")}${createdSymlinks.length > 8 ? `, and ${createdSymlinks.length - 8} more` : ""}. External writes through those links cannot be undone; the result is blocked and the repository was restored.`;
-    const diagnostic = callbackError === undefined
+    const diagnostic = createdSymlinks.length > 0
       ? symlinkDiagnostic
-      : `${safeDiagnostic(callbackError)} ${symlinkDiagnostic}`;
+      : callbackError === undefined
+        ? mutation
+        : `${safeDiagnostic(callbackError)} ${mutation}`;
     const mutationError = new Error(diagnostic) as Error & { code?: string };
-    if (isRecord(callbackError) && typeof callbackError["code"] === "string") {
-      mutationError.code = callbackError["code"];
-    } else if (createdSymlinks.length > 0) {
+    if (createdSymlinks.length > 0) {
+      // A mid-run symlink is the most severe read-only violation and always
+      // yields a blocked status, regardless of any concurrent callback error.
       mutationError.code = "SPECIALIST_SYMLINK_BLOCKED";
+    } else if (isRecord(callbackError) && typeof callbackError["code"] === "string") {
+      mutationError.code = callbackError["code"];
     }
     throw mutationError;
   }
