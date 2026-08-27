@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { open } from "node:fs/promises";
 import { promisify } from "node:util";
 
 import { artifactPathSchema } from "@legion/protocol";
@@ -16,7 +17,6 @@ import {
   normalizeExecutionResult,
   parseResultFromText,
   prepareProjectTextFile,
-  readOptionalText,
   writeProjectExecutionResult,
   writeProjectTextFile
 } from "./result.js";
@@ -44,6 +44,9 @@ const MAX_REDACTION_DECODE_LENGTH = 64 * 1024;
 const MAX_REDACTION_INPUT_LENGTH = 1024 * 1024;
 const MAX_URL_SCHEME_LENGTH = 1024;
 const MAX_URL_LENGTH = 64 * 1024;
+export const MAX_ADAPTER_OUTPUT_BYTES = 1 * 1024 * 1024;
+const ADAPTER_OUTPUT_TRUNCATION_MARKER = "\n[ADAPTER_OUTPUT_TRUNCATED]";
+const BOUNDED_READ_CHUNK_BYTES = 64 * 1024;
 
 function isAsciiAlpha(character: string | undefined): boolean {
   return character !== undefined && ((character >= "a" && character <= "z") || (character >= "A" && character <= "Z"));
@@ -139,6 +142,7 @@ function redactDirectText(value: string): string {
 export function redactAdapterTranscript(text: string): string {
   if (text.length > MAX_REDACTION_INPUT_LENGTH) return "[REDACTED_TRANSCRIPT]";
   const direct = redactDirectText(text);
+  if (!direct.includes("%")) return direct;
   return direct.replace(ENCODED_SEGMENT_RE, (match) => {
     if (!match.includes("%")) return match;
     if (match.length > MAX_REDACTION_DECODE_LENGTH) return "[REDACTED_ENCODED_SECRET]";
@@ -466,7 +470,7 @@ const hermesAdapter: ExecutionAdapter = {
     const parsed = parseResultFromText(rawOutput);
     const status: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode !== 0
+      : processResult.outputLimitExceeded || processResult.exitCode !== 0
         ? "failed"
         : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
@@ -489,6 +493,8 @@ const hermesAdapter: ExecutionAdapter = {
         body: `Hermes did not complete within ${processResult.timeoutMs}ms. Check Hermes auth/configuration, raise LEGION_HERMES_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
         severity: "blocking"
       });
+    } else if (processResult.outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Hermes Agent", "hermes-executor-output-limit"));
     }
     const result: ExecutionResult = blockingFindings.length === 0
       ? withStructured
@@ -544,6 +550,7 @@ const grokAdapter: ExecutionAdapter = {
         stdout: "",
         stderr: "Grok Build executable could not be started.",
         timedOut: false,
+        outputLimitExceeded: false,
         timeoutMs
       };
     }
@@ -554,7 +561,7 @@ const grokAdapter: ExecutionAdapter = {
     const envelope = parseGrokEnvelope(processResult.stdout);
     const processStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode !== 0
+      : processResult.outputLimitExceeded || processResult.exitCode !== 0
         ? "failed"
         : envelope.ok
           ? "succeeded"
@@ -576,10 +583,13 @@ const grokAdapter: ExecutionAdapter = {
     // become a success merely because its last JSON body said `succeeded`.
     const resultStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode !== 0 || !envelope.ok
+      : processResult.outputLimitExceeded || processResult.exitCode !== 0 || !envelope.ok
         ? "failed"
         : normalized.status;
     const findings: ExecutionFinding[] = [];
+    if (processResult.outputLimitExceeded) {
+      findings.push(outputLimitFinding("Grok Build", "grok-executor-output-limit"));
+    }
     if (!envelope.ok) {
       findings.push({
         id: "grok-executor-invalid-output",
@@ -805,7 +815,7 @@ const claudeAdapter: ExecutionAdapter = {
     // zero exit code -- claude exits 0 on an API error it reports in-band.
     const processStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode !== 0 || envelope?.isError === true
+      : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true
         ? "failed"
         : "succeeded";
 
@@ -817,7 +827,7 @@ const claudeAdapter: ExecutionAdapter = {
     });
     const resultStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode !== 0 || envelope?.isError === true
+      : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true
         ? "failed"
         : normalized.status;
     const withStructured: ExecutionResult = lastMessage.length > 0 && resultStatus === "succeeded"
@@ -832,6 +842,8 @@ const claudeAdapter: ExecutionAdapter = {
         body: `Claude did not complete within ${processResult.timeoutMs}ms. Check Claude Code auth/configuration, raise LEGION_CLAUDE_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
         severity: "blocking"
       });
+    } else if (processResult.outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Claude", "claude-executor-output-limit"));
     } else if (processResult.exitCode !== 0) {
       blockingFindings.push({
         id: "claude-executor-failed",
@@ -940,7 +952,9 @@ const codexAdapter: ExecutionAdapter = {
       processResult.stdout,
       processResult.stderr
     ].filter((entry) => entry.length > 0).join("\n");
-    const lastMessage = await readOptionalText(outputLastMessagePath);
+    const lastMessageResult = await readBoundedText(outputLastMessagePath);
+    const lastMessage = lastMessageResult.text;
+    const outputLimitExceeded = processResult.outputLimitExceeded || lastMessageResult.outputLimitExceeded;
     // Codex writes this file itself. Scrub it immediately after reading, before
     // parsing or any later persistence can fail and reach the cleanup fence.
     await writeProjectTextFile({
@@ -951,7 +965,7 @@ const codexAdapter: ExecutionAdapter = {
     const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
     const processStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode === 0 ? "succeeded" : "failed";
+      : outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
       status: processStatus,
       summary: processResult.timedOut
@@ -962,7 +976,7 @@ const codexAdapter: ExecutionAdapter = {
     });
     const resultStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode !== 0
+      : outputLimitExceeded || processResult.exitCode !== 0
         ? "failed"
         : normalized.status;
     // Kept separate from rawOutput, which is process output. Downstream typed
@@ -979,6 +993,8 @@ const codexAdapter: ExecutionAdapter = {
         body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
         severity: "blocking"
       });
+    } else if (outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Codex", "codex-executor-output-limit"));
     } else if (processResult.exitCode !== 0) {
       blockingFindings.push({
         id: "codex-executor-failed",
@@ -1043,6 +1059,93 @@ function claudeExecTimeoutMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CLAUDE_EXEC_TIMEOUT_MS;
 }
 
+function utf8Prefix(value: string, maxBytes: number): string {
+  if (maxBytes <= 0) return "";
+  let result = Buffer.from(value, "utf8").subarray(0, maxBytes).toString("utf8");
+  while (Buffer.byteLength(result, "utf8") > maxBytes) result = result.slice(0, -1);
+  return result;
+}
+
+type OutputStream = "stdout" | "stderr";
+
+class BoundedOutputCapture {
+  private stdoutValue = "";
+  private stderrValue = "";
+  private totalBytes = 0;
+  private exceeded = false;
+
+  append(stream: OutputStream, chunk: string | Buffer): void {
+    if (this.exceeded) return;
+    const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    const remaining = MAX_ADAPTER_OUTPUT_BYTES - this.totalBytes;
+    const markerBytes = Buffer.byteLength(ADAPTER_OUTPUT_TRUNCATION_MARKER, "utf8");
+    const chunkBytes = Buffer.byteLength(text, "utf8");
+    if (chunkBytes <= remaining) {
+      this.set(stream, this.get(stream) + text);
+      this.totalBytes += chunkBytes;
+      return;
+    }
+    const prefixBudget = Math.max(0, remaining - markerBytes);
+    const bounded = `${utf8Prefix(text, prefixBudget)}${remaining >= markerBytes ? ADAPTER_OUTPUT_TRUNCATION_MARKER : ""}`;
+    this.set(stream, this.get(stream) + bounded);
+    this.totalBytes += Buffer.byteLength(bounded, "utf8");
+    this.exceeded = true;
+  }
+
+  get stdout(): string {
+    return this.stdoutValue;
+  }
+
+  get stderr(): string {
+    return this.stderrValue;
+  }
+
+  get outputLimitExceeded(): boolean {
+    return this.exceeded;
+  }
+
+  private get(stream: OutputStream): string {
+    return stream === "stdout" ? this.stdoutValue : this.stderrValue;
+  }
+
+  private set(stream: OutputStream, value: string): void {
+    if (stream === "stdout") this.stdoutValue = value;
+    else this.stderrValue = value;
+  }
+}
+
+async function readBoundedText(filePath: string): Promise<{ readonly text: string; readonly outputLimitExceeded: boolean }> {
+  let handle;
+  try {
+    handle = await open(filePath, "r");
+  } catch (error) {
+    if (isRecordValue(error) && error["code"] === "ENOENT") return { text: "", outputLimitExceeded: false };
+    throw error;
+  }
+  const capture = new BoundedOutputCapture();
+  const buffer = Buffer.allocUnsafe(BOUNDED_READ_CHUNK_BYTES);
+  try {
+    while (true) {
+      const read = await handle.read(buffer, 0, buffer.length, null);
+      if (read.bytesRead === 0) break;
+      capture.append("stdout", buffer.subarray(0, read.bytesRead));
+      if (capture.outputLimitExceeded) break;
+    }
+    return { text: capture.stdout, outputLimitExceeded: capture.outputLimitExceeded };
+  } finally {
+    await handle.close();
+  }
+}
+
+function outputLimitFinding(executorLabel: string, findingId: string): ExecutionFinding {
+  return {
+    id: findingId,
+    title: `${executorLabel} executor output exceeded the bounded capture limit`,
+    body: `${executorLabel} output exceeded the ${MAX_ADAPTER_OUTPUT_BYTES}-byte capture limit and the process or payload was rejected before unbounded accumulation.`,
+    severity: "blocking"
+  };
+}
+
 async function spawnWithInput(
   command: string,
   args: readonly string[],
@@ -1055,6 +1158,7 @@ async function spawnWithInput(
   readonly stdout: string;
   readonly stderr: string;
   readonly timedOut: boolean;
+  readonly outputLimitExceeded: boolean;
   readonly timeoutMs: number;
 }> {
   return new Promise((resolve, reject) => {
@@ -1063,38 +1167,51 @@ async function spawnWithInput(
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"]
     });
-    let stdout = "";
-    let stderr = "";
+    const output = new BoundedOutputCapture();
     let settled = false;
     let timedOut = false;
+    let outputLimitExceeded = false;
+    let outputLimitTimer: NodeJS.Timeout | undefined;
 
     const settle = (exitCode: number) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
+      if (outputLimitTimer !== undefined) clearTimeout(outputLimitTimer);
       resolve({
         exitCode,
-        stdout,
-        stderr,
+        stdout: output.stdout,
+        stderr: output.stderr,
         timedOut,
+        outputLimitExceeded,
         timeoutMs
       });
     };
 
     const timeout = setTimeout(() => {
       timedOut = true;
-      stderr += `${stderr.length === 0 ? "" : "\n"}${executorLabel} executor timed out after ${timeoutMs}ms.`;
+      output.append("stderr", `${output.stderr.length === 0 ? "" : "\n"}${executorLabel} executor timed out after ${timeoutMs}ms.`);
       terminateProcessTree(child.pid);
       setTimeout(() => settle(124), 1_000).unref();
     }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
+      output.append("stdout", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        terminateProcessTree(child.pid);
+        outputLimitTimer = setTimeout(() => settle(125), 1_000);
+      }
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
+      output.append("stderr", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        terminateProcessTree(child.pid);
+        outputLimitTimer = setTimeout(() => settle(125), 1_000);
+      }
     });
     child.stdin.on("error", () => {});
     child.on("error", (error) => {
@@ -1104,7 +1221,7 @@ async function spawnWithInput(
       reject(error);
     });
     child.on("close", (code) => {
-      settle(timedOut ? 124 : code ?? 1);
+      settle(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
     });
     child.stdin.end(input);
   });
@@ -1115,6 +1232,7 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
   readonly stdout: string;
   readonly stderr: string;
   readonly timedOut: boolean;
+  readonly outputLimitExceeded: boolean;
   readonly timeoutMs: number;
 }> {
   return new Promise((resolve, reject) => {
@@ -1126,32 +1244,51 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
       // to mistake for an interactive session.
       stdio: ["ignore", "pipe", "pipe"]
     });
-    let stdout = "";
-    let stderr = "";
+    const output = new BoundedOutputCapture();
     let settled = false;
     let timedOut = false;
+    let outputLimitExceeded = false;
+    let outputLimitTimer: NodeJS.Timeout | undefined;
 
     const settle = (exitCode: number) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      resolve({ exitCode, stdout, stderr, timedOut, timeoutMs });
+      if (outputLimitTimer !== undefined) clearTimeout(outputLimitTimer);
+      resolve({
+        exitCode,
+        stdout: output.stdout,
+        stderr: output.stderr,
+        timedOut,
+        outputLimitExceeded,
+        timeoutMs
+      });
     };
 
     const timeout = setTimeout(() => {
       timedOut = true;
-      stderr += `${stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`;
+      output.append("stderr", `${output.stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`);
       terminateProcessTree(child.pid);
       setTimeout(() => settle(124), 1_000).unref();
     }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
+      output.append("stdout", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        terminateProcessTree(child.pid);
+        outputLimitTimer = setTimeout(() => settle(125), 1_000);
+      }
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
+      output.append("stderr", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        terminateProcessTree(child.pid);
+        outputLimitTimer = setTimeout(() => settle(125), 1_000);
+      }
     });
     child.on("error", (error) => {
       if (settled) return;
@@ -1160,7 +1297,7 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
       reject(error);
     });
     child.on("close", (code) => {
-      settle(timedOut ? 124 : code ?? 1);
+      settle(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
     });
   });
 }

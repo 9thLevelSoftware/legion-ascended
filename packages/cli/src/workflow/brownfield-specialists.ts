@@ -798,6 +798,37 @@ function parseJsonText(text: string): unknown {
   }
 }
 
+function isSpecialistPayload(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length > 0 && keys.every((key) => key === "findings" || key === "assumptions");
+}
+
+function unwrapSpecialistPayload(value: unknown): unknown {
+  let current = value;
+  const seen = new Set<object>();
+  for (let depth = 0; depth < 8; depth += 1) {
+    if (isSpecialistPayload(current)) return current;
+    if (typeof current === "string") {
+      current = parseJsonText(current);
+      continue;
+    }
+    if (!isRecord(current)) return undefined;
+    if (seen.has(current)) return undefined;
+    seen.add(current);
+    let next: unknown;
+    for (const key of ["structuredOutput", "output", "text", "result", "payload"]) {
+      if (current[key] !== undefined) {
+        next = current[key];
+        break;
+      }
+    }
+    if (next === undefined) return undefined;
+    current = next;
+  }
+  return undefined;
+}
+
 function specialistPayloadFrom(value: unknown): { readonly status: "succeeded" | "failed" | "blocked"; readonly payload?: unknown; readonly diagnostic: string } {
   if (isExecutionResult(value)) {
     if (value.status !== "succeeded") {
@@ -809,9 +840,11 @@ function specialistPayloadFrom(value: unknown): { readonly status: "succeeded" |
       return { status: "failed", diagnostic: "Specialist executor completed without structured JSON output." };
     }
     try {
+      const payload = unwrapSpecialistPayload(structured);
+      if (payload === undefined) throw new Error("Specialist executor structured output did not contain a findings/assumptions object.");
       return {
         status: "succeeded",
-        payload: typeof structured === "string" ? parseJsonText(structured) : structured,
+        payload,
         diagnostic: ""
       };
     } catch (error) {
@@ -820,7 +853,7 @@ function specialistPayloadFrom(value: unknown): { readonly status: "succeeded" |
   }
   if (typeof value === "string") {
     try {
-      return { status: "succeeded", payload: parseJsonText(value), diagnostic: "" };
+      return { status: "succeeded", payload: unwrapSpecialistPayload(value), diagnostic: "" };
     } catch (error) {
       return { status: "failed", diagnostic: safeDiagnostic(error) };
     }
@@ -1022,7 +1055,7 @@ function cleanupFailureResult(error: unknown): ExecutionResult {
   return {
     ok: false,
     status: "blocked",
-    summary: "Adapter artifact cleanup failed; specialist execution is blocked.",
+    summary: `Adapter artifact cleanup failed; specialist execution is blocked. ${diagnostic}`,
     filesChanged: [],
     commandsRun: [],
     findings: [{
@@ -1044,6 +1077,7 @@ async function runWithExistingAdapter(input: {
   const adapterArtifactRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-adapter-"));
   let adapterResult: ExecutionResult | undefined;
   let executionFailure: { readonly error: unknown } | undefined;
+  let repositoryBaseline: RepositorySnapshot | undefined;
   try {
     const artifacts = specialistArtifactPath(input.assessmentId, input.pack.specialist, "executor-result.json");
     const artifactPaths = [artifacts.context, artifacts.prompt, artifacts.result, artifacts.raw, artifacts.redacted];
@@ -1085,6 +1119,10 @@ async function runWithExistingAdapter(input: {
       redactedLogArtifactPath: redacted.parsed,
       redactedLogAbsolutePath: redacted.absolutePath
     };
+    // The adapter receives the real repository as its working directory. Its
+    // CLI flags are advisory, so snapshot the bounded tree before spawning and
+    // enforce the read-only contract independently of the adapter's report.
+    repositoryBaseline = await snapshotRepository(input.repositoryRoot);
     try {
       adapterResult = await adapterForKind(input.executor).run(request);
     } catch (error) {
@@ -1094,22 +1132,58 @@ async function runWithExistingAdapter(input: {
     executionFailure = { error };
   }
 
+  if (repositoryBaseline !== undefined) {
+    let repositoryAfter: RepositorySnapshot | undefined;
+    try {
+      repositoryAfter = await snapshotRepository(input.repositoryRoot, { allowUnboundedFiles: true });
+    } catch (error) {
+      try {
+        await restoreRepositoryFromBaseline(input.repositoryRoot, repositoryBaseline);
+        executionFailure = {
+          error: new Error(`Read-only external adapter state could not be inspected; baseline restoration completed before rejecting: ${safeDiagnostic(error)}.`)
+        };
+      } catch (cleanupError) {
+        executionFailure = {
+          error: new Error(`Read-only external adapter cleanup failed while inspecting repository state: ${safeDiagnostic(error)} Cleanup failed: ${safeDiagnostic(cleanupError)}.`)
+        };
+      }
+    }
+    if (repositoryAfter !== undefined) {
+      const changed = changedRepositoryPaths(repositoryBaseline, repositoryAfter);
+      if (changed.length > 0) {
+        const mutation = boundedText(
+          `External specialist adapter violated the read-only repository boundary: ${changed.slice(0, 8).join(", ")}${changed.length > 8 ? `, and ${changed.length - 8} more` : ""}.`,
+          MAX_DIAGNOSTIC_CHARS
+        );
+        try {
+          await restoreRepository(input.repositoryRoot, repositoryBaseline, repositoryAfter);
+          executionFailure = { error: new Error(mutation) };
+        } catch (error) {
+          const restoreError = new Error(`${mutation} External adapter cleanup failed: ${safeDiagnostic(error)}.`) as Error & { code?: string };
+          restoreError.code = "READ_ONLY_RESTORE_FAILED";
+          executionFailure = { error: restoreError };
+        }
+      }
+    }
+  }
+
   try {
     await cleanupAdapterArtifacts(adapterArtifactRoot);
-    try {
-      await access(adapterArtifactRoot);
-    } catch (error) {
-      if (isRecord(error) && error["code"] === "ENOENT") {
-        if (executionFailure !== undefined) throw executionFailure.error;
-        if (adapterResult === undefined) throw new Error("Adapter completed without a result.");
-        return adapterResult;
-      }
-      return cleanupFailureResult(error);
-    }
-    return cleanupFailureResult(new Error("Isolated adapter artifact root still exists after cleanup."));
   } catch (error) {
     return cleanupFailureResult(error);
   }
+
+  try {
+    await access(adapterArtifactRoot);
+  } catch (error) {
+    if (isRecord(error) && error["code"] === "ENOENT") {
+      if (executionFailure !== undefined) throw executionFailure.error;
+      if (adapterResult === undefined) throw new Error("Adapter completed without a result.");
+      return adapterResult;
+    }
+    return cleanupFailureResult(error);
+  }
+  return cleanupFailureResult(new Error("Isolated adapter artifact root still exists after cleanup."));
 }
 
 function timeoutError(timeoutMs: number): Error & { readonly code: string } {
@@ -1406,10 +1480,49 @@ async function clearRepositoryRoot(root: string): Promise<void> {
   for (const child of children) await removeRepositoryEntry(root, child.name);
 }
 
+async function prepareRepositoryTreeForRestore(root: string): Promise<void> {
+  const absoluteRoot = repositoryAbsolutePath(root, "");
+  let rootStat;
+  try {
+    rootStat = await lstat(absoluteRoot);
+  } catch (error) {
+    if (isRecord(error) && error["code"] === "ENOENT") {
+      await mkdir(absoluteRoot, { mode: 0o700 });
+      return;
+    }
+    throw error;
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) return;
+
+  const queue = [absoluteRoot];
+  let visited = 0;
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === undefined) continue;
+    if (visited >= MAX_READ_ONLY_SNAPSHOT_ENTRIES) {
+      throw new Error(`Read-only repository cleanup exceeded ${MAX_READ_ONLY_SNAPSHOT_ENTRIES} directory entries while restoring access.`);
+    }
+    visited += 1;
+    // The saved root/parent path remains inside the repository. Restoring
+    // owner permissions before traversal lets cleanup proceed after a child
+    // or the root was chmod'd to 000 by an adapter or callback.
+    await chmod(current, 0o700);
+    const children = (await readdir(current, { withFileTypes: true }))
+      .sort((left, right) => compareStrings(left.name, right.name));
+    for (const child of children) {
+      if (!child.isDirectory() || child.isSymbolicLink()) continue;
+      const childPath = path.join(current, child.name);
+      await chmod(childPath, 0o700);
+      queue.push(childPath);
+    }
+  }
+}
+
 async function restoreRepositoryFromBaseline(root: string, before: RepositorySnapshot): Promise<void> {
   if ([...before.values()].some((entry) => entry.kind === "other")) {
     throw new Error("Cannot safely restore a repository containing non-regular entries from a bounded snapshot.");
   }
+  await prepareRepositoryTreeForRestore(root);
   await clearRepositoryRoot(root);
   const pathsToRestore = [...before.keys()]
     .sort((left, right) => repositoryPathDepth(left) - repositoryPathDepth(right) || compareStrings(left, right));

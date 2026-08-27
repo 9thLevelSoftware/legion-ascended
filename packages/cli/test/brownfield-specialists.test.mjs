@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -193,6 +193,53 @@ function claudeShimSource(result, exitCode) {
 
 function codexShimSource(result, exitCode) {
   return `#!/usr/bin/env node\nconst fs = require("node:fs");\nconst index = process.argv.indexOf("--output-last-message");\nfs.writeFileSync(process.argv[index + 1], ${JSON.stringify(JSON.stringify(result))}, "utf8");\nprocess.exitCode = ${exitCode};\n`;
+}
+
+function claudeSpecialistMutationShimSource() {
+  return `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+let prompt = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { prompt += chunk; });
+process.stdin.on("end", () => {
+  const specialist = /You are the ([a-z-]+) assessor/u.exec(prompt)?.[1] ?? "architecture";
+  const id = specialist === "architecture" ? "af_111111111111111111111111" : "af_222222222222222222222222";
+  const root = process.cwd();
+  fs.writeFileSync(path.join(root, "pwned.txt"), "pwned bytes\\n", "utf8");
+  fs.chmodSync(path.join(root, "nested"), 0o000);
+  fs.chmodSync(root, 0o000);
+  const result = { findings: [{ id, specialist, title: "Bounded fixture finding", statement: "The supplied structural evidence identifies a review point.", severity: "moderate", confidence: "medium", evidence: [{ kind: "source-file", path: "src/app.ts", sha256: ${JSON.stringify(SOURCE_SHA)}, note: "bounded source fixture" }], assumptions: [], recommendation: "Review the referenced evidence with an approved verification command." }], assumptions: [] };
+  const envelope = { type: "result", is_error: false, result: JSON.stringify(result) };
+  process.stdout.write(JSON.stringify(envelope), () => process.exit(0));
+});
+`;
+}
+
+function grokSpecialistShimSource() {
+  return `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv;
+const prompt = fs.readFileSync(args[args.indexOf("--prompt-file") + 1], "utf8");
+const specialist = /You are the ([a-z-]+) assessor/u.exec(prompt)?.[1] ?? "architecture";
+const id = specialist === "architecture" ? "af_111111111111111111111111" : "af_222222222222222222222222";
+const specialistOutput = { findings: [{ id, specialist, title: "Bounded fixture finding", statement: "The supplied structural evidence identifies a review point.", severity: "moderate", confidence: "medium", evidence: [{ kind: "source-file", path: "src/app.ts", sha256: ${JSON.stringify(SOURCE_SHA)}, note: "bounded source fixture" }], assumptions: [], recommendation: "Review the referenced evidence with an approved verification command." }], assumptions: [] };
+const result = { status: "succeeded", summary: "Grok completed.", filesChanged: [], commandsRun: [], findings: [], structuredOutput: JSON.stringify(specialistOutput) };
+const envelope = { type: "result", text: JSON.stringify(result), stopReason: "end_turn", sessionId: "session_fixture", requestId: "request_fixture" };
+process.stdout.write(JSON.stringify(envelope));
+`;
+}
+
+function hugeClaudeShimSource() {
+  return `#!/usr/bin/env node\nprocess.stdout.write("x".repeat(2_000_000));\n`;
+}
+
+function hugeGrokShimSource() {
+  return `#!/usr/bin/env node\nprocess.stdout.write("x".repeat(2_000_000));\n`;
+}
+
+function hugeCodexLastMessageShimSource() {
+  return `#!/usr/bin/env node\nconst fs = require("node:fs");\nconst index = process.argv.indexOf("--output-last-message");\nfs.writeFileSync(process.argv[index + 1], "x".repeat(2_000_000), "utf8");\n`;
 }
 
 async function withExecutableShim(name, source, callback) {
@@ -981,6 +1028,123 @@ test("isolates and removes adapter artifacts so secrets never persist in the ass
   } finally {
     if (previousPlan === undefined) delete process.env.LEGION_FAKE_EXECUTOR_PLAN;
     else process.env.LEGION_FAKE_EXECUTOR_PLAN = previousPlan;
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("contains external adapters that mutate repository files and directory modes", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-external-mutation-"));
+  const nested = path.join(repositoryRoot, "nested");
+  const sourceFile = path.join(repositoryRoot, "src", "app.ts");
+  await mkdir(path.dirname(sourceFile), { recursive: true });
+  await mkdir(nested);
+  await writeFile(sourceFile, "original source bytes\\n", "utf8");
+  const rootMode = (await stat(repositoryRoot)).mode & 0o7777;
+  const nestedMode = (await stat(nested)).mode & 0o7777;
+  try {
+    await withExecutableShim("claude", claudeSpecialistMutationShimSource(), async () => {
+      const result = await runBrownfieldSpecialists({
+        ...input({ repositoryRoot }),
+        executor: "claude",
+        execute: undefined
+      });
+      assert.equal(result.ok, false);
+      assert.equal(result.findings.length, 0);
+      assert.equal(result.assumptions.length, 2);
+      assert.ok(result.executionRecords.every((record) => record.status === "failed"), JSON.stringify(result.executionRecords));
+      assert.ok(result.executionRecords.every((record) => /read-only|mutat|changed|cleanup|restore/iu.test(record.diagnostic)));
+    });
+    await assert.rejects(readFile(path.join(repositoryRoot, "pwned.txt"), "utf8"), { code: "ENOENT" });
+    assert.equal(await readFile(sourceFile, "utf8"), "original source bytes\\n");
+    assert.equal((await stat(repositoryRoot)).mode & 0o7777, rootMode);
+    assert.equal((await stat(nested)).mode & 0o7777, nestedMode);
+  } finally {
+    await chmod(repositoryRoot, 0o700).catch(() => {});
+    await chmod(nested, nestedMode).catch(() => {});
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("restores root and nested directory modes after an in-process callback chmods them", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-directory-modes-"));
+  const nested = path.join(repositoryRoot, "nested");
+  const sourceFile = path.join(repositoryRoot, "src", "app.ts");
+  await mkdir(path.dirname(sourceFile), { recursive: true });
+  await mkdir(nested);
+  await writeFile(sourceFile, "original source bytes\\n", "utf8");
+  const rootMode = (await stat(repositoryRoot)).mode & 0o7777;
+  const nestedMode = (await stat(nested)).mode & 0o7777;
+  try {
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: async (request) => {
+        await chmod(nested, 0o000);
+        await chmod(repositoryRoot, 0o000);
+        return executeFinding(request);
+      }
+    });
+    assert.equal(result.findings.length, 0);
+    assert.equal(result.assumptions.length, 2);
+    assert.ok(result.executionRecords.every((record) => record.status === "failed"));
+    assert.equal(await readFile(sourceFile, "utf8"), "original source bytes\\n");
+    assert.equal((await stat(repositoryRoot)).mode & 0o7777, rootMode);
+    assert.equal((await stat(nested)).mode & 0o7777, nestedMode);
+  } finally {
+    await chmod(repositoryRoot, 0o700).catch(() => {});
+    await chmod(nested, nestedMode).catch(() => {});
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("normalizes a valid Grok envelope's nested specialist payload and closes evidence", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-grok-"));
+  try {
+    await withExecutableShim("grok", grokSpecialistShimSource(), async () => {
+      const result = await runBrownfieldSpecialists({
+        ...input({ repositoryRoot }),
+        executor: "grok",
+        execute: undefined
+      });
+      assert.equal(result.ok, true);
+      assert.equal(result.findings.length, 2);
+      assert.equal(result.assumptions.length, 0);
+      assert.ok(result.executionRecords.every((record) => record.status === "succeeded"));
+      assert.ok(result.findings.every((finding) => finding.evidence.some((entry) => entry.path === SOURCE_PATH)));
+    });
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("bounds large Claude and Grok process output before result accumulation", async () => {
+  assert.equal(typeof adapterModule.MAX_ADAPTER_OUTPUT_BYTES, "number");
+  for (const [kind, source] of [["claude", hugeClaudeShimSource()], ["grok", hugeGrokShimSource()]]) {
+    const repositoryRoot = await mkdtemp(path.join(tmpdir(), `legion-brownfield-${kind}-output-limit-`));
+    try {
+      await withExecutableShim(kind, source, async () => {
+        const result = await adapterModule.adapterForKind(kind).run(directAdapterRequest(repositoryRoot, kind));
+        assert.equal(result.ok, false);
+        assert.equal(result.status, "failed");
+        assert.ok(result.findings.some((finding) => finding.id === `${kind}-executor-output-limit`));
+        assert.ok(Buffer.byteLength(result.rawOutput ?? "", "utf8") <= adapterModule.MAX_ADAPTER_OUTPUT_BYTES);
+      });
+    } finally {
+      await rm(repositoryRoot, { recursive: true, force: true });
+    }
+  }
+});
+
+test("bounds the Codex last-message file before parsing and persistence", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-codex-last-message-limit-"));
+  try {
+    await withExecutableShim("codex", hugeCodexLastMessageShimSource(), async () => {
+      const result = await adapterModule.adapterForKind("codex").run(directAdapterRequest(repositoryRoot, "codex"));
+      assert.equal(result.ok, false);
+      assert.equal(result.status, "failed");
+      assert.ok(result.findings.some((finding) => finding.id === "codex-executor-output-limit"));
+      assert.ok(Buffer.byteLength(result.rawOutput ?? "", "utf8") <= adapterModule.MAX_ADAPTER_OUTPUT_BYTES);
+    });
+  } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }
 });
