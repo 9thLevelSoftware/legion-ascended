@@ -164,6 +164,47 @@ test("produces deterministic output regardless of input ordering", () => {
   }
 });
 
+test("sorts and deduplicates before capping when input exceeds bounds", () => {
+  const spec = specialists({ findings: [] });
+  const forwardCommands = Array.from({ length: 300 }, (_, i) => `unrun:cmd-${String(i).padStart(3, "0")}`);
+  const reversedCommands = [...forwardCommands].reverse();
+  const forward = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals: [], testFiles: [], testToSourceLinks: [], summary: { ...signals().summary, unsupportedSignals: 0 } }),
+    specialists: spec,
+    unrunCommands: forwardCommands,
+    unsupportedAreas: [],
+    openQuestions: [],
+    strengths: []
+  });
+  const reversed = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals: [], testFiles: [], testToSourceLinks: [], summary: { ...signals().summary, unsupportedSignals: 0 } }),
+    specialists: spec,
+    unrunCommands: reversedCommands,
+    unsupportedAreas: [],
+    openQuestions: [],
+    strengths: []
+  });
+  assert.deepEqual(forward, reversed);
+  assert.equal(forward.behavioralProofGaps.length, 256);
+  assert.ok(forward.behavioralProofGaps[0] < forward.behavioralProofGaps[1]);
+});
+
+test("deduplicates strengths deterministically", () => {
+  const spec = specialists({ findings: [] });
+  const forward = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals: [], summary: { ...signals().summary, unsupportedSignals: 0 } }),
+    specialists: spec,
+    strengths: ["Dup", "dup", "Z", "A", "a"]
+  });
+  const reversed = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals: [], summary: { ...signals().summary, unsupportedSignals: 0 } }),
+    specialists: spec,
+    strengths: ["a", "A", "dup", "Dup", "Z"]
+  });
+  assert.deepEqual(forward, reversed);
+  assert.ok(forward.evidenceBackedStrengths.length <= 4);
+});
+
 test("separates static inventory and unsupported areas from behavioral proof", () => {
   const behaviorClaim = finding({ id: "af_aaaaaaaaaaaaaaaaaaaaaaaa", title: "Runtime behavior", statement: "The integration executes safely at runtime.", severity: "major", confidence: "low" });
   const design = synthesizeBrownfieldDesign({ signals: signals(), specialists: specialists({ findings: [behaviorClaim], executionRecords: [{ specialist: { name: "tests", pass: 1, focus: "proof" }, status: "failed" }] }), unrunCommands: ["pnpm test --filter runtime"], unsupportedAreas: ["binary parser"] });

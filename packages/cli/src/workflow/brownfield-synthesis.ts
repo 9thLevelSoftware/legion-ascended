@@ -481,11 +481,20 @@ function hasBehaviorEvidence(finding: AssessmentFinding): boolean {
   return finding.evidence.some((reference) => reference.kind === "command-result" || reference.kind === "test-result");
 }
 
-function addUniqueBounded(values: string[], value: string, limit: number): void {
+function collectUniqueText(accumulator: Map<string, string>, value: string): void {
   const bounded = boundedText(value, MAX_STRING_CHARS);
   const key = normalizedText(bounded);
-  if (values.some((entry) => normalizedText(entry) === key)) return;
-  if (values.length < limit) values.push(bounded);
+  const existing = accumulator.get(key);
+  // Keep the lexicographically first original spelling so output is
+  // deterministic regardless of input order.
+  if (existing === undefined || bounded < existing) accumulator.set(key, bounded);
+}
+
+function finalizeBoundedSet(accumulator: Map<string, string>, limit: number): string[] {
+  return [...accumulator.entries()]
+    .sort(([leftKey], [rightKey]) => compareStrings(leftKey, rightKey))
+    .slice(0, limit)
+    .map(([, value]) => value);
 }
 
 function criticalInputAssumption(finding: AssessmentFinding): AssessmentAssumption {
@@ -656,27 +665,27 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     });
   });
 
-  const proofGaps: string[] = [];
+  const gapCollector = new Map<string, string>();
   const commandResultEvidenceKeys = new Set(input.commandResults?.map(evidenceIdentity) ?? []);
   for (const testPath of signals.testFiles) {
-    addUniqueBounded(proofGaps, `Test inventory entry '${testPath}' does not prove test execution or coverage.`, MAX_GAPS);
+    collectUniqueText(gapCollector, `Test inventory entry '${testPath}' does not prove test execution or coverage.`);
   }
   for (const link of signals.testToSourceLinks) {
-    addUniqueBounded(proofGaps, `Conservative test-to-source link '${link.testPath}' -> '${link.sourcePath}' is not behavioral proof.`, MAX_GAPS);
+    collectUniqueText(gapCollector, `Conservative test-to-source link '${link.testPath}' -> '${link.sourcePath}' is not behavioral proof.`);
   }
   if (signals.summary.unsupportedSignals > 0) {
-    addUniqueBounded(proofGaps, `${signals.summary.unsupportedSignals} unsupported structural area(s) remain without behavioral proof.`, MAX_GAPS);
+    collectUniqueText(gapCollector, `${signals.summary.unsupportedSignals} unsupported structural area(s) remain without behavioral proof.`);
   }
   for (const signal of [...signals.architectureSignals, ...signals.riskSignals]) {
     if (/unsupported|opaque|size-limit|parser-error|unreadable/iu.test(signal.code)) {
-      addUniqueBounded(proofGaps, `Unsupported or incomplete coverage signal '${signal.code}' requires explicit verification.`, MAX_GAPS);
+      collectUniqueText(gapCollector, `Unsupported or incomplete coverage signal '${signal.code}' requires explicit verification.`);
     }
   }
   for (const command of input.unrunCommands ?? []) {
-    addUniqueBounded(proofGaps, `Unrun command: ${command}`, MAX_GAPS);
+    collectUniqueText(gapCollector, `Unrun command: ${command}`);
   }
   for (const area of input.unsupportedAreas ?? []) {
-    addUniqueBounded(proofGaps, `Unsupported area: ${area}`, MAX_GAPS);
+    collectUniqueText(gapCollector, `Unsupported area: ${area}`);
   }
   if ((input.commandResults ?? []).length > 0) {
     // Command-result evidence was supplied at the synthesis boundary but
@@ -684,13 +693,13 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     // is recorded as available behavioral evidence below.
   }
   for (const diagnostic of specialistDiagnostics) {
-    addUniqueBounded(proofGaps, `Unresolved specialist output: ${diagnostic}`, MAX_GAPS);
+    collectUniqueText(gapCollector, `Unresolved specialist output: ${diagnostic}`);
   }
   for (const record of (specialistRecord?.executionRecords ?? []) as readonly Partial<BrownfieldSpecialistExecutionRecord>[]) {
     if (record.status === "succeeded") continue;
     const name = isRecord(record.specialist) && typeof record.specialist["name"] === "string" ? record.specialist["name"] : "unknown";
     const pass = isRecord(record.specialist) && typeof record.specialist["pass"] === "number" ? String(record.specialist["pass"]) : "?";
-    addUniqueBounded(proofGaps, `Specialist ${name} pass ${pass} did not produce resolved output; behavioral proof is unavailable.`, MAX_GAPS);
+    collectUniqueText(gapCollector, `Specialist ${name} pass ${pass} did not produce resolved output; behavioral proof is unavailable.`);
   }
   const hasSynthesisCommandEvidence = (input.commandResults ?? []).length > 0;
   for (const finding of finalFindings) {
@@ -698,48 +707,41 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
       reference.kind === "command-result" || reference.kind === "test-result" || commandResultEvidenceKeys.has(evidenceIdentity(reference))
     );
     if (isBehavioralClaim(finding) && !hasCommandEvidence && !hasSynthesisCommandEvidence) {
-      addUniqueBounded(proofGaps, `Behavioral claim '${finding.title}' lacks explicit command-result or test-result evidence.`, MAX_GAPS);
+      collectUniqueText(gapCollector, `Behavioral claim '${finding.title}' lacks explicit command-result or test-result evidence.`);
     }
   }
+  const behavioralProofGaps = finalizeBoundedSet(gapCollector, MAX_GAPS);
 
   const assumptionsRequiringInput = accumulator.values
     .filter((assumption) => assumption.confidence === "unknown" || assumption.blocking)
     .sort((left, right) => compareStrings(left.id, right.id))
     .slice(0, MAX_ASSUMPTIONS);
 
-  const rawQuestions: string[] = [];
-  for (const question of input.openQuestions ?? []) rawQuestions.push(boundedText(question, MAX_STRING_CHARS));
+  const questionCollector = new Map<string, string>();
+  for (const question of input.openQuestions ?? []) collectUniqueText(questionCollector, question);
   for (const title of dissentQuestionTitles.sort(compareStrings)) {
-    rawQuestions.push(boundedText(`Which evidence-backed interpretation of '${title}' reflects the intended architecture or behavior?`, MAX_STRING_CHARS));
+    collectUniqueText(questionCollector, `Which evidence-backed interpretation of '${title}' reflects the intended architecture or behavior?`);
   }
   for (const assumption of assumptionsRequiringInput) {
-    rawQuestions.push(boundedText(`Resolve assumption ${assumption.id}: ${assumption.statement}`, MAX_STRING_CHARS));
+    collectUniqueText(questionCollector, `Resolve assumption ${assumption.id}: ${assumption.statement}`);
   }
-  // Sort and dedupe before capping so reversed input order produces the same set.
-  const openQuestions = [...new Set(rawQuestions.map((entry) => normalizedText(entry)))].sort(compareStrings).slice(0, MAX_QUESTIONS).map((entry) => {
-    const original = rawQuestions.find((raw) => normalizedText(raw) === entry);
-    return original ?? entry;
-  });
+  const openQuestions = finalizeBoundedSet(questionCollector, MAX_QUESTIONS);
 
   const improvementPlan = finalFindings.slice(0, MAX_IMPROVEMENTS).map(makeImprovement);
   const summary = signals.summary;
-  const strengths = [...(input.strengths ?? [])].sort(compareStrings).slice(0, MAX_STRENGTHS);
-
-  // Sort and dedupe gaps before capping so reversed input order produces the same set.
-  const behavioralProofGaps = [...new Set(proofGaps.map((entry) => normalizedText(entry)))].sort(compareStrings).slice(0, MAX_GAPS).map((entry) => {
-    const original = proofGaps.find((raw) => normalizedText(raw) === entry);
-    return original ?? entry;
-  });
-  if (strengths.length === 0 && summary.sourceFiles > 0) {
-    strengths.push(`A bounded structural snapshot covers ${summary.sourceFiles} source files and ${summary.coverageFiles} coverage entries.`);
+  const strengthCollector = new Map<string, string>();
+  for (const value of input.strengths ?? []) collectUniqueText(strengthCollector, value);
+  if (strengthCollector.size === 0 && summary.sourceFiles > 0) {
+    collectUniqueText(strengthCollector, `A bounded structural snapshot covers ${summary.sourceFiles} source files and ${summary.coverageFiles} coverage entries.`);
   }
-  if (summary.testToSourceLinks > 0) strengths.push(`${summary.testToSourceLinks} conservative test-to-source link(s) are available for follow-up verification.`);
+  if (summary.testToSourceLinks > 0) collectUniqueText(strengthCollector, `${summary.testToSourceLinks} conservative test-to-source link(s) are available for follow-up verification.`);
+  const strengths = finalizeBoundedSet(strengthCollector, MAX_STRENGTHS);
 
   return {
     title: boundedText(input.title, MAX_TITLE_CHARS, "Brownfield assessment improvement design"),
-    executiveSummary: executiveSummary(signals, finalFindings, assumptionsRequiringInput, proofGaps),
+    executiveSummary: executiveSummary(signals, finalFindings, assumptionsRequiringInput, behavioralProofGaps),
     currentArchitecture: currentArchitectureSummary(signals),
-    evidenceBackedStrengths: [...strengths.slice(0, MAX_STRENGTHS).map((value) => boundedText(value, MAX_STRING_CHARS))].sort(compareStrings),
+    evidenceBackedStrengths: strengths,
     prioritizedFindings: finalFindings,
     assumptionsRequiringInput,
     improvementPlan,

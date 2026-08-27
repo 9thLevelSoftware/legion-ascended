@@ -1841,19 +1841,19 @@ async function writeUpdatedBundle(input: {
     // The phase is revalidated under the publication lock so two stale
     // readers cannot publish out of order and regress an earlier phase.
     const validatePhaseUnderLock = async (): Promise<void> => {
-      let existingPhase: string | undefined;
+      let existingState: unknown;
       try {
-        const existingState = await readBundleJson(input.repositoryRoot, input.paths.state);
-        if (existingState !== null && typeof existingState === "object" && "phase" in existingState && typeof existingState.phase === "string") {
-          existingPhase = existingState.phase;
-        }
-      } catch {
-        // An unreadable state blocks the publish; the call-site catch
-        // preserves the error.
-        existingPhase = undefined;
+        existingState = await readBundleJson(input.repositoryRoot, input.paths.state);
+      } catch (error) {
+        // An unreadable or corrupt state is not a safe checkpoint to publish
+        // over; the caller's catch branch surfaces a blocking diagnostic.
+        throw new Error(`Brownfield assessment state is unreadable under the publication lock: ${error instanceof Error ? error.message : String(error)}. The update is blocked to prevent silent regression.`);
       }
-      if (existingPhase !== undefined && existingPhase in ASSESSMENT_PHASE_ORDER && ASSESSMENT_PHASE_ORDER[existingPhase as keyof typeof ASSESSMENT_PHASE_ORDER] >= ASSESSMENT_PHASE_ORDER[input.state.phase]) {
-        throw new Error(`Brownfield assessment phase has already been advanced by a concurrent updater to "${existingPhase}". The requested transition from "${input.expectedCurrentPhase}" to "${input.state.phase}" is no longer valid.`);
+      if (existingState !== null && typeof existingState === "object" && "phase" in existingState && typeof existingState.phase === "string") {
+        const existingPhase = existingState.phase;
+        if (existingPhase in ASSESSMENT_PHASE_ORDER && ASSESSMENT_PHASE_ORDER[existingPhase as keyof typeof ASSESSMENT_PHASE_ORDER] >= ASSESSMENT_PHASE_ORDER[input.state.phase]) {
+          throw new Error(`Brownfield assessment phase has already been advanced by a concurrent updater to "${existingPhase}". The requested transition from "${input.expectedCurrentPhase}" to "${input.state.phase}" is no longer valid.`);
+        }
       }
     };
     await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity!, stageDescriptor, { replaceExisting: true, validateBeforePublish: validatePhaseUnderLock });
