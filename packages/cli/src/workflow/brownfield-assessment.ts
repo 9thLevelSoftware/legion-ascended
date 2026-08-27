@@ -1178,7 +1178,7 @@ async function publishStagedBundle(
   parent: OpenedBundleDirectory,
   stageIdentity: BundleStat,
   stageDescriptor?: BundleFileHandle,
-  options: { readonly replaceExisting?: boolean } = {}
+  options: { readonly replaceExisting?: boolean; readonly validateBeforePublish?: () => Promise<void> } = {}
 ): Promise<void> {
   const replaceExisting = options.replaceExisting === true;
   const final = await resolveSafeBundlePath(parent.repositoryRoot, paths.root);
@@ -1191,6 +1191,9 @@ async function publishStagedBundle(
   let operationError: unknown;
   let hasOperationError = false;
   try {
+    if (options.validateBeforePublish !== undefined) {
+      await options.validateBeforePublish();
+    }
     const existing = parent.descriptor === undefined
       ? await lstatIfPresent(final.absolutePath)
       : await lstatIfPresent(descriptorChildPath(parent.descriptor, finalName));
@@ -1835,24 +1838,25 @@ async function writeUpdatedBundle(input: {
       await writeStagedText(stagedPath, fileName, contentByFile[fileName], stageDirectory.descriptor);
     }
     await syncBundleDirectory(stageDirectory);
-    // Before publishing, re-read the persisted bundle state to confirm
-    // the phase has not been advanced by a concurrent updater. This
-    // check closes the TOCTOU window between initial validation and
-    // lock acquisition; publishStagedBundle serialises subsequent
-    // operations under a per-bundle lock.
-    let existingPhase: string | undefined;
-    try {
-      const existingState = await readBundleJson(input.repositoryRoot, input.paths.state);
-      if (existingState !== null && typeof existingState === "object" && "phase" in existingState && typeof existingState.phase === "string") {
-        existingPhase = existingState.phase;
+    // The phase is revalidated under the publication lock so two stale
+    // readers cannot publish out of order and regress an earlier phase.
+    const validatePhaseUnderLock = async (): Promise<void> => {
+      let existingPhase: string | undefined;
+      try {
+        const existingState = await readBundleJson(input.repositoryRoot, input.paths.state);
+        if (existingState !== null && typeof existingState === "object" && "phase" in existingState && typeof existingState.phase === "string") {
+          existingPhase = existingState.phase;
+        }
+      } catch {
+        // An unreadable state blocks the publish; the call-site catch
+        // preserves the error.
+        existingPhase = undefined;
       }
-    } catch {
-      existingPhase = undefined;
-    }
-    if (existingPhase !== undefined && existingPhase in ASSESSMENT_PHASE_ORDER && ASSESSMENT_PHASE_ORDER[existingPhase as keyof typeof ASSESSMENT_PHASE_ORDER] >= ASSESSMENT_PHASE_ORDER[input.state.phase]) {
-      throw new Error(`Brownfield assessment phase has already been advanced by a concurrent updater to "${existingPhase}". The requested transition from "${input.expectedCurrentPhase}" to "${input.state.phase}" is no longer valid.`);
-    }
-    await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity!, stageDescriptor, { replaceExisting: true });
+      if (existingPhase !== undefined && existingPhase in ASSESSMENT_PHASE_ORDER && ASSESSMENT_PHASE_ORDER[existingPhase as keyof typeof ASSESSMENT_PHASE_ORDER] >= ASSESSMENT_PHASE_ORDER[input.state.phase]) {
+        throw new Error(`Brownfield assessment phase has already been advanced by a concurrent updater to "${existingPhase}". The requested transition from "${input.expectedCurrentPhase}" to "${input.state.phase}" is no longer valid.`);
+      }
+    };
+    await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity!, stageDescriptor, { replaceExisting: true, validateBeforePublish: validatePhaseUnderLock });
     staged = false;
   } catch (error) {
     operationError = error;

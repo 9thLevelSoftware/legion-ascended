@@ -692,11 +692,12 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     const pass = isRecord(record.specialist) && typeof record.specialist["pass"] === "number" ? String(record.specialist["pass"]) : "?";
     addUniqueBounded(proofGaps, `Specialist ${name} pass ${pass} did not produce resolved output; behavioral proof is unavailable.`, MAX_GAPS);
   }
+  const hasSynthesisCommandEvidence = (input.commandResults ?? []).length > 0;
   for (const finding of finalFindings) {
     const hasCommandEvidence = finding.evidence.some((reference) =>
       reference.kind === "command-result" || reference.kind === "test-result" || commandResultEvidenceKeys.has(evidenceIdentity(reference))
     );
-    if (isBehavioralClaim(finding) && !hasCommandEvidence) {
+    if (isBehavioralClaim(finding) && !hasCommandEvidence && !hasSynthesisCommandEvidence) {
       addUniqueBounded(proofGaps, `Behavioral claim '${finding.title}' lacks explicit command-result or test-result evidence.`, MAX_GAPS);
     }
   }
@@ -706,18 +707,29 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     .sort((left, right) => compareStrings(left.id, right.id))
     .slice(0, MAX_ASSUMPTIONS);
 
-  const openQuestions: string[] = [];
-  for (const question of input.openQuestions ?? []) addUniqueBounded(openQuestions, question, MAX_QUESTIONS);
+  const rawQuestions: string[] = [];
+  for (const question of input.openQuestions ?? []) rawQuestions.push(boundedText(question, MAX_STRING_CHARS));
   for (const title of dissentQuestionTitles.sort(compareStrings)) {
-    addUniqueBounded(openQuestions, `Which evidence-backed interpretation of '${title}' reflects the intended architecture or behavior?`, MAX_QUESTIONS);
+    rawQuestions.push(boundedText(`Which evidence-backed interpretation of '${title}' reflects the intended architecture or behavior?`, MAX_STRING_CHARS));
   }
   for (const assumption of assumptionsRequiringInput) {
-    addUniqueBounded(openQuestions, `Resolve assumption ${assumption.id}: ${assumption.statement}`, MAX_QUESTIONS);
+    rawQuestions.push(boundedText(`Resolve assumption ${assumption.id}: ${assumption.statement}`, MAX_STRING_CHARS));
   }
+  // Sort and dedupe before capping so reversed input order produces the same set.
+  const openQuestions = [...new Set(rawQuestions.map((entry) => normalizedText(entry)))].sort(compareStrings).slice(0, MAX_QUESTIONS).map((entry) => {
+    const original = rawQuestions.find((raw) => normalizedText(raw) === entry);
+    return original ?? entry;
+  });
 
   const improvementPlan = finalFindings.slice(0, MAX_IMPROVEMENTS).map(makeImprovement);
   const summary = signals.summary;
-  const strengths = [...(input.strengths ?? [])].slice(0, MAX_STRENGTHS);
+  const strengths = [...(input.strengths ?? [])].sort(compareStrings).slice(0, MAX_STRENGTHS);
+
+  // Sort and dedupe gaps before capping so reversed input order produces the same set.
+  const behavioralProofGaps = [...new Set(proofGaps.map((entry) => normalizedText(entry)))].sort(compareStrings).slice(0, MAX_GAPS).map((entry) => {
+    const original = proofGaps.find((raw) => normalizedText(raw) === entry);
+    return original ?? entry;
+  });
   if (strengths.length === 0 && summary.sourceFiles > 0) {
     strengths.push(`A bounded structural snapshot covers ${summary.sourceFiles} source files and ${summary.coverageFiles} coverage entries.`);
   }
@@ -736,8 +748,8 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
       "Do not infer runtime behavior, product intent, or test coverage from structural evidence alone.",
       "Do not silently average conflicting specialist findings."
     ].sort(compareStrings),
-    behavioralProofGaps: [...proofGaps].sort(compareStrings),
-    openQuestions: [...openQuestions].sort(compareStrings)
+    behavioralProofGaps,
+    openQuestions
   };
 }
 
