@@ -34,7 +34,6 @@ const JSON_CREDENTIAL_RE =
 // Treat every URI with an authority as sensitive. This deliberately uses an
 // opaque replacement rather than trying to preserve a public URL while
 // accidentally leaking userinfo, query, or fragment credentials.
-const URL_RE = /\b[a-z][a-z0-9+.-]{0,31}:\/\/[^\s<>"'`]+/giu;
 const BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu;
 const TOKEN_RE = /\b(?:sk|ghp|gho|xox[baprs]-)[A-Za-z0-9_-]{8,}\b/gu;
 const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu;
@@ -42,6 +41,75 @@ const ENCODED_SEGMENT_RE = /[^\s]*%[0-9a-f]{2}[^\s]*/giu;
 const ENCODED_ESCAPE_RE = /%[0-9a-f]{2}/iu;
 const MAX_REDACTION_DECODE_PASSES = 16;
 const MAX_REDACTION_DECODE_LENGTH = 64 * 1024;
+const MAX_REDACTION_INPUT_LENGTH = 1024 * 1024;
+const MAX_URL_SCHEME_LENGTH = 1024;
+const MAX_URL_LENGTH = 64 * 1024;
+
+function isAsciiAlpha(character: string | undefined): boolean {
+  return character !== undefined && ((character >= "a" && character <= "z") || (character >= "A" && character <= "Z"));
+}
+
+function isAsciiWord(character: string | undefined): boolean {
+  return character !== undefined && (
+    isAsciiAlpha(character) ||
+    (character >= "0" && character <= "9") ||
+    character === "_"
+  );
+}
+
+function isUrlSchemeCharacter(character: string | undefined): boolean {
+  return character !== undefined && (
+    isAsciiAlpha(character) ||
+    (character >= "0" && character <= "9") ||
+    character === "+" ||
+    character === "-" ||
+    character === "."
+  );
+}
+
+function isUrlTerminator(character: string | undefined): boolean {
+  return character === undefined || /[\s<>"'`]/u.test(character);
+}
+
+/**
+ * Redact URI authorities opaquely without putting an unbounded scheme or URL
+ * body in a backtracking regex. The scanner still recognizes over-limit
+ * scheme/body lengths and consumes the whole candidate so they fail closed.
+ */
+function redactUrls(value: string): string {
+  let result = "";
+  let cursor = 0;
+  while (cursor < value.length) {
+    const character = value[cursor];
+    const boundary = cursor === 0 || !isAsciiWord(value[cursor - 1]);
+    if (isAsciiAlpha(character) && boundary) {
+      const schemeScanLimit = Math.min(value.length, cursor + 1 + MAX_URL_SCHEME_LENGTH);
+      let schemeEnd = cursor + 1;
+      while (schemeEnd < schemeScanLimit && isUrlSchemeCharacter(value[schemeEnd])) schemeEnd += 1;
+      if (schemeEnd === schemeScanLimit && isUrlSchemeCharacter(value[schemeEnd])) {
+        while (schemeEnd < value.length && isUrlSchemeCharacter(value[schemeEnd])) schemeEnd += 1;
+      }
+      if (value.slice(schemeEnd, schemeEnd + 3) === "://") {
+        let urlEnd = schemeEnd + 3;
+        const urlScanLimit = Math.min(value.length, cursor + MAX_URL_LENGTH);
+        while (urlEnd < urlScanLimit && !isUrlTerminator(value[urlEnd])) urlEnd += 1;
+        if (urlEnd >= urlScanLimit && urlEnd < value.length && !isUrlTerminator(value[urlEnd])) {
+          while (urlEnd < value.length && !isUrlTerminator(value[urlEnd])) urlEnd += 1;
+        }
+        const schemeLength = schemeEnd - cursor;
+        const urlLength = urlEnd - cursor;
+        if (schemeLength > 0 && urlLength > 3) {
+          result += "[REDACTED_URL]";
+          cursor = urlEnd;
+          continue;
+        }
+      }
+    }
+    result += character;
+    cursor += 1;
+  }
+  return result;
+}
 
 function decodeRepeatedly(value: string): { readonly decoded: string; readonly exhausted: boolean } {
   if (value.length > MAX_REDACTION_DECODE_LENGTH) return { decoded: value, exhausted: true };
@@ -60,16 +128,16 @@ function decodeRepeatedly(value: string): { readonly decoded: string; readonly e
 }
 
 function redactDirectText(value: string): string {
-  return value
+  return redactUrls(value
     .replace(CONTROL_RE, "�")
-    .replace(URL_RE, "[REDACTED_URL]")
     .replace(JSON_CREDENTIAL_RE, "[REDACTED_JSON_SECRET]")
     .replace(BEARER_RE, "Bearer [REDACTED_TOKEN]")
     .replace(SECRET_ASSIGNMENT_RE, "[REDACTED_SECRET]")
-    .replace(TOKEN_RE, "[REDACTED_TOKEN]");
+    .replace(TOKEN_RE, "[REDACTED_TOKEN]"));
 }
 
 export function redactAdapterTranscript(text: string): string {
+  if (text.length > MAX_REDACTION_INPUT_LENGTH) return "[REDACTED_TRANSCRIPT]";
   const direct = redactDirectText(text);
   return direct.replace(ENCODED_SEGMENT_RE, (match) => {
     if (!match.includes("%")) return match;

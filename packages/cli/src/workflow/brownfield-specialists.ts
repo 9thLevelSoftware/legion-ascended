@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { access, lstat, mkdtemp, readdir, readFile, readlink, rm } from "node:fs/promises";
+import { access, chmod, lstat, mkdir, mkdtemp, readdir, readFile, readlink, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -68,6 +68,10 @@ const EXECUTION_ARTIFACT_ROOT = ".legion/project/workflow/brownfield-specialists
 const BOUNDED_EVIDENCE_NOTE = " [BOUNDED_EVIDENCE]";
 const BOUNDED_PROMPT_NOTE = "\n[BOUNDED_PROMPT_TRUNCATED]";
 const BOUNDED_PACK_NOTE = "[BOUNDED_PACK_TRUNCATED]";
+const MAX_READ_ONLY_SNAPSHOT_ENTRIES = 50_000;
+const MAX_READ_ONLY_SNAPSHOT_FILE_BYTES = 16 * 1024 * 1024;
+const MAX_READ_ONLY_SNAPSHOT_BYTES = 128 * 1024 * 1024;
+const MAX_READ_ONLY_SYMLINK_BYTES = 64 * 1024;
 
 let cleanupAdapterArtifacts: (root: string) => Promise<void> = (root) => rm(root, { recursive: true, force: true });
 
@@ -1138,13 +1142,37 @@ function cloneAndFreeze<T>(value: T): T {
 }
 
 type RepositoryEntry = {
-  readonly kind: "file" | "symlink" | "other";
+  readonly kind: "file" | "directory" | "symlink" | "other";
   readonly digest: string;
+  readonly mode: number;
+  readonly bytes?: Buffer;
+  readonly linkTarget?: string;
 };
 
 type RepositorySnapshot = ReadonlyMap<string, RepositoryEntry>;
 
-async function snapshotRepository(root: string): Promise<RepositorySnapshot> {
+interface RepositorySnapshotOptions {
+  readonly allowUnboundedFiles?: boolean;
+}
+
+function repositoryAbsolutePath(root: string, relativePath: string): string {
+  if (relativePath.includes("\u0000")) throw new Error("In-process specialist repository path contains a NUL byte.");
+  const absoluteRoot = path.resolve(root);
+  const absolutePath = relativePath.length === 0
+    ? absoluteRoot
+    : path.resolve(absoluteRoot, ...relativePath.split("/"));
+  const relative = path.relative(absoluteRoot, absolutePath);
+  if (path.isAbsolute(relative) || relative === ".." || relative.startsWith(`..${path.sep}`)) {
+    throw new Error(`In-process specialist repository path escapes the repository root: ${relativePath}.`);
+  }
+  return absolutePath;
+}
+
+function repositoryMode(mode: number): number {
+  return mode & 0o7777;
+}
+
+async function snapshotRepository(root: string, options: RepositorySnapshotOptions = {}): Promise<RepositorySnapshot> {
   const entries = new Map<string, RepositoryEntry>();
   let rootStat;
   try {
@@ -1153,7 +1181,18 @@ async function snapshotRepository(root: string): Promise<RepositorySnapshot> {
     if (isRecord(error) && error["code"] === "ENOENT") return entries;
     throw error;
   }
-  if (!rootStat.isDirectory()) throw new Error("In-process specialist repository root is not a directory.");
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw new Error("In-process specialist repository root is not a directory.");
+  }
+
+  let snapshotBytes = 0;
+  const addEntry = (relativePath: string, entry: RepositoryEntry): void => {
+    if (entries.size >= MAX_READ_ONLY_SNAPSHOT_ENTRIES) {
+      throw new Error(`In-process specialist repository snapshot exceeded ${MAX_READ_ONLY_SNAPSHOT_ENTRIES} entries.`);
+    }
+    entries.set(relativePath, entry);
+  };
+  addEntry("", { kind: "directory", digest: "", mode: repositoryMode(rootStat.mode) });
 
   const visit = async (absoluteRoot: string, relativeRoot: string): Promise<void> => {
     const children = (await readdir(absoluteRoot, { withFileTypes: true }))
@@ -1163,27 +1202,71 @@ async function snapshotRepository(root: string): Promise<RepositorySnapshot> {
       const relativePath = relativeRoot.length === 0 ? child.name : `${relativeRoot}/${child.name}`;
       const stat = await lstat(absolutePath);
       if (stat.isDirectory()) {
+        addEntry(relativePath, { kind: "directory", digest: "", mode: repositoryMode(stat.mode) });
         await visit(absolutePath, relativePath);
         continue;
       }
       if (stat.isFile()) {
+        const fileWithinBudget = Number.isSafeInteger(stat.size) &&
+          stat.size <= MAX_READ_ONLY_SNAPSHOT_FILE_BYTES &&
+          snapshotBytes + stat.size <= MAX_READ_ONLY_SNAPSHOT_BYTES;
+        if (!fileWithinBudget) {
+          if (options.allowUnboundedFiles !== true) {
+            throw new Error(`In-process specialist repository file exceeds the bounded restoration limit: ${relativePath}.`);
+          }
+          addEntry(relativePath, {
+            kind: "file",
+            digest: `unavailable:${stat.size}`,
+            mode: repositoryMode(stat.mode)
+          });
+          continue;
+        }
         const bytes = await readFile(absolutePath);
-        entries.set(relativePath, {
+        if (bytes.length > MAX_READ_ONLY_SNAPSHOT_FILE_BYTES || snapshotBytes + bytes.length > MAX_READ_ONLY_SNAPSHOT_BYTES) {
+          if (options.allowUnboundedFiles !== true) {
+            throw new Error(`In-process specialist repository file changed beyond the bounded restoration limit: ${relativePath}.`);
+          }
+          addEntry(relativePath, {
+            kind: "file",
+            digest: `unavailable:${bytes.length}`,
+            mode: repositoryMode(stat.mode)
+          });
+          continue;
+        }
+        snapshotBytes += bytes.length;
+        addEntry(relativePath, {
           kind: "file",
-          digest: createHash("sha256").update(bytes).digest("hex")
+          digest: createHash("sha256").update(bytes).digest("hex"),
+          mode: repositoryMode(stat.mode),
+          bytes
         });
         continue;
       }
       if (stat.isSymbolicLink()) {
-        entries.set(relativePath, {
+        const linkTarget = await readlink(absolutePath);
+        if (Buffer.byteLength(linkTarget, "utf8") > MAX_READ_ONLY_SYMLINK_BYTES) {
+          if (options.allowUnboundedFiles !== true) {
+            throw new Error(`In-process specialist repository symlink exceeds the bounded restoration limit: ${relativePath}.`);
+          }
+          addEntry(relativePath, {
+            kind: "symlink",
+            digest: "unavailable",
+            mode: repositoryMode(stat.mode)
+          });
+          continue;
+        }
+        addEntry(relativePath, {
           kind: "symlink",
-          digest: createHash("sha256").update(await readlink(absolutePath), "utf8").digest("hex")
+          digest: createHash("sha256").update(linkTarget, "utf8").digest("hex"),
+          mode: repositoryMode(stat.mode),
+          linkTarget
         });
         continue;
       }
-      entries.set(relativePath, {
+      addEntry(relativePath, {
         kind: "other",
-        digest: `${stat.mode}:${stat.size}`
+        digest: `${stat.mode}:${stat.size}`,
+        mode: repositoryMode(stat.mode)
       });
     }
   };
@@ -1191,25 +1274,245 @@ async function snapshotRepository(root: string): Promise<RepositorySnapshot> {
   return entries;
 }
 
-async function repositoryMutationDiagnostic(
-  root: string,
-  before: RepositorySnapshot
-): Promise<string | undefined> {
-  const after = await snapshotRepository(root);
+function sameRepositoryEntry(left: RepositoryEntry, right: RepositoryEntry): boolean {
+  return left.kind === right.kind &&
+    left.digest === right.digest &&
+    left.mode === right.mode &&
+    left.linkTarget === right.linkTarget;
+}
+
+function repositoryPathDepth(relativePath: string): number {
+  return relativePath.length === 0 ? 0 : relativePath.split("/").length;
+}
+
+function repositoryChangeLabel(action: "added" | "removed" | "changed", relativePath: string): string {
+  return `${action} ${relativePath.length === 0 ? "repository root" : relativePath}`;
+}
+
+function changedRepositoryPaths(before: RepositorySnapshot, after: RepositorySnapshot): string[] {
   const changed: string[] = [];
   const paths = [...new Set([...before.keys(), ...after.keys()])].sort(compareStrings);
   for (const relativePath of paths) {
     const previous = before.get(relativePath);
     const current = after.get(relativePath);
-    if (previous === undefined) changed.push(`added ${relativePath}`);
-    else if (current === undefined) changed.push(`removed ${relativePath}`);
-    else if (previous.kind !== current.kind || previous.digest !== current.digest) changed.push(`changed ${relativePath}`);
+    if (previous === undefined) changed.push(repositoryChangeLabel("added", relativePath));
+    else if (current === undefined) changed.push(repositoryChangeLabel("removed", relativePath));
+    else if (!sameRepositoryEntry(previous, current)) changed.push(repositoryChangeLabel("changed", relativePath));
   }
+  return changed;
+}
+
+function mutationDiagnostic(changed: readonly string[]): string | undefined {
   if (changed.length === 0) return undefined;
   return boundedText(
     `In-process specialist callback violated the read-only repository boundary: ${changed.slice(0, 8).join(", ")}${changed.length > 8 ? `, and ${changed.length - 8} more` : ""}.`,
     MAX_DIAGNOSTIC_CHARS
   );
+}
+
+async function removeRepositoryEntry(root: string, relativePath: string): Promise<void> {
+  if (relativePath.length === 0) throw new Error("Refusing to remove the in-process specialist repository root.");
+  const absolutePath = repositoryAbsolutePath(root, relativePath);
+  let stat;
+  try {
+    stat = await lstat(absolutePath);
+  } catch (error) {
+    if (isRecord(error) && error["code"] === "ENOENT") return;
+    throw error;
+  }
+  await rm(absolutePath, { recursive: stat.isDirectory() && !stat.isSymbolicLink(), force: false });
+}
+
+async function ensureRepositoryDirectory(root: string, relativePath: string): Promise<string> {
+  const absoluteRoot = repositoryAbsolutePath(root, "");
+  let rootStat;
+  try {
+    rootStat = await lstat(absoluteRoot);
+  } catch (error) {
+    if (!(isRecord(error) && error["code"] === "ENOENT")) throw error;
+    await mkdir(absoluteRoot, { mode: 0o700 });
+    rootStat = await lstat(absoluteRoot);
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("Cannot safely restore a repository directory through a non-directory root.");
+  if (relativePath.length === 0) return absoluteRoot;
+
+  const components = relativePath.split("/");
+  let currentRelative = "";
+  for (const component of components) {
+    currentRelative = currentRelative.length === 0 ? component : `${currentRelative}/${component}`;
+    const current = repositoryAbsolutePath(root, currentRelative);
+    let stat;
+    try {
+      stat = await lstat(current);
+    } catch (error) {
+      if (!(isRecord(error) && error["code"] === "ENOENT")) throw error;
+      await mkdir(current, { mode: 0o700 });
+      continue;
+    }
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Cannot safely restore through repository path ${currentRelative}.`);
+  }
+  return repositoryAbsolutePath(root, relativePath);
+}
+
+async function restoreFile(root: string, relativePath: string, entry: RepositoryEntry): Promise<void> {
+  if (entry.bytes === undefined) throw new Error(`Missing bounded bytes for repository file ${relativePath}.`);
+  const parentRelative = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/")) : "";
+  const parent = await ensureRepositoryDirectory(root, parentRelative);
+  const absolutePath = repositoryAbsolutePath(root, relativePath);
+  const temporaryRoot = await mkdtemp(path.join(parent, ".legion-read-only-restore-"));
+  const temporaryPath = path.join(temporaryRoot, "entry");
+  try {
+    await writeFile(temporaryPath, entry.bytes, { mode: entry.mode });
+    await chmod(temporaryPath, entry.mode);
+    await rename(temporaryPath, absolutePath);
+    await chmod(absolutePath, entry.mode);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+async function restoreSymlink(root: string, relativePath: string, entry: RepositoryEntry): Promise<void> {
+  if (entry.linkTarget === undefined) throw new Error(`Missing bounded link target for repository symlink ${relativePath}.`);
+  const parentRelative = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/")) : "";
+  const parent = await ensureRepositoryDirectory(root, parentRelative);
+  const absolutePath = repositoryAbsolutePath(root, relativePath);
+  const temporaryRoot = await mkdtemp(path.join(parent, ".legion-read-only-restore-"));
+  const temporaryPath = path.join(temporaryRoot, "entry");
+  try {
+    await symlink(entry.linkTarget, temporaryPath);
+    await rename(temporaryPath, absolutePath);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+async function clearRepositoryRoot(root: string): Promise<void> {
+  const absoluteRoot = repositoryAbsolutePath(root, "");
+  let rootStat;
+  try {
+    rootStat = await lstat(absoluteRoot);
+  } catch (error) {
+    if (!(isRecord(error) && error["code"] === "ENOENT")) throw error;
+    await mkdir(absoluteRoot, { mode: 0o700 });
+    return;
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    await rm(absoluteRoot, { recursive: false, force: false });
+    await mkdir(absoluteRoot, { mode: 0o700 });
+    return;
+  }
+  const children = (await readdir(absoluteRoot, { withFileTypes: true }))
+    .sort((left, right) => compareStrings(left.name, right.name));
+  for (const child of children) await removeRepositoryEntry(root, child.name);
+}
+
+async function restoreRepositoryFromBaseline(root: string, before: RepositorySnapshot): Promise<void> {
+  if ([...before.values()].some((entry) => entry.kind === "other")) {
+    throw new Error("Cannot safely restore a repository containing non-regular entries from a bounded snapshot.");
+  }
+  await clearRepositoryRoot(root);
+  const pathsToRestore = [...before.keys()]
+    .sort((left, right) => repositoryPathDepth(left) - repositoryPathDepth(right) || compareStrings(left, right));
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    if (previous === undefined) continue;
+    if (previous.kind === "directory") {
+      const absolutePath = await ensureRepositoryDirectory(root, relativePath);
+      await chmod(absolutePath, 0o700);
+    }
+  }
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    if (previous === undefined) continue;
+    if (previous.kind === "file") {
+      await restoreFile(root, relativePath, previous);
+    } else if (previous.kind === "symlink") {
+      await restoreSymlink(root, relativePath, previous);
+    }
+  }
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    if (previous === undefined) continue;
+    if (previous.kind === "directory") {
+      const absolutePath = await ensureRepositoryDirectory(root, relativePath);
+      await chmod(absolutePath, previous.mode);
+    }
+  }
+  const verified = await snapshotRepository(root);
+  const residual = changedRepositoryPaths(before, verified);
+  if (residual.length > 0) {
+    throw new Error(`Read-only repository cleanup did not restore the original state: ${residual.slice(0, 8).join(", ")}${residual.length > 8 ? `, and ${residual.length - 8} more` : ""}.`);
+  }
+}
+
+async function restoreRepository(
+  root: string,
+  before: RepositorySnapshot,
+  after: RepositorySnapshot
+): Promise<void> {
+  const changed = changedRepositoryPaths(before, after);
+  if (changed.length === 0) return;
+
+  // Special files cannot be reconstructed from bounded metadata. Refuse to
+  // claim cleanup if one was deleted or changed instead of risking a partial
+  // and inaccurate restoration.
+  for (const [relativePath, previous] of before.entries()) {
+    if (previous.kind !== "other") continue;
+    const current = after.get(relativePath);
+    if (current === undefined || !sameRepositoryEntry(previous, current)) {
+      throw new Error(`Cannot safely restore non-regular repository entry ${relativePath.length === 0 ? "repository root" : relativePath}.`);
+    }
+  }
+
+  const pathsToRestore = [...before.keys()]
+    .sort((left, right) => repositoryPathDepth(left) - repositoryPathDepth(right) || compareStrings(left, right));
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    const current = after.get(relativePath);
+    if (previous?.kind === "directory" && (current === undefined || current.kind === "directory")) {
+      const absolutePath = await ensureRepositoryDirectory(root, relativePath);
+      await chmod(absolutePath, 0o700);
+    }
+  }
+
+  const pathsToRemove = [...after.keys()]
+    .filter((relativePath) => {
+      if (relativePath.length === 0) return false;
+      const previous = before.get(relativePath);
+      const current = after.get(relativePath);
+      return current !== undefined && (previous === undefined || previous.kind !== current.kind);
+    })
+    .sort((left, right) => repositoryPathDepth(right) - repositoryPathDepth(left) || compareStrings(left, right));
+  for (const relativePath of pathsToRemove) await removeRepositoryEntry(root, relativePath);
+
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    if (previous === undefined) continue;
+    const current = after.get(relativePath);
+    if (previous.kind === "file") {
+      if (current === undefined || current.kind !== "file" || !sameRepositoryEntry(previous, current)) {
+        await restoreFile(root, relativePath, previous);
+      }
+    } else if (previous.kind === "symlink") {
+      if (current === undefined || current.kind !== "symlink" || !sameRepositoryEntry(previous, current)) {
+        await restoreSymlink(root, relativePath, previous);
+      }
+    }
+  }
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    if (previous === undefined) continue;
+    if (previous.kind === "directory") {
+      const absolutePath = await ensureRepositoryDirectory(root, relativePath);
+      await chmod(absolutePath, previous.mode);
+    }
+  }
+
+  const verified = await snapshotRepository(root);
+  const residual = changedRepositoryPaths(before, verified);
+  if (residual.length > 0) {
+    throw new Error(`Read-only repository cleanup did not restore the original state: ${residual.slice(0, 8).join(", ")}${residual.length > 8 ? `, and ${residual.length - 8} more` : ""}.`);
+  }
 }
 
 async function runReadOnlyInProcessCallback(input: {
@@ -1243,8 +1546,28 @@ async function runReadOnlyInProcessCallback(input: {
       }
     }
   }
-  const mutation = await repositoryMutationDiagnostic(input.repositoryRoot, before);
+
+  let after: RepositorySnapshot;
+  try {
+    after = await snapshotRepository(input.repositoryRoot, { allowUnboundedFiles: true });
+  } catch (error) {
+    try {
+      await restoreRepositoryFromBaseline(input.repositoryRoot, before);
+    } catch (cleanupError) {
+      throw new Error(`Read-only repository cleanup failed while inspecting callback state: ${safeDiagnostic(error)} Cleanup failed: ${safeDiagnostic(cleanupError)}.`);
+    }
+    throw new Error(`Read-only callback state exceeded the bounded inspection limit; cleanup restored the baseline before rejecting: ${safeDiagnostic(error)}.`);
+  }
+  const mutation = mutationDiagnostic(changedRepositoryPaths(before, after));
   if (mutation !== undefined) {
+    try {
+      await restoreRepository(input.repositoryRoot, before, after);
+    } catch (error) {
+      const cleanupDiagnostic = safeDiagnostic(error);
+      const restoreError = new Error(`${mutation} Read-only repository cleanup failed: ${cleanupDiagnostic}.`) as Error & { code?: string };
+      restoreError.code = "READ_ONLY_RESTORE_FAILED";
+      throw restoreError;
+    }
     const diagnostic = callbackError === undefined
       ? mutation
       : `${safeDiagnostic(callbackError)} ${mutation}`;

@@ -453,11 +453,13 @@ test("drains a timed-out callback before the next specialist and before returnin
     assert.equal(mutationAfterResult, false);
     assert.equal(firstCallbackSettled, true);
     assert.equal(active, 0);
-    assert.equal(result.assumptions.length, 2);
+    assert.equal(result.assumptions.length, 1);
     assert.ok(result.assumptions.every(hasSyntheticUserInput));
-    assert.ok(result.executionRecords.every((record) => record.status !== "succeeded"));
     assert.ok(result.executionRecords.some((record) => record.status === "blocked"));
-    assert.ok(result.executionRecords.every((record) => /timed out|read-only|changed/iu.test(record.diagnostic)));
+    assert.equal(result.executionRecords[0].status, "blocked");
+    assert.match(result.executionRecords[0].diagnostic, /timed out|read-only|changed/iu);
+    assert.equal(result.executionRecords[1].status, "succeeded");
+    await assert.rejects(readFile(delayedFile, "utf8"), { code: "ENOENT" });
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }
@@ -766,7 +768,7 @@ test("rejects in-process callbacks that mutate supplied source files", async () 
     assert.ok(result.assumptions.every(hasSyntheticUserInput));
     assert.ok(result.executionRecords.every((record) => record.status === "failed"));
     assert.ok(result.executionRecords.every((record) => /read-only|mutat|changed|source/iu.test(record.diagnostic)));
-    assert.equal(await readFile(sourceFile, "utf8"), "mutated source bytes\\n");
+    assert.equal(await readFile(sourceFile, "utf8"), "original source bytes\\n");
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }
@@ -788,7 +790,7 @@ test("rejects in-process callbacks that add repository files", async () => {
     assert.ok(result.assumptions.every(hasSyntheticUserInput));
     assert.ok(result.executionRecords.every((record) => record.status === "failed"));
     assert.ok(result.executionRecords.every((record) => /read-only|add|changed|source/iu.test(record.diagnostic)));
-    assert.equal(await readFile(addedFile, "utf8"), "callback-created bytes\\n");
+    await assert.rejects(readFile(addedFile, "utf8"), { code: "ENOENT" });
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }
@@ -800,12 +802,14 @@ test("redacts URLs, credential values, bearer tokens, controls, and encoded secr
   const encodedJsonFourTimes = [1, 2, 3, 4].reduce((value) => encodeURIComponent(value), "{\"password\":\"json-secret-four-times\",\"apiKey\":\"api-key-four-times\"}");
   const encodedJsonEightTimes = [1, 2, 3, 4, 5, 6, 7, 8].reduce((value) => encodeURIComponent(value), "{\"password\":\"json-secret-eight-times\",\"apiKey\":\"api-key-eight-times\"}");
   const deeplyEncodedUrl = encodeURIComponent(encodeURIComponent("https://user:topsecret@example.invalid/private?api_key=topsecret"));
+  const longScheme = `${"s".repeat(33)}://long-user:long-scheme-secret@example.invalid/private?token=long-query-secret`;
   const raw = [
     "https://example.invalid/public/path",
     "postgresql://db-user:postgres-secret@example.invalid:5432/app?sslpassword=query-secret#fragment-secret",
     "ftp://ftp-user:ftp-secret@example.invalid/private",
     "git://git-user:git-secret@example.invalid/repository",
     "custom+scheme://scheme-user:scheme-secret@example.invalid/private",
+    longScheme,
     "{\"password\":\"topsecret\",\"apiKey\":\"api-secret\"}",
     "Authorization: Bearer bearer-secret-token-123456",
     "password = source-secret",
@@ -827,6 +831,8 @@ test("redacts URLs, credential values, bearer tokens, controls, and encoded secr
   assert.equal(redacted.includes("ftp-secret"), false);
   assert.equal(redacted.includes("git-secret"), false);
   assert.equal(redacted.includes("scheme-secret"), false);
+  assert.equal(redacted.includes("long-scheme-secret"), false);
+  assert.equal(redacted.includes("long-query-secret"), false);
   assert.equal(redacted.includes("topsecret"), false);
   assert.equal(redacted.includes("api-secret"), false);
   assert.equal(redacted.includes("bearer-secret-token-123456"), false);
@@ -858,6 +864,8 @@ test("redacts URLs, credential values, bearer tokens, controls, and encoded secr
     assert.equal(transcript.includes("ftp-secret"), false);
     assert.equal(transcript.includes("git-secret"), false);
     assert.equal(transcript.includes("scheme-secret"), false);
+    assert.equal(transcript.includes("long-scheme-secret"), false);
+    assert.equal(transcript.includes("long-query-secret"), false);
     assert.equal(transcript.includes("partial-key-secret"), false);
     assert.equal(transcript.includes("json-secret-twice"), false);
     assert.equal(transcript.includes("api-key-four-times"), false);
