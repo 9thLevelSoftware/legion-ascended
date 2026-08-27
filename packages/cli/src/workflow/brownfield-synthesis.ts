@@ -217,7 +217,8 @@ function findingSemanticKey(finding: AssessmentFinding): string {
     severity: finding.severity,
     confidence: finding.confidence,
     recommendation: normalizedText(finding.recommendation),
-    evidence: [...finding.evidence].map(evidenceIdentity).sort(compareStrings)
+    evidence: [...finding.evidence].map(evidenceIdentity).sort(compareStrings),
+    assumptions: [...finding.assumptions].sort(compareStrings)
   });
 }
 
@@ -611,17 +612,24 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
 
   const findingsWithResolvedAssumptions: AssessmentFinding[] = [];
   for (const finding of prioritizedFindings) {
-    const assumptionIds = [...finding.assumptions];
-    for (const assumptionId of assumptionIds) {
-      if (accumulator.ids.has(assumptionId)) continue;
-      addGeneratedAssumption(accumulator, makeGeneratedAssumption({
-        seed: `unresolved\u0000${assumptionId}`,
-        statement: `[needs-user-input] Finding '${finding.title}' references unresolved assumption ${assumptionId}.`,
-        resolution: "Provide the missing assumption record or remove the unresolved reference.",
-        evidence: finding.evidence
-      }));
+    const resolvedAssumptions: string[] = [];
+    for (const assumptionId of finding.assumptions) {
+      if (accumulator.ids.has(assumptionId)) {
+        resolvedAssumptions.push(assumptionId);
+      } else {
+        const newId = addGeneratedAssumption(accumulator, makeGeneratedAssumption({
+          seed: `unresolved\u0000${assumptionId}`,
+          statement: `[needs-user-input] Finding '${finding.title}' references unresolved assumption ${assumptionId}.`,
+          resolution: "Provide the missing assumption record or remove the unresolved reference.",
+          evidence: finding.evidence
+        }));
+        resolvedAssumptions.push(newId);
+      }
     }
-    findingsWithResolvedAssumptions.push(finding);
+    findingsWithResolvedAssumptions.push(assessmentFindingSchema.parse({
+      ...finding,
+      assumptions: [...new Set(resolvedAssumptions)]
+    }));
   }
 
   const byTitle = new Map<string, AssessmentFinding[]>();
@@ -706,7 +714,7 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     const hasCommandEvidence = finding.evidence.some((reference) =>
       reference.kind === "command-result" || reference.kind === "test-result" || commandResultEvidenceKeys.has(evidenceIdentity(reference))
     );
-    if (isBehavioralClaim(finding) && !hasCommandEvidence && !hasSynthesisCommandEvidence) {
+    if (isBehavioralClaim(finding) && !hasCommandEvidence) {
       collectUniqueText(gapCollector, `Behavioral claim '${finding.title}' lacks explicit command-result or test-result evidence.`);
     }
   }
