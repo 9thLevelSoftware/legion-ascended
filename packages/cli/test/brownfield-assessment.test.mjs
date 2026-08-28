@@ -192,6 +192,57 @@ async function runAssessmentChild(repositoryRoot, snapshot, onSpawn) {
   });
 }
 
+async function runAssessmentUpdateChild(repositoryRoot, assessmentId, onSpawn) {
+  const moduleUrl = new URL("../dist/workflow/brownfield-assessment.js", import.meta.url).href;
+  const child = spawn(process.execPath, [
+    "--input-type=module",
+    "-e",
+    `
+      const { updateBrownfieldAssessmentState } = await import(${JSON.stringify(moduleUrl)});
+      try {
+        await updateBrownfieldAssessmentState({
+          repositoryRoot: process.env.BROWNFIELD_REPOSITORY_ROOT,
+          assessmentId: process.env.BROWNFIELD_ASSESSMENT_ID,
+          phase: "signals_complete"
+        });
+        process.stdout.write("resolved");
+      } catch (error) {
+        process.stderr.write(String(error?.stack ?? error));
+        process.exitCode = 1;
+      }
+    `
+  ], {
+    env: {
+      ...process.env,
+      BROWNFIELD_REPOSITORY_ROOT: repositoryRoot,
+      BROWNFIELD_ASSESSMENT_ID: assessmentId
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  onSpawn?.(child);
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+
+  return await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error(`assessment update child timed out; stderr: ${stderr}`));
+    }, 5_000);
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once("close", (code, signal) => {
+      clearTimeout(timeout);
+      resolve({ code, signal, stdout, stderr });
+    });
+  });
+}
+
 test("refuses setup when no fresh structural snapshot exists", async () => {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-assessment-absent-"));
   try {
@@ -539,18 +590,47 @@ test("fails closed when persisted effort no longer matches the assessment identi
 
 test("rejects a phase update when the persisted assessment ID is tampered", async () => {
   const fixture = await writeMapFixture();
+  let child;
+  let watcher;
   try {
     const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
     const statePath = path.join(fixture.repositoryRoot, ...created.paths.state.split("/"));
+    const parentPath = path.dirname(path.dirname(statePath));
+    const stagePrefix = `.${path.basename(created.paths.root)}.`;
+    let stopped = false;
+    let stopResolve;
+    const stoppedReady = new Promise((resolve) => { stopResolve = resolve; });
+    watcher = watchDirectory(parentPath, (_eventType, entryName) => {
+      const name = String(entryName ?? "");
+      if (stopped || !name.startsWith(stagePrefix) || !name.endsWith(".staging")) return;
+      stopped = true;
+      child.kill("SIGSTOP");
+      stopResolve();
+    });
+
+    const update = runAssessmentUpdateChild(fixture.repositoryRoot, created.assessmentId, (processHandle) => {
+      child = processHandle;
+    });
+    const stageObserved = await Promise.race([
+      stoppedReady.then(() => ({ observed: true })),
+      update.then((result) => ({ observed: false, result }))
+    ]);
+    assert.equal(stageObserved.observed, true, `did not observe the update staging directory: ${JSON.stringify(stageObserved)}`);
+
     const state = JSON.parse(await readFile(statePath, "utf8"));
     state.assessmentId = "assess_bbbbbbbbbbbbbbbbbbbbbbbb";
     await writeFile(statePath, stableProtocolJson(state), "utf8");
+    child.kill("SIGCONT");
+    watcher.close();
+    watcher = undefined;
 
-    await assert.rejects(
-      () => updateBrownfieldAssessmentState({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId, phase: "signals_complete" }),
-      /identity|assessment state ID|tampered/iu
-    );
+    const result = await update;
+    assert.equal(result.code, 1, result.stdout);
+    assert.match(result.stderr, /identity mismatch under the publication lock/iu);
   } finally {
+    watcher?.close();
+    child?.kill("SIGCONT");
+    child?.kill("SIGKILL");
     await fixture.cleanup();
   }
 });
