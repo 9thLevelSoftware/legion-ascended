@@ -176,7 +176,7 @@ async function runAssessmentChild(repositoryRoot, snapshot, onSpawn) {
     const timeout = setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
-    }, 5_000);
+    }, 15_000);
     child.once("error", (error) => {
       clearTimeout(timeout);
       reject(error);
