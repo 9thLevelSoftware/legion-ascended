@@ -41220,7 +41220,7 @@ async function spawnWithInput(command, args2, input, cwd, timeoutMs, executorLab
       if (settled || terminationPending) return;
       if (!supportsIsolatedProcessGroup()) {
         quiescenceProven = false;
-      } else if (child.pid !== void 0 && processGroupStillExists(child.pid)) {
+      } else if (child.pid !== void 0 && processTreeStillExists(child.pid)) {
         quiescenceProven = false;
         await terminateProcessTree(child.pid).catch(() => false);
       } else {
@@ -41229,7 +41229,8 @@ async function spawnWithInput(command, args2, input, cwd, timeoutMs, executorLab
       settle(exitCode);
     };
     child.on("close", (code) => {
-      void settleAfterQuiescence(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
+      const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+      void settleAfterQuiescence(exitCode);
     });
     child.stdin.end(input);
   });
@@ -41313,7 +41314,7 @@ async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
       if (settled || terminationPending) return;
       if (!supportsIsolatedProcessGroup()) {
         quiescenceProven = false;
-      } else if (child.pid !== void 0 && processGroupStillExists(child.pid)) {
+      } else if (child.pid !== void 0 && processTreeStillExists(child.pid)) {
         quiescenceProven = false;
         await terminateProcessTree(child.pid).catch(() => false);
       } else {
@@ -41322,13 +41323,22 @@ async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
       settle(exitCode);
     };
     child.on("close", (code) => {
-      void settleAfterQuiescence(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
+      const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+      void settleAfterQuiescence(exitCode);
     });
   });
 }
 function supportsIsolatedProcessGroup() {
   if (adapterProcessContainmentOverride !== void 0) return adapterProcessContainmentOverride;
-  return process.platform !== "win32" && process.platform !== "android";
+  return process.platform !== "android";
+}
+function processStillExists(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error51) {
+    return !(error51 !== null && typeof error51 === "object" && "code" in error51 && error51.code === "ESRCH");
+  }
 }
 function processGroupStillExists(pid) {
   try {
@@ -41337,6 +41347,9 @@ function processGroupStillExists(pid) {
   } catch (error51) {
     return !(error51 !== null && typeof error51 === "object" && "code" in error51 && error51.code === "ESRCH");
   }
+}
+function processTreeStillExists(pid) {
+  return process.platform === "win32" ? processStillExists(pid) : processGroupStillExists(pid);
 }
 async function waitForQuiescence(check2, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
@@ -41347,7 +41360,7 @@ async function waitForQuiescence(check2, timeoutMs) {
 async function processQuiescenceProven(pid) {
   if (pid === void 0) return true;
   if (!supportsIsolatedProcessGroup()) return false;
-  const stillExists = () => processGroupStillExists(pid);
+  const stillExists = () => processTreeStillExists(pid);
   await waitForQuiescence(stillExists, PROCESS_QUIESCENCE_TIMEOUT_MS);
   return !stillExists();
 }
