@@ -1384,7 +1384,7 @@ async function spawnWithInput(
       if (settled || terminationPending) return;
       if (!supportsIsolatedProcessGroup()) {
         quiescenceProven = false;
-      } else if (child.pid !== undefined && processGroupStillExists(child.pid)) {
+      } else if (child.pid !== undefined && processTreeStillExists(child.pid)) {
         // A normal leader exit is not a safe completion boundary when a
         // descendant remains. Kill the entire group before settling so no late
         // write can race repository reconciliation or artifact publication.
@@ -1396,7 +1396,10 @@ async function spawnWithInput(
       settle(exitCode);
     };
     child.on("close", (code) => {
-      void settleAfterQuiescence(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
+      // Windows reports taskkill termination with a null exit code. Keep the
+      // adapter contract stable by preserving the synthetic timeout code.
+      const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+      void settleAfterQuiescence(exitCode);
     });
     child.stdin.end(input);
   });
@@ -1485,7 +1488,7 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
       if (settled || terminationPending) return;
       if (!supportsIsolatedProcessGroup()) {
         quiescenceProven = false;
-      } else if (child.pid !== undefined && processGroupStillExists(child.pid)) {
+      } else if (child.pid !== undefined && processTreeStillExists(child.pid)) {
         // A normal leader exit is not a safe completion boundary when a
         // descendant remains. Kill the entire group before settling so no late
         // write can race repository reconciliation or artifact publication.
@@ -1497,16 +1500,28 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
       settle(exitCode);
     };
     child.on("close", (code) => {
-      void settleAfterQuiescence(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
+      // Windows reports taskkill termination with a null exit code. Keep the
+      // adapter contract stable by preserving the synthetic timeout code.
+      const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+      void settleAfterQuiescence(exitCode);
     });
   });
 }
 
 function supportsIsolatedProcessGroup(): boolean {
   if (adapterProcessContainmentOverride !== undefined) return adapterProcessContainmentOverride;
-  // Node's detached/session semantics used here are POSIX-specific. External
-  // adapters are refused before spawn when this guarantee is unavailable.
-  return process.platform !== "win32" && process.platform !== "android";
+  // POSIX uses detached sessions/process groups. Windows uses taskkill /t in
+  // terminateProcessTree, which provides the equivalent child-tree boundary.
+  return process.platform !== "android";
+}
+
+function processStillExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !(error !== null && typeof error === "object" && "code" in error && error.code === "ESRCH");
+  }
 }
 
 function processGroupStillExists(pid: number): boolean {
@@ -1516,6 +1531,10 @@ function processGroupStillExists(pid: number): boolean {
   } catch (error) {
     return !(error !== null && typeof error === "object" && "code" in error && error.code === "ESRCH");
   }
+}
+
+function processTreeStillExists(pid: number): boolean {
+  return process.platform === "win32" ? processStillExists(pid) : processGroupStillExists(pid);
 }
 
 async function waitForQuiescence(check: () => boolean, timeoutMs: number): Promise<void> {
@@ -1528,7 +1547,7 @@ async function waitForQuiescence(check: () => boolean, timeoutMs: number): Promi
 async function processQuiescenceProven(pid: number | undefined): Promise<boolean> {
   if (pid === undefined) return true;
   if (!supportsIsolatedProcessGroup()) return false;
-  const stillExists = () => processGroupStillExists(pid);
+  const stillExists = () => processTreeStillExists(pid);
   await waitForQuiescence(stillExists, PROCESS_QUIESCENCE_TIMEOUT_MS);
   return !stillExists();
 }
