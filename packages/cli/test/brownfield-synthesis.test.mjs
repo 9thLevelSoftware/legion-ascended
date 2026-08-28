@@ -48,9 +48,10 @@ function finding({
   severity = "major",
   confidence = "medium",
   evidence = [sourceEvidence()],
+  assumptions = [],
   recommendation = "Add a bounded verification."
 }) {
-  return { id, specialist, title, statement, severity, confidence, evidence, assumptions: [], recommendation };
+  return { id, specialist, title, statement, severity, confidence, evidence, assumptions, recommendation };
 }
 
 function signals(overrides = {}) {
@@ -234,6 +235,28 @@ test("null specialists yield a typed blocking assumption without leaking unbound
   assert.ok(design.assumptionsRequiringInput.some((entry) => entry.confidence === "unknown" && entry.blocking));
   assert.ok(design.assumptionsRequiringInput.every((entry) => entry.evidence.length > 0));
   assert.ok(JSON.stringify(design).length < 100_000);
+});
+
+test("generates an assumption and rewrites a dangling finding reference", () => {
+  const missingAssumptionId = "asm_bbbbbbbbbbbbbbbbbbbbbbbb";
+  const design = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals: [], summary: { ...signals().summary, unsupportedSignals: 0 } }),
+    specialists: specialists({
+      findings: [finding({ id: "af_ffffffffffffffffffffffff", assumptions: [missingAssumptionId] })]
+    })
+  });
+
+  const result = design.prioritizedFindings.find((entry) => entry.id === "af_ffffffffffffffffffffffff");
+  assert.ok(result);
+  assert.equal(result.assumptions.length, 1);
+  assert.match(result.assumptions[0], /^asm_[a-f0-9]{24}$/);
+  assert.notEqual(result.assumptions[0], missingAssumptionId);
+
+  const generated = design.assumptionsRequiringInput.find((entry) => entry.id === result.assumptions[0]);
+  assert.ok(generated);
+  assert.equal(generated.blocking, true);
+  assert.equal(generated.confidence, "unknown");
+  assert.match(generated.statement, new RegExp(`unresolved assumption ${missingAssumptionId}`));
 });
 
 test("updates assessment state only through monotonic, provenance-checked phase transitions", async () => {

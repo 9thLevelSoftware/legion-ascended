@@ -39981,6 +39981,7 @@ function budgetForWriteScope(write, options = {}) {
 
 // packages/cli/src/workflow/executor/adapters.ts
 import { execFile as execFile4, spawn } from "node:child_process";
+import { open as open2 } from "node:fs/promises";
 import { promisify as promisify4 } from "node:util";
 
 // packages/cli/src/workflow/executor/fake-plan.ts
@@ -40055,11 +40056,6 @@ function applyFakeExecutorPlan(input) {
 
 // packages/cli/src/workflow/executor/result.ts
 import { readFile as readFile14, writeFile as writeFile6 } from "node:fs/promises";
-var SECRET_ASSIGNMENT_RE = /\b(api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;]+)/gi;
-var JSON_CREDENTIAL_RE = /"(?:api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)"\s*:\s*"(?:[^"\\]|\\.)*"/gi;
-function redactTranscript(text) {
-  return text.replace(JSON_CREDENTIAL_RE, (match) => match.replace(/:\s*"(?:[^"\\]|\\.)*"/, ': "[REDACTED_JSON_SECRET]"')).replace(SECRET_ASSIGNMENT_RE, (_match, key) => `${key}=[REDACTED_SECRET]`);
-}
 async function writeProjectTextFile(input) {
   const absolutePath = await prepareProjectTextFile(input);
   await writeFile6(absolutePath, input.text, "utf8");
@@ -40078,14 +40074,6 @@ async function writeProjectExecutionResult(input) {
     artifactPath: input.artifactPath,
     text: stableProtocolJson(input.result)
   });
-}
-async function readOptionalText(filePath) {
-  try {
-    return await readFile14(filePath, "utf8");
-  } catch (error51) {
-    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") return "";
-    throw error51;
-  }
 }
 function normalizeExecutionResult(input, fallback) {
   const value = isRecord11(input) ? input : {};
@@ -40188,6 +40176,108 @@ var DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 9e5;
 var DEFAULT_HERMES_EXEC_TIMEOUT_MS = 6e5;
 var DEFAULT_GROK_EXEC_TIMEOUT_MS = 6e5;
 var GROK_VERSION_RE = /^grok\s+(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\s+\([0-9A-Za-z-]+\))?(?:\s+\[[A-Za-z0-9.-]+\])?\s*$/u;
+var SECRET_ASSIGNMENT_RE = /\b(?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization|password|passwd|pwd|token|secret)\b\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;}]+)/giu;
+var JSON_CREDENTIAL_RE = /["'](?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization|password|passwd|pwd|token|secret)["']\s*:\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,\s}]+)/giu;
+var BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu;
+var TOKEN_RE = /\b(?:sk|ghp|gho|xox[baprs]-)[A-Za-z0-9_-]{8,}\b/gu;
+var CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu;
+var ENCODED_SEGMENT_RE = /[^\s]*%[0-9a-f]{2}[^\s]*/giu;
+var ENCODED_ESCAPE_RE = /%[0-9a-f]{2}/iu;
+var MAX_REDACTION_DECODE_PASSES = 16;
+var MAX_REDACTION_DECODE_LENGTH = 64 * 1024;
+var MAX_REDACTION_INPUT_LENGTH = 1024 * 1024;
+var MAX_URL_SCHEME_LENGTH = 1024;
+var MAX_URL_LENGTH = 64 * 1024;
+var MAX_ADAPTER_OUTPUT_BYTES = 1 * 1024 * 1024;
+var ADAPTER_OUTPUT_TRUNCATION_MARKER = "\n[ADAPTER_OUTPUT_TRUNCATED]";
+var BOUNDED_READ_CHUNK_BYTES = 64 * 1024;
+var PROCESS_TERM_GRACE_MS = 250;
+var PROCESS_QUIESCENCE_TIMEOUT_MS = 5e3;
+var PROCESS_QUIESCENCE_POLL_MS = 25;
+var adapterProcessContainmentOverride;
+function isAsciiAlpha(character) {
+  return character !== void 0 && (character >= "a" && character <= "z" || character >= "A" && character <= "Z");
+}
+function isAsciiWord(character) {
+  return character !== void 0 && (isAsciiAlpha(character) || character >= "0" && character <= "9" || character === "_");
+}
+function isUrlSchemeCharacter(character) {
+  return character !== void 0 && (isAsciiAlpha(character) || character >= "0" && character <= "9" || character === "+" || character === "-" || character === ".");
+}
+function isUrlTerminator(character) {
+  return character === void 0 || /[\s<>"'`]/u.test(character);
+}
+function redactUrls(value) {
+  let result = "";
+  let cursor = 0;
+  while (cursor < value.length) {
+    const character = value[cursor];
+    const boundary = cursor === 0 || !isAsciiWord(value[cursor - 1]);
+    if (isAsciiAlpha(character) && boundary) {
+      const schemeScanLimit = Math.min(value.length, cursor + 1 + MAX_URL_SCHEME_LENGTH);
+      let schemeEnd = cursor + 1;
+      while (schemeEnd < schemeScanLimit && isUrlSchemeCharacter(value[schemeEnd])) schemeEnd += 1;
+      if (schemeEnd === schemeScanLimit && isUrlSchemeCharacter(value[schemeEnd])) {
+        while (schemeEnd < value.length && isUrlSchemeCharacter(value[schemeEnd])) schemeEnd += 1;
+      }
+      if (value.slice(schemeEnd, schemeEnd + 3) === "://") {
+        let urlEnd = schemeEnd + 3;
+        const urlScanLimit = Math.min(value.length, cursor + MAX_URL_LENGTH);
+        while (urlEnd < urlScanLimit && !isUrlTerminator(value[urlEnd])) urlEnd += 1;
+        if (urlEnd >= urlScanLimit && urlEnd < value.length && !isUrlTerminator(value[urlEnd])) {
+          while (urlEnd < value.length && !isUrlTerminator(value[urlEnd])) urlEnd += 1;
+        }
+        const schemeLength = schemeEnd - cursor;
+        const urlLength = urlEnd - cursor;
+        if (schemeLength > 0 && urlLength > 3) {
+          result += "[REDACTED_URL]";
+          cursor = urlEnd;
+          continue;
+        }
+      }
+    }
+    result += character;
+    cursor += 1;
+  }
+  return result;
+}
+function decodeRepeatedly(value) {
+  if (value.length > MAX_REDACTION_DECODE_LENGTH) return { decoded: value, exhausted: true };
+  let decoded = value;
+  for (let attempt = 0; attempt < MAX_REDACTION_DECODE_PASSES; attempt += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) return { decoded, exhausted: false };
+      if (next.length > MAX_REDACTION_DECODE_LENGTH) return { decoded, exhausted: true };
+      decoded = next;
+    } catch {
+      return { decoded, exhausted: ENCODED_ESCAPE_RE.test(decoded) };
+    }
+  }
+  return { decoded, exhausted: ENCODED_ESCAPE_RE.test(decoded) };
+}
+var ESCAPED_JSON_PUNCTUATION_RE = /\\+(?=[{}\[\],:"])/gu;
+function normalizeEscapedJsonRepresentation(value) {
+  return value.replace(ESCAPED_JSON_PUNCTUATION_RE, "");
+}
+function redactDirectText(value) {
+  const normalized = normalizeEscapedJsonRepresentation(value);
+  const redacted = redactUrls(normalized.replace(CONTROL_RE, "\uFFFD").replace(JSON_CREDENTIAL_RE, "[REDACTED_JSON_SECRET]").replace(BEARER_RE, "Bearer [REDACTED_TOKEN]").replace(SECRET_ASSIGNMENT_RE, "[REDACTED_SECRET]").replace(TOKEN_RE, "[REDACTED_TOKEN]"));
+  return redacted === normalized ? value : redacted;
+}
+function redactAdapterTranscript(text) {
+  if (text.length > MAX_REDACTION_INPUT_LENGTH) return "[REDACTED_TRANSCRIPT]";
+  const direct = redactDirectText(text);
+  if (!direct.includes("%")) return direct;
+  return direct.replace(ENCODED_SEGMENT_RE, (match) => {
+    if (!match.includes("%")) return match;
+    if (match.length > MAX_REDACTION_DECODE_LENGTH) return "[REDACTED_ENCODED_SECRET]";
+    const decodedResult = decodeRepeatedly(match);
+    if (decodedResult.exhausted) return "[REDACTED_ENCODED_SECRET]";
+    const decoded = decodedResult.decoded;
+    return decoded !== match && redactDirectText(decoded) !== decoded ? "[REDACTED_ENCODED_SECRET]" : match;
+  });
+}
 var CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"];
 function claudeExecArgs(input) {
   return [
@@ -40274,6 +40364,43 @@ function adapterForKind(kind) {
       return fakeAdapter;
   }
 }
+function artifactRepositoryRoot(request) {
+  return request.artifactRepositoryRoot ?? request.repositoryRoot;
+}
+function isolatedArtifactText(_request, text) {
+  return redactAdapterTranscript(text);
+}
+function isolatedExecutionResult(_request, result) {
+  return {
+    ...result.structuredOutput === void 0 ? {} : { structuredOutput: redactAdapterTranscript(result.structuredOutput) },
+    ok: result.ok,
+    status: result.status,
+    summary: redactAdapterTranscript(result.summary),
+    filesChanged: result.filesChanged.map((entry) => redactAdapterTranscript(entry)),
+    commandsRun: result.commandsRun.map((entry) => ({
+      command: redactAdapterTranscript(entry.command),
+      args: entry.args.map((arg) => redactAdapterTranscript(arg)),
+      exitCode: entry.exitCode
+    })),
+    findings: result.findings.map((entry) => ({
+      id: redactAdapterTranscript(entry.id),
+      title: redactAdapterTranscript(entry.title),
+      body: redactAdapterTranscript(entry.body),
+      severity: entry.severity,
+      ...entry.evidenceRefs === void 0 ? {} : { evidenceRefs: entry.evidenceRefs.map((ref) => redactAdapterTranscript(ref)) }
+    })),
+    ...result.reviewVerdicts === void 0 ? {} : { reviewVerdicts: result.reviewVerdicts },
+    ...result.rawOutput === void 0 ? {} : { rawOutput: redactAdapterTranscript(result.rawOutput) },
+    ...result.exitCode === void 0 ? {} : { exitCode: result.exitCode }
+  };
+}
+async function persistExecutionResult(request, result) {
+  await writeProjectExecutionResult({
+    repositoryRoot: artifactRepositoryRoot(request),
+    artifactPath: request.resultArtifactPath,
+    result: isolatedExecutionResult(request, result)
+  });
+}
 async function codexAvailable() {
   try {
     const invocation = codexInvocation(["exec", "--help"]);
@@ -40353,9 +40480,58 @@ function grokExecTimeoutMs() {
   const parsed = Number.parseInt(configured, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GROK_EXEC_TIMEOUT_MS;
 }
+function hermesReadOnlyBlockedResult() {
+  return {
+    ok: false,
+    status: "blocked",
+    summary: "Hermes Agent cannot guarantee read-only execution for this specialist request.",
+    filesChanged: [],
+    commandsRun: [],
+    findings: [{
+      id: "hermes-read-only-unsupported",
+      title: "Hermes read-only execution is unavailable",
+      body: "The Hermes adapter has no platform-enforced read-only mode for this request. The specialist is blocked rather than being run with prompt-only safety claims.",
+      severity: "blocking"
+    }]
+  };
+}
+function processContainmentBlockedResult(kind, label) {
+  return {
+    ok: false,
+    status: "blocked",
+    summary: `${label} executor is unavailable because strict process-group containment is unsupported on this platform.`,
+    filesChanged: [],
+    commandsRun: [],
+    findings: [{
+      id: `${kind}-process-containment-unavailable`,
+      title: `${label} process containment is unavailable`,
+      body: `${label} was not spawned because Legion cannot guarantee strict process-group/session containment for external specialist execution on this platform.`,
+      severity: "blocking"
+    }]
+  };
+}
+async function processContainmentBlockedBeforeSpawn(request, kind, label) {
+  const result = processContainmentBlockedResult(kind, label);
+  const artifactRoot = artifactRepositoryRoot(request);
+  const text = `${result.summary}
+`;
+  await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text });
+  await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text });
+  await persistExecutionResult(request, result);
+  return result;
+}
 var hermesAdapter = {
   kind: "hermes",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "hermes", "Hermes Agent");
+    if (request.readOnly) {
+      const result2 = hermesReadOnlyBlockedResult();
+      const artifactRoot2 = artifactRepositoryRoot(request);
+      await writeProjectTextFile({ repositoryRoot: artifactRoot2, artifactPath: request.redactedLogArtifactPath, text: `${result2.summary}
+` });
+      await persistExecutionResult(request, result2);
+      return result2;
+    }
     const args2 = ["chat", "-q", request.prompt, "--source", "legion", "-Q", "--in", request.repositoryRoot];
     const invocation = hermesInvocation(args2);
     const processResult = await spawnWithInput(
@@ -40364,20 +40540,24 @@ var hermesAdapter = {
       "",
       // stdin unused — hermes reads from -q arg
       request.repositoryRoot,
-      hermesExecTimeoutMs()
+      hermesExecTimeoutMs(),
+      "Hermes Agent"
     );
     const rawOutput = [
       processResult.stdout,
       processResult.stderr
     ].filter((entry) => entry.length > 0).join("\n");
     const parsed = parseResultFromText(rawOutput);
-    const status2 = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 ? "failed" : "succeeded";
+    const status2 = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
       status: status2,
       summary: processResult.exitCode === 0 ? "Hermes Agent executor completed." : "Hermes Agent executor failed.",
       rawOutput,
       exitCode: processResult.exitCode
     });
+    const resultStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : normalized.status;
+    const hermesOutput = hermesStructuredOutput(parsed);
+    const withStructured = hermesOutput === void 0 ? normalized : { ...normalized, structuredOutput: hermesOutput };
     const blockingFindings = [];
     if (processResult.timedOut) {
       blockingFindings.push({
@@ -40386,25 +40566,37 @@ var hermesAdapter = {
         body: `Hermes did not complete within ${processResult.timeoutMs}ms. Check Hermes auth/configuration, raise LEGION_HERMES_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
         severity: "blocking"
       });
+    } else if (processResult.outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Hermes Agent", "hermes-executor-output-limit"));
     }
-    const result = blockingFindings.length === 0 ? normalized : {
-      ...normalized,
-      ok: false,
-      status: processResult.timedOut ? "blocked" : "failed",
-      findings: [...normalized.findings, ...blockingFindings]
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "hermes-executor-process-not-quiescent",
+        title: "Hermes executor descendants were not quiescent",
+        body: "Hermes exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
+    const result = {
+      ...withStructured,
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0 ? resultStatus : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
     };
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
-` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    const redacted = redactAdapterTranscript(rawOutput);
+    const artifactRoot = artifactRepositoryRoot(request);
+    await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}
+`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}
+`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
 var grokAdapter = {
   kind: "grok",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "grok", "Grok Build");
     const timeoutMs = grokExecTimeoutMs();
     const args2 = grokExecArgs({
       repositoryRoot: request.repositoryRoot,
@@ -40426,12 +40618,14 @@ var grokAdapter = {
         stdout: "",
         stderr: "Grok Build executable could not be started.",
         timedOut: false,
-        timeoutMs
+        outputLimitExceeded: false,
+        timeoutMs,
+        quiescenceProven: true
       };
     }
     const rawOutput = [processResult.stdout, processResult.stderr].filter((entry) => entry.length > 0).join("\n");
     const envelope = parseGrokEnvelope(processResult.stdout);
-    const processStatus = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 ? "failed" : envelope.ok ? "succeeded" : "failed";
+    const processStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : envelope.ok ? "succeeded" : "failed";
     const parsed = envelope.ok ? envelope.result : void 0;
     const normalized = normalizeExecutionResult(parsed, {
       status: processStatus,
@@ -40439,8 +40633,19 @@ var grokAdapter = {
       rawOutput,
       exitCode: processResult.exitCode
     });
-    const resultStatus = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 || !envelope.ok ? "failed" : normalized.status;
+    const resultStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 || !envelope.ok ? "failed" : normalized.status;
     const findings = [];
+    if (processResult.outputLimitExceeded) {
+      findings.push(outputLimitFinding("Grok Build", "grok-executor-output-limit"));
+    }
+    if (!processResult.quiescenceProven) {
+      findings.push({
+        id: "grok-executor-process-not-quiescent",
+        title: "Grok Build descendants were not quiescent",
+        body: "Grok Build exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
     if (!envelope.ok) {
       findings.push({
         id: "grok-executor-invalid-output",
@@ -40471,24 +40676,20 @@ var grokAdapter = {
       status: resultStatus,
       findings: [...withEnvelope.findings, ...findings]
     };
-    const redacted = redactTranscript(rawOutput);
+    const redacted = redactAdapterTranscript(rawOutput);
     await writeProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: request.rawLogArtifactPath,
-      text: rawOutput.length > 0 ? rawOutput : `${result.summary}
-`
+      text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}
+`)
     });
     await writeProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: request.redactedLogArtifactPath,
-      text: redacted.length > 0 ? redacted : `${result.summary}
-`
+      text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}
+`)
     });
-    await writeProjectExecutionResult({
-      repositoryRoot: request.repositoryRoot,
-      artifactPath: request.resultArtifactPath,
-      result
-    });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -40502,7 +40703,14 @@ function parseGrokEnvelope(stdout) {
     return { ok: false, message: "Grok Build output was not one complete JSON envelope." };
   }
   if (!isRecordValue(value)) return { ok: false, message: "Grok Build output was not a JSON object envelope." };
-  if (value["type"] === "error") return { ok: false, message: "Grok Build reported an error envelope." };
+  const discriminator = value["type"];
+  if (discriminator === "error") return { ok: false, message: "Grok Build reported an error envelope." };
+  if (discriminator !== "result") {
+    return { ok: false, message: "Grok Build result envelope has an unknown or missing type discriminator." };
+  }
+  if (!hasRequiredKeys(value, ["type", "text", "stopReason", "sessionId", "requestId"])) {
+    return { ok: false, message: "Grok Build result envelope is missing required core fields." };
+  }
   const text = value["text"];
   if (typeof text !== "string" || text.trim().length === 0) {
     return { ok: false, message: "Grok Build result envelope is missing non-empty text." };
@@ -40528,11 +40736,35 @@ function parseGrokEnvelope(stdout) {
   return { ok: true, text, result };
 }
 function isCompleteGrokResult(value) {
+  return isCompleteExecutionResult(value) || isCompleteSpecialistPayload(value);
+}
+function isCompleteExecutionResult(value) {
   if (!isRecordValue(value)) return false;
   return (value["status"] === "succeeded" || value["status"] === "failed" || value["status"] === "blocked") && typeof value["summary"] === "string" && value["summary"].length > 0 && Array.isArray(value["filesChanged"]) && Array.isArray(value["commandsRun"]) && Array.isArray(value["findings"]);
 }
+function isCompleteSpecialistPayload(value) {
+  if (!isRecordValue(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length > 0 && keys.every((key) => key === "findings" || key === "assumptions") && (value["findings"] === void 0 || Array.isArray(value["findings"])) && (value["assumptions"] === void 0 || Array.isArray(value["assumptions"]));
+}
+function hasRequiredKeys(value, required2) {
+  return required2.every((key) => Object.hasOwn(value, key));
+}
 function isRecordValue(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function hermesStructuredOutput(value) {
+  if (!isRecordValue(value)) return void 0;
+  for (const key of ["structuredOutput", "output", "text", "result"]) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && parseResultFromText(candidate) !== void 0) return candidate;
+    if (isRecordValue(candidate) || Array.isArray(candidate)) {
+      const serialized = JSON.stringify(candidate);
+      if (serialized !== void 0) return serialized;
+    }
+  }
+  if (Array.isArray(value["findings"]) && Array.isArray(value["assumptions"])) return JSON.stringify(value);
+  return void 0;
 }
 var fakeAdapter = {
   kind: "fake",
@@ -40562,11 +40794,11 @@ var fakeAdapter = {
         }
       } : {}
     };
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${result.summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redactTranscript(`${result.summary}
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, `${result.summary}
 `) });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, `${result.summary}
+`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -40595,17 +40827,18 @@ var manualAdapter = {
         }
       ]
     };
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: `${summary}
-` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, `${summary}
+`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, `${summary}
+`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
 var claudeAdapter = {
   kind: "claude",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "claude", "Claude");
     const args2 = claudeExecArgs({ readOnly: request.readOnly });
     const invocation = claudeInvocation(args2);
     const processResult = await spawnWithInput(
@@ -40613,7 +40846,8 @@ var claudeAdapter = {
       invocation.args,
       request.prompt,
       request.repositoryRoot,
-      claudeExecTimeoutMs()
+      claudeExecTimeoutMs(),
+      "Claude"
     );
     const rawOutput = [
       processResult.stdout,
@@ -40622,20 +40856,38 @@ var claudeAdapter = {
     const envelope = parseClaudeEnvelope(processResult.stdout);
     const lastMessage = envelope?.result ?? "";
     const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
-    const status2 = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 || envelope?.isError === true ? "failed" : "succeeded";
+    const processStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true ? "failed" : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
-      status: status2,
+      status: processStatus,
       summary: claudeFallbackSummary(processResult, envelope),
       rawOutput,
       exitCode: processResult.exitCode
     });
-    const withStructured = lastMessage.length > 0 ? { ...normalized, structuredOutput: lastMessage } : normalized;
+    const resultStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true ? "failed" : normalized.status;
+    const withStructured = lastMessage.length > 0 && resultStatus === "succeeded" ? { ...normalized, structuredOutput: lastMessage } : normalized;
     const blockingFindings = [];
     if (processResult.timedOut) {
       blockingFindings.push({
         id: "claude-executor-timeout",
         title: "Claude executor timed out",
         body: `Claude did not complete within ${processResult.timeoutMs}ms. Check Claude Code auth/configuration, raise LEGION_CLAUDE_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    } else if (processResult.outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Claude", "claude-executor-output-limit"));
+    } else if (processResult.exitCode !== 0) {
+      blockingFindings.push({
+        id: "claude-executor-failed",
+        title: "Claude executor exited unsuccessfully",
+        body: `Claude exited with code ${processResult.exitCode}. Check the raw and redacted executor logs before retrying.`,
+        severity: "blocking"
+      });
+    }
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "claude-executor-process-not-quiescent",
+        title: "Claude executor descendants were not quiescent",
+        body: "Claude exited, but its process group could not be proven quiescent before the result was finalized.",
         severity: "blocking"
       });
     }
@@ -40647,18 +40899,18 @@ var claudeAdapter = {
         severity: "blocking"
       });
     }
-    const result = blockingFindings.length === 0 ? withStructured : {
+    const result = {
       ...withStructured,
-      ok: false,
-      status: processResult.timedOut ? "blocked" : "failed",
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0 ? resultStatus : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
       findings: [...withStructured.findings, ...blockingFindings]
     };
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
-` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    const redacted = redactAdapterTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}
+`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}
+`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -40697,9 +40949,10 @@ function claudeFallbackSummary(processResult, envelope) {
 var codexAdapter = {
   kind: "codex",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "codex", "Codex");
     const outputLastMessageArtifactPath = artifactPathSchema.parse(request.resultArtifactPath.replace(/executor-result\.json$/u, "executor-last-message.txt"));
     const outputLastMessagePath = await prepareProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: outputLastMessageArtifactPath
     });
     const args2 = codexExecArgs({
@@ -40713,42 +40966,69 @@ var codexAdapter = {
       invocation.args,
       request.prompt,
       request.repositoryRoot,
-      codexExecTimeoutMs()
+      codexExecTimeoutMs(),
+      "Codex"
     );
     const rawOutput = [
       processResult.stdout,
       processResult.stderr
     ].filter((entry) => entry.length > 0).join("\n");
-    const lastMessage = await readOptionalText(outputLastMessagePath);
+    const lastMessageResult = await readBoundedText(outputLastMessagePath);
+    const lastMessage = lastMessageResult.text;
+    const outputLimitExceeded = processResult.outputLimitExceeded || lastMessageResult.outputLimitExceeded;
+    await writeProjectTextFile({
+      repositoryRoot: artifactRepositoryRoot(request),
+      artifactPath: outputLastMessageArtifactPath,
+      text: lastMessage.length > 0 ? redactAdapterTranscript(lastMessage) : ""
+    });
     const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
-    const status2 = processResult.timedOut ? "blocked" : processResult.exitCode === 0 ? "succeeded" : "failed";
+    const processStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
-      status: status2,
+      status: processStatus,
       summary: processResult.timedOut ? `Codex executor timed out after ${processResult.timeoutMs}ms.` : processResult.exitCode === 0 ? "Codex executor completed." : "Codex executor failed.",
       rawOutput,
       exitCode: processResult.exitCode
     });
-    const withStructured = lastMessage.length > 0 ? { ...normalized, structuredOutput: lastMessage } : normalized;
-    const result = processResult.timedOut ? {
+    const resultStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : normalized.status;
+    const withStructured = lastMessage.length > 0 && resultStatus === "succeeded" ? { ...normalized, structuredOutput: lastMessage } : normalized;
+    const blockingFindings = [];
+    if (processResult.timedOut) {
+      blockingFindings.push({
+        id: "codex-executor-timeout",
+        title: "Codex executor timed out",
+        body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    } else if (outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Codex", "codex-executor-output-limit"));
+    } else if (processResult.exitCode !== 0) {
+      blockingFindings.push({
+        id: "codex-executor-failed",
+        title: "Codex executor exited unsuccessfully",
+        body: `Codex exited with code ${processResult.exitCode}. Check the raw and redacted executor logs before retrying.`,
+        severity: "blocking"
+      });
+    }
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "codex-executor-process-not-quiescent",
+        title: "Codex executor descendants were not quiescent",
+        body: "Codex exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
+    const result = {
       ...withStructured,
-      ok: false,
-      status: "blocked",
-      findings: [
-        ...normalized.findings,
-        {
-          id: "codex-executor-timeout",
-          title: "Codex executor timed out",
-          body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
-          severity: "blocking"
-        }
-      ]
-    } : withStructured;
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
-` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0 ? resultStatus : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
+    };
+    const redacted = redactAdapterTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}
+`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}
+`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -40787,53 +41067,169 @@ function claudeExecTimeoutMs() {
   const parsed = Number.parseInt(configured, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CLAUDE_EXEC_TIMEOUT_MS;
 }
-async function spawnWithInput(command, args2, input, cwd, timeoutMs) {
+function utf8Prefix(value, maxBytes) {
+  if (maxBytes <= 0) return "";
+  let result = Buffer.from(value, "utf8").subarray(0, maxBytes).toString("utf8");
+  while (Buffer.byteLength(result, "utf8") > maxBytes) result = result.slice(0, -1);
+  return result;
+}
+var BoundedOutputCapture = class {
+  stdoutValue = "";
+  stderrValue = "";
+  totalBytes = 0;
+  exceeded = false;
+  append(stream, chunk) {
+    if (this.exceeded) return;
+    const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    const remaining = MAX_ADAPTER_OUTPUT_BYTES - this.totalBytes;
+    const markerBytes = Buffer.byteLength(ADAPTER_OUTPUT_TRUNCATION_MARKER, "utf8");
+    const chunkBytes = Buffer.byteLength(text, "utf8");
+    if (chunkBytes <= remaining) {
+      this.set(stream, this.get(stream) + text);
+      this.totalBytes += chunkBytes;
+      return;
+    }
+    const prefixBudget = Math.max(0, remaining - markerBytes);
+    const bounded = `${utf8Prefix(text, prefixBudget)}${remaining >= markerBytes ? ADAPTER_OUTPUT_TRUNCATION_MARKER : ""}`;
+    this.set(stream, this.get(stream) + bounded);
+    this.totalBytes += Buffer.byteLength(bounded, "utf8");
+    this.exceeded = true;
+  }
+  get stdout() {
+    return this.stdoutValue;
+  }
+  get stderr() {
+    return this.stderrValue;
+  }
+  get outputLimitExceeded() {
+    return this.exceeded;
+  }
+  get(stream) {
+    return stream === "stdout" ? this.stdoutValue : this.stderrValue;
+  }
+  set(stream, value) {
+    if (stream === "stdout") this.stdoutValue = value;
+    else this.stderrValue = value;
+  }
+};
+async function readBoundedText(filePath) {
+  let handle2;
+  try {
+    handle2 = await open2(filePath, "r");
+  } catch (error51) {
+    if (isRecordValue(error51) && error51["code"] === "ENOENT") return { text: "", outputLimitExceeded: false };
+    throw error51;
+  }
+  const capture2 = new BoundedOutputCapture();
+  const buffer = Buffer.allocUnsafe(BOUNDED_READ_CHUNK_BYTES);
+  try {
+    while (true) {
+      const read = await handle2.read(buffer, 0, buffer.length, null);
+      if (read.bytesRead === 0) break;
+      capture2.append("stdout", buffer.subarray(0, read.bytesRead));
+      if (capture2.outputLimitExceeded) break;
+    }
+    return { text: capture2.stdout, outputLimitExceeded: capture2.outputLimitExceeded };
+  } finally {
+    await handle2.close();
+  }
+}
+function outputLimitFinding(executorLabel, findingId) {
+  return {
+    id: findingId,
+    title: `${executorLabel} executor output exceeded the bounded capture limit`,
+    body: `${executorLabel} output exceeded the ${MAX_ADAPTER_OUTPUT_BYTES}-byte capture limit and the process or payload was rejected before unbounded accumulation.`,
+    severity: "blocking"
+  };
+}
+async function spawnWithInput(command, args2, input, cwd, timeoutMs, executorLabel) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args2, {
       cwd,
       windowsHide: true,
+      detached: supportsIsolatedProcessGroup(),
       stdio: ["pipe", "pipe", "pipe"]
     });
-    let stdout = "";
-    let stderr = "";
+    const output = new BoundedOutputCapture();
     let settled = false;
     let timedOut = false;
+    let outputLimitExceeded = false;
+    let terminationPending = false;
+    let terminationExitCode;
+    let terminationPromise;
+    let spawnError;
+    let quiescenceProven = true;
     const settle = (exitCode) => {
-      if (settled) return;
+      if (settled || terminationPending) return;
       settled = true;
       clearTimeout(timeout);
+      if (spawnError !== void 0) {
+        reject(spawnError);
+        return;
+      }
       resolve({
         exitCode,
-        stdout,
-        stderr,
+        stdout: output.stdout,
+        stderr: output.stderr,
         timedOut,
-        timeoutMs
+        outputLimitExceeded,
+        timeoutMs,
+        quiescenceProven
+      });
+    };
+    const requestTermination = (exitCode) => {
+      if (terminationExitCode === void 0) terminationExitCode = exitCode;
+      if (terminationPromise !== void 0) return;
+      terminationPending = true;
+      terminationPromise = terminateProcessTree(child.pid).catch(() => false).then((proven) => {
+        quiescenceProven = proven;
+        terminationPending = false;
+        settle(terminationExitCode ?? exitCode);
       });
     };
     const timeout = setTimeout(() => {
+      if (settled) return;
       timedOut = true;
-      stderr += `${stderr.length === 0 ? "" : "\n"}Codex executor timed out after ${timeoutMs}ms.`;
-      terminateProcessTree(child.pid);
-      setTimeout(() => settle(124), 1e3).unref();
+      output.append("stderr", `${output.stderr.length === 0 ? "" : "\n"}${executorLabel} executor timed out after ${timeoutMs}ms.`);
+      requestTermination(124);
     }, timeoutMs);
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
+      output.append("stdout", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
+      output.append("stderr", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
     child.stdin.on("error", () => {
     });
     child.on("error", (error51) => {
       if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(error51);
+      spawnError = error51;
+      requestTermination(1);
     });
+    const settleAfterQuiescence = async (exitCode) => {
+      if (settled || terminationPending) return;
+      if (!supportsIsolatedProcessGroup()) {
+        quiescenceProven = false;
+      } else if (child.pid !== void 0 && processGroupStillExists(child.pid)) {
+        quiescenceProven = false;
+        await terminateProcessTree(child.pid).catch(() => false);
+      } else {
+        quiescenceProven = true;
+      }
+      settle(exitCode);
+    };
     child.on("close", (code) => {
-      settle(timedOut ? 124 : code ?? 1);
+      void settleAfterQuiescence(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
     });
     child.stdin.end(input);
   });
@@ -40843,67 +41239,144 @@ async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
     const child = spawn(command, args2, {
       cwd,
       windowsHide: true,
+      detached: supportsIsolatedProcessGroup(),
       // Grok consumes the prompt from --prompt-file. `ignore` is deliberate:
       // Legion neither writes a prompt to stdin nor leaves a pipe for a child
       // to mistake for an interactive session.
       stdio: ["ignore", "pipe", "pipe"]
     });
-    let stdout = "";
-    let stderr = "";
+    const output = new BoundedOutputCapture();
     let settled = false;
     let timedOut = false;
+    let outputLimitExceeded = false;
+    let terminationPending = false;
+    let terminationExitCode;
+    let terminationPromise;
+    let spawnError;
+    let quiescenceProven = true;
     const settle = (exitCode) => {
-      if (settled) return;
+      if (settled || terminationPending) return;
       settled = true;
       clearTimeout(timeout);
-      resolve({ exitCode, stdout, stderr, timedOut, timeoutMs });
+      if (spawnError !== void 0) {
+        reject(spawnError);
+        return;
+      }
+      resolve({
+        exitCode,
+        stdout: output.stdout,
+        stderr: output.stderr,
+        timedOut,
+        outputLimitExceeded,
+        timeoutMs,
+        quiescenceProven
+      });
+    };
+    const requestTermination = (exitCode) => {
+      if (terminationExitCode === void 0) terminationExitCode = exitCode;
+      if (terminationPromise !== void 0) return;
+      terminationPending = true;
+      terminationPromise = terminateProcessTree(child.pid).catch(() => false).then((proven) => {
+        quiescenceProven = proven;
+        terminationPending = false;
+        settle(terminationExitCode ?? exitCode);
+      });
     };
     const timeout = setTimeout(() => {
+      if (settled) return;
       timedOut = true;
-      stderr += `${stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`;
-      terminateProcessTree(child.pid);
-      setTimeout(() => settle(124), 1e3).unref();
+      output.append("stderr", `${output.stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`);
+      requestTermination(124);
     }, timeoutMs);
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
+      output.append("stdout", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
+      output.append("stderr", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
     child.on("error", (error51) => {
       if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(error51);
+      spawnError = error51;
+      requestTermination(1);
     });
+    const settleAfterQuiescence = async (exitCode) => {
+      if (settled || terminationPending) return;
+      if (!supportsIsolatedProcessGroup()) {
+        quiescenceProven = false;
+      } else if (child.pid !== void 0 && processGroupStillExists(child.pid)) {
+        quiescenceProven = false;
+        await terminateProcessTree(child.pid).catch(() => false);
+      } else {
+        quiescenceProven = true;
+      }
+      settle(exitCode);
+    };
     child.on("close", (code) => {
-      settle(timedOut ? 124 : code ?? 1);
+      void settleAfterQuiescence(timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1);
     });
   });
 }
-function terminateProcessTree(pid) {
-  if (pid === void 0) return;
+function supportsIsolatedProcessGroup() {
+  if (adapterProcessContainmentOverride !== void 0) return adapterProcessContainmentOverride;
+  return process.platform !== "win32" && process.platform !== "android";
+}
+function processGroupStillExists(pid) {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error51) {
+    return !(error51 !== null && typeof error51 === "object" && "code" in error51 && error51.code === "ESRCH");
+  }
+}
+async function waitForQuiescence(check2, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (check2() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, PROCESS_QUIESCENCE_POLL_MS));
+  }
+}
+async function processQuiescenceProven(pid) {
+  if (pid === void 0) return true;
+  if (!supportsIsolatedProcessGroup()) return false;
+  const stillExists = () => processGroupStillExists(pid);
+  await waitForQuiescence(stillExists, PROCESS_QUIESCENCE_TIMEOUT_MS);
+  return !stillExists();
+}
+async function terminateProcessTree(pid) {
+  if (pid === void 0) return true;
+  if (!supportsIsolatedProcessGroup()) return false;
   if (process.platform === "win32") {
-    const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
-      windowsHide: true,
-      stdio: "ignore"
+    await new Promise((resolve) => {
+      const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
+        windowsHide: true,
+        stdio: "ignore"
+      });
+      killer.on("error", () => resolve());
+      killer.on("close", () => resolve());
     });
-    killer.on("error", () => {
-    });
-    return;
+    return processQuiescenceProven(pid);
   }
   try {
-    process.kill(pid, "SIGTERM");
+    process.kill(-pid, "SIGTERM");
   } catch {
   }
-  setTimeout(() => {
+  await waitForQuiescence(() => processGroupStillExists(pid), PROCESS_TERM_GRACE_MS);
+  if (processGroupStillExists(pid)) {
     try {
-      process.kill(pid, "SIGKILL");
+      process.kill(-pid, "SIGKILL");
     } catch {
     }
-  }, 1e3).unref();
+  }
+  return processQuiescenceProven(pid);
 }
 
 // packages/cli/src/workflow/guarded-execution.ts
@@ -42029,7 +42502,7 @@ async function loadExploration(repositoryRoot, runId) {
 
 // packages/cli/src/workflow/intake/lifecycle.ts
 import { createHash as createHash23, randomUUID as randomUUID3 } from "node:crypto";
-import { link, lstat as lstat4, open as open2, readFile as readFile20, readdir as readdir14, realpath as realpath5, rename as rename5, rm as rm7, rmdir as rmdir2, writeFile as writeFile8 } from "node:fs/promises";
+import { link, lstat as lstat4, open as open3, readFile as readFile20, readdir as readdir14, realpath as realpath5, rename as rename5, rm as rm7, rmdir as rmdir2, writeFile as writeFile8 } from "node:fs/promises";
 import path37 from "node:path";
 
 // packages/cli/src/workflow/codebase-map.ts
@@ -48360,7 +48833,7 @@ async function writeDraftExclusive(repositoryRoot, draft, lease, beforePublish, 
   const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath });
   const temporary = `${resolved.absolutePath}.${randomUUID3()}.tmp`;
   await assertTransitionLeaseOwned(lease);
-  const handle2 = await open2(temporary, "wx", 384);
+  const handle2 = await open3(temporary, "wx", 384);
   try {
     await handle2.writeFile(draftBytes(draft), "utf8");
     await handle2.sync();
@@ -48788,12 +49261,12 @@ async function stageIntakeDraft(input) {
       };
       const scanned = await inspectActiveDraftCandidates(input.repositoryRoot);
       if (!scanned.ok) return scanned;
-      const open3 = scanned.drafts;
-      if (open3.length > 1) return {
+      const open4 = scanned.drafts;
+      if (open4.length > 1) return {
         ok: false,
         diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; resolve them before staging a replacement." }]
       };
-      const previous = open3[0];
+      const previous = open4[0];
       if (previous !== void 0 && previous.id !== draft.id && previous.status === "draft") {
         const previousResolved = await resolveProjectArtifactPath({
           repositoryRoot: input.repositoryRoot,
@@ -49135,7 +49608,7 @@ async function acquireDraftAcceptanceLease(repositoryRoot, draftId) {
     };
     let handle2;
     try {
-      handle2 = await open2(resolved.absolutePath, "wx", 384);
+      handle2 = await open3(resolved.absolutePath, "wx", 384);
       await handle2.writeFile(transitionLockBytes(metadata2), "utf8");
       await handle2.sync();
       await handle2.close();
@@ -49770,12 +50243,12 @@ async function publishDraftReview(input) {
     };
     const scanned = await inspectActiveDraftCandidates(input.repositoryRoot);
     if (!scanned.ok) return scanned;
-    const open3 = scanned.drafts;
-    if (open3.length > 1) return {
+    const open4 = scanned.drafts;
+    if (open4.length > 1) return {
       ok: false,
       diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; no review can be selected safely." }]
     };
-    if (open3[0]?.id !== input.draftId) return {
+    if (open4[0]?.id !== input.draftId) return {
       ok: false,
       diagnostics: [{ code: "draft_not_open", message: `Draft ${input.draftId} is not the single open draft.` }]
     };
@@ -49831,8 +50304,8 @@ async function publishDraftReview(input) {
 async function resolveReviewedDraftDecision(input) {
   const scanned = await inspectActiveDraftCandidates(input.repositoryRoot);
   if (!scanned.ok) return scanned;
-  const open3 = scanned.drafts;
-  if (open3.length > 1) return {
+  const open4 = scanned.drafts;
+  if (open4.length > 1) return {
     ok: false,
     diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; name and repair them before making a decision." }]
   };
@@ -49850,7 +50323,7 @@ async function resolveReviewedDraftDecision(input) {
     ok: false,
     diagnostics: [{ code: "stale_draft_decision", message: `Draft ${input.explicitDraftId} is not the currently displayed draft ${active.draftId}.` }]
   };
-  if (open3[0]?.id !== active.draftId) return {
+  if (open4[0]?.id !== active.draftId) return {
     ok: false,
     diagnostics: [{ code: "stale_draft_decision", message: `Displayed draft ${active.draftId} is no longer the single open draft.` }]
   };
@@ -49859,8 +50332,8 @@ async function resolveReviewedDraftDecision(input) {
 async function validateReviewedBinding(repositoryRoot, draftId, raw, lease, beforeMismatchRebind, expected) {
   const scanned = await inspectActiveDraftCandidates(repositoryRoot);
   if (!scanned.ok) return { ok: false, diagnostics: scanned.diagnostics };
-  const open3 = scanned.drafts;
-  if (open3.length > 1) return {
+  const open4 = scanned.drafts;
+  if (open4.length > 1) return {
     ok: false,
     diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; no decision is safe." }]
   };

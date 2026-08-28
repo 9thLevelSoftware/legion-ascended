@@ -45,6 +45,8 @@ Preparation selectors and edits are valid only during bare preparation or alongs
 
 Use `legion explore` before start when discovery is useful; start can automatically select a compatible completed exploration, select one explicitly with `--from-exploration`, or opt out with `--without-exploration`. `legion map --query <text>` searches the latest generated map. Direct `legion start --name ...` initialization remains available for callers that intentionally want no intake requirements. Normal users should not edit worker bundle manifests or compute prompt hashes; those are `legion dev worker` extension workflows.
 
+Use `legion assess` for a read-only brownfield assessment that produces evidence-bound audit reports without modifying source files or runtime configuration.
+
 ## Guidance Commands
 
 ```powershell

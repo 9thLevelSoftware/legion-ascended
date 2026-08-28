@@ -1855,10 +1855,7 @@ async function writeUpdatedBundle(input: {
         throw new Error(`Brownfield assessment identity mismatch under the publication lock: expected ${input.state.assessmentId}, found ${parsed.data.assessmentId}.`);
       }
       const existingPhase = parsed.data.phase;
-      if (!(existingPhase in ASSESSMENT_PHASE_ORDER)) {
-        throw new Error(`Brownfield assessment state has an unrecognized phase "${existingPhase}" under the publication lock. The update is blocked.`);
-      }
-      if (ASSESSMENT_PHASE_ORDER[existingPhase as keyof typeof ASSESSMENT_PHASE_ORDER] >= ASSESSMENT_PHASE_ORDER[input.state.phase]) {
+      if (ASSESSMENT_PHASE_ORDER[existingPhase] >= ASSESSMENT_PHASE_ORDER[input.state.phase]) {
         throw new Error(`Brownfield assessment phase has already been advanced by a concurrent updater to "${existingPhase}". The requested transition from "${input.expectedCurrentPhase}" to "${input.state.phase}" is no longer valid.`);
       }
     };

@@ -709,7 +709,6 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     const pass = isRecord(record.specialist) && typeof record.specialist["pass"] === "number" ? String(record.specialist["pass"]) : "?";
     collectUniqueText(gapCollector, `Specialist ${name} pass ${pass} did not produce resolved output; behavioral proof is unavailable.`);
   }
-  const hasSynthesisCommandEvidence = (input.commandResults ?? []).length > 0;
   for (const finding of finalFindings) {
     const hasCommandEvidence = finding.evidence.some((reference) =>
       reference.kind === "command-result" || reference.kind === "test-result" || commandResultEvidenceKeys.has(evidenceIdentity(reference))

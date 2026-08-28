@@ -21,7 +21,8 @@ import {
 import { buildStructuralCodeIndex } from "../dist/workflow/code-index.js";
 import {
   createBrownfieldAssessment,
-  readBrownfieldAssessment
+  readBrownfieldAssessment,
+  updateBrownfieldAssessmentState
 } from "../dist/workflow/brownfield-assessment.js";
 
 function sha256(value) {
@@ -530,6 +531,24 @@ test("fails closed when persisted effort no longer matches the assessment identi
     await expectDiagnostic(
       () => createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record }),
       /identity|assessment ID|effort/iu
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("rejects a phase update when the persisted assessment ID is tampered", async () => {
+  const fixture = await writeMapFixture();
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    const statePath = path.join(fixture.repositoryRoot, ...created.paths.state.split("/"));
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    state.assessmentId = "assess_bbbbbbbbbbbbbbbbbbbbbbbb";
+    await writeFile(statePath, stableProtocolJson(state), "utf8");
+
+    await assert.rejects(
+      () => updateBrownfieldAssessmentState({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId, phase: "signals_complete" }),
+      /identity|assessment state ID|tampered/iu
     );
   } finally {
     await fixture.cleanup();

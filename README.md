@@ -12,6 +12,11 @@ legion start -> legion plan -> legion build -> legion review -> legion ship
 That sentence is the product contract. Host integrations, skills, commands, and compatibility aliases
 are only wrappers around the same `legion <command>` language.
 
+## Brownfield Assessment
+
+`legion assess` performs a read-only brownfield assessment of an existing repository.
+It produces evidence-bound audit reports without modifying source files or runtime configuration.
+
 ## What It Does
 
 Legion Ascended is not an autonomous "build my app" button. It is a workflow system that interviews
@@ -114,7 +119,7 @@ packaging first. Claude Desktop is not Claude Code; the `claude` target above is
 ## Semantic Map v2
 
 The `map` command gives the workflow a deterministic, inspectable view of a repository before a human
-plans or reviews a change. Release `9.3.1` ships Semantic Map v2 and the first-class Grok Build
+plans or reviews a change. Release `9.4.0` ships Semantic Map v2 and the first-class Grok Build
 install target and executor in the npm package, including the
 published Tree-sitter WASM grammars used by the structural profile. It requires Node.js `>=24 <26`.
 
