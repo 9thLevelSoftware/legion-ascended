@@ -5,4 +5,5 @@ secret:
     - "packages/cli/test/brownfield-signals.test.mjs"
     - "packages/cli/test/brownfield-specialists.test.mjs"
   ignored-detectors:
-    - "generic-password"
+    - "basic-auth-string"
+    - "ftp-credentials"
