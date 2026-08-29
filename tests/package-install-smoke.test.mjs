@@ -67,7 +67,7 @@ async function installPackedFakeGrok(root) {
   await mkdir(binDir, { recursive: true });
   const fixture = path.join(GROK_FIXTURE_ROOT, "fake-grok.cjs");
   if (process.platform === "win32") {
-    await writeFile(path.join(binDir, "grok.cmd"), `@echo off\r\n"${process.execPath}" "${fixture}" %*\r\nexit /b %errorlevel%\r\n`, "utf8");
+    await writeFile(path.join(binDir, "grok.cmd"), `@echo off\r\n"${process.execPath}" "${fixture}" %*\r\n`, "utf8");
   } else {
     const shim = path.join(binDir, "grok");
     await writeFile(shim, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(fixture)} "$@"\n`, "utf8");
