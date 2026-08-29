@@ -31,6 +31,7 @@ const LEGION_CLI_COMMANDS = [
   { name: 'start', invoke: 'start', description: 'Prepare and display an intake contract, then pause for a human decision' },
   { name: 'explore', invoke: 'explore', description: 'Create a design discovery artifact before start or planning' },
   { name: 'map', invoke: 'map', description: 'Generate, refresh, check, or query codebase context' },
+  { name: 'assess', invoke: 'assess', description: 'Run a read-only brownfield assessment of an existing repository' },
   { name: 'plan', invoke: 'plan', description: 'Plan a phase or change into typed task contracts' },
   { name: 'build', invoke: 'build', description: 'Execute approved task contracts through a runtime driver' },
   { name: 'approve', invoke: 'approve', description: "Record a human decision about the change's delta specs" },

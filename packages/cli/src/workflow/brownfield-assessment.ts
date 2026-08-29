@@ -7,8 +7,11 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
   artifactReferenceSchema,
   artifactPathSchema,
-  assessmentIdSchema,
+  assessmentAssumptionSchema,
   assessmentEffortSchema,
+  assessmentFindingSchema,
+  assessmentIdSchema,
+  assessmentSignalSummarySchema,
   brownfieldAssessmentSchema,
   codeIndexSha256Schema,
   codeIndexSnapshotSchema,
@@ -1058,6 +1061,12 @@ async function writeStagedText(
   text: string,
   stageDescriptor?: BundleFileHandle
 ): Promise<void> {
+  const encodedBytes = Buffer.byteLength(text, "utf8");
+  if (encodedBytes > MAX_BUNDLE_FILE_BYTES) {
+    throw new Error(
+      `Brownfield assessment artifact ${fileName} exceeds the ${MAX_BUNDLE_FILE_BYTES}-byte publication limit (${encodedBytes} bytes).`
+    );
+  }
   const stagedPath = path.join(stageDirectory, fileName);
   let stagedHandle: BundleFileHandle | undefined;
   let stagedIdentity: BundleStat | undefined;
@@ -1984,6 +1993,19 @@ const UPDATE_PHASES = {
   review_complete: "complete"
 } as const;
 
+type AssessmentUpdateEvent = keyof typeof UPDATE_PHASES;
+
+const ALLOWED_UPDATE_EVENTS: Readonly<Record<BrownfieldAssessment["phase"], readonly AssessmentUpdateEvent[]>> = {
+  setup: ["signals_complete"],
+  signals: ["specialists_complete"],
+  specialists: ["synthesis_complete"],
+  assumptions: ["synthesis_complete"],
+  synthesis: ["review_complete"],
+  review: ["review_complete"],
+  complete: [],
+  blocked: []
+};
+
 const ASSESSMENT_PHASE_ORDER: Readonly<Record<BrownfieldAssessment["phase"], number>> = {
   setup: 0,
   signals: 1,
@@ -1995,6 +2017,46 @@ const ASSESSMENT_PHASE_ORDER: Readonly<Record<BrownfieldAssessment["phase"], num
   // A blocked assessment is terminal and is handled explicitly below.
   blocked: Number.MAX_SAFE_INTEGER
 };
+
+function hydrateAssessmentState(
+  current: BrownfieldAssessment,
+  nextPhase: BrownfieldAssessment["phase"],
+  input: {
+    readonly signals?: unknown;
+    readonly findings?: unknown;
+    readonly assumptions?: unknown;
+  }
+): BrownfieldAssessment {
+  const next: {
+    -readonly [K in keyof BrownfieldAssessment]: BrownfieldAssessment[K];
+  } = {
+    ...current,
+    phase: nextPhase
+  };
+  if (input.signals !== undefined) {
+    if (typeof input.signals !== "object" || input.signals === null || !("summary" in input.signals)) {
+      throw new Error("Brownfield assessment signals payload is missing a signal summary.");
+    }
+    next.signals = assessmentSignalSummarySchema.parse(input.signals.summary);
+  }
+  if (input.findings !== undefined) {
+    if (!Array.isArray(input.findings)) throw new Error("Brownfield assessment findings payload must be an array.");
+    next.findings = input.findings.map((finding, index) => {
+      const parsed = assessmentFindingSchema.safeParse(finding);
+      if (!parsed.success) throw new Error(`Brownfield assessment findings payload is invalid at index ${index}.`);
+      return parsed.data;
+    });
+  }
+  if (input.assumptions !== undefined) {
+    if (!Array.isArray(input.assumptions)) throw new Error("Brownfield assessment assumptions payload must be an array.");
+    next.assumptions = input.assumptions.map((assumption, index) => {
+      const parsed = assessmentAssumptionSchema.safeParse(assumption);
+      if (!parsed.success) throw new Error(`Brownfield assessment assumptions payload is invalid at index ${index}.`);
+      return parsed.data;
+    });
+  }
+  return brownfieldAssessmentSchema.parse(next);
+}
 
 /**
  * Persist one monotonic workflow checkpoint without touching source files.
@@ -2025,14 +2087,16 @@ export async function updateBrownfieldAssessmentState(input: {
   if (currentPhase === "blocked") {
     throw new Error(`Brownfield assessment phase transition is not allowed from terminal phase ${currentPhase}.`);
   }
+  if (!ALLOWED_UPDATE_EVENTS[currentPhase].includes(input.phase)) {
+    throw new Error(
+      `Brownfield assessment phase transition must follow the next checkpoint: ${currentPhase} cannot accept ${input.phase}.`
+    );
+  }
   if (ASSESSMENT_PHASE_ORDER[nextPhase] <= ASSESSMENT_PHASE_ORDER[currentPhase]) {
     throw new Error(`Brownfield assessment phase transition must be monotonic: ${currentPhase} -> ${nextPhase}.`);
   }
 
-  const nextState = brownfieldAssessmentSchema.parse({
-    ...loaded.state,
-    phase: nextPhase
-  });
+  const nextState = hydrateAssessmentState(loaded.state, nextPhase, input);
   await writeUpdatedBundle({
     repositoryRoot: input.repositoryRoot,
     paths: loaded.paths,

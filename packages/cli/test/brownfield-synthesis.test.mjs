@@ -386,6 +386,31 @@ test("updates assessment state only through monotonic, provenance-checked phase 
   } finally { await fixture.cleanup(); }
 });
 
+test("rejects skipped assessment checkpoints and hydrates state from stage payloads", async () => {
+  const fixture = await makeAssessmentFixture();
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, scope: ".", snapshot: fixture.snapshot });
+    await assert.rejects(
+      () => updateBrownfieldAssessmentState({
+        repositoryRoot: fixture.repositoryRoot,
+        assessmentId: created.assessmentId,
+        phase: "review_complete"
+      }),
+      /next checkpoint|cannot accept/i
+    );
+    const collected = signals();
+    await updateBrownfieldAssessmentState({
+      repositoryRoot: fixture.repositoryRoot,
+      assessmentId: created.assessmentId,
+      phase: "signals_complete",
+      signals: collected
+    });
+    const loaded = await readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId });
+    assert.equal(loaded.state.phase, "signals");
+    assert.deepEqual(loaded.state.signals, collected.summary);
+  } finally { await fixture.cleanup(); }
+});
+
 test("rejects a phase update when the bound structural snapshot is tampered", async () => {
   const fixture = await makeAssessmentFixture();
   try {

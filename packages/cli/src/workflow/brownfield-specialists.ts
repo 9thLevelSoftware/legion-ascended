@@ -388,13 +388,6 @@ function attachCoverageSourceHashes(
   hashes: ReadonlyMap<string, CodeIndexSha256>
 ): void {
   for (const coverage of snapshot.coverage as readonly SnapshotCoverageWithSourceHash[]) {
-    const sha256 = hashes.get(coverage.path);
-    if (sha256 === undefined) continue;
-function attachCoverageSourceHashes(
-  snapshot: CodeIndexSnapshot,
-  hashes: ReadonlyMap<string, CodeIndexSha256>
-): void {
-  for (const coverage of snapshot.coverage as readonly SnapshotCoverageWithSourceHash[]) {
     const existing = (coverage as SnapshotCoverageWithSourceHash).sha256;
     const sha256 = hashes.get(coverage.path);
     if (sha256 === undefined) continue;
@@ -403,8 +396,6 @@ function attachCoverageSourceHashes(
     }
     if (existing !== undefined) continue;
     Object.defineProperty(coverage, "sha256", { value: sha256, enumerable: false, configurable: true });
-  }
-}
   }
 }
 

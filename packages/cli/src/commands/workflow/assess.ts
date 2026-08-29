@@ -129,6 +129,16 @@ export async function handleAssessWorkflow(context: CliContext): Promise<CliResu
     }
 
     let state = loaded.state;
+    if (resume !== undefined && discovery.record.snapshot.snapshotId !== loaded.state.snapshotId) {
+      return usageError(
+        `Resumed assessment was bound to snapshot ${loaded.state.snapshotId}, but the current structural map is ${discovery.record.snapshot.snapshotId}. Run "legion assess" (without --resume) to start a fresh assessment, or restore the previous map.`
+      );
+    }
+    if (resume !== undefined && context.args.options.has("effort") && effort !== loaded.state.effort) {
+      return usageError(
+        `--effort ${effort} does not match the resumed assessment effort ${loaded.state.effort}.`
+      );
+    }
     if (state.phase === "blocked") {
       return failure(
         {
@@ -143,7 +153,15 @@ export async function handleAssessWorkflow(context: CliContext): Promise<CliResu
         ["Brownfield assessment is blocked.", `Assessment: ${assessmentId}`, renderNextAction(nextAction(REFRESH_ACTION, "Start a new assessment after refreshing the structural map."))].join("\n")
       );
     }
-    if (state.phase === "complete") return completedAssessment(assessmentId, paths, state, undefined, undefined);
+    if (state.phase === "complete") {
+      return completedAssessment(
+        assessmentId,
+        paths,
+        state,
+        undefined,
+        await readCompletedDesign(context.repositoryRoot, paths.synthesis)
+      );
+    }
 
     let signals: BrownfieldSignals | undefined;
     let specialists: BrownfieldSpecialistsResult | undefined;
@@ -152,11 +170,7 @@ export async function handleAssessWorkflow(context: CliContext): Promise<CliResu
     if (state.phase === "setup") {
       signals = await collectBrownfieldSignals({
         repositoryRoot: context.repositoryRoot,
-  if (resume !== undefined && discovery.record.snapshot.snapshotId !== loaded.state.snapshotId) {
-    return usageError(
-      `Resumed assessment was bound to snapshot ${loaded.state.snapshotId}, but the current structural map is ${discovery.record.snapshot.snapshotId}. Run \"legion assess\" (without --resume) to start a fresh assessment, or restore the previous map.`
-    );
-  }
+        snapshot: discovery.record.snapshot,
         sqlitePath: discovery.record.semanticSqliteArtifactPath
       });
       await updateBrownfieldAssessmentState({
@@ -186,7 +200,8 @@ export async function handleAssessWorkflow(context: CliContext): Promise<CliResu
         assessmentId,
         phase: "specialists_complete",
         findings: specialists.findings,
-        assumptions: specialists.assumptions
+        assumptions: specialists.assumptions,
+        review: specialistStatusArtifact(specialists)
       });
       loaded = await readBrownfieldAssessment({ repositoryRoot: context.repositoryRoot, assessmentId });
       state = loaded.state;
@@ -196,7 +211,8 @@ export async function handleAssessWorkflow(context: CliContext): Promise<CliResu
       if (specialists === undefined) {
         const findings = await readAssessmentArtifact<BrownfieldSpecialistsResult["findings"]>(context.repositoryRoot, paths.findings);
         const assumptions = await readAssessmentArtifact<BrownfieldSpecialistsResult["assumptions"]>(context.repositoryRoot, paths.assumptions);
-        specialists = persistedSpecialists(findings, assumptions);
+        const specialistStatus = await readAssessmentArtifact<unknown>(context.repositoryRoot, paths.review);
+        specialists = persistedSpecialists(findings, assumptions, specialistStatus);
       }
       design = synthesizeBrownfieldDesign({ signals, specialists });
       await updateBrownfieldAssessmentState({
@@ -275,10 +291,45 @@ function parseResume(context: CliContext): string | undefined | CliResult {
   return parsed.data;
 }
 
+const SPECIALIST_STATUS_KIND = "brownfield_specialist_status";
+
+function specialistStatusArtifact(specialists: BrownfieldSpecialistsResult): unknown {
+  return {
+    kind: SPECIALIST_STATUS_KIND,
+    ok: specialists.ok,
+    roster: specialists.roster,
+    executionRecords: specialists.executionRecords,
+    diagnostics: specialists.diagnostics
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function persistedSpecialists(
   findings: BrownfieldSpecialistsResult["findings"],
-  assumptions: BrownfieldSpecialistsResult["assumptions"]
+  assumptions: BrownfieldSpecialistsResult["assumptions"],
+  status: unknown
 ): BrownfieldSpecialistsResult {
+  if (isRecord(status) && status["kind"] === SPECIALIST_STATUS_KIND) {
+    const roster = status["roster"];
+    const executionRecords = status["executionRecords"];
+    const diagnostics = status["diagnostics"];
+    return {
+      ok: status["ok"] === true,
+      roster: Array.isArray(roster) ? roster as BrownfieldSpecialistsResult["roster"] : [],
+      packs: [],
+      findings,
+      assumptions,
+      executionRecords: Array.isArray(executionRecords)
+        ? executionRecords as BrownfieldSpecialistsResult["executionRecords"]
+        : [],
+      diagnostics: Array.isArray(diagnostics)
+        ? diagnostics.filter((entry): entry is string => typeof entry === "string")
+        : []
+    };
+  }
   return {
     ok: true,
     roster: [],
@@ -288,6 +339,21 @@ function persistedSpecialists(
     executionRecords: [],
     diagnostics: []
   };
+}
+
+async function readCompletedDesign(
+  repositoryRoot: string,
+  synthesisPath: ArtifactPath
+): Promise<BrownfieldDesign | undefined> {
+  try {
+    const design = await readAssessmentArtifact<BrownfieldDesign>(repositoryRoot, synthesisPath);
+    if (!isRecord(design) || !Array.isArray(design["prioritizedFindings"]) || !Array.isArray(design["assumptionsRequiringInput"])) {
+      return undefined;
+    }
+    return design;
+  } catch {
+    return undefined;
+  }
 }
 
 async function readAssessmentArtifact<T>(repositoryRoot: string, artifactPath: ArtifactPath): Promise<T> {

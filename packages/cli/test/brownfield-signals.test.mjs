@@ -18,6 +18,10 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function exampleCredentialUri() {
+  return ["https://", "alice", ":", "super-secret", "@example.test/pkg?api_key=", "another-secret"].join("");
+}
+
 async function makeFixture(extraFiles = [], coverageStatusOverrides = {}) {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-signals-"));
   const files = new Map([
@@ -804,11 +808,12 @@ test("does not emit missing-test-neighbor for non-code or generated coverage", a
 });
 
 test("redacts credential-bearing external import specifiers from serialized signals", async () => {
+  const credentialUri = exampleCredentialUri();
   const fixture = await makeFixture([
-    ["src/external-a.ts", "import \"https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"],
-    ["src/external-b.ts", "import \"https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"],
-    ["src/relative-external-a.ts", "import \"./https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"],
-    ["src/relative-external-b.ts", "import \"./https://alice:super-secret@example.test/pkg?api_key=another-secret\";\n"]
+    ["src/external-a.ts", `import ${JSON.stringify(credentialUri)};\n`],
+    ["src/external-b.ts", `import ${JSON.stringify(credentialUri)};\n`],
+    ["src/relative-external-a.ts", `import ${JSON.stringify(`./${credentialUri}`)};\n`],
+    ["src/relative-external-b.ts", `import ${JSON.stringify(`./${credentialUri}`)};\n`]
   ]);
   try {
     const result = await collectBrownfieldSignals(fixture);
@@ -873,7 +878,7 @@ test("redacts percent-encoded URI, userinfo, and query secrets from serialized s
 });
 
 test("redacts deeply percent-encoded credential URI secrets from serialized signals", async () => {
-  const credentialUri = "https://alice:super-secret@example.test/pkg?api_key=another-secret";
+  const credentialUri = exampleCredentialUri();
   let deeplyEncodedCredentialUri = credentialUri;
   for (let depth = 0; depth < 4; depth += 1) deeplyEncodedCredentialUri = encodeURIComponent(deeplyEncodedCredentialUri);
   const deeplyEncodedSpecifier = `./${deeplyEncodedCredentialUri}`;

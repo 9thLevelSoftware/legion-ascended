@@ -39,6 +39,10 @@ const SNAPSHOT_ID = "idx_000000000000000000000001";
 const ASSESSMENT_ID = "assess_000000000000000000000001";
 const SQLITE_PATH = ".legion/project/workflow/map/run-fixture/semantic-index.sqlite";
 const SOURCE_PATH = "src/app.ts";
+
+function credentialUri(scheme, user, secret, host, rest = "") {
+  return [scheme, "://", user, ":", secret, "@", host, rest].join("");
+}
 const SOURCE_EVIDENCE = {
   kind: "source-file",
   path: SOURCE_PATH,
@@ -124,7 +128,7 @@ function signalsFixture({ sourcePath = SOURCE_PATH } = {}) {
       highRiskSignals: 1,
       unsupportedSignals: 0
     },
-    dependencyEdges: [{ from: sourcePath, to: "https://user:import-secret@example.invalid/x?token=secret", evidence: FACT_EVIDENCE }],
+    dependencyEdges: [{ from: sourcePath, to: credentialUri("https", "user", "import-secret", "example.invalid", "/x?token=secret"), evidence: FACT_EVIDENCE }],
     testFiles: [],
     testToSourceLinks: [],
     architectureSignals: [{
@@ -666,6 +670,93 @@ test("binds coverage-only hashes from the sibling map.json inventory", async () 
     assert.ok(result.executionRecords.filter((record) => record.specialist.name === "tests").every((record) =>
       record.evidence.some((entry) => entry.kind === "source-file" && entry.path === testPath && entry.sha256 === TEST_SHA)
     ));
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("accepts matching pre-attached coverage hashes and rejects inventory mismatches", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-specialist-preattached-hash-"));
+  try {
+    const sourcePath = "src/coverage-only.ts";
+    const testPath = "test/coverage-only.test.ts";
+    const mapFiles = [
+      { path: sourcePath, sha256: SOURCE_SHA, sizeBytes: 1, lineCount: 1, symbols: [], headings: [], summary: "source" },
+      { path: testPath, sha256: TEST_SHA, sizeBytes: 1, lineCount: 1, symbols: [], headings: [], summary: "test" }
+    ].sort((left, right) => left.path.localeCompare(right.path));
+    const sourceFingerprint = fingerprintSourceFiles(mapFiles);
+    const snapshot = {
+      ...snapshotFixture(),
+      sourceFingerprint,
+      coverage: [
+        { path: sourcePath, status: "parsed", language: "typescript", sha256: SOURCE_SHA },
+        { path: testPath, status: "parsed", language: "typescript", sha256: TEST_SHA }
+      ].sort((left, right) => left.path.localeCompare(right.path)),
+      symbols: [],
+      imports: [],
+      exports: []
+    };
+    const sqliteAbsolute = path.join(repositoryRoot, ...SQLITE_PATH.split("/"));
+    await mkdir(path.dirname(sqliteAbsolute), { recursive: true });
+    await writeFile(sqliteAbsolute, "sqlite-fixture\n", "utf8");
+    await writeFile(path.join(path.dirname(sqliteAbsolute), "map.json"), JSON.stringify({
+      schemaVersion: 1,
+      kind: "codebase_map",
+      generatedAt: snapshot.generatedAt,
+      scope: snapshot.scope,
+      sourceFingerprint,
+      sourceFileCount: mapFiles.length,
+      files: mapFiles
+    }), "utf8");
+    const signals = {
+      ...emptySignalsFixture(),
+      summary: {
+        ...emptySignalsFixture().summary,
+        sourceFiles: 2,
+        coverageFiles: 2,
+        testFiles: 1,
+        highRiskSignals: 1
+      },
+      testFiles: [testPath],
+      architectureSignals: [{
+        code: "coverage-only-source",
+        severity: "moderate",
+        statement: "Coverage-only source evidence is valid.",
+        evidence: [{ kind: "source-file", path: sourcePath, sha256: SOURCE_SHA, note: "coverage-only source" }]
+      }]
+    };
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot, snapshot, signals }),
+      effort: 2,
+      execute: async () => ({
+        status: "succeeded",
+        summary: "ok",
+        filesChanged: [],
+        commandsRun: [],
+        findings: []
+      })
+    });
+    assert.ok(result.executionRecords.some((record) => record.evidence.some((entry) =>
+      entry.kind === "source-file" && entry.path === sourcePath && entry.sha256 === SOURCE_SHA
+    )));
+
+    const mismatched = {
+      ...snapshot,
+      coverage: snapshot.coverage.map((entry) =>
+        entry.path === sourcePath ? { ...entry, sha256: "e".repeat(64) } : entry
+      )
+    };
+    await assert.rejects(() => runBrownfieldSpecialists({
+      ...input({ repositoryRoot, snapshot: mismatched, signals }),
+      effort: 2,
+      execute: async () => ({
+        status: "succeeded",
+        summary: "ok",
+        filesChanged: [],
+        commandsRun: [],
+        findings: []
+      })
+    }), /source hash mismatch/iu);
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }
@@ -1229,14 +1320,14 @@ test("redacts URLs, credential values, bearer tokens, controls, and encoded secr
   const encodedJsonTwice = encodeURIComponent(encodeURIComponent("{\"password\":\"json-secret-twice\",\"apiKey\":\"api-key-twice\"}"));
   const encodedJsonFourTimes = [1, 2, 3, 4].reduce((value) => encodeURIComponent(value), "{\"password\":\"json-secret-four-times\",\"apiKey\":\"api-key-four-times\"}");
   const encodedJsonEightTimes = [1, 2, 3, 4, 5, 6, 7, 8].reduce((value) => encodeURIComponent(value), "{\"password\":\"json-secret-eight-times\",\"apiKey\":\"api-key-eight-times\"}");
-  const deeplyEncodedUrl = encodeURIComponent(encodeURIComponent("https://user:topsecret@example.invalid/private?api_key=topsecret"));
+  const deeplyEncodedUrl = encodeURIComponent(encodeURIComponent(credentialUri("https", "user", "topsecret", "example.invalid", "/private?api_key=topsecret")));
   const longScheme = `${"s".repeat(33)}://long-user:long-scheme-secret@example.invalid/private?token=long-query-secret`;
   const raw = [
     "https://example.invalid/public/path",
-    "postgresql://db-user:postgres-secret@example.invalid:5432/app?sslpassword=query-secret#fragment-secret",
-    "ftp://ftp-user:ftp-secret@example.invalid/private",
-    "git://git-user:git-secret@example.invalid/repository",
-    "custom+scheme://scheme-user:scheme-secret@example.invalid/private",
+    credentialUri("postgresql", "db-user", "postgres-secret", "example.invalid", ":5432/app?sslpassword=query-secret#fragment-secret"),
+    credentialUri("ftp", "ftp-user", "ftp-secret", "example.invalid", "/private"),
+    credentialUri("git", "git-user", "git-secret", "example.invalid", "/repository"),
+    credentialUri("custom+scheme", "scheme-user", "scheme-secret", "example.invalid", "/private"),
     longScheme,
     "{\"password\":\"topsecret\",\"apiKey\":\"api-secret\"}",
     "Authorization: Bearer bearer-secret-token-123456",

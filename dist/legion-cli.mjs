@@ -40301,12 +40301,26 @@ function coalesceRedactionSpans(spans) {
       continue;
     }
     if (span.end > previous.end) {
-      coalesced[coalesced.length - 1] = {
-        start: previous.start,
-        end: span.end,
-        replacement: span.replacement,
-        priority: span.priority
-      };
+      if (span.priority < previous.priority) {
+        coalesced[coalesced.length - 1] = {
+          start: previous.start,
+          end: span.end,
+          replacement: span.replacement,
+          priority: span.priority
+        };
+      } else if (span.priority > previous.priority) {
+        coalesced.push({
+          start: previous.end,
+          end: span.end,
+          replacement: span.replacement,
+          priority: span.priority
+        });
+      } else {
+        coalesced[coalesced.length - 1] = {
+          ...previous,
+          end: span.end
+        };
+      }
     }
   }
   return coalesced;
@@ -67010,6 +67024,12 @@ async function acquirePublishLock(parent, finalPath, finalName) {
   throw new Error(`Timed out waiting to publish the brownfield assessment bundle: ${finalPath}`);
 }
 async function writeStagedText(stageDirectory, fileName, text, stageDescriptor) {
+  const encodedBytes = Buffer.byteLength(text, "utf8");
+  if (encodedBytes > MAX_BUNDLE_FILE_BYTES) {
+    throw new Error(
+      `Brownfield assessment artifact ${fileName} exceeds the ${MAX_BUNDLE_FILE_BYTES}-byte publication limit (${encodedBytes} bytes).`
+    );
+  }
   const stagedPath = path52.join(stageDirectory, fileName);
   let stagedHandle;
   let stagedIdentity;
@@ -67824,6 +67844,16 @@ var UPDATE_PHASES = {
   synthesis_complete: "synthesis",
   review_complete: "complete"
 };
+var ALLOWED_UPDATE_EVENTS = {
+  setup: ["signals_complete"],
+  signals: ["specialists_complete"],
+  specialists: ["synthesis_complete"],
+  assumptions: ["synthesis_complete"],
+  synthesis: ["review_complete"],
+  review: ["review_complete"],
+  complete: [],
+  blocked: []
+};
 var ASSESSMENT_PHASE_ORDER = {
   setup: 0,
   signals: 1,
@@ -67835,6 +67865,35 @@ var ASSESSMENT_PHASE_ORDER = {
   // A blocked assessment is terminal and is handled explicitly below.
   blocked: Number.MAX_SAFE_INTEGER
 };
+function hydrateAssessmentState(current, nextPhase, input) {
+  const next = {
+    ...current,
+    phase: nextPhase
+  };
+  if (input.signals !== void 0) {
+    if (typeof input.signals !== "object" || input.signals === null || !("summary" in input.signals)) {
+      throw new Error("Brownfield assessment signals payload is missing a signal summary.");
+    }
+    next.signals = assessmentSignalSummarySchema.parse(input.signals.summary);
+  }
+  if (input.findings !== void 0) {
+    if (!Array.isArray(input.findings)) throw new Error("Brownfield assessment findings payload must be an array.");
+    next.findings = input.findings.map((finding, index) => {
+      const parsed = assessmentFindingSchema.safeParse(finding);
+      if (!parsed.success) throw new Error(`Brownfield assessment findings payload is invalid at index ${index}.`);
+      return parsed.data;
+    });
+  }
+  if (input.assumptions !== void 0) {
+    if (!Array.isArray(input.assumptions)) throw new Error("Brownfield assessment assumptions payload must be an array.");
+    next.assumptions = input.assumptions.map((assumption, index) => {
+      const parsed = assessmentAssumptionSchema.safeParse(assumption);
+      if (!parsed.success) throw new Error(`Brownfield assessment assumptions payload is invalid at index ${index}.`);
+      return parsed.data;
+    });
+  }
+  return brownfieldAssessmentSchema.parse(next);
+}
 async function updateBrownfieldAssessmentState(input) {
   const nextPhase = UPDATE_PHASES[input.phase];
   if (nextPhase === void 0) throw new Error(`Invalid brownfield assessment phase transition: ${String(input.phase)}.`);
@@ -67846,13 +67905,15 @@ async function updateBrownfieldAssessmentState(input) {
   if (currentPhase === "blocked") {
     throw new Error(`Brownfield assessment phase transition is not allowed from terminal phase ${currentPhase}.`);
   }
+  if (!ALLOWED_UPDATE_EVENTS[currentPhase].includes(input.phase)) {
+    throw new Error(
+      `Brownfield assessment phase transition must follow the next checkpoint: ${currentPhase} cannot accept ${input.phase}.`
+    );
+  }
   if (ASSESSMENT_PHASE_ORDER[nextPhase] <= ASSESSMENT_PHASE_ORDER[currentPhase]) {
     throw new Error(`Brownfield assessment phase transition must be monotonic: ${currentPhase} -> ${nextPhase}.`);
   }
-  const nextState = brownfieldAssessmentSchema.parse({
-    ...loaded.state,
-    phase: nextPhase
-  });
+  const nextState = hydrateAssessmentState(loaded.state, nextPhase, input);
   await writeUpdatedBundle({
     repositoryRoot: input.repositoryRoot,
     paths: loaded.paths,
@@ -68849,8 +68910,13 @@ function snapshotSourceHashes(snapshot) {
 }
 function attachCoverageSourceHashes(snapshot, hashes) {
   for (const coverage of snapshot.coverage) {
+    const existing = coverage.sha256;
     const sha2564 = hashes.get(coverage.path);
     if (sha2564 === void 0) continue;
+    if (existing !== void 0 && existing !== sha2564) {
+      throw new Error(`Snapshot source hash mismatch for ${coverage.path}: pre-attached ${existing} vs inventory ${sha2564}.`);
+    }
+    if (existing !== void 0) continue;
     Object.defineProperty(coverage, "sha256", { value: sha2564, enumerable: false, configurable: true });
   }
 }
@@ -71010,6 +71076,16 @@ async function handleAssessWorkflow(context) {
       });
     }
     let state = loaded.state;
+    if (resume !== void 0 && discovery.record.snapshot.snapshotId !== loaded.state.snapshotId) {
+      return usageError(
+        `Resumed assessment was bound to snapshot ${loaded.state.snapshotId}, but the current structural map is ${discovery.record.snapshot.snapshotId}. Run "legion assess" (without --resume) to start a fresh assessment, or restore the previous map.`
+      );
+    }
+    if (resume !== void 0 && context.args.options.has("effort") && effort !== loaded.state.effort) {
+      return usageError(
+        `--effort ${effort} does not match the resumed assessment effort ${loaded.state.effort}.`
+      );
+    }
     if (state.phase === "blocked") {
       return failure(
         {
@@ -71024,7 +71100,15 @@ async function handleAssessWorkflow(context) {
         ["Brownfield assessment is blocked.", `Assessment: ${assessmentId}`, renderNextAction(nextAction(REFRESH_ACTION2, "Start a new assessment after refreshing the structural map."))].join("\n")
       );
     }
-    if (state.phase === "complete") return completedAssessment(assessmentId, paths, state, void 0, void 0);
+    if (state.phase === "complete") {
+      return completedAssessment(
+        assessmentId,
+        paths,
+        state,
+        void 0,
+        await readCompletedDesign(context.repositoryRoot, paths.synthesis)
+      );
+    }
     let signals;
     let specialists;
     let design;
@@ -71059,7 +71143,8 @@ async function handleAssessWorkflow(context) {
         assessmentId,
         phase: "specialists_complete",
         findings: specialists.findings,
-        assumptions: specialists.assumptions
+        assumptions: specialists.assumptions,
+        review: specialistStatusArtifact(specialists)
       });
       loaded = await readBrownfieldAssessment({ repositoryRoot: context.repositoryRoot, assessmentId });
       state = loaded.state;
@@ -71068,7 +71153,8 @@ async function handleAssessWorkflow(context) {
       if (specialists === void 0) {
         const findings = await readAssessmentArtifact(context.repositoryRoot, paths.findings);
         const assumptions = await readAssessmentArtifact(context.repositoryRoot, paths.assumptions);
-        specialists = persistedSpecialists(findings, assumptions);
+        const specialistStatus = await readAssessmentArtifact(context.repositoryRoot, paths.review);
+        specialists = persistedSpecialists(findings, assumptions, specialistStatus);
       }
       design = synthesizeBrownfieldDesign({ signals, specialists });
       await updateBrownfieldAssessmentState({
@@ -71141,7 +71227,34 @@ function parseResume(context) {
   if (!parsed.success) return usageError(`Invalid assessment id ${JSON.stringify(raw)} for --resume.`);
   return parsed.data;
 }
-function persistedSpecialists(findings, assumptions) {
+var SPECIALIST_STATUS_KIND = "brownfield_specialist_status";
+function specialistStatusArtifact(specialists) {
+  return {
+    kind: SPECIALIST_STATUS_KIND,
+    ok: specialists.ok,
+    roster: specialists.roster,
+    executionRecords: specialists.executionRecords,
+    diagnostics: specialists.diagnostics
+  };
+}
+function isRecord16(value) {
+  return typeof value === "object" && value !== null;
+}
+function persistedSpecialists(findings, assumptions, status2) {
+  if (isRecord16(status2) && status2["kind"] === SPECIALIST_STATUS_KIND) {
+    const roster = status2["roster"];
+    const executionRecords = status2["executionRecords"];
+    const diagnostics = status2["diagnostics"];
+    return {
+      ok: status2["ok"] === true,
+      roster: Array.isArray(roster) ? roster : [],
+      packs: [],
+      findings,
+      assumptions,
+      executionRecords: Array.isArray(executionRecords) ? executionRecords : [],
+      diagnostics: Array.isArray(diagnostics) ? diagnostics.filter((entry) => typeof entry === "string") : []
+    };
+  }
   return {
     ok: true,
     roster: [],
@@ -71151,6 +71264,17 @@ function persistedSpecialists(findings, assumptions) {
     executionRecords: [],
     diagnostics: []
   };
+}
+async function readCompletedDesign(repositoryRoot, synthesisPath) {
+  try {
+    const design = await readAssessmentArtifact(repositoryRoot, synthesisPath);
+    if (!isRecord16(design) || !Array.isArray(design["prioritizedFindings"]) || !Array.isArray(design["assumptionsRequiringInput"])) {
+      return void 0;
+    }
+    return design;
+  } catch {
+    return void 0;
+  }
 }
 async function readAssessmentArtifact(repositoryRoot, artifactPath) {
   const absolutePath = path55.join(repositoryRoot, ...artifactPath.split("/"));

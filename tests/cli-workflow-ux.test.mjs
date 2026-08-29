@@ -679,7 +679,6 @@ test("installed Grok skill drives a real CLI build through the fake Grok executa
         assert.equal(await realpath(records[0].args[promptIndex + 1]), path.join(canonicalRoot, ".legion", "project", "changes", changeId, "runs", runId, "executor-prompt.md"));
         assert.equal(await realpath(records[0].args[cwdIndex + 1]), canonicalRoot);
         assert.deepEqual(records[0].args.slice(cwdIndex + 2), ["--output-format", "json", "--permission-mode", "bypassPermissions"]);
-        assert.deepEqual(records[0].args.slice(cwdIndex + 2), ["--output-format", "json", "--permission-mode", "bypassPermissions"]);
         assert.equal(records[0].stdinLength, 0);
         assert.equal(records[0].xaiApiKeyPresent, false);
       }

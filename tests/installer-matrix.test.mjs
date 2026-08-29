@@ -473,6 +473,14 @@ test("Grok Build dry-run and native skill lifecycle are safe and managed", async
     assert.equal(manifest.supportTier, "first-class");
     const resolvedManifestSkillPath = await realpath(manifest.paths.native["grok-skill"]);
     assert.equal(resolvedManifestSkillPath.replaceAll("\\", "/"), resolvedSkillPath.replaceAll("\\", "/"));
+    const resolvedArtifactPaths = await Promise.all(
+      manifest.nativeArtifacts.map((artifact) =>
+        realpath(artifact.path)
+          .then((resolved) => resolved.replaceAll("\\", "/"))
+          .catch(() => null)
+      )
+    );
+    assert.ok(resolvedArtifactPaths.includes(resolvedSkillPath.replaceAll("\\", "/")));
     assert.ok(manifest.nativeArtifacts.some((artifact) => artifact.backupCreated === true));
 
     const nativeSkillBeforeInvalidUpdate = readFileSync(skillPath, "utf8");
