@@ -270,7 +270,7 @@ test("updates assessment state only through monotonic, provenance-checked phase 
     await updateBrownfieldAssessmentState({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId, phase: "synthesis_complete" });
     await updateBrownfieldAssessmentState({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId, phase: "review_complete" });
     const loaded = await readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId });
-    assert.equal(loaded.state.phase, "review");
+    assert.equal(loaded.state.phase, "complete");
     assert.equal(await readFile(path.join(fixture.repositoryRoot, ...loaded.paths.signals.split("/")), "utf8"), "[]\n");
   } finally { await fixture.cleanup(); }
 });
