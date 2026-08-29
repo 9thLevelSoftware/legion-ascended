@@ -518,6 +518,7 @@ function grokRunRequest(root, { readOnly = false, base = "chg_grok", run = "run_
 
 function grokEnvelope(text, overrides = {}) {
   return JSON.stringify({
+    type: "result",
     text,
     stopReason: "completed",
     sessionId: "sess_grok_test",
@@ -671,16 +672,13 @@ test("installed Grok skill drives a real CLI build through the fake Grok executa
           .map((line) => JSON.parse(line));
         assert.equal(records.length, 1);
         const canonicalRoot = await realpath(root);
-        assert.deepEqual(records[0].args, [
-          "--prompt-file",
-          path.join(canonicalRoot, ".legion", "project", "changes", changeId, "runs", runId, "executor-prompt.md"),
-          "--cwd",
-          canonicalRoot,
-          "--output-format",
-          "json",
-          "--permission-mode",
-          "bypassPermissions"
-        ]);
+        const promptIndex = records[0].args.indexOf("--prompt-file");
+        const cwdIndex = records[0].args.indexOf("--cwd");
+        assert.notEqual(promptIndex, -1);
+        assert.notEqual(cwdIndex, -1);
+        assert.equal(await realpath(records[0].args[promptIndex + 1]), path.join(canonicalRoot, ".legion", "project", "changes", changeId, "runs", runId, "executor-prompt.md"));
+        assert.equal(await realpath(records[0].args[cwdIndex + 1]), canonicalRoot);
+        assert.deepEqual(records[0].args.slice(cwdIndex + 2), ["--output-format", "json", "--permission-mode", "bypassPermissions"]);
         assert.equal(records[0].stdinLength, 0);
         assert.equal(records[0].xaiApiKeyPresent, false);
       }
@@ -728,11 +726,11 @@ test("workflow grok executor normalizes the JSON envelope and never sends prompt
     findings: [],
     reviewVerdicts: { specification: "pass", integration: "pass", evidence: "pass" }
   });
-  await withGrokShim({ stdout: grokEnvelope(contract) }, async (root) => {
+  await withGrokShim({ stdout: grokEnvelope(contract, { costUsd: 0.01 }) }, async (root) => {
     const recordPath = path.join(root, "grok-record.json");
     // Install a second shim with a fixture-local record destination; this keeps
     // the invocation evidence inside the temporary repository.
-    const binDir = await installGrokShim(root, { stdout: grokEnvelope(contract), recordPath });
+    const binDir = await installGrokShim(root, { stdout: grokEnvelope(contract, { costUsd: 0.01 }), recordPath });
     process.env.PATH = process.platform === "win32" ? `${binDir}${path.delimiter}${process.env.PATH ?? ""}` : binDir;
     const result = await adapters.adapterForKind("grok").run(grokRunRequest(root));
 
@@ -1049,6 +1047,12 @@ test("workflow executor auto-selection does not nest a claude run inside Claude 
     else process.env.PATH = previousPath;
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("legion assess --help names the command", async () => {
+  const result = await runCliCapture(["assess", "--help"]);
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /legion assess\b/);
 });
 
 test("core workflow commands expose command-specific help", async () => {

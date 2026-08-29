@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import { createRequire } from "node:module";
+import { directoryLinkType, requireDirSymlink } from "./helpers/symlink-capability.mjs";
 
 const require = createRequire(import.meta.url);
 const {
@@ -15,6 +16,7 @@ const {
   SUPPORT_TIERS,
   recommendedRuntimeKeys
 } = require("../bin/runtime-metadata");
+const { commandDetected, samePath } = require("../bin/install");
 
 const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
@@ -44,6 +46,16 @@ const EXEC_OPTIONS = {
   maxBuffer: 20 * 1024 * 1024,
   timeout: 120_000
 };
+
+function withPlatform(platform, run) {
+  const original = process.platform;
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  try {
+    return run();
+  } finally {
+    Object.defineProperty(process, "platform", { value: original, configurable: true });
+  }
+}
 
 const FIRST_CLASS_ARTIFACTS = {
   claude: [".claude/skills/legion/SKILL.md"],
@@ -334,6 +346,64 @@ test("Grok detection executes a bounded --version probe and rejects invalid outp
   });
 });
 
+test("Grok detection honors Windows PATHEXT entries returned by where.exe", async () => {
+  await withTempProject(async ({ env, home }) => {
+    const { binDir, recordFile } = await createFakeGrokExecutable(path.dirname(home));
+    const grokCmd = path.join(binDir, "grok.cmd");
+    if (process.platform !== "win32") {
+      await writeFile(
+        grokCmd,
+        `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(path.join(binDir, "grok.cjs"))} "$@"\n`,
+        "utf8"
+      );
+      await chmod(grokCmd, 0o755);
+      const whereExe = path.join(binDir, "where.exe");
+      await writeFile(whereExe, `#!/bin/sh\nprintf '%s\\n' ${JSON.stringify(grokCmd)}\n`, "utf8");
+      await chmod(whereExe, 0o755);
+      const cmdExe = path.join(binDir, "cmd.exe");
+      await writeFile(cmdExe, "#!/bin/sh\nshift 3\ncommand=$1\nshift\nexec \"$command\" \"$@\"\n", "utf8");
+      await chmod(cmdExe, 0o755);
+    }
+
+    const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
+    env[pathKey] = [binDir, env[pathKey]].filter(Boolean).join(path.delimiter);
+    const result = await execFileAsync(process.execPath, ["-e", `
+      Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+      const { commandDetected } = require(${JSON.stringify(path.join(ROOT, "bin", "install.js"))});
+      process.stdout.write(String(commandDetected("grok", "grok")));
+    `], {
+      ...EXEC_OPTIONS,
+      env
+    });
+
+    assert.equal(result.stdout, "true");
+    assert.deepEqual(
+      (await readFile(recordFile, "utf8")).trim().split(/\r?\n/).map((line) => JSON.parse(line)),
+      [["--version"]]
+    );
+  });
+});
+
+test("samePath canonicalizes aliases before comparing Windows-style paths", async (t) => {
+  if (!requireDirSymlink(t)) return;
+  const root = await mkdtemp(path.join(tmpdir(), "legion-path-comparison-"));
+  const targetDir = path.join(root, "long-directory");
+  const aliasDir = path.join(root, "short-directory");
+  const targetFile = path.join(targetDir, "package", "marker.txt");
+  const aliasFile = path.join(aliasDir, "package", "marker.txt");
+  try {
+    await mkdir(path.dirname(targetFile), { recursive: true });
+    await writeFile(targetFile, "same file\n", "utf8");
+    await symlink(targetDir, aliasDir, directoryLinkType());
+
+    withPlatform("win32", () => {
+      assert.equal(samePath(aliasFile, targetFile), true);
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("installer dry-run writes no project artifacts and warns for compatibility targets", async () => {
   await withTempProject(async ({ env, project }) => {
     const result = await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "cursor", "--local", "--dry-run"], {
@@ -401,8 +471,17 @@ test("Grok Build dry-run and native skill lifecycle are safe and managed", async
     const resolvedSkillPath = await realpath(skillPath);
     assert.equal(manifest.runtime, "grok");
     assert.equal(manifest.supportTier, "first-class");
-    assert.equal(manifest.paths.native["grok-skill"], resolvedSkillPath.replaceAll("\\", "/"));
-    assert.ok(manifest.nativeArtifacts.some((artifact) => artifact.path === resolvedSkillPath.replaceAll("\\", "/") && artifact.backupCreated === true));
+    const resolvedManifestSkillPath = await realpath(manifest.paths.native["grok-skill"]);
+    assert.equal(resolvedManifestSkillPath.replaceAll("\\", "/"), resolvedSkillPath.replaceAll("\\", "/"));
+    const resolvedArtifactPaths = await Promise.all(
+      manifest.nativeArtifacts.map((artifact) =>
+        realpath(artifact.path)
+          .then((resolved) => resolved.replaceAll("\\", "/"))
+          .catch(() => null)
+      )
+    );
+    assert.ok(resolvedArtifactPaths.includes(resolvedSkillPath.replaceAll("\\", "/")));
+    assert.ok(manifest.nativeArtifacts.some((artifact) => artifact.backupCreated === true));
 
     const nativeSkillBeforeInvalidUpdate = readFileSync(skillPath, "utf8");
     const manifestBeforeInvalidUpdate = readFileSync(manifestPathFor(project, "grok"), "utf8");
@@ -452,7 +531,9 @@ test("Grok Build dry-run and native skill lifecycle are safe and managed", async
     assert.equal(existsSync(globalManifestPath), true);
     assert.equal(existsSync(path.join(home, ".grok", "skills", "legion", "SKILL.md")), false);
     const globalManifest = JSON.parse(readFileSync(globalManifestPath, "utf8"));
-    assert.equal(globalManifest.paths.native["grok-skill"], globalSkillPath.replaceAll("\\", "/"));
+    const resolvedGlobalSkillPath = await realpath(globalSkillPath);
+    const resolvedManifestGlobalSkillPath = await realpath(globalManifest.paths.native["grok-skill"]);
+    assert.equal(resolvedManifestGlobalSkillPath.replaceAll("\\", "/"), resolvedGlobalSkillPath.replaceAll("\\", "/"));
 
     await execFileAsync(process.execPath, [LEGION_BIN, "uninstall", "--target", "grok", "--global"], {
       ...EXEC_OPTIONS,

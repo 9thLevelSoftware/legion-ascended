@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path54 from "node:path";
+import path58 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -1071,10 +1071,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path55) {
-  if (!path55)
+function getElementAtPath(obj, path59) {
+  if (!path59)
     return obj;
-  return path55.reduce((acc, key) => acc?.[key], obj);
+  return path59.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -1483,11 +1483,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path55, issues) {
+function prefixIssues(path59, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path55);
+    iss.path.unshift(path59);
     return iss;
   });
 }
@@ -1634,16 +1634,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path55 = []) => {
+  const processError = (error52, path59 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path55, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path59, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path55, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path59, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path55, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path59, ...issue2.path]);
       } else {
-        const fullpath = [...path55, ...issue2.path];
+        const fullpath = [...path59, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -1670,17 +1670,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path55 = []) => {
+  const processError = (error52, path59 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path55, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path59, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path55, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path59, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path55, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path59, ...issue2.path]);
       } else {
-        const fullpath = [...path55, ...issue2.path];
+        const fullpath = [...path59, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -1712,8 +1712,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path55 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path55) {
+  const path59 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path59) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -14405,13 +14405,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path55 = ref.slice(1).split("/").filter(Boolean);
-  if (path55.length === 0) {
+  const path59 = ref.slice(1).split("/").filter(Boolean);
+  if (path59.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path55[0] === defsKey) {
-    const key = path55[1];
+  if (path59[0] === defsKey) {
+    const key = path59[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -15096,11 +15096,11 @@ function findProtocolMigrationPath(input) {
         continue;
       if (visited.has(migration.toVersion))
         continue;
-      const path55 = [...next.path, migration];
+      const path59 = [...next.path, migration];
       if (migration.toVersion === toVersion)
-        return path55;
+        return path59;
       visited.add(migration.toVersion);
-      queue.push({ version: migration.toVersion, path: path55 });
+      queue.push({ version: migration.toVersion, path: path59 });
     }
     next = queue.shift();
   }
@@ -16975,86 +16975,6 @@ var attestationSchema = schemaMetadataSchema.extend({
   }
 });
 
-// packages/protocol/dist/entities/change.js
-var changeStatusSchema = _enum2([
-  "draft",
-  "proposed",
-  "approved",
-  "planned",
-  "in_progress",
-  "verifying",
-  "accepted",
-  "rejected",
-  "blocked",
-  "archived"
-]);
-var acceptanceActorSchema = string2().min(1).max(128);
-var acceptanceReasonSchema = string2().min(1).max(2048);
-var acceptanceStateSchema = discriminatedUnion("status", [
-  strictObject({
-    status: literal("not_ready"),
-    acceptedAt: utcTimestampSchema.optional(),
-    acceptedBy: acceptanceActorSchema.optional(),
-    reason: acceptanceReasonSchema.optional()
-  }),
-  strictObject({
-    status: literal("ready"),
-    acceptedAt: utcTimestampSchema.optional(),
-    acceptedBy: acceptanceActorSchema.optional(),
-    reason: acceptanceReasonSchema.optional()
-  }),
-  strictObject({
-    status: literal("accepted"),
-    acceptedAt: utcTimestampSchema,
-    acceptedBy: acceptanceActorSchema,
-    reason: acceptanceReasonSchema.optional()
-  }),
-  strictObject({
-    status: literal("rejected"),
-    acceptedAt: utcTimestampSchema.optional(),
-    acceptedBy: acceptanceActorSchema.optional(),
-    reason: acceptanceReasonSchema
-  }),
-  strictObject({
-    status: literal("blocked"),
-    acceptedAt: utcTimestampSchema.optional(),
-    acceptedBy: acceptanceActorSchema.optional(),
-    reason: acceptanceReasonSchema
-  }),
-  strictObject({
-    status: literal("superseded"),
-    acceptedAt: utcTimestampSchema.optional(),
-    acceptedBy: acceptanceActorSchema.optional(),
-    reason: acceptanceReasonSchema.optional()
-  })
-]);
-var currentTruthSchema = strictObject({
-  specRefs: array(artifactReferenceSchema).min(1),
-  baseSpecHash: contentHashSchema,
-  baseGitSha: gitShaSchema,
-  requirementIds: array(requirementIdSchema)
-});
-var proposedTruthSchema = strictObject({
-  deltaSpecRefs: array(artifactReferenceSchema).min(1),
-  targetSpecHash: contentHashSchema,
-  requirementIds: array(requirementIdSchema)
-});
-var changeSchema = schemaMetadataSchema.extend({
-  kind: literal("change"),
-  id: changeIdSchema,
-  projectId: projectIdSchema,
-  title: string2().min(1).max(160),
-  summary: string2().min(1).max(2048),
-  status: changeStatusSchema,
-  currentTruth: currentTruthSchema,
-  proposedTruth: proposedTruthSchema,
-  artifactRevisions: array(artifactRevisionSchema).min(1),
-  risk: riskProfileSchema,
-  acceptance: acceptanceStateSchema,
-  decisionRefs: array(decisionIdSchema),
-  oracleRefs: array(oracleIdSchema)
-});
-
 // packages/protocol/dist/entities/code-index.js
 var CODE_INDEX_FACT_ID_PATTERN = /^(idx|sym|imp|exp)_[a-f0-9]{24}$/;
 var CODE_INDEX_SHA256_PATTERN = /^[0-9a-f]{64}$/;
@@ -17212,6 +17132,234 @@ var codeIndexSnapshotSchema = strictObject({
       }
     }
   }
+});
+
+// packages/protocol/dist/entities/brownfield-assessment.js
+var assessmentEffortSchema = number2().int().min(1).max(5);
+var assessmentPhaseSchema = _enum2([
+  "setup",
+  "signals",
+  "specialists",
+  "assumptions",
+  "synthesis",
+  "review",
+  "complete",
+  "blocked"
+]);
+var assessmentConfidenceSchema = _enum2(["high", "medium", "low", "unknown"]);
+var assessmentEvidenceKindSchema = _enum2([
+  "structural-fact",
+  "source-file",
+  "manifest",
+  "test-result",
+  "command-result",
+  "git-metadata",
+  "user-input"
+]);
+var assessmentSeveritySchema = _enum2(["critical", "major", "moderate", "minor", "informational"]);
+var assessmentSpecialistSchema = _enum2([
+  "architecture",
+  "code",
+  "tests",
+  "security",
+  "product-intent",
+  "documentation"
+]);
+var assessmentIdSchema = string2().regex(/^assess_[a-f0-9]{24}$/, "Invalid brownfield assessment ID").brand();
+var assessmentAssumptionIdSchema = string2().regex(/^asm_[a-f0-9]{24}$/, "Invalid brownfield assessment assumption ID").brand();
+var assessmentFindingIdSchema = string2().regex(/^af_[a-f0-9]{24}$/, "Invalid brownfield assessment finding ID").brand();
+var assessmentArtifactEvidenceFields = {
+  path: artifactPathSchema,
+  note: string2().min(1).max(512)
+};
+var assessmentEvidenceRefSchema = discriminatedUnion("kind", [
+  strictObject({
+    kind: literal("structural-fact"),
+    ...assessmentArtifactEvidenceFields,
+    sha256: codeIndexSha256Schema.optional(),
+    factId: codeIndexFactIdSchema
+  }),
+  strictObject({
+    kind: literal("source-file"),
+    path: codeIndexSourcePathSchema,
+    sha256: codeIndexSha256Schema,
+    note: assessmentArtifactEvidenceFields.note
+  }),
+  strictObject({ kind: literal("manifest"), ...assessmentArtifactEvidenceFields }),
+  strictObject({ kind: literal("test-result"), ...assessmentArtifactEvidenceFields }),
+  strictObject({ kind: literal("command-result"), ...assessmentArtifactEvidenceFields }),
+  strictObject({ kind: literal("git-metadata"), ...assessmentArtifactEvidenceFields }),
+  strictObject({ kind: literal("user-input"), ...assessmentArtifactEvidenceFields })
+]);
+var assessmentAssumptionSchema = strictObject({
+  id: assessmentAssumptionIdSchema,
+  statement: string2().min(1).max(2e3),
+  confidence: assessmentConfidenceSchema,
+  blocking: boolean2(),
+  resolution: string2().min(1).max(1e3),
+  evidence: array(assessmentEvidenceRefSchema).min(1).max(64)
+});
+var assessmentFindingSchema = strictObject({
+  id: assessmentFindingIdSchema,
+  specialist: assessmentSpecialistSchema,
+  title: string2().min(1).max(256),
+  statement: string2().min(1).max(4e3),
+  severity: assessmentSeveritySchema,
+  confidence: assessmentConfidenceSchema,
+  evidence: array(assessmentEvidenceRefSchema).min(1).max(128),
+  assumptions: array(assessmentAssumptionIdSchema).max(32),
+  recommendation: string2().min(1).max(4e3)
+});
+var assessmentSignalSummarySchema = strictObject({
+  sourceFiles: number2().int().nonnegative(),
+  coverageFiles: number2().int().nonnegative(),
+  symbols: number2().int().nonnegative(),
+  imports: number2().int().nonnegative(),
+  exports: number2().int().nonnegative(),
+  testFiles: number2().int().nonnegative(),
+  testToSourceLinks: number2().int().nonnegative(),
+  dependencyEdges: number2().int().nonnegative(),
+  highRiskSignals: number2().int().nonnegative(),
+  unsupportedSignals: number2().int().nonnegative()
+});
+var brownfieldAssessmentSchema = strictObject({
+  schemaVersion: literal(1),
+  kind: literal("brownfield_assessment"),
+  assessmentId: assessmentIdSchema,
+  generatedAt: utcTimestampSchema,
+  effort: assessmentEffortSchema,
+  phase: assessmentPhaseSchema,
+  repositoryRoot: artifactPathSchema,
+  scope: union([literal("."), codeIndexSourcePathSchema]),
+  snapshotId: codeIndexSnapshotIdSchema,
+  sourceFingerprint: codeIndexSha256Schema,
+  semanticIndexSha256: codeIndexSha256Schema,
+  semanticSqliteSha256: codeIndexSha256Schema,
+  signals: assessmentSignalSummarySchema,
+  assumptions: array(assessmentAssumptionSchema).max(256),
+  findings: array(assessmentFindingSchema).max(2e3),
+  nextActions: array(string2().min(1).max(1e3)).max(64)
+}).describe("Runtime validation requires unique assumption and finding IDs; every finding assumption reference must resolve to an assumption in the same assessment and must not repeat within a finding.").superRefine((assessment, context) => {
+  const assumptionIds = /* @__PURE__ */ new Set();
+  for (const [index, assumption] of assessment.assumptions.entries()) {
+    if (assumptionIds.has(assumption.id)) {
+      context.addIssue({
+        code: "custom",
+        message: "Brownfield assessment assumption IDs must be unique.",
+        path: ["assumptions", index, "id"]
+      });
+    }
+    assumptionIds.add(assumption.id);
+  }
+  const findingIds = /* @__PURE__ */ new Set();
+  for (const [index, finding] of assessment.findings.entries()) {
+    if (findingIds.has(finding.id)) {
+      context.addIssue({
+        code: "custom",
+        message: "Brownfield assessment finding IDs must be unique.",
+        path: ["findings", index, "id"]
+      });
+    }
+    findingIds.add(finding.id);
+    const assumptionRefs = /* @__PURE__ */ new Set();
+    for (const [assumptionIndex, assumptionId] of finding.assumptions.entries()) {
+      if (assumptionRefs.has(assumptionId)) {
+        context.addIssue({
+          code: "custom",
+          message: "Finding assumption references must be unique within a finding.",
+          path: ["findings", index, "assumptions", assumptionIndex]
+        });
+      }
+      if (!assumptionIds.has(assumptionId)) {
+        context.addIssue({
+          code: "custom",
+          message: "Finding assumption references must resolve within the same assessment.",
+          path: ["findings", index, "assumptions", assumptionIndex]
+        });
+      }
+      assumptionRefs.add(assumptionId);
+    }
+  }
+});
+
+// packages/protocol/dist/entities/change.js
+var changeStatusSchema = _enum2([
+  "draft",
+  "proposed",
+  "approved",
+  "planned",
+  "in_progress",
+  "verifying",
+  "accepted",
+  "rejected",
+  "blocked",
+  "archived"
+]);
+var acceptanceActorSchema = string2().min(1).max(128);
+var acceptanceReasonSchema = string2().min(1).max(2048);
+var acceptanceStateSchema = discriminatedUnion("status", [
+  strictObject({
+    status: literal("not_ready"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema.optional()
+  }),
+  strictObject({
+    status: literal("ready"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema.optional()
+  }),
+  strictObject({
+    status: literal("accepted"),
+    acceptedAt: utcTimestampSchema,
+    acceptedBy: acceptanceActorSchema,
+    reason: acceptanceReasonSchema.optional()
+  }),
+  strictObject({
+    status: literal("rejected"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema
+  }),
+  strictObject({
+    status: literal("blocked"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema
+  }),
+  strictObject({
+    status: literal("superseded"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema.optional()
+  })
+]);
+var currentTruthSchema = strictObject({
+  specRefs: array(artifactReferenceSchema).min(1),
+  baseSpecHash: contentHashSchema,
+  baseGitSha: gitShaSchema,
+  requirementIds: array(requirementIdSchema)
+});
+var proposedTruthSchema = strictObject({
+  deltaSpecRefs: array(artifactReferenceSchema).min(1),
+  targetSpecHash: contentHashSchema,
+  requirementIds: array(requirementIdSchema)
+});
+var changeSchema = schemaMetadataSchema.extend({
+  kind: literal("change"),
+  id: changeIdSchema,
+  projectId: projectIdSchema,
+  title: string2().min(1).max(160),
+  summary: string2().min(1).max(2048),
+  status: changeStatusSchema,
+  currentTruth: currentTruthSchema,
+  proposedTruth: proposedTruthSchema,
+  artifactRevisions: array(artifactRevisionSchema).min(1),
+  risk: riskProfileSchema,
+  acceptance: acceptanceStateSchema,
+  decisionRefs: array(decisionIdSchema),
+  oracleRefs: array(oracleIdSchema)
 });
 
 // packages/protocol/dist/entities/decision.js
@@ -18124,6 +18272,7 @@ var entityJsonSchemas = {
   project: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/project.schema.json", "Legion protocol project entity schema", projectSchema),
   change: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/change.schema.json", "Legion protocol change entity schema", changeSchema),
   codeIndex: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/code-index.schema.json", "Legion protocol code index snapshot entity schema", codeIndexSnapshotSchema),
+  brownfieldAssessment: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/brownfield-assessment.schema.json", "Legion protocol brownfield assessment entity schema", brownfieldAssessmentSchema),
   requirement: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/requirement.schema.json", "Legion protocol requirement entity schema", requirementSchema),
   decision: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/decision.schema.json", "Legion protocol decision entity schema", decisionSchema),
   oracle: jsonSchemaDocument2("https://schemas.9thlevelsoftware.com/legion/entities/oracle.schema.json", "Legion protocol oracle entity schema", oracleSchema),
@@ -18428,17 +18577,17 @@ function applyMigrations(input, options) {
   const initial = assertVersionedRecord(input);
   const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
   assertSupportedVersion(targetVersion, options.registry, "targetVersion");
-  const path55 = findProtocolMigrationPath({
+  const path59 = findProtocolMigrationPath({
     fromVersion: initial.schemaVersion,
     toVersion: targetVersion,
     migrations: options.registry.migrations
   });
-  if (path55 === null) {
+  if (path59 === null) {
     throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
   }
   let record2 = cloneVersionedRecord(initial);
   const appliedMigrations = [];
-  for (const descriptor of path55) {
+  for (const descriptor of path59) {
     const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
     if (!migration) {
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
@@ -19501,10 +19650,10 @@ function collectScope(taskContract) {
 
 // packages/core/dist/dispatch/blocker.js
 var DISPATCH_BLOCKER_REPORTER = "fresh-context-dispatcher";
-function renderPath(path55) {
-  if (path55.length === 0)
+function renderPath(path59) {
+  if (path59.length === 0)
     return "<root>";
-  return path55.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
+  return path59.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
 }
 function renderIssueReason(issue2) {
   return `code=${issue2.code} path=${renderPath(issue2.path)} :: ${issue2.message}`;
@@ -19531,8 +19680,8 @@ function sha256Hex2(input) {
   return crypto3.createHash("sha256").update(input, "utf8").digest("hex");
 }
 function joinReferences(references) {
-  const sorted = [...references].map((reference) => `${reference.path}|${reference.sha256}`).sort();
-  return sorted.join(";");
+  const sorted3 = [...references].map((reference) => `${reference.path}|${reference.sha256}`).sort();
+  return sorted3.join(";");
 }
 function joinPaths(paths) {
   return [...paths].sort().join(";");
@@ -19932,7 +20081,7 @@ async function safeInvoke(runner, request, timeoutMs, timeout) {
     }
   }
 }
-function emptyResultFor(request, startedAt, finishedAt, errorMessage2, timedOut = false) {
+function emptyResultFor(request, startedAt, finishedAt, errorMessage3, timedOut = false) {
   const noContentHash = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
   return {
     index: request.index,
@@ -19947,7 +20096,7 @@ function emptyResultFor(request, startedAt, finishedAt, errorMessage2, timedOut 
     timedOut,
     startedAt,
     finishedAt,
-    notes: errorMessage2
+    notes: errorMessage3
   };
 }
 function recordFailingIndices(results) {
@@ -20229,15 +20378,15 @@ function parseSettings(value) {
   if (result.success)
     return { ok: true, findings: [] };
   const findings = result.error.issues.map((issue2) => {
-    const path55 = issue2.path.join(".");
+    const path59 = issue2.path.join(".");
     if (issue2.code === "unrecognized_keys") {
-      const keys = issue2.keys.map((key) => path55.length === 0 ? key : `${path55}.${key}`);
+      const keys = issue2.keys.map((key) => path59.length === 0 ? key : `${path59}.${key}`);
       return {
-        path: path55,
+        path: path59,
         message: `Unknown setting${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}.`
       };
     }
-    return { path: path55, message: path55.length === 0 ? issue2.message : `${path55}: ${issue2.message}` };
+    return { path: path59, message: path59.length === 0 ? issue2.message : `${path59}: ${issue2.message}` };
   });
   return { ok: false, findings };
 }
@@ -26829,8 +26978,8 @@ var PROJECT_ARTIFACT_PATHS = Object.freeze({
   changes: ".legion/project/changes",
   adr: ".legion/project/adr"
 });
-function isBlockingDiagnostic(diagnostic3) {
-  return diagnostic3.severity !== "warning";
+function isBlockingDiagnostic(diagnostic4) {
+  return diagnostic4.severity !== "warning";
 }
 var ArtifactPathError = class extends Error {
   constructor(message) {
@@ -27044,11 +27193,11 @@ function sortStable(value) {
   if (!isRecord7(value)) {
     return value;
   }
-  const sorted = {};
+  const sorted3 = {};
   for (const [key, entryValue] of Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)) {
-    sorted[key] = sortStable(entryValue);
+    sorted3[key] = sortStable(entryValue);
   }
-  return sorted;
+  return sorted3;
 }
 function stableProtocolJson(value) {
   const serialized = JSON.stringify(sortStable(value));
@@ -27062,14 +27211,14 @@ function hashContent(content) {
   const hash2 = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash2}`);
 }
-function mediaTypeForArtifactPath(path55) {
-  if (path55.endsWith(".json"))
+function mediaTypeForArtifactPath(path59) {
+  if (path59.endsWith(".json"))
     return "application/json";
-  if (path55.endsWith(".yaml") || path55.endsWith(".yml"))
+  if (path59.endsWith(".yaml") || path59.endsWith(".yml"))
     return "application/yaml";
-  if (path55.endsWith(".md"))
+  if (path59.endsWith(".md"))
     return "text/markdown";
-  if (path55.endsWith(".txt"))
+  if (path59.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -27112,16 +27261,16 @@ function jsonParseLocation(error51, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path55, issues) {
+function schemaDiagnostics(path59, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path55 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path59 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path55
+      path: path59
     });
   });
 }
@@ -27894,7 +28043,7 @@ async function loadProject(input) {
     schema: projectManifestSchema
   });
   if (!result.ok) {
-    const notFound = result.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found");
+    const notFound = result.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found");
     return failure2(notFound ? "not_found" : "invalid", result.diagnostics);
   }
   return {
@@ -28294,7 +28443,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path55 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path59 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -28308,7 +28457,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path55
+        path: path59
       }))
     };
   }
@@ -29443,7 +29592,7 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path55) {
+function parseBaseGitSha(input, path59) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -29451,18 +29600,18 @@ function parseBaseGitSha(input, path55) {
     return failure4("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path55
+      path: path59
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path55) {
+function assertExpectedRevision(value, path59) {
   if (!Number.isInteger(value) || value < 0) {
     return failure4("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path55
+        path: path59
       })
     ]);
   }
@@ -29637,7 +29786,7 @@ async function readTaskGraph(input) {
     schema: taskGraphDocumentSchema
   });
   if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    const status2 = read.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found") ? "not_found" : "invalid";
     return failure4(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
@@ -29780,7 +29929,7 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path55) {
+function parseBaseGitSha2(input, path59) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -29788,18 +29937,18 @@ function parseBaseGitSha2(input, path55) {
     return failure5("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path55
+      path: path59
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path55) {
+function assertExpectedRevision2(value, path59) {
   if (!Number.isInteger(value) || value < 0) {
     return failure5("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path55
+        path: path59
       })
     ]);
   }
@@ -30098,7 +30247,7 @@ async function readEvidenceIndex(input) {
     schema: evidenceIndexDocumentSchema
   });
   if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    const status2 = read.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found") ? "not_found" : "invalid";
     return failure5(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
@@ -30168,13 +30317,13 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path55) {
+function parseRequirementId2(input, path59) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path55
+      path: path59
     })));
   }
   return parsed.data;
@@ -30190,24 +30339,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path55) {
+function parseBaseGitSha3(input, path59) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path55
+      path: path59
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path55) {
+function parseOwners(input, path59) {
   if (input.length === 0) {
     return failure6("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path55
+        path: path59
       })
     ]);
   }
@@ -30219,7 +30368,7 @@ function parseOwners(input, path55) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path55
+        path: path59
       })));
       continue;
     }
@@ -30507,7 +30656,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path55) {
+function conflictDiagnostics(deltas, path59) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -30516,7 +30665,7 @@ function conflictDiagnostics(deltas, path55) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path55
+        path: path59
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -31061,7 +31210,7 @@ async function loadChangeBundle(input) {
     schema: changeBundleSchema
   });
   if (!proposal.ok) {
-    const notFound = proposal.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found");
+    const notFound = proposal.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found");
     return failure6(notFound ? "not_found" : "invalid", proposal.diagnostics);
   }
   const bundle = proposal.value;
@@ -31600,18 +31749,18 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path55) {
+function parseOracleId2(input, path59) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path55
+      path: path59
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path55) {
+function parseBaseGitSha4(input, path59) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -31619,7 +31768,7 @@ function parseBaseGitSha4(input, path55) {
     return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path55
+      path: path59
     })));
   }
   return parsed.data;
@@ -31756,7 +31905,7 @@ async function readOracleArtifact(input) {
     schema: oracleArtifactDocumentSchema
   });
   if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    const status2 = read.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found") ? "not_found" : "invalid";
     return failure7(status2, read.diagnostics);
   }
   if (read.value.oracle.id !== oracleId) {
@@ -31885,13 +32034,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path55) {
+function assertExpectedRevision3(value, path59) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path55
+        path: path59
       })
     ]);
   }
@@ -32033,7 +32182,7 @@ async function readTaskRun(input) {
     schema: taskRunSchema
   });
   if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    const status2 = read.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found") ? "not_found" : "invalid";
     return failure8(status2, read.diagnostics);
   }
   const diagnostics = identityDiagnostics({
@@ -32168,13 +32317,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path55) {
+function assertExpectedRevision4(value, path59) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path55
+        path: path59
       })
     ]);
   }
@@ -32316,7 +32465,7 @@ async function readReviewDecision(input) {
     schema: reviewDecisionSchema
   });
   if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    const status2 = read.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found") ? "not_found" : "invalid";
     return failure9(status2, read.diagnostics);
   }
   const diagnostics = identityDiagnostics2({
@@ -32455,13 +32604,13 @@ function parseBaseGitSha7(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision5(value, path55) {
+function assertExpectedRevision5(value, path59) {
   if (!Number.isInteger(value) || value < 0) {
     return failure10("invalid", [
       approvalDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path55
+        path: path59
       })
     ]);
   }
@@ -32603,7 +32752,7 @@ async function readApproval(input) {
     schema: approvalSchema
   });
   if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    const status2 = read.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found") ? "not_found" : "invalid";
     return failure10(status2, read.diagnostics);
   }
   const diagnostics = identityDiagnostics3({
@@ -32882,7 +33031,7 @@ async function readAttestation(input) {
     schema: attestationSchema
   });
   if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    const status2 = read.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found") ? "not_found" : "invalid";
     return failure11(status2, read.diagnostics);
   }
   const diagnostics = identityDiagnostics4({
@@ -33130,7 +33279,7 @@ async function readRelease(input) {
     schema: releaseSchema
   });
   if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    const status2 = read.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found") ? "not_found" : "invalid";
     return failure12(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
@@ -33185,8 +33334,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path55) {
-  return nodeId("artifact", path55);
+function artifactNodeId(path59) {
+  return nodeId("artifact", path59);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -33222,8 +33371,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path55) {
-  const fileName = path55.split("/").at(-1);
+function oracleIdFromPath(path59) {
+  const fileName = path59.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -33338,13 +33487,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path55 = [];
+  const path59 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path55.indexOf(node);
+      const cycleStartIndex = path59.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path55.length; index++) {
-          const cyclicNode = path55[index];
+        for (let index = cycleStartIndex; index < path59.length; index++) {
+          const cyclicNode = path59[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -33354,11 +33503,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path55.push(node);
+    path59.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path55.pop();
+    path59.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -33386,10 +33535,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path55 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path59 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path55,
+        path: path59,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -33919,14 +34068,14 @@ async function loadTraceabilityArtifacts(input) {
   }
   return { currentSpecs, change, oracles, taskGraph, evidenceIndex };
 }
-function isLegacyEvidenceDiagnostic(diagnostic3) {
-  return diagnostic3.code === "orphan_evidence";
+function isLegacyEvidenceDiagnostic(diagnostic4) {
+  return diagnostic4.code === "orphan_evidence";
 }
 function partitionTraceabilityDiagnostics(diagnostics, options = {}) {
   if (options.allowLegacyEvidence !== true)
     return { blocking: diagnostics, allowed: [] };
   return {
-    blocking: diagnostics.filter((diagnostic3) => !isLegacyEvidenceDiagnostic(diagnostic3)),
+    blocking: diagnostics.filter((diagnostic4) => !isLegacyEvidenceDiagnostic(diagnostic4)),
     allowed: diagnostics.filter(isLegacyEvidenceDiagnostic)
   };
 }
@@ -34046,13 +34195,13 @@ function parseChangeId12(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path55) {
+function parseArchivedAt(input, path59) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path55
+      path: path59
     })));
   }
   return parsed.data;
@@ -34081,7 +34230,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path55) {
+function archiveHashDiagnostics(record2, path59) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -34089,11 +34238,11 @@ function archiveHashDiagnostics(record2, path55) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path55
+      path: path59
     })
   ];
 }
-async function assertWorktreeTarget(input, path55) {
+async function assertWorktreeTarget(input, path59) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -34107,7 +34256,7 @@ async function assertWorktreeTarget(input, path55) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path55
+        path: path59
       })
     ]);
   } catch (error51) {
@@ -34115,7 +34264,7 @@ async function assertWorktreeTarget(input, path55) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error51 instanceof Error ? error51.message : String(error51),
-        path: path55
+        path: path59
       })
     ]);
   }
@@ -34194,11 +34343,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path55 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path55 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path55)) : remaining;
+    const path59 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path59 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path59)) : remaining;
     return {
-      path: path55,
+      path: path59,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -34261,9 +34410,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path55, document) {
+function validatePlannedDocument(path59, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path55,
+    artifactPath: path59,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -34274,7 +34423,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path55, document]) => [path55, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path59, document]) => [path59, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -34298,17 +34447,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path55 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path55)) {
+      const path59 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path59)) {
         return failure14("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path55}.`,
-            path: path55
+            message: `Archive add target already exists: ${path59}.`,
+            path: path59
           })
         ]);
       }
-      plannedDocs.set(path55, {
+      plannedDocs.set(path59, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -34321,7 +34470,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path55);
+      touchedPaths.add(path59);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -34506,8 +34655,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path55 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path55);
+  const path59 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path59);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -34751,14 +34900,14 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path55 = archivePath(changeId);
+  const path59 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path55,
+    artifactPath: path59,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    const status2 = read.diagnostics.some((diagnostic4) => diagnostic4.code === "not_found") ? "not_found" : "invalid";
     return failure14(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
@@ -34766,22 +34915,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path55
+        path: path59
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path55);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path59);
   if (hashDiagnostics.length > 0)
     return failure14("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path55,
+    artifactPath: path59,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path55,
+      path: path59,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -34945,20 +35094,20 @@ function invalidPathDiagnostic(input, error51) {
     path: diagnosticPath(input)
   });
 }
-function artifactTooLargeDiagnostic(path55, byteLength) {
+function artifactTooLargeDiagnostic(path59, byteLength) {
   return diagnosticForPath({
     code: "artifact_too_large",
     message: `Code index artifact exceeds the 256 MiB maximum (${byteLength} bytes).`,
-    path: path55
+    path: path59
   });
 }
 function preserveDiagnosticPaths(input, diagnostics) {
-  const path55 = diagnosticPath(input);
-  return diagnostics.map((diagnostic3) => ({
-    ...diagnostic3,
+  const path59 = diagnosticPath(input);
+  return diagnostics.map((diagnostic4) => ({
+    ...diagnostic4,
     source: {
-      ...diagnostic3.source,
-      path: path55
+      ...diagnostic4.source,
+      path: path59
     }
   }));
 }
@@ -38098,6 +38247,7 @@ var WORKFLOW_COMMANDS = Object.freeze([
   { name: "start", summary: "Initialize a project and route to the first plan." },
   { name: "explore", summary: "Create a design discovery artifact before start or planning." },
   { name: "map", summary: "Generate, refresh, check, or query codebase context." },
+  { name: "assess", summary: "Run a read-only brownfield assessment of an existing repository." },
   { name: "plan", summary: "Plan a phase or change into typed task contracts." },
   { name: "build", summary: "Execute approved task contracts through a runtime driver." },
   { name: "approve", summary: "Record a human decision about the change's delta specs." },
@@ -38362,15 +38512,15 @@ Reason: ${action.reason}`;
 }
 function renderDiagnostics(diagnostics) {
   if (diagnostics.length === 0) return "";
-  return diagnostics.map((diagnostic3) => {
-    if (diagnostic3 && typeof diagnostic3 === "object" && "message" in diagnostic3) {
-      const entry = diagnostic3;
+  return diagnostics.map((diagnostic4) => {
+    if (diagnostic4 && typeof diagnostic4 === "object" && "message" in diagnostic4) {
+      const entry = diagnostic4;
       const code = typeof entry.code === "string" && entry.code.length > 0 ? `[${entry.code}] ` : "";
       const diagnosticPath2 = typeof entry.path === "string" ? entry.path : typeof entry.source?.path === "string" ? entry.source.path : void 0;
       const pathSuffix = diagnosticPath2 === void 0 ? "" : ` (${diagnosticPath2})`;
       return `- ${code}${String(entry.message)}${pathSuffix}`;
     }
-    return `- ${String(diagnostic3)}`;
+    return `- ${String(diagnostic4)}`;
   }).join("\n");
 }
 
@@ -39614,8 +39764,8 @@ function declaredSurfacePaths(answers) {
     if (draft.priority === "wont") continue;
     for (const criterion of draft.criteria) {
       if (criterion.surfaceKind.trim().length === 0) continue;
-      for (const path55 of parsePathList(criterion.surfacePins)) {
-        declared.push({ requirementIndex: draft.index, criterionIndex: criterion.index, path: path55 });
+      for (const path59 of parsePathList(criterion.surfacePins)) {
+        declared.push({ requirementIndex: draft.index, criterionIndex: criterion.index, path: path59 });
       }
     }
   }
@@ -39831,7 +39981,8 @@ function budgetForWriteScope(write, options = {}) {
 }
 
 // packages/cli/src/workflow/executor/adapters.ts
-import { execFile as execFile4, spawn } from "node:child_process";
+import { execFile as execFile4, execFileSync as execFileSync4, spawn } from "node:child_process";
+import { open as open2 } from "node:fs/promises";
 import { promisify as promisify4 } from "node:util";
 
 // packages/cli/src/workflow/executor/fake-plan.ts
@@ -39906,11 +40057,6 @@ function applyFakeExecutorPlan(input) {
 
 // packages/cli/src/workflow/executor/result.ts
 import { readFile as readFile14, writeFile as writeFile6 } from "node:fs/promises";
-var SECRET_ASSIGNMENT_RE = /\b(api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;]+)/gi;
-var JSON_CREDENTIAL_RE = /"(?:api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)"\s*:\s*"(?:[^"\\]|\\.)*"/gi;
-function redactTranscript(text) {
-  return text.replace(JSON_CREDENTIAL_RE, (match) => match.replace(/:\s*"(?:[^"\\]|\\.)*"/, ': "[REDACTED_JSON_SECRET]"')).replace(SECRET_ASSIGNMENT_RE, (_match, key) => `${key}=[REDACTED_SECRET]`);
-}
 async function writeProjectTextFile(input) {
   const absolutePath = await prepareProjectTextFile(input);
   await writeFile6(absolutePath, input.text, "utf8");
@@ -39929,14 +40075,6 @@ async function writeProjectExecutionResult(input) {
     artifactPath: input.artifactPath,
     text: stableProtocolJson(input.result)
   });
-}
-async function readOptionalText(filePath) {
-  try {
-    return await readFile14(filePath, "utf8");
-  } catch (error51) {
-    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") return "";
-    throw error51;
-  }
 }
 function normalizeExecutionResult(input, fallback) {
   const value = isRecord11(input) ? input : {};
@@ -40039,6 +40177,194 @@ var DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 9e5;
 var DEFAULT_HERMES_EXEC_TIMEOUT_MS = 6e5;
 var DEFAULT_GROK_EXEC_TIMEOUT_MS = 6e5;
 var GROK_VERSION_RE = /^grok\s+(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\s+\([0-9A-Za-z-]+\))?(?:\s+\[[A-Za-z0-9.-]+\])?\s*$/u;
+var SECRET_ASSIGNMENT_RE = /\b(?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization|password|passwd|pwd|token|secret)\b\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;}]+)/giu;
+var JSON_CREDENTIAL_RE = /["'](?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization|password|passwd|pwd|token|secret)["']\s*:\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,\s}]+)/giu;
+var BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu;
+var TOKEN_RE = /\b(?:sk|ghp|gho|xox[baprs]-)[A-Za-z0-9_-]{8,}\b/gu;
+var CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu;
+var ENCODED_SEGMENT_RE = /[^\s]*%[0-9a-f]{2}[^\s]*/giu;
+var ENCODED_ESCAPE_RE = /%[0-9a-f]{2}/iu;
+var MAX_REDACTION_DECODE_PASSES = 16;
+var MAX_REDACTION_DECODE_LENGTH = 64 * 1024;
+var MAX_REDACTION_INPUT_LENGTH = 1024 * 1024;
+var MAX_URL_SCHEME_LENGTH = 1024;
+var MAX_URL_LENGTH = 64 * 1024;
+var MAX_ADAPTER_OUTPUT_BYTES = 1 * 1024 * 1024;
+var ADAPTER_OUTPUT_TRUNCATION_MARKER = "\n[ADAPTER_OUTPUT_TRUNCATED]";
+var BOUNDED_READ_CHUNK_BYTES = 64 * 1024;
+var PROCESS_TERM_GRACE_MS = 250;
+var PROCESS_QUIESCENCE_TIMEOUT_MS = 5e3;
+var PROCESS_QUIESCENCE_POLL_MS = 25;
+var WINDOWS_PROCESS_TABLE_TIMEOUT_MS = 2e3;
+var adapterProcessContainmentOverride;
+function isAsciiAlpha(character) {
+  return character !== void 0 && (character >= "a" && character <= "z" || character >= "A" && character <= "Z");
+}
+function isAsciiWord(character) {
+  return character !== void 0 && (isAsciiAlpha(character) || character >= "0" && character <= "9" || character === "_");
+}
+function isUrlSchemeCharacter(character) {
+  return character !== void 0 && (isAsciiAlpha(character) || character >= "0" && character <= "9" || character === "+" || character === "-" || character === ".");
+}
+function isUrlTerminator(character) {
+  return character === void 0 || /[\s<>"'`]/u.test(character);
+}
+function findUrlRedactionSpans(value) {
+  const spans = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const character = value[cursor];
+    const boundary = cursor === 0 || !isAsciiWord(value[cursor - 1]);
+    if (isAsciiAlpha(character) && boundary) {
+      const schemeScanLimit = Math.min(value.length, cursor + 1 + MAX_URL_SCHEME_LENGTH);
+      let schemeEnd = cursor + 1;
+      while (schemeEnd < schemeScanLimit && isUrlSchemeCharacter(value[schemeEnd])) schemeEnd += 1;
+      if (schemeEnd === schemeScanLimit && isUrlSchemeCharacter(value[schemeEnd])) {
+        while (schemeEnd < value.length && isUrlSchemeCharacter(value[schemeEnd])) schemeEnd += 1;
+      }
+      if (value.slice(schemeEnd, schemeEnd + 3) === "://") {
+        let urlEnd = schemeEnd + 3;
+        const urlScanLimit = Math.min(value.length, cursor + MAX_URL_LENGTH);
+        while (urlEnd < urlScanLimit && !isUrlTerminator(value[urlEnd])) urlEnd += 1;
+        if (urlEnd >= urlScanLimit && urlEnd < value.length && !isUrlTerminator(value[urlEnd])) {
+          while (urlEnd < value.length && !isUrlTerminator(value[urlEnd])) urlEnd += 1;
+        }
+        const schemeLength = schemeEnd - cursor;
+        const urlLength = urlEnd - cursor;
+        if (schemeLength > 0 && urlLength > 3) {
+          spans.push({ start: cursor, end: urlEnd, replacement: "[REDACTED_URL]", priority: 6 });
+          cursor = urlEnd;
+          continue;
+        }
+      }
+    }
+    cursor += 1;
+  }
+  return spans;
+}
+function decodeRepeatedly(value) {
+  if (value.length > MAX_REDACTION_DECODE_LENGTH) return { decoded: value, exhausted: true };
+  let decoded = value;
+  for (let attempt = 0; attempt < MAX_REDACTION_DECODE_PASSES; attempt += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) return { decoded, exhausted: false };
+      if (next.length > MAX_REDACTION_DECODE_LENGTH) return { decoded, exhausted: true };
+      decoded = next;
+    } catch {
+      return { decoded, exhausted: ENCODED_ESCAPE_RE.test(decoded) };
+    }
+  }
+  return { decoded, exhausted: ENCODED_ESCAPE_RE.test(decoded) };
+}
+function normalizeJsonRepresentation(value) {
+  const characters = [];
+  const originalSpans = [];
+  let index = 0;
+  while (index < value.length) {
+    const slashStart = index;
+    const character = value[index];
+    if (character === void 0) break;
+    if (character === "\\") {
+      let slashEnd = index;
+      while (slashEnd < value.length && value[slashEnd] === "\\") slashEnd += 1;
+      if (/[{}\[\],:"]/u.test(value[slashEnd] ?? "")) index = slashEnd;
+    }
+    const normalizedCharacter = value[index];
+    if (normalizedCharacter === void 0) break;
+    characters.push(normalizedCharacter);
+    originalSpans.push({ start: slashStart, end: index + 1 });
+    index += 1;
+  }
+  return { text: characters.join(""), originalSpans };
+}
+function regexRedactionSpans(value, pattern, replacement, priority) {
+  const spans = [];
+  pattern.lastIndex = 0;
+  let match;
+  while ((match = pattern.exec(value)) !== null) {
+    spans.push({ start: match.index, end: match.index + match[0].length, replacement, priority });
+    if (match[0].length === 0) pattern.lastIndex += 1;
+  }
+  pattern.lastIndex = 0;
+  return spans;
+}
+function coalesceRedactionSpans(spans) {
+  const ordered = [...spans].sort(
+    (left, right) => left.start - right.start || right.end - left.end || left.priority - right.priority
+  );
+  const coalesced = [];
+  for (const span of ordered) {
+    const previous = coalesced[coalesced.length - 1];
+    if (previous === void 0 || span.start >= previous.end) {
+      coalesced.push(span);
+      continue;
+    }
+    if (span.end > previous.end) {
+      if (span.priority < previous.priority) {
+        coalesced[coalesced.length - 1] = {
+          start: previous.start,
+          end: span.end,
+          replacement: span.replacement,
+          priority: span.priority
+        };
+      } else if (span.priority > previous.priority) {
+        coalesced.push({
+          start: previous.end,
+          end: span.end,
+          replacement: span.replacement,
+          priority: span.priority
+        });
+      } else {
+        coalesced[coalesced.length - 1] = {
+          ...previous,
+          end: span.end
+        };
+      }
+    }
+  }
+  return coalesced;
+}
+function redactDirectText(value) {
+  const normalized = normalizeJsonRepresentation(value);
+  const spans = [
+    ...regexRedactionSpans(normalized.text, CONTROL_RE, "\uFFFD", 0),
+    ...regexRedactionSpans(normalized.text, JSON_CREDENTIAL_RE, "[REDACTED_JSON_SECRET]", 1),
+    ...regexRedactionSpans(normalized.text, BEARER_RE, "Bearer [REDACTED_TOKEN]", 2),
+    ...regexRedactionSpans(normalized.text, SECRET_ASSIGNMENT_RE, "[REDACTED_SECRET]", 3),
+    ...regexRedactionSpans(normalized.text, TOKEN_RE, "[REDACTED_TOKEN]", 4),
+    ...findUrlRedactionSpans(normalized.text)
+  ];
+  if (spans.length === 0) return value;
+  const selected = coalesceRedactionSpans(spans);
+  let result = "";
+  let originalCursor = 0;
+  let normalizedCursor = 0;
+  for (const span of selected) {
+    if (span.start < normalizedCursor) continue;
+    const originalStart = normalized.originalSpans[span.start]?.start;
+    const originalEnd = normalized.originalSpans[span.end - 1]?.end;
+    if (originalStart === void 0 || originalEnd === void 0) continue;
+    result += value.slice(originalCursor, originalStart);
+    result += span.replacement;
+    originalCursor = originalEnd;
+    normalizedCursor = span.end;
+  }
+  return result + value.slice(originalCursor);
+}
+function redactAdapterTranscript(text) {
+  if (text.length > MAX_REDACTION_INPUT_LENGTH) return "[REDACTED_TRANSCRIPT]";
+  const direct = redactDirectText(text);
+  if (!direct.includes("%")) return direct;
+  return direct.replace(ENCODED_SEGMENT_RE, (match) => {
+    if (!match.includes("%")) return match;
+    if (match.length > MAX_REDACTION_DECODE_LENGTH) return "[REDACTED_ENCODED_SECRET]";
+    const decodedResult = decodeRepeatedly(match);
+    if (decodedResult.exhausted) return "[REDACTED_ENCODED_SECRET]";
+    const decoded = decodedResult.decoded;
+    return decoded !== match && redactDirectText(decoded) !== decoded ? "[REDACTED_ENCODED_SECRET]" : match;
+  });
+}
 var CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"];
 function claudeExecArgs(input) {
   return [
@@ -40125,6 +40451,43 @@ function adapterForKind(kind) {
       return fakeAdapter;
   }
 }
+function artifactRepositoryRoot(request) {
+  return request.artifactRepositoryRoot ?? request.repositoryRoot;
+}
+function isolatedArtifactText(_request, text) {
+  return redactAdapterTranscript(text);
+}
+function isolatedExecutionResult(_request, result) {
+  return {
+    ...result.structuredOutput === void 0 ? {} : { structuredOutput: redactAdapterTranscript(result.structuredOutput) },
+    ok: result.ok,
+    status: result.status,
+    summary: redactAdapterTranscript(result.summary),
+    filesChanged: result.filesChanged.map((entry) => redactAdapterTranscript(entry)),
+    commandsRun: result.commandsRun.map((entry) => ({
+      command: redactAdapterTranscript(entry.command),
+      args: entry.args.map((arg) => redactAdapterTranscript(arg)),
+      exitCode: entry.exitCode
+    })),
+    findings: result.findings.map((entry) => ({
+      id: redactAdapterTranscript(entry.id),
+      title: redactAdapterTranscript(entry.title),
+      body: redactAdapterTranscript(entry.body),
+      severity: entry.severity,
+      ...entry.evidenceRefs === void 0 ? {} : { evidenceRefs: entry.evidenceRefs.map((ref) => redactAdapterTranscript(ref)) }
+    })),
+    ...result.reviewVerdicts === void 0 ? {} : { reviewVerdicts: result.reviewVerdicts },
+    ...result.rawOutput === void 0 ? {} : { rawOutput: redactAdapterTranscript(result.rawOutput) },
+    ...result.exitCode === void 0 ? {} : { exitCode: result.exitCode }
+  };
+}
+async function persistExecutionResult(request, result) {
+  await writeProjectExecutionResult({
+    repositoryRoot: artifactRepositoryRoot(request),
+    artifactPath: request.resultArtifactPath,
+    result: isolatedExecutionResult(request, result)
+  });
+}
 async function codexAvailable() {
   try {
     const invocation = codexInvocation(["exec", "--help"]);
@@ -40174,23 +40537,25 @@ async function grokAvailable() {
     return false;
   }
 }
+function quoteWindowsCmdToken(token) {
+  if (token.length === 0) return '""';
+  if (!/[\s"&<>|^()]/.test(token)) return token;
+  return `"${token.replaceAll('"', '\\"')}"`;
+}
+function windowsCmdSpawnArgs(command, args2) {
+  return ["/d", "/s", "/c", [command, ...args2].map(quoteWindowsCmdToken).join(" ")];
+}
 function hermesInvocation(args2) {
   if (process.platform !== "win32") {
     return { command: "hermes", args: args2 };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "hermes", ...args2]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("hermes", args2) };
 }
 function grokInvocation(args2) {
   if (process.platform !== "win32") {
     return { command: "grok", args: args2 };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "grok", ...args2]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("grok", args2) };
 }
 function hermesExecTimeoutMs() {
   const configured = process.env["LEGION_HERMES_EXEC_TIMEOUT_MS"];
@@ -40204,9 +40569,60 @@ function grokExecTimeoutMs() {
   const parsed = Number.parseInt(configured, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GROK_EXEC_TIMEOUT_MS;
 }
+function hermesReadOnlyBlockedResult() {
+  return {
+    ok: false,
+    status: "blocked",
+    summary: "Hermes Agent cannot guarantee read-only execution for this specialist request.",
+    filesChanged: [],
+    commandsRun: [],
+    findings: [{
+      id: "hermes-read-only-unsupported",
+      title: "Hermes read-only execution is unavailable",
+      body: "The Hermes adapter has no platform-enforced read-only mode for this request. The specialist is blocked rather than being run with prompt-only safety claims.",
+      severity: "blocking"
+    }]
+  };
+}
+function processContainmentBlockedResult(kind, label) {
+  return {
+    ok: false,
+    status: "blocked",
+    summary: `${label} executor is unavailable because strict process-group containment is unsupported on this platform.`,
+    filesChanged: [],
+    commandsRun: [],
+    findings: [{
+      id: `${kind}-process-containment-unavailable`,
+      title: `${label} process containment is unavailable`,
+      body: `${label} was not spawned because Legion cannot guarantee strict process-group/session containment for external specialist execution on this platform.`,
+      severity: "blocking"
+    }]
+  };
+}
+async function processContainmentBlockedBeforeSpawn(request, kind, label) {
+  const result = processContainmentBlockedResult(kind, label);
+  const artifactRoot = artifactRepositoryRoot(request);
+  const text = `${result.summary}
+`;
+  await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text });
+  await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text });
+  await persistExecutionResult(request, result);
+  return result;
+}
 var hermesAdapter = {
   kind: "hermes",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "hermes", "Hermes Agent");
+    if (request.readOnly) {
+      const result2 = hermesReadOnlyBlockedResult();
+      const artifactRoot2 = artifactRepositoryRoot(request);
+      const text = `${result2.summary}
+`;
+      await writeProjectTextFile({ repositoryRoot: artifactRoot2, artifactPath: request.rawLogArtifactPath, text });
+      await writeProjectTextFile({ repositoryRoot: artifactRoot2, artifactPath: request.redactedLogArtifactPath, text });
+      await persistExecutionResult(request, result2);
+      return result2;
+    }
     const args2 = ["chat", "-q", request.prompt, "--source", "legion", "-Q", "--in", request.repositoryRoot];
     const invocation = hermesInvocation(args2);
     const processResult = await spawnWithInput(
@@ -40215,20 +40631,24 @@ var hermesAdapter = {
       "",
       // stdin unused — hermes reads from -q arg
       request.repositoryRoot,
-      hermesExecTimeoutMs()
+      hermesExecTimeoutMs(),
+      "Hermes Agent"
     );
     const rawOutput = [
       processResult.stdout,
       processResult.stderr
     ].filter((entry) => entry.length > 0).join("\n");
     const parsed = parseResultFromText(rawOutput);
-    const status2 = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 ? "failed" : "succeeded";
+    const status2 = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
       status: status2,
       summary: processResult.exitCode === 0 ? "Hermes Agent executor completed." : "Hermes Agent executor failed.",
       rawOutput,
       exitCode: processResult.exitCode
     });
+    const resultStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : normalized.status;
+    const hermesOutput = hermesStructuredOutput(parsed);
+    const withStructured = hermesOutput === void 0 ? normalized : { ...normalized, structuredOutput: hermesOutput };
     const blockingFindings = [];
     if (processResult.timedOut) {
       blockingFindings.push({
@@ -40237,25 +40657,37 @@ var hermesAdapter = {
         body: `Hermes did not complete within ${processResult.timeoutMs}ms. Check Hermes auth/configuration, raise LEGION_HERMES_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
         severity: "blocking"
       });
+    } else if (processResult.outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Hermes Agent", "hermes-executor-output-limit"));
     }
-    const result = blockingFindings.length === 0 ? normalized : {
-      ...normalized,
-      ok: false,
-      status: processResult.timedOut ? "blocked" : "failed",
-      findings: [...normalized.findings, ...blockingFindings]
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "hermes-executor-process-not-quiescent",
+        title: "Hermes executor descendants were not quiescent",
+        body: "Hermes exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
+    const result = {
+      ...withStructured,
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0 ? resultStatus : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
     };
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
-` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    const redacted = redactAdapterTranscript(rawOutput);
+    const artifactRoot = artifactRepositoryRoot(request);
+    await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}
+`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}
+`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
 var grokAdapter = {
   kind: "grok",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "grok", "Grok Build");
     const timeoutMs = grokExecTimeoutMs();
     const args2 = grokExecArgs({
       repositoryRoot: request.repositoryRoot,
@@ -40277,12 +40709,14 @@ var grokAdapter = {
         stdout: "",
         stderr: "Grok Build executable could not be started.",
         timedOut: false,
-        timeoutMs
+        outputLimitExceeded: false,
+        timeoutMs,
+        quiescenceProven: true
       };
     }
     const rawOutput = [processResult.stdout, processResult.stderr].filter((entry) => entry.length > 0).join("\n");
     const envelope = parseGrokEnvelope(processResult.stdout);
-    const processStatus = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 ? "failed" : envelope.ok ? "succeeded" : "failed";
+    const processStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : envelope.ok ? "succeeded" : "failed";
     const parsed = envelope.ok ? envelope.result : void 0;
     const normalized = normalizeExecutionResult(parsed, {
       status: processStatus,
@@ -40290,8 +40724,19 @@ var grokAdapter = {
       rawOutput,
       exitCode: processResult.exitCode
     });
-    const resultStatus = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 || !envelope.ok ? "failed" : normalized.status;
+    const resultStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 || !envelope.ok ? "failed" : normalized.status;
     const findings = [];
+    if (processResult.outputLimitExceeded) {
+      findings.push(outputLimitFinding("Grok Build", "grok-executor-output-limit"));
+    }
+    if (!processResult.quiescenceProven) {
+      findings.push({
+        id: "grok-executor-process-not-quiescent",
+        title: "Grok Build descendants were not quiescent",
+        body: "Grok Build exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
     if (!envelope.ok) {
       findings.push({
         id: "grok-executor-invalid-output",
@@ -40322,24 +40767,20 @@ var grokAdapter = {
       status: resultStatus,
       findings: [...withEnvelope.findings, ...findings]
     };
-    const redacted = redactTranscript(rawOutput);
+    const redacted = redactAdapterTranscript(rawOutput);
     await writeProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: request.rawLogArtifactPath,
-      text: rawOutput.length > 0 ? rawOutput : `${result.summary}
-`
+      text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}
+`)
     });
     await writeProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: request.redactedLogArtifactPath,
-      text: redacted.length > 0 ? redacted : `${result.summary}
-`
+      text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}
+`)
     });
-    await writeProjectExecutionResult({
-      repositoryRoot: request.repositoryRoot,
-      artifactPath: request.resultArtifactPath,
-      result
-    });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -40353,7 +40794,14 @@ function parseGrokEnvelope(stdout) {
     return { ok: false, message: "Grok Build output was not one complete JSON envelope." };
   }
   if (!isRecordValue(value)) return { ok: false, message: "Grok Build output was not a JSON object envelope." };
-  if (value["type"] === "error") return { ok: false, message: "Grok Build reported an error envelope." };
+  const discriminator = value["type"];
+  if (discriminator === "error") return { ok: false, message: "Grok Build reported an error envelope." };
+  if (discriminator !== "result") {
+    return { ok: false, message: "Grok Build result envelope has an unknown or missing type discriminator." };
+  }
+  if (!hasRequiredKeys(value, ["type", "text", "stopReason", "sessionId", "requestId"])) {
+    return { ok: false, message: "Grok Build result envelope is missing required core fields." };
+  }
   const text = value["text"];
   if (typeof text !== "string" || text.trim().length === 0) {
     return { ok: false, message: "Grok Build result envelope is missing non-empty text." };
@@ -40379,11 +40827,35 @@ function parseGrokEnvelope(stdout) {
   return { ok: true, text, result };
 }
 function isCompleteGrokResult(value) {
+  return isCompleteExecutionResult(value) || isCompleteSpecialistPayload(value);
+}
+function isCompleteExecutionResult(value) {
   if (!isRecordValue(value)) return false;
   return (value["status"] === "succeeded" || value["status"] === "failed" || value["status"] === "blocked") && typeof value["summary"] === "string" && value["summary"].length > 0 && Array.isArray(value["filesChanged"]) && Array.isArray(value["commandsRun"]) && Array.isArray(value["findings"]);
 }
+function isCompleteSpecialistPayload(value) {
+  if (!isRecordValue(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length > 0 && keys.every((key) => key === "findings" || key === "assumptions") && (value["findings"] === void 0 || Array.isArray(value["findings"])) && (value["assumptions"] === void 0 || Array.isArray(value["assumptions"]));
+}
+function hasRequiredKeys(value, required2) {
+  return required2.every((key) => Object.hasOwn(value, key));
+}
 function isRecordValue(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function hermesStructuredOutput(value) {
+  if (!isRecordValue(value)) return void 0;
+  for (const key of ["structuredOutput", "output", "text", "result"]) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && parseResultFromText(candidate) !== void 0) return candidate;
+    if (isRecordValue(candidate) || Array.isArray(candidate)) {
+      const serialized = JSON.stringify(candidate);
+      if (serialized !== void 0) return serialized;
+    }
+  }
+  if (Array.isArray(value["findings"]) && Array.isArray(value["assumptions"])) return JSON.stringify(value);
+  return void 0;
 }
 var fakeAdapter = {
   kind: "fake",
@@ -40413,11 +40885,11 @@ var fakeAdapter = {
         }
       } : {}
     };
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${result.summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redactTranscript(`${result.summary}
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, `${result.summary}
 `) });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, `${result.summary}
+`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -40446,17 +40918,18 @@ var manualAdapter = {
         }
       ]
     };
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: `${summary}
-` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, `${summary}
+`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, `${summary}
+`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
 var claudeAdapter = {
   kind: "claude",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "claude", "Claude");
     const args2 = claudeExecArgs({ readOnly: request.readOnly });
     const invocation = claudeInvocation(args2);
     const processResult = await spawnWithInput(
@@ -40464,7 +40937,8 @@ var claudeAdapter = {
       invocation.args,
       request.prompt,
       request.repositoryRoot,
-      claudeExecTimeoutMs()
+      claudeExecTimeoutMs(),
+      "Claude"
     );
     const rawOutput = [
       processResult.stdout,
@@ -40473,20 +40947,38 @@ var claudeAdapter = {
     const envelope = parseClaudeEnvelope(processResult.stdout);
     const lastMessage = envelope?.result ?? "";
     const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
-    const status2 = processResult.timedOut ? "blocked" : processResult.exitCode !== 0 || envelope?.isError === true ? "failed" : "succeeded";
+    const processStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true ? "failed" : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
-      status: status2,
+      status: processStatus,
       summary: claudeFallbackSummary(processResult, envelope),
       rawOutput,
       exitCode: processResult.exitCode
     });
-    const withStructured = lastMessage.length > 0 ? { ...normalized, structuredOutput: lastMessage } : normalized;
+    const resultStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true ? "failed" : normalized.status;
+    const withStructured = lastMessage.length > 0 && resultStatus === "succeeded" ? { ...normalized, structuredOutput: lastMessage } : normalized;
     const blockingFindings = [];
     if (processResult.timedOut) {
       blockingFindings.push({
         id: "claude-executor-timeout",
         title: "Claude executor timed out",
         body: `Claude did not complete within ${processResult.timeoutMs}ms. Check Claude Code auth/configuration, raise LEGION_CLAUDE_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    } else if (processResult.outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Claude", "claude-executor-output-limit"));
+    } else if (processResult.exitCode !== 0) {
+      blockingFindings.push({
+        id: "claude-executor-failed",
+        title: "Claude executor exited unsuccessfully",
+        body: `Claude exited with code ${processResult.exitCode}. Check the raw and redacted executor logs before retrying.`,
+        severity: "blocking"
+      });
+    }
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "claude-executor-process-not-quiescent",
+        title: "Claude executor descendants were not quiescent",
+        body: "Claude exited, but its process group could not be proven quiescent before the result was finalized.",
         severity: "blocking"
       });
     }
@@ -40498,18 +40990,18 @@ var claudeAdapter = {
         severity: "blocking"
       });
     }
-    const result = blockingFindings.length === 0 ? withStructured : {
+    const result = {
       ...withStructured,
-      ok: false,
-      status: processResult.timedOut ? "blocked" : "failed",
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0 ? resultStatus : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
       findings: [...withStructured.findings, ...blockingFindings]
     };
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
-` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    const redacted = redactAdapterTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}
+`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}
+`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -40548,9 +41040,10 @@ function claudeFallbackSummary(processResult, envelope) {
 var codexAdapter = {
   kind: "codex",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "codex", "Codex");
     const outputLastMessageArtifactPath = artifactPathSchema.parse(request.resultArtifactPath.replace(/executor-result\.json$/u, "executor-last-message.txt"));
     const outputLastMessagePath = await prepareProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: outputLastMessageArtifactPath
     });
     const args2 = codexExecArgs({
@@ -40564,42 +41057,69 @@ var codexAdapter = {
       invocation.args,
       request.prompt,
       request.repositoryRoot,
-      codexExecTimeoutMs()
+      codexExecTimeoutMs(),
+      "Codex"
     );
     const rawOutput = [
       processResult.stdout,
       processResult.stderr
     ].filter((entry) => entry.length > 0).join("\n");
-    const lastMessage = await readOptionalText(outputLastMessagePath);
+    const lastMessageResult = await readBoundedText(outputLastMessagePath);
+    const lastMessage = lastMessageResult.text;
+    const outputLimitExceeded = processResult.outputLimitExceeded || lastMessageResult.outputLimitExceeded;
+    await writeProjectTextFile({
+      repositoryRoot: artifactRepositoryRoot(request),
+      artifactPath: outputLastMessageArtifactPath,
+      text: lastMessage.length > 0 ? redactAdapterTranscript(lastMessage) : ""
+    });
     const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
-    const status2 = processResult.timedOut ? "blocked" : processResult.exitCode === 0 ? "succeeded" : "failed";
+    const processStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
-      status: status2,
+      status: processStatus,
       summary: processResult.timedOut ? `Codex executor timed out after ${processResult.timeoutMs}ms.` : processResult.exitCode === 0 ? "Codex executor completed." : "Codex executor failed.",
       rawOutput,
       exitCode: processResult.exitCode
     });
-    const withStructured = lastMessage.length > 0 ? { ...normalized, structuredOutput: lastMessage } : normalized;
-    const result = processResult.timedOut ? {
+    const resultStatus = processResult.timedOut ? "blocked" : !processResult.quiescenceProven ? "blocked" : outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : normalized.status;
+    const withStructured = lastMessage.length > 0 && resultStatus === "succeeded" ? { ...normalized, structuredOutput: lastMessage } : normalized;
+    const blockingFindings = [];
+    if (processResult.timedOut) {
+      blockingFindings.push({
+        id: "codex-executor-timeout",
+        title: "Codex executor timed out",
+        body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    } else if (outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Codex", "codex-executor-output-limit"));
+    } else if (processResult.exitCode !== 0) {
+      blockingFindings.push({
+        id: "codex-executor-failed",
+        title: "Codex executor exited unsuccessfully",
+        body: `Codex exited with code ${processResult.exitCode}. Check the raw and redacted executor logs before retrying.`,
+        severity: "blocking"
+      });
+    }
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "codex-executor-process-not-quiescent",
+        title: "Codex executor descendants were not quiescent",
+        body: "Codex exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
+    const result = {
       ...withStructured,
-      ok: false,
-      status: "blocked",
-      findings: [
-        ...normalized.findings,
-        {
-          id: "codex-executor-timeout",
-          title: "Codex executor timed out",
-          body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
-          severity: "blocking"
-        }
-      ]
-    } : withStructured;
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
-` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0 ? resultStatus : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
+    };
+    const redacted = redactAdapterTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}
+`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}
+`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -40638,53 +41158,188 @@ function claudeExecTimeoutMs() {
   const parsed = Number.parseInt(configured, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CLAUDE_EXEC_TIMEOUT_MS;
 }
-async function spawnWithInput(command, args2, input, cwd, timeoutMs) {
+function utf8Prefix(value, maxBytes) {
+  if (maxBytes <= 0) return "";
+  let result = Buffer.from(value, "utf8").subarray(0, maxBytes).toString("utf8");
+  while (Buffer.byteLength(result, "utf8") > maxBytes) result = result.slice(0, -1);
+  return result;
+}
+var BoundedOutputCapture = class {
+  stdoutValue = "";
+  stderrValue = "";
+  totalBytes = 0;
+  exceeded = false;
+  append(stream, chunk) {
+    if (this.exceeded) return;
+    const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    const remaining = MAX_ADAPTER_OUTPUT_BYTES - this.totalBytes;
+    const markerBytes = Buffer.byteLength(ADAPTER_OUTPUT_TRUNCATION_MARKER, "utf8");
+    const chunkBytes = Buffer.byteLength(text, "utf8");
+    if (chunkBytes <= remaining) {
+      this.set(stream, this.get(stream) + text);
+      this.totalBytes += chunkBytes;
+      return;
+    }
+    const prefixBudget = Math.max(0, remaining - markerBytes);
+    const bounded = `${utf8Prefix(text, prefixBudget)}${remaining >= markerBytes ? ADAPTER_OUTPUT_TRUNCATION_MARKER : ""}`;
+    this.set(stream, this.get(stream) + bounded);
+    this.totalBytes += Buffer.byteLength(bounded, "utf8");
+    this.exceeded = true;
+  }
+  get stdout() {
+    return this.stdoutValue;
+  }
+  get stderr() {
+    return this.stderrValue;
+  }
+  get outputLimitExceeded() {
+    return this.exceeded;
+  }
+  get(stream) {
+    return stream === "stdout" ? this.stdoutValue : this.stderrValue;
+  }
+  set(stream, value) {
+    if (stream === "stdout") this.stdoutValue = value;
+    else this.stderrValue = value;
+  }
+};
+function waitForOutputStreamEnd(stream) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    stream.once("end", finish);
+    stream.once("error", finish);
+  });
+}
+async function readBoundedText(filePath) {
+  let handle2;
+  try {
+    handle2 = await open2(filePath, "r");
+  } catch (error51) {
+    if (isRecordValue(error51) && error51["code"] === "ENOENT") return { text: "", outputLimitExceeded: false };
+    throw error51;
+  }
+  const capture2 = new BoundedOutputCapture();
+  const buffer = Buffer.allocUnsafe(BOUNDED_READ_CHUNK_BYTES);
+  try {
+    while (true) {
+      const read = await handle2.read(buffer, 0, buffer.length, null);
+      if (read.bytesRead === 0) break;
+      capture2.append("stdout", buffer.subarray(0, read.bytesRead));
+      if (capture2.outputLimitExceeded) break;
+    }
+    return { text: capture2.stdout, outputLimitExceeded: capture2.outputLimitExceeded };
+  } finally {
+    await handle2.close();
+  }
+}
+function outputLimitFinding(executorLabel, findingId) {
+  return {
+    id: findingId,
+    title: `${executorLabel} executor output exceeded the bounded capture limit`,
+    body: `${executorLabel} output exceeded the ${MAX_ADAPTER_OUTPUT_BYTES}-byte capture limit and the process or payload was rejected before unbounded accumulation.`,
+    severity: "blocking"
+  };
+}
+async function spawnWithInput(command, args2, input, cwd, timeoutMs, executorLabel) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args2, {
       cwd,
-      windowsHide: true,
-      stdio: ["pipe", "pipe", "pipe"]
+      ...adapterSpawnOptions({ stdio: ["pipe", "pipe", "pipe"] })
     });
-    let stdout = "";
-    let stderr = "";
+    const output = new BoundedOutputCapture();
     let settled = false;
     let timedOut = false;
+    let outputLimitExceeded = false;
+    let terminationPending = false;
+    let terminationExitCode;
+    let terminationPromise;
+    let spawnError;
+    let quiescenceProven = true;
     const settle = (exitCode) => {
-      if (settled) return;
+      if (settled || terminationPending) return;
       settled = true;
       clearTimeout(timeout);
+      if (spawnError !== void 0) {
+        reject(spawnError);
+        return;
+      }
       resolve({
         exitCode,
-        stdout,
-        stderr,
+        stdout: output.stdout,
+        stderr: output.stderr,
         timedOut,
-        timeoutMs
+        outputLimitExceeded,
+        timeoutMs,
+        quiescenceProven
+      });
+    };
+    const requestTermination = (exitCode) => {
+      if (terminationExitCode === void 0) terminationExitCode = exitCode;
+      if (terminationPromise !== void 0) return;
+      terminationPending = true;
+      terminationPromise = terminateProcessTree(child.pid).catch(() => false).then((proven) => {
+        quiescenceProven = proven;
+        terminationPending = false;
+        settle(terminationExitCode ?? exitCode);
       });
     };
     const timeout = setTimeout(() => {
+      if (settled) return;
       timedOut = true;
-      stderr += `${stderr.length === 0 ? "" : "\n"}Codex executor timed out after ${timeoutMs}ms.`;
-      terminateProcessTree(child.pid);
-      setTimeout(() => settle(124), 1e3).unref();
+      output.append("stderr", `${output.stderr.length === 0 ? "" : "\n"}${executorLabel} executor timed out after ${timeoutMs}ms.`);
+      requestTermination(124);
     }, timeoutMs);
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
+      output.append("stdout", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
+      output.append("stderr", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     child.stdin.on("error", () => {
     });
     child.on("error", (error51) => {
       if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(error51);
+      spawnError = error51;
+      requestTermination(1);
     });
+    const settleAfterQuiescence = async (exitCode) => {
+      if (settled || terminationPending) return;
+      if (!supportsIsolatedProcessGroup()) {
+        quiescenceProven = false;
+      } else if (child.pid !== void 0 && processTreeStillExists(child.pid)) {
+        if (process.platform === "win32") {
+          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
+        } else {
+          quiescenceProven = false;
+          await terminateProcessTree(child.pid).catch(() => false);
+        }
+      } else {
+        quiescenceProven = true;
+      }
+      settle(exitCode);
+    };
     child.on("close", (code) => {
-      settle(timedOut ? 124 : code ?? 1);
+      void Promise.all([stdoutEnded, stderrEnded]).then(() => {
+        const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+        return settleAfterQuiescence(exitCode);
+      });
     });
     child.stdin.end(input);
   });
@@ -40693,78 +41348,290 @@ async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args2, {
       cwd,
-      windowsHide: true,
+      ...adapterSpawnOptions({ stdio: ["ignore", "pipe", "pipe"] })
       // Grok consumes the prompt from --prompt-file. `ignore` is deliberate:
       // Legion neither writes a prompt to stdin nor leaves a pipe for a child
       // to mistake for an interactive session.
-      stdio: ["ignore", "pipe", "pipe"]
     });
-    let stdout = "";
-    let stderr = "";
+    const output = new BoundedOutputCapture();
     let settled = false;
     let timedOut = false;
+    let outputLimitExceeded = false;
+    let terminationPending = false;
+    let terminationExitCode;
+    let terminationPromise;
+    let spawnError;
+    let quiescenceProven = true;
     const settle = (exitCode) => {
-      if (settled) return;
+      if (settled || terminationPending) return;
       settled = true;
       clearTimeout(timeout);
-      resolve({ exitCode, stdout, stderr, timedOut, timeoutMs });
+      if (spawnError !== void 0) {
+        reject(spawnError);
+        return;
+      }
+      resolve({
+        exitCode,
+        stdout: output.stdout,
+        stderr: output.stderr,
+        timedOut,
+        outputLimitExceeded,
+        timeoutMs,
+        quiescenceProven
+      });
+    };
+    const requestTermination = (exitCode) => {
+      if (terminationExitCode === void 0) terminationExitCode = exitCode;
+      if (terminationPromise !== void 0) return;
+      terminationPending = true;
+      terminationPromise = terminateProcessTree(child.pid).catch(() => false).then((proven) => {
+        quiescenceProven = proven;
+        terminationPending = false;
+        settle(terminationExitCode ?? exitCode);
+      });
     };
     const timeout = setTimeout(() => {
+      if (settled) return;
       timedOut = true;
-      stderr += `${stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`;
-      terminateProcessTree(child.pid);
-      setTimeout(() => settle(124), 1e3).unref();
+      output.append("stderr", `${output.stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`);
+      requestTermination(124);
     }, timeoutMs);
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
+      output.append("stdout", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
+      output.append("stderr", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     child.on("error", (error51) => {
       if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(error51);
+      spawnError = error51;
+      requestTermination(1);
     });
+    const settleAfterQuiescence = async (exitCode) => {
+      if (settled || terminationPending) return;
+      if (!supportsIsolatedProcessGroup()) {
+        quiescenceProven = false;
+      } else if (child.pid !== void 0 && processTreeStillExists(child.pid)) {
+        if (process.platform === "win32") {
+          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
+        } else {
+          quiescenceProven = false;
+          await terminateProcessTree(child.pid).catch(() => false);
+        }
+      } else {
+        quiescenceProven = true;
+      }
+      settle(exitCode);
+    };
     child.on("close", (code) => {
-      settle(timedOut ? 124 : code ?? 1);
+      void Promise.all([stdoutEnded, stderrEnded]).then(() => {
+        const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+        return settleAfterQuiescence(exitCode);
+      });
     });
   });
 }
-function terminateProcessTree(pid) {
-  if (pid === void 0) return;
-  if (process.platform === "win32") {
-    const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
+function adapterSpawnOptions(input) {
+  const platform = input.platform ?? process.platform;
+  const containmentAvailable = platform === process.platform ? supportsIsolatedProcessGroup() : supportsIsolatedProcessGroupForPlatform(platform);
+  return {
+    windowsHide: true,
+    detached: platform !== "win32" && containmentAvailable,
+    stdio: input.stdio
+  };
+}
+function supportsIsolatedProcessGroupForPlatform(platform) {
+  return platform !== "android";
+}
+function supportsIsolatedProcessGroup() {
+  if (adapterProcessContainmentOverride !== void 0) return adapterProcessContainmentOverride;
+  return supportsIsolatedProcessGroupForPlatform(process.platform);
+}
+function processStillExists(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error51) {
+    return !(error51 !== null && typeof error51 === "object" && "code" in error51 && error51.code === "ESRCH");
+  }
+}
+function processGroupStillExists(pid) {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error51) {
+    return !(error51 !== null && typeof error51 === "object" && "code" in error51 && error51.code === "ESRCH");
+  }
+}
+function parseWindowsProcessRows(output) {
+  const rows = [];
+  for (const line of output.split(/\r?\n/u)) {
+    const fields = line.split(",").map((field) => field.trim().replace(/^"|"$/gu, ""));
+    const numericFields = fields.filter((field) => /^\d+$/u.test(field));
+    if (numericFields.length < 2) continue;
+    const parentProcessId = Number(numericFields[numericFields.length - 2]);
+    const processId = Number(numericFields[numericFields.length - 1]);
+    if (!Number.isSafeInteger(parentProcessId) || !Number.isSafeInteger(processId)) continue;
+    rows.push({ parentProcessId, processId });
+  }
+  return rows;
+}
+function runWindowsProcessProbe(command, args2, options) {
+  return execFileSync4(command, args2, options);
+}
+function windowsProcessRows(probe = runWindowsProcessProbe) {
+  try {
+    const output = probe(
+      "wmic",
+      ["process", "get", "ParentProcessId,ProcessId", "/format:csv"],
+      {
+        encoding: "utf8",
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: WINDOWS_PROCESS_TABLE_TIMEOUT_MS
+      }
+    );
+    return parseWindowsProcessRows(String(output));
+  } catch (wmicError) {
+    try {
+      const output = probe(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Get-CimInstance -ClassName Win32_Process | Select-Object ParentProcessId,ProcessId | ConvertTo-Csv -NoTypeInformation"
+        ],
+        {
+          encoding: "utf8",
+          windowsHide: true,
+          stdio: ["ignore", "pipe", "ignore"],
+          timeout: WINDOWS_PROCESS_TABLE_TIMEOUT_MS
+        }
+      );
+      return parseWindowsProcessRows(String(output));
+    } catch {
+      throw wmicError;
+    }
+  }
+}
+function enumerateWindowsDescendantPids(pid) {
+  const childrenByParent = /* @__PURE__ */ new Map();
+  for (const row of windowsProcessRows()) {
+    const children = childrenByParent.get(row.parentProcessId) ?? [];
+    children.push(row.processId);
+    childrenByParent.set(row.parentProcessId, children);
+  }
+  const descendants = [];
+  const pending = [pid];
+  const seen = /* @__PURE__ */ new Set([pid]);
+  while (pending.length > 0) {
+    const parent = pending.shift();
+    if (parent === void 0) continue;
+    for (const child of childrenByParent.get(parent) ?? []) {
+      if (seen.has(child)) continue;
+      seen.add(child);
+      descendants.push(child);
+      pending.push(child);
+    }
+  }
+  return descendants;
+}
+function processTreeStillExistsForPlatform(pid, platform, probes = {}) {
+  const processExists = probes.processStillExists ?? processStillExists;
+  if (platform !== "win32") {
+    return (probes.processGroupStillExists ?? processGroupStillExists)(pid);
+  }
+  if (processExists(pid)) return true;
+  try {
+    return (probes.windowsDescendantPids ?? enumerateWindowsDescendantPids)(pid).some((descendantPid) => processExists(descendantPid));
+  } catch {
+    return true;
+  }
+}
+function processTreeStillExists(pid) {
+  return processTreeStillExistsForPlatform(pid, process.platform);
+}
+async function waitForQuiescence(check2, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (check2() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, PROCESS_QUIESCENCE_POLL_MS));
+  }
+}
+async function processQuiescenceProven(pid) {
+  if (pid === void 0) return true;
+  if (!supportsIsolatedProcessGroup()) return false;
+  const stillExists = () => processTreeStillExists(pid);
+  await waitForQuiescence(stillExists, PROCESS_QUIESCENCE_TIMEOUT_MS);
+  return !stillExists();
+}
+function spawnWindowsTaskkill(args2) {
+  return new Promise((resolve) => {
+    const killer = spawn("taskkill", args2, {
       windowsHide: true,
       stdio: "ignore"
     });
-    killer.on("error", () => {
-    });
-    return;
+    killer.on("error", () => resolve());
+    killer.on("close", () => resolve());
+  });
+}
+async function taskkillWindowsPids(pid, descendantPids, taskkill = spawnWindowsTaskkill) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const targetPid of [pid, ...descendantPids]) {
+    if (seen.has(targetPid)) continue;
+    seen.add(targetPid);
+    await taskkill(["/pid", String(targetPid), "/t", "/f"]);
   }
+}
+async function terminateWindowsProcessTree(pid) {
+  let descendantPids = [];
   try {
-    process.kill(pid, "SIGTERM");
+    descendantPids = enumerateWindowsDescendantPids(pid);
   } catch {
   }
-  setTimeout(() => {
+  await taskkillWindowsPids(pid, descendantPids);
+  return processQuiescenceProven(pid);
+}
+async function terminateProcessTree(pid) {
+  if (pid === void 0) return true;
+  if (!supportsIsolatedProcessGroup()) return false;
+  if (process.platform === "win32") {
+    return terminateWindowsProcessTree(pid);
+  }
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {
+  }
+  await waitForQuiescence(() => processGroupStillExists(pid), PROCESS_TERM_GRACE_MS);
+  if (processGroupStillExists(pid)) {
     try {
-      process.kill(pid, "SIGKILL");
+      process.kill(-pid, "SIGKILL");
     } catch {
     }
-  }, 1e3).unref();
+  }
+  return processQuiescenceProven(pid);
 }
 
 // packages/cli/src/workflow/guarded-execution.ts
-import { execFileSync as execFileSync5 } from "node:child_process";
+import { execFileSync as execFileSync6 } from "node:child_process";
 import { createHash as createHash19 } from "node:crypto";
 import { lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync2, readlinkSync, rmSync as rmSync3, statSync as statSync2, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import path30 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
-import { execFileSync as execFileSync4 } from "node:child_process";
+import { execFileSync as execFileSync5 } from "node:child_process";
 import { createHash as createHash18 } from "node:crypto";
 import { readFileSync, rmSync as rmSync2, statSync } from "node:fs";
 import path28 from "node:path";
@@ -40781,7 +41648,7 @@ function summarizeObservation(files, baseGitSha) {
 var MAX_UNTRACKED_LINE_COUNT_BYTES = 2e6;
 var MAX_HASHED_BYTES = 64 * 1024 * 1024;
 function git(repositoryRoot, args2) {
-  return execFileSync4("git", ["-C", repositoryRoot, ...args2], {
+  return execFileSync5("git", ["-C", repositoryRoot, ...args2], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
     maxBuffer: 32 * 1024 * 1024
@@ -41091,7 +41958,7 @@ function readTargetKind(linkPath, target) {
 }
 function stagedProtectedPaths(repositoryRoot) {
   try {
-    const output = execFileSync5(
+    const output = execFileSync6(
       "git",
       ["-C", repositoryRoot, "diff", "--cached", "--name-only", "--", LEGION_PROJECT_ROOT],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
@@ -41255,7 +42122,7 @@ function restoreProtectedIndex(input) {
   if (input.paths.length === 0) return [];
   const run2 = (args2) => {
     try {
-      execFileSync5("git", ["-C", input.repositoryRoot, ...args2], { stdio: "ignore" });
+      execFileSync6("git", ["-C", input.repositoryRoot, ...args2], { stdio: "ignore" });
       return true;
     } catch {
       return false;
@@ -41273,7 +42140,7 @@ function restoreProtectedIndex(input) {
 }
 function protectedPathsCommittedSince(input) {
   try {
-    const output = execFileSync5(
+    const output = execFileSync6(
       "git",
       [
         "-C",
@@ -41294,7 +42161,7 @@ function protectedPathsCommittedSince(input) {
 }
 function currentHead(repositoryRoot) {
   try {
-    return execFileSync5("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+    return execFileSync6("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
@@ -41880,7 +42747,7 @@ async function loadExploration(repositoryRoot, runId) {
 
 // packages/cli/src/workflow/intake/lifecycle.ts
 import { createHash as createHash23, randomUUID as randomUUID3 } from "node:crypto";
-import { link, lstat as lstat4, open as open2, readFile as readFile20, readdir as readdir14, realpath as realpath5, rename as rename5, rm as rm7, rmdir as rmdir2, writeFile as writeFile8 } from "node:fs/promises";
+import { link, lstat as lstat4, open as open3, readFile as readFile20, readdir as readdir14, realpath as realpath5, rename as rename5, rm as rm7, rmdir as rmdir2, writeFile as writeFile8 } from "node:fs/promises";
 import path37 from "node:path";
 
 // packages/cli/src/workflow/codebase-map.ts
@@ -43643,11 +44510,11 @@ async function Module2(moduleArg = {}) {
   }, "quit_");
   var _scriptName = import.meta.url;
   var scriptDirectory = "";
-  function locateFile(path55) {
+  function locateFile(path59) {
     if (Module["locateFile"]) {
-      return Module["locateFile"](path55, scriptDirectory);
+      return Module["locateFile"](path59, scriptDirectory);
     }
-    return scriptDirectory + path55;
+    return scriptDirectory + path59;
   }
   __name(locateFile, "locateFile");
   var readAsync, readBinary;
@@ -46570,10 +47437,10 @@ function parserDiagnostics(root) {
   const seen = /* @__PURE__ */ new Set();
   function visit(node) {
     if (node.isError || node.isMissing) {
-      const diagnostic3 = `parser error: ${node.type} at ${node.startPosition.row + 1}:${node.startPosition.column + 1}`.slice(0, MAX_DIAGNOSTIC_LENGTH);
-      if (!seen.has(diagnostic3)) {
-        seen.add(diagnostic3);
-        diagnostics.push(diagnostic3);
+      const diagnostic4 = `parser error: ${node.type} at ${node.startPosition.row + 1}:${node.startPosition.column + 1}`.slice(0, MAX_DIAGNOSTIC_LENGTH);
+      if (!seen.has(diagnostic4)) {
+        seen.add(diagnostic4);
+        diagnostics.push(diagnostic4);
       }
     }
     if (diagnostics.length >= MAX_DIAGNOSTICS) return;
@@ -46875,6 +47742,25 @@ async function refreshCodebaseMap(input) {
     mapArtifactPath
   };
 }
+function deriveStructuralMapSummary(input) {
+  const coverageStatusCounts = {};
+  for (const coverage of input.snapshot.coverage) {
+    coverageStatusCounts[coverage.status] = (coverageStatusCounts[coverage.status] ?? 0) + 1;
+  }
+  const symbolCount = input.snapshot.symbols.length;
+  const importCount = input.snapshot.imports.length;
+  const exportCount = input.snapshot.exports.length;
+  return {
+    semanticIndexArtifactPath: input.semanticIndexArtifactPath,
+    semanticSqliteArtifactPath: input.snapshot.sqlite.path,
+    coverageCount: input.snapshot.coverage.length,
+    coverageStatusCounts,
+    symbolCount,
+    importCount,
+    exportCount,
+    totalFactCount: symbolCount + importCount + exportCount
+  };
+}
 async function refreshStructuralCodeIndex(input) {
   const snapshotId = structuralSnapshotId(input.paths.runId, input.sourceFingerprint);
   const mapRunId = structuralMapRunId(input.paths.runId);
@@ -47111,7 +47997,7 @@ function structuralCandidateDiagnostic(runId, code, message) {
   return { runId, code, message: `Ignored structural map run ${runId}: ${message}.` };
 }
 function formatArtifactDiagnostics(diagnostics) {
-  return diagnostics.map((diagnostic3) => `${diagnostic3.code}: ${diagnostic3.message}`).join("; ");
+  return diagnostics.map((diagnostic4) => `${diagnostic4.code}: ${diagnostic4.message}`).join("; ");
 }
 async function latestStructuralMapRun(repositoryRoot) {
   const workflowRoot = path35.join(repositoryRoot, ".legion", "project", "workflow", "map");
@@ -47584,6 +48470,19 @@ async function resolveMapState(repositoryRoot, scope, now, profile = "inventory"
   const structuralRecord = profile === "structural" ? discovery.record : void 0;
   const inventoryRecord = profile === "inventory" ? discovery.record : void 0;
   const latest = profile === "structural" ? structuralRecord?.snapshot : inventoryRecord?.map;
+  const structuralSummary = structuralRecord === void 0 ? {
+    semanticIndexArtifactPath: null,
+    semanticSqliteArtifactPath: null,
+    coverageCount: null,
+    coverageStatusCounts: null,
+    symbolCount: null,
+    importCount: null,
+    exportCount: null,
+    totalFactCount: null
+  } : deriveStructuralMapSummary({
+    snapshot: structuralRecord.snapshot,
+    semanticIndexArtifactPath: structuralRecord.semanticIndexArtifactPath
+  });
   let current;
   try {
     current = await currentCodebaseFingerprint({ repositoryRoot, ...scope === void 0 ? {} : { scope } });
@@ -47598,7 +48497,11 @@ async function resolveMapState(repositoryRoot, scope, now, profile = "inventory"
     latestSourceFingerprint: latest?.sourceFingerprint ?? null,
     generatedAt: latest?.generatedAt ?? null,
     mapArtifact: profile === "structural" ? structuralRecord?.snapshotArtifact ?? null : inventoryRecord?.artifact ?? null,
-    ...profile === "structural" ? { indexProfile: "structural", snapshotId: structuralRecord?.snapshot.snapshotId ?? null } : {},
+    ...profile === "structural" ? {
+      indexProfile: "structural",
+      snapshotId: structuralRecord?.snapshot.snapshotId ?? null,
+      ...structuralSummary
+    } : {},
     diagnostics: discovery.diagnostics
   };
   if (latest === void 0) {
@@ -48004,7 +48907,7 @@ async function resolveExplorationSelection(input) {
       return { diagnostics: [...diagnostics, { runId: input.explicitRunId, code: "unreadable", message: loaded.reason }] };
     }
     const incompatible = diagnostics.some(
-      (diagnostic3) => diagnostic3.runId === loaded.loaded.candidate.runId && diagnostic3.code !== "competing_candidate"
+      (diagnostic4) => diagnostic4.runId === loaded.loaded.candidate.runId && diagnostic4.code !== "competing_candidate"
     );
     return incompatible ? { diagnostics } : { selected: loaded.loaded, diagnostics };
   }
@@ -48175,7 +49078,7 @@ async function writeDraftExclusive(repositoryRoot, draft, lease, beforePublish, 
   const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath });
   const temporary = `${resolved.absolutePath}.${randomUUID3()}.tmp`;
   await assertTransitionLeaseOwned(lease);
-  const handle2 = await open2(temporary, "wx", 384);
+  const handle2 = await open3(temporary, "wx", 384);
   try {
     await handle2.writeFile(draftBytes(draft), "utf8");
     await handle2.sync();
@@ -48603,12 +49506,12 @@ async function stageIntakeDraft(input) {
       };
       const scanned = await inspectActiveDraftCandidates(input.repositoryRoot);
       if (!scanned.ok) return scanned;
-      const open3 = scanned.drafts;
-      if (open3.length > 1) return {
+      const open6 = scanned.drafts;
+      if (open6.length > 1) return {
         ok: false,
         diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; resolve them before staging a replacement." }]
       };
-      const previous = open3[0];
+      const previous = open6[0];
       if (previous !== void 0 && previous.id !== draft.id && previous.status === "draft") {
         const previousResolved = await resolveProjectArtifactPath({
           repositoryRoot: input.repositoryRoot,
@@ -48772,14 +49675,14 @@ async function validateDraftEvidence(repositoryRoot, draft) {
   for (const unresolved of draft.unresolvedNodes) {
     await inspect(unresolved.evidenceRefs, { label: unresolved.nodeId, nodeId: unresolved.nodeId, slot: unresolved.slot });
   }
-  return diagnostics.filter((diagnostic3, index) => diagnostics.findIndex(
-    (candidate) => candidate.code === diagnostic3.code && candidate.message === diagnostic3.message && candidate.nodeId === diagnostic3.nodeId && candidate.slot === diagnostic3.slot
+  return diagnostics.filter((diagnostic4, index) => diagnostics.findIndex(
+    (candidate) => candidate.code === diagnostic4.code && candidate.message === diagnostic4.message && candidate.nodeId === diagnostic4.nodeId && candidate.slot === diagnostic4.slot
   ) === index);
 }
 var DraftDecisionValidationError = class extends Error {
   diagnostics;
   constructor(diagnostics) {
-    super(diagnostics.map((diagnostic3) => diagnostic3.message).join(" "));
+    super(diagnostics.map((diagnostic4) => diagnostic4.message).join(" "));
     this.name = "DraftDecisionValidationError";
     this.diagnostics = diagnostics;
   }
@@ -48950,7 +49853,7 @@ async function acquireDraftAcceptanceLease(repositoryRoot, draftId) {
     };
     let handle2;
     try {
-      handle2 = await open2(resolved.absolutePath, "wx", 384);
+      handle2 = await open3(resolved.absolutePath, "wx", 384);
       await handle2.writeFile(transitionLockBytes(metadata2), "utf8");
       await handle2.sync();
       await handle2.close();
@@ -49058,7 +49961,7 @@ function pendingAcceptanceRecovered(draftIds) {
   };
 }
 function pendingAcceptanceLifecycleError(code, diagnostics) {
-  const error51 = new Error(diagnostics.map((diagnostic3) => diagnostic3.message).join(" "));
+  const error51 = new Error(diagnostics.map((diagnostic4) => diagnostic4.message).join(" "));
   error51.code = code;
   return error51;
 }
@@ -49585,12 +50488,12 @@ async function publishDraftReview(input) {
     };
     const scanned = await inspectActiveDraftCandidates(input.repositoryRoot);
     if (!scanned.ok) return scanned;
-    const open3 = scanned.drafts;
-    if (open3.length > 1) return {
+    const open6 = scanned.drafts;
+    if (open6.length > 1) return {
       ok: false,
       diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; no review can be selected safely." }]
     };
-    if (open3[0]?.id !== input.draftId) return {
+    if (open6[0]?.id !== input.draftId) return {
       ok: false,
       diagnostics: [{ code: "draft_not_open", message: `Draft ${input.draftId} is not the single open draft.` }]
     };
@@ -49646,8 +50549,8 @@ async function publishDraftReview(input) {
 async function resolveReviewedDraftDecision(input) {
   const scanned = await inspectActiveDraftCandidates(input.repositoryRoot);
   if (!scanned.ok) return scanned;
-  const open3 = scanned.drafts;
-  if (open3.length > 1) return {
+  const open6 = scanned.drafts;
+  if (open6.length > 1) return {
     ok: false,
     diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; name and repair them before making a decision." }]
   };
@@ -49665,7 +50568,7 @@ async function resolveReviewedDraftDecision(input) {
     ok: false,
     diagnostics: [{ code: "stale_draft_decision", message: `Draft ${input.explicitDraftId} is not the currently displayed draft ${active.draftId}.` }]
   };
-  if (open3[0]?.id !== active.draftId) return {
+  if (open6[0]?.id !== active.draftId) return {
     ok: false,
     diagnostics: [{ code: "stale_draft_decision", message: `Displayed draft ${active.draftId} is no longer the single open draft.` }]
   };
@@ -49674,8 +50577,8 @@ async function resolveReviewedDraftDecision(input) {
 async function validateReviewedBinding(repositoryRoot, draftId, raw, lease, beforeMismatchRebind, expected) {
   const scanned = await inspectActiveDraftCandidates(repositoryRoot);
   if (!scanned.ok) return { ok: false, diagnostics: scanned.diagnostics };
-  const open3 = scanned.drafts;
-  if (open3.length > 1) return {
+  const open6 = scanned.drafts;
+  if (open6.length > 1) return {
     ok: false,
     diagnostics: [{ code: "ambiguous_active_drafts", message: "Multiple open intake drafts exist; no decision is safe." }]
   };
@@ -50166,8 +51069,8 @@ async function prepareIntakePreflight(input) {
       throw pendingAcceptanceLifecycleError("EPENDINGACCEPTANCEBLOCKED", recovery.diagnostics);
     }
     if (recovery.rolledBackDraftIds.length > 0) {
-      const diagnostic3 = pendingAcceptanceRecovered(recovery.rolledBackDraftIds);
-      throw pendingAcceptanceLifecycleError("EPENDINGACCEPTANCERECOVERED", [diagnostic3]);
+      const diagnostic4 = pendingAcceptanceRecovered(recovery.rolledBackDraftIds);
+      throw pendingAcceptanceLifecycleError("EPENDINGACCEPTANCERECOVERED", [diagnostic4]);
     }
     const existing = await readPreflight(input.repositoryRoot, lease);
     const explorationSelectionIntent = input.explicitRunId !== void 0 ? { mode: "explicit", runId: input.explicitRunId } : input.withoutExploration === true ? { mode: "none" } : existing?.explorationSelectionIntent ?? { mode: "automatic" };
@@ -50200,7 +51103,7 @@ async function prepareIntakePreflight(input) {
       map: map2,
       compatibleExplorations: candidates.filter(
         (candidate) => !selection.diagnostics.some(
-          (diagnostic3) => diagnostic3.runId === candidate.runId && diagnostic3.code !== "competing_candidate"
+          (diagnostic4) => diagnostic4.runId === candidate.runId && diagnostic4.code !== "competing_candidate"
         )
       ),
       explorationSelectionIntent,
@@ -50259,9 +51162,9 @@ function renderQuestion(input) {
 }
 function renderIntakeDiagnostics(diagnostics) {
   if (diagnostics.length === 0) return "";
-  return diagnostics.map((diagnostic3) => {
-    const location = diagnostic3.nodeId === void 0 ? "" : ` (${diagnostic3.nodeId})`;
-    return `  - ${diagnostic3.message}${location}`;
+  return diagnostics.map((diagnostic4) => {
+    const location = diagnostic4.nodeId === void 0 ? "" : ` (${diagnostic4.nodeId})`;
+    return `  - ${diagnostic4.message}${location}`;
   }).join("\n");
 }
 function renderSessionStatus(input) {
@@ -50403,12 +51306,12 @@ async function resolveSession(context, options) {
       if (!recovery.ok) {
         return failure(
           { ok: false, status: "rejected", diagnostics: recovery.diagnostics },
-          recovery.diagnostics.map((diagnostic3) => diagnostic3.message).join(" ")
+          recovery.diagnostics.map((diagnostic4) => diagnostic4.message).join(" ")
         );
       }
       if (recovery.rolledBackDraftIds.length > 0) {
-        const diagnostic3 = pendingAcceptanceRecovered(recovery.rolledBackDraftIds);
-        return failure({ ok: false, status: "rejected", diagnostics: [diagnostic3] }, diagnostic3.message);
+        const diagnostic4 = pendingAcceptanceRecovered(recovery.rolledBackDraftIds);
+        return failure({ ok: false, status: "rejected", diagnostics: [diagnostic4] }, diagnostic4.message);
       }
     }
     const explicitEntityRunId = explicitlyLoaded?.ok === true ? explicitlyLoaded.loaded.exploration.runId : void 0;
@@ -50544,7 +51447,7 @@ async function prepareIntakePreflightForCli(input) {
   } catch (error51) {
     const code = error51 && typeof error51 === "object" && "code" in error51 ? String(error51.code) : void 0;
     if (!["EEXIST", "ELEASELOST", "EPENDINGACCEPTANCEBLOCKED", "EPENDINGACCEPTANCERECOVERED"].includes(code ?? "")) throw error51;
-    const diagnostic3 = code === "EEXIST" ? {
+    const diagnostic4 = code === "EEXIST" ? {
       code: "intake_transition_in_progress",
       message: "Another intake transition owns preparation state; retry after it completes."
     } : code === "ELEASELOST" ? {
@@ -50558,8 +51461,8 @@ async function prepareIntakePreflightForCli(input) {
       message: error51 instanceof Error ? error51.message : "Pending draft acceptance must be repaired before preparation can continue."
     };
     return failure(
-      { ok: false, status: "rejected", diagnostics: [diagnostic3] },
-      diagnostic3.message
+      { ok: false, status: "rejected", diagnostics: [diagnostic4] },
+      diagnostic4.message
     );
   }
 }
@@ -50734,9 +51637,9 @@ function stablePreflightPayload(preflight, preparation) {
     initiative: preflight.initiative ?? null,
     reviewContract: "review" in preparation ? preparation["review"] : preparationReview(),
     preparation,
-    warnings: preflight.diagnostics.map((diagnostic3) => ({
-      code: diagnostic3.code,
-      message: diagnostic3.message
+    warnings: preflight.diagnostics.map((diagnostic4) => ({
+      code: diagnostic4.code,
+      message: diagnostic4.message
     })),
     diagnostics: preflight.diagnostics
   };
@@ -51002,12 +51905,12 @@ async function handleStageDraft(context, hooks = {}) {
       const loaded = await loadExploration(context.repositoryRoot, explicitRunId);
       const canonicalRunId = loaded.ok ? loaded.loaded.candidate.runId : explicitRunId;
       const blocking = overridePreflight.diagnostics.filter(
-        (diagnostic3) => diagnostic3.runId === canonicalRunId && diagnostic3.code !== "competing_candidate"
+        (diagnostic4) => diagnostic4.runId === canonicalRunId && diagnostic4.code !== "competing_candidate"
       );
       const selectedMatches = loaded.ok && overridePreflight.selectedExplorationRunId === canonicalRunId;
       if (!selectedMatches || blocking.length > 0) {
-        const diagnostics = blocking.length > 0 ? blocking.filter((diagnostic3, index) => blocking.findIndex(
-          (candidate) => candidate.code === diagnostic3.code && candidate.message === diagnostic3.message
+        const diagnostics = blocking.length > 0 ? blocking.filter((diagnostic4, index) => blocking.findIndex(
+          (candidate) => candidate.code === diagnostic4.code && candidate.message === diagnostic4.message
         ) === index) : [{
           code: "preflight_exploration_mismatch",
           message: `Explicit exploration ${explicitRunId} did not resolve to a compatible readable start handoff.`
@@ -52033,11 +52936,11 @@ async function resolvableRequirementIds(repositoryRoot, set2, changeId) {
       if (delta.proposedRequirement !== void 0) ids.add(delta.proposedRequirement.id);
     }
   } else {
-    for (const diagnostic3 of change.value.diagnostics) {
+    for (const diagnostic4 of change.value.diagnostics) {
       diagnostics.push({
         code: "change_bundle_invalid",
-        message: `${changeId} could not be loaded, so its proposed requirements were not checked: ${diagnostic3.message}`,
-        source: { path: diagnostic3.source?.path ?? `${CHANGES_ROOT}/${changeId}` }
+        message: `${changeId} could not be loaded, so its proposed requirements were not checked: ${diagnostic4.message}`,
+        source: { path: diagnostic4.source?.path ?? `${CHANGES_ROOT}/${changeId}` }
       });
     }
   }
@@ -52070,10 +52973,10 @@ async function currentSpecRequirements(repositoryRoot) {
   }
   return {
     ids,
-    diagnostics: specs.value.diagnostics.map((diagnostic3) => ({
+    diagnostics: specs.value.diagnostics.map((diagnostic4) => ({
       code: "current_spec_invalid",
-      message: `A current spec could not be used: ${diagnostic3.message}`,
-      source: { path: diagnostic3.source?.path ?? CURRENT_SPECS_ROOT }
+      message: `A current spec could not be used: ${diagnostic4.message}`,
+      source: { path: diagnostic4.source?.path ?? CURRENT_SPECS_ROOT }
     }))
   };
 }
@@ -55373,7 +56276,7 @@ async function resolveWorkflowState(context) {
   }
   const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
   if (!latestChange.ok) {
-    if (latestChange.diagnostics.every((diagnostic3) => diagnostic3.code === "change_missing")) {
+    if (latestChange.diagnostics.every((diagnostic4) => diagnostic4.code === "change_missing")) {
       return {
         stage: "started",
         projectId: project.loaded.project.id,
@@ -56459,7 +57362,7 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action, retroActio
 }
 
 // packages/cli/src/commands/workflow/build.ts
-import { execFileSync as execFileSync6 } from "node:child_process";
+import { execFileSync as execFileSync7 } from "node:child_process";
 import { readFile as readFile25 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
@@ -56618,7 +57521,7 @@ function fencedJson(value) {
 }
 function renderDiagnostics2(diagnostics) {
   if (diagnostics.length === 0) return "No diagnostics.";
-  return diagnostics.map((diagnostic3) => `- ${diagnosticMessage(diagnostic3)}`).join("\n");
+  return diagnostics.map((diagnostic4) => `- ${diagnosticMessage(diagnostic4)}`).join("\n");
 }
 function diagnosticMessage(value) {
   if (value && typeof value === "object" && "message" in value) return String(value.message);
@@ -56907,14 +57810,14 @@ async function loadOracleFacts(input) {
   return oracles;
 }
 async function loadReleaseFact(input) {
-  const path55 = releaseArtifactPath(input.changeId);
+  const path59 = releaseArtifactPath(input.changeId);
   const read = await absentOnFailure(
     () => readRelease({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
   );
-  if (read === void 0) return { kind: "unreadable", path: path55 };
+  if (read === void 0) return { kind: "unreadable", path: path59 };
   if (read.ok) return { kind: "document", document: read.document };
   if (read.status === "not_found") return { kind: "absent" };
-  return { kind: "unreadable", path: path55 };
+  return { kind: "unreadable", path: path59 };
 }
 function releaseArtifactPath(changeId) {
   try {
@@ -57925,11 +58828,11 @@ async function loadReaffirmedPins(input) {
   }
   if (approvals.length === 0) return () => false;
   const evaluatedAt = currentUtcTimestamp();
-  return (path55, sha2564) => approvals.some(
+  return (path59, sha2564) => approvals.some(
     (approval) => isLiveSurfaceReaffirmation({
       approval,
       changeId: input.changeId,
-      path: path55,
+      path: path59,
       currentSha256: sha2564,
       evaluatedAt
     })
@@ -58032,7 +58935,7 @@ async function oraclesForTask(input) {
     }
     unreadable.push({
       oracleId,
-      reason: read.diagnostics.map((diagnostic3) => diagnostic3.message).join("; ") || "unreadable"
+      reason: read.diagnostics.map((diagnostic4) => diagnostic4.message).join("; ") || "unreadable"
     });
   }
   return { loaded, unreadable };
@@ -58096,7 +58999,7 @@ function buildResultContract() {
 }
 function dirtyWorktreeDiagnostic(repositoryRoot) {
   try {
-    execFileSync6("git", ["-C", repositoryRoot, "rev-parse", "--is-inside-work-tree"], {
+    execFileSync7("git", ["-C", repositoryRoot, "rev-parse", "--is-inside-work-tree"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     });
@@ -58105,7 +59008,7 @@ function dirtyWorktreeDiagnostic(repositoryRoot) {
   }
   let status2 = "";
   try {
-    status2 = execFileSync6("git", ["-C", repositoryRoot, "status", "--porcelain"], {
+    status2 = execFileSync7("git", ["-C", repositoryRoot, "status", "--porcelain"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
@@ -58802,7 +59705,7 @@ function acceptanceSummary(promotion) {
   };
 }
 function blockedAcceptanceReason(diagnostics) {
-  const named = [...diagnostics].map((diagnostic3) => `${diagnostic3.code} (${diagnostic3.source?.path ?? "unknown"}): ${diagnostic3.message}`).sort((left, right) => left.localeCompare(right));
+  const named = [...diagnostics].map((diagnostic4) => `${diagnostic4.code} (${diagnostic4.source?.path ?? "unknown"}): ${diagnostic4.message}`).sort((left, right) => left.localeCompare(right));
   const shown = named.slice(0, 3);
   const remainder = named.length > shown.length ? ` (+${named.length - shown.length} more)` : "";
   const reason = `Change traceability reported ${named.length} blocking defect${named.length === 1 ? "" : "s"} at legion review --accept: ${shown.join(" | ")}${remainder}`;
@@ -59567,19 +60470,19 @@ var SHIP_HELP = [
 ].join("\n");
 var REBUILDABLE = /* @__PURE__ */ new Set(["missing_evidence_index", "missing_accepted_evidence"]);
 function recoveryFor(diagnostics) {
-  if (diagnostics.every((diagnostic3) => REBUILDABLE.has(diagnostic3.code))) {
+  if (diagnostics.every((diagnostic4) => REBUILDABLE.has(diagnostic4.code))) {
     return nextAction(
       "legion build",
       "The task has no accepted evidence yet; building produces it with the requirement and oracle links this gate checks."
     );
   }
-  if (diagnostics.every((diagnostic3) => diagnostic3.code === "orphan_evidence")) {
+  if (diagnostics.every((diagnostic4) => diagnostic4.code === "orphan_evidence")) {
     return nextAction(
       "legion ship --allow-legacy-evidence",
       "This evidence carries no requirement or oracle link. Rebuilding cannot repair it \u2014 a rebuild adds a new entry and leaves the old one in the index. If it predates linking, this accepts it; if it is current evidence that lost its links, the index is corrupt and has to be corrected rather than allowed."
     );
   }
-  const paths = [...new Set(diagnostics.map((diagnostic3) => diagnostic3.source?.path).filter(isPath))];
+  const paths = [...new Set(diagnostics.map((diagnostic4) => diagnostic4.source?.path).filter(isPath))];
   const where = paths.length === 0 ? "the planned artifacts" : paths.join(", ");
   return nextAction(
     "legion ship",
@@ -59830,17 +60733,17 @@ async function handleShipWorkflow(context) {
     const legacyEvidence = allowed;
     if (blocking.length > 0) {
       return blockedShip(
-        blocking.map((diagnostic3) => ({
+        blocking.map((diagnostic4) => ({
           code: "change_traceability_broken",
-          message: diagnostic3.message,
-          path: diagnostic3.source?.path ?? taskgraph.artifactPath
+          message: diagnostic4.message,
+          path: diagnostic4.source?.path ?? taskgraph.artifactPath
         })),
         recoveryFor(blocking)
       );
     }
-    traceabilityWarnings = legacyEvidence.map((diagnostic3) => ({
+    traceabilityWarnings = legacyEvidence.map((diagnostic4) => ({
       code: "legacy_evidence_unlinked",
-      message: `${diagnostic3.message} This evidence predates requirement and oracle linking; rebuilding the task will add it.`
+      message: `${diagnostic4.message} This evidence predates requirement and oracle linking; rebuilding the task will add it.`
     }));
   }
   const changeFacts = await loadShipGateChangeFacts({
@@ -59919,7 +60822,7 @@ async function handleShipWorkflow(context) {
       ...traceabilityWarnings.length === 0 && planeSkips.length === 0 && waiverWarnings.length === 0 ? {} : {
         warnings: [
           ...traceabilityWarnings,
-          ...planeSkips.map((diagnostic3) => ({ code: diagnostic3.code, message: diagnostic3.message })),
+          ...planeSkips.map((diagnostic4) => ({ code: diagnostic4.code, message: diagnostic4.message })),
           ...waiverWarnings
         ]
       },
@@ -59955,7 +60858,7 @@ async function handleShipWorkflow(context) {
       // directly above applies with no exception: a terminal run that printed
       // "Ship ready." while an artifact could not be read told the operator less
       // than the JSON did, about the one thing they would want to know.
-      ...planeSkips.map((diagnostic3) => `warning: ${diagnostic3.message}`),
+      ...planeSkips.map((diagnostic4) => `warning: ${diagnostic4.message}`),
       ...waiverWarnings.map((warning) => `warning: ${warning.message}`),
       `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
       ...unevaluable.length === 0 ? [] : [
@@ -59981,7 +60884,7 @@ function blockedShip(diagnostics, action, warnings = []) {
       // while another was waived, and an operator reading only the blockers would
       // never learn that a gate they believe was checked was not.
       ...warnings.map((warning) => `warning: ${warning.message}`),
-      diagnostics.map((diagnostic3) => diagnostic3 && typeof diagnostic3 === "object" && "message" in diagnostic3 ? String(diagnostic3.message) : String(diagnostic3)).join("\n"),
+      diagnostics.map((diagnostic4) => diagnostic4 && typeof diagnostic4 === "object" && "message" in diagnostic4 ? String(diagnostic4.message) : String(diagnostic4)).join("\n"),
       renderNextAction(action)
     ].join("\n")
   );
@@ -60341,7 +61244,7 @@ async function approveDeltaSpecs(context) {
 function recoveryForDiscovery(diagnostics) {
   const codes = new Set(
     diagnostics.map(
-      (diagnostic3) => diagnostic3 !== null && typeof diagnostic3 === "object" && "code" in diagnostic3 ? String(diagnostic3.code) : ""
+      (diagnostic4) => diagnostic4 !== null && typeof diagnostic4 === "object" && "code" in diagnostic4 ? String(diagnostic4.code) : ""
     ).filter((code) => code.length > 0)
   );
   if (codes.has("delta_artifact_mismatch")) {
@@ -64162,6 +65065,11 @@ async function mapRefresh(context, scope, profile) {
       files: source.files
     });
     const parserDiagnostics2 = semantic?.parserDiagnostics ?? [];
+    const structuralSummary = semantic === void 0 ? void 0 : deriveStructuralMapSummary({
+      snapshot: semantic.snapshot,
+      semanticIndexArtifactPath: semantic.semanticIndexArtifactPath
+    });
+    const structuralFields = structuralSummary ?? {};
     const status2 = parserDiagnostics2.length === 0 ? "completed" : "blocked";
     const action = status2 === "completed" ? nextAction("legion plan 1", "Use refreshed map context when planning the next change.") : nextAction("legion map --refresh", "The structural parser reported errors; inspect snapshot coverage diagnostics before relying on this index.");
     const diagnostics = parserDiagnostics2.map((message) => ({ code: "map_parser_error", message }));
@@ -64181,7 +65089,8 @@ async function mapRefresh(context, scope, profile) {
         semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
         semanticIndexSha256: semantic.semanticIndexSha256,
         indexProfile: "structural",
-        snapshotId: semantic.snapshot.snapshotId
+        snapshotId: semantic.snapshot.snapshotId,
+        ...structuralFields
       }
     };
     await writeGuidanceRun({
@@ -64211,7 +65120,8 @@ async function mapRefresh(context, scope, profile) {
         semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
         semanticIndexSha256: semantic.semanticIndexSha256,
         indexProfile: "structural",
-        snapshotId: semantic.snapshot.snapshotId
+        snapshotId: semantic.snapshot.snapshotId,
+        ...structuralFields
       },
       nextAction: action,
       diagnostics
@@ -64220,6 +65130,7 @@ async function mapRefresh(context, scope, profile) {
       status2 === "completed" ? `Codebase map refreshed for ${artifacts.map.sourceFileCount} source files.` : `Structural codebase map blocked by ${parserDiagnostics2.length} parser diagnostic(s).`,
       `Artifact: ${artifacts.codebaseArtifactPath}`,
       ...semantic === void 0 ? [] : [`Semantic index: ${semantic.semanticIndexArtifactPath}`],
+      ...structuralSummary === void 0 ? [] : renderStructuralMapSummary(structuralSummary),
       renderNextAction(action)
     ].join("\n");
     return status2 === "completed" ? success2(payload, human) : failure(payload, human);
@@ -64350,6 +65261,32 @@ async function mapWhy(context, factId) {
     ].join("\n")
   );
 }
+function renderStructuralMapSummary(summary) {
+  const statusBreakdown = Object.entries(summary.coverageStatusCounts).sort(([left], [right]) => left.localeCompare(right)).map(([status2, count]) => `${status2}: ${count}`).join(", ");
+  return [
+    `Structural facts: ${summary.totalFactCount} total (symbols: ${summary.symbolCount}, imports: ${summary.importCount}, exports: ${summary.exportCount}).`,
+    `Structural coverage: ${summary.coverageCount} files.`,
+    `Coverage status counts: ${statusBreakdown || "none"}.`,
+    `Semantic index JSON: ${summary.semanticIndexArtifactPath}`,
+    `Semantic index SQLite: ${summary.semanticSqliteArtifactPath}`,
+    "Note: Structural source mapping, not behavioral proof."
+  ];
+}
+function structuralSummaryFromState(state) {
+  if (state.semanticIndexArtifactPath == null || state.semanticSqliteArtifactPath == null || state.coverageCount == null || state.coverageStatusCounts == null || state.symbolCount == null || state.importCount == null || state.exportCount == null || state.totalFactCount == null) {
+    return void 0;
+  }
+  return {
+    semanticIndexArtifactPath: state.semanticIndexArtifactPath,
+    semanticSqliteArtifactPath: state.semanticSqliteArtifactPath,
+    coverageCount: state.coverageCount,
+    coverageStatusCounts: state.coverageStatusCounts,
+    symbolCount: state.symbolCount,
+    importCount: state.importCount,
+    exportCount: state.exportCount,
+    totalFactCount: state.totalFactCount
+  };
+}
 function mapStatePayload(state, mode) {
   return {
     ok: true,
@@ -64361,7 +65298,18 @@ function mapStatePayload(state, mode) {
     sourceFileCount: state.sourceFileCount,
     latestSourceFingerprint: state.latestSourceFingerprint,
     generatedAt: state.generatedAt,
-    ...state.indexProfile === "structural" ? { indexProfile: "structural", snapshotId: state.snapshotId } : {},
+    ...state.indexProfile === "structural" ? {
+      indexProfile: "structural",
+      snapshotId: state.snapshotId,
+      semanticIndexArtifactPath: state.semanticIndexArtifactPath ?? null,
+      semanticSqliteArtifactPath: state.semanticSqliteArtifactPath ?? null,
+      coverageCount: state.coverageCount ?? null,
+      coverageStatusCounts: state.coverageStatusCounts ?? null,
+      symbolCount: state.symbolCount ?? null,
+      importCount: state.importCount ?? null,
+      exportCount: state.exportCount ?? null,
+      totalFactCount: state.totalFactCount ?? null
+    } : {},
     diagnostics: state.diagnostics
   };
 }
@@ -64380,9 +65328,14 @@ async function mapCheck(context, scope, profile) {
   const state = await resolveMapState(context.repositoryRoot, scope, createdAt, profile);
   if ("error" in state) return usageError(state.error);
   const action = mapStateAction(state);
+  const structuralSummary = profile === "structural" ? structuralSummaryFromState(state) : void 0;
   return success2(
     { ...mapStatePayload(state, "check"), nextAction: action },
-    [`Codebase map (${profile}): ${state.freshness}. ${state.reason}`, renderNextAction(action)].join("\n")
+    [
+      `Codebase map (${profile}): ${state.freshness}. ${state.reason}`,
+      ...structuralSummary === void 0 ? [] : renderStructuralMapSummary(structuralSummary),
+      renderNextAction(action)
+    ].join("\n")
   );
 }
 async function mapSummary(context, scope, profile) {
@@ -64391,12 +65344,14 @@ async function mapSummary(context, scope, profile) {
   const state = await resolveMapState(context.repositoryRoot, scope, createdAt, profile);
   if ("error" in state) return usageError(state.error);
   const action = mapStateAction(state);
+  const structuralSummary = profile === "structural" ? structuralSummaryFromState(state) : void 0;
   return success2(
     { ...mapStatePayload(state, "summary"), nextAction: action },
     [
       `Codebase map: ${state.freshness}. ${state.reason}`,
       `Scope: ${state.scope}. Source files: ${state.sourceFileCount}.`,
       state.generatedAt === null ? "Never generated." : `Generated: ${state.generatedAt}.`,
+      ...structuralSummary === void 0 ? [] : renderStructuralMapSummary(structuralSummary),
       renderNextAction(action)
     ].join("\n")
   );
@@ -65285,18 +66240,5135 @@ function renderDerivedMetrics(metrics) {
   ];
 }
 
+// packages/cli/src/commands/workflow/assess.ts
+import { readFile as readFile29 } from "node:fs/promises";
+import path55 from "node:path";
+
+// packages/cli/src/workflow/brownfield-assessment.ts
+import { createHash as createHash27, randomUUID as randomUUID4 } from "node:crypto";
+import { constants as fsConstants2 } from "node:fs";
+import { access, lstat as lstat6, mkdir as mkdir14, open as open4, readdir as readdir21, realpath as realpath6, rename as rename6, rm as rm9 } from "node:fs/promises";
+import path52 from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+var ASSESSMENT_ROOT = ".legion/project/assessment";
+var SAFE_REPOSITORY_ROOT = "repository";
+var REFRESH_ACTION = "legion map --refresh --profile structural";
+var BUNDLE_FILE_NAMES = [
+  "state.json",
+  "signals.json",
+  "assumptions.json",
+  "findings.json",
+  "synthesis.json",
+  "review.json"
+];
+var MAX_BUNDLE_FILE_BYTES = 16 * 1024 * 1024;
+var BUNDLE_READ_CHUNK_BYTES = 64 * 1024;
+var PUBLISH_LOCK_STALE_MS = 6e4;
+var PUBLISH_LOCK_ATTEMPTS = 6e4;
+var PUBLISH_LOCK_METADATA = "owner.json";
+var MAX_PUBLISH_LOCK_METADATA_BYTES = 4 * 1024;
+var DARWIN_O_NOFOLLOW = 256;
+var LINUX_O_NOFOLLOW = 131072;
+var NOFOLLOW_FLAG = typeof fsConstants2.O_NOFOLLOW === "number" ? fsConstants2.O_NOFOLLOW : process.platform === "darwin" ? DARWIN_O_NOFOLLOW : process.platform === "linux" ? LINUX_O_NOFOLLOW : 0;
+var DIRECTORY_FLAG = typeof fsConstants2.O_DIRECTORY === "number" ? fsConstants2.O_DIRECTORY : 0;
+var NONBLOCK_FLAG = typeof fsConstants2.O_NONBLOCK === "number" ? fsConstants2.O_NONBLOCK : 0;
+var DESCRIPTOR_PATH_ROOT = process.platform === "linux" ? "/proc/self/fd" : void 0;
+function isNodeErrorCode5(error51, code) {
+  return typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === code;
+}
+function samePath(left, right) {
+  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+function descriptorPath(descriptor) {
+  if (DESCRIPTOR_PATH_ROOT === void 0) {
+    throw new Error("Descriptor-relative bundle operations are not supported on this platform");
+  }
+  return `${DESCRIPTOR_PATH_ROOT}/${descriptor.fd}`;
+}
+function descriptorChildPath(parent, child) {
+  return path52.join(descriptorPath(parent), child);
+}
+var descriptorTraversalAvailable;
+async function canUseDescriptorTraversal() {
+  if (descriptorTraversalAvailable !== void 0) return descriptorTraversalAvailable;
+  if (DESCRIPTOR_PATH_ROOT === void 0) {
+    descriptorTraversalAvailable = false;
+    return descriptorTraversalAvailable;
+  }
+  try {
+    await access(DESCRIPTOR_PATH_ROOT);
+    descriptorTraversalAvailable = true;
+  } catch {
+    descriptorTraversalAvailable = false;
+  }
+  return descriptorTraversalAvailable;
+}
+async function assertStableAbsolutePath(absolutePath, displayPath, allowMissingFinal = true) {
+  const expectedParent = path52.dirname(absolutePath);
+  let parentRealPath;
+  try {
+    parentRealPath = await realpath6(expectedParent);
+  } catch (error51) {
+    if (allowMissingFinal && isNodeErrorCode5(error51, "ENOENT")) return;
+    throw error51;
+  }
+  if (!samePath(parentRealPath, expectedParent)) {
+    throw new Error(`Brownfield assessment artifact path contains a symbolic link: ${displayPath}`);
+  }
+  try {
+    const targetRealPath = await realpath6(absolutePath);
+    if (!samePath(targetRealPath, absolutePath)) {
+      throw new Error(`Brownfield assessment artifact path contains a symbolic link: ${displayPath}`);
+    }
+  } catch (error51) {
+    if (allowMissingFinal && isNodeErrorCode5(error51, "ENOENT")) return;
+    throw error51;
+  }
+}
+async function assertStableFallbackPath(resolved, artifactPath, allowMissingFinal = true) {
+  await assertStableAbsolutePath(resolved.absolutePath, artifactPath, allowMissingFinal);
+}
+async function openRelativeDirectory(parent, name2) {
+  return open4(descriptorChildPath(parent, name2), fsConstants2.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG | NONBLOCK_FLAG);
+}
+async function openRelativeFile(parent, name2, flags2, mode) {
+  return open4(descriptorChildPath(parent, name2), flags2 | NOFOLLOW_FLAG | NONBLOCK_FLAG, mode);
+}
+async function mkdirRelative(parent, name2) {
+  await mkdir14(descriptorChildPath(parent, name2), { mode: 448 });
+}
+async function removeRelative(parent, name2) {
+  await rm9(descriptorChildPath(parent, name2), { recursive: true, force: true });
+}
+async function removeRelativeIfOwned(parent, name2, expectedIdentity) {
+  const currentStat = await lstatIfPresent(descriptorChildPath(parent, name2));
+  if (currentStat === void 0 || currentStat.isSymbolicLink() || sameFileIdentity(expectedIdentity, currentStat) === false) return;
+  await removeRelative(parent, name2);
+}
+async function removeRelativeIfOwnedAndToken(parent, name2, expectedIdentity, expectedToken) {
+  const absolutePath = descriptorChildPath(parent, name2);
+  const currentStat = await lstatIfPresent(absolutePath);
+  if (currentStat === void 0 || currentStat.isSymbolicLink() || !currentStat.isDirectory() || sameFileIdentity(expectedIdentity, currentStat) !== true) return false;
+  if (expectedToken !== void 0 && lockMetadataToken(await readLockMetadata(absolutePath)) !== expectedToken) return false;
+  const finalStat = await lstatIfPresent(absolutePath);
+  if (finalStat === void 0 || finalStat.isSymbolicLink() || !finalStat.isDirectory() || sameFileIdentity(expectedIdentity, finalStat) !== true) return false;
+  if (expectedToken !== void 0 && lockMetadataToken(await readLockMetadata(absolutePath)) !== expectedToken) return false;
+  await rm9(absolutePath, { recursive: true, force: true });
+  return true;
+}
+async function removePathIfOwned(absolutePath, expectedIdentity) {
+  const currentStat = await lstatIfPresent(absolutePath);
+  if (currentStat === void 0 || currentStat.isSymbolicLink() || sameFileIdentity(expectedIdentity, currentStat) === false) return;
+  await rm9(absolutePath, { recursive: true, force: true });
+}
+async function removePathIfOwnedAndToken(absolutePath, expectedIdentity, expectedToken) {
+  const currentStat = await lstatIfPresent(absolutePath);
+  if (currentStat === void 0 || currentStat.isSymbolicLink() || !currentStat.isDirectory() || sameFileIdentity(expectedIdentity, currentStat) !== true) return false;
+  if (expectedToken !== void 0 && lockMetadataToken(await readLockMetadata(absolutePath)) !== expectedToken) return false;
+  const finalStat = await lstatIfPresent(absolutePath);
+  if (finalStat === void 0 || finalStat.isSymbolicLink() || !finalStat.isDirectory() || sameFileIdentity(expectedIdentity, finalStat) !== true) return false;
+  if (expectedToken !== void 0 && lockMetadataToken(await readLockMetadata(absolutePath)) !== expectedToken) return false;
+  await rm9(absolutePath, { recursive: true, force: true });
+  return true;
+}
+async function openBundleDirectory(repositoryRoot, artifactPath, createMissing) {
+  const resolved = await resolveSafeBundlePath(repositoryRoot, artifactPath);
+  if (!await canUseDescriptorTraversal()) {
+    await assertStableFallbackPath(resolved, artifactPath, true);
+    return { repositoryRoot: resolved.repositoryRoot, absolutePath: resolved.absolutePath };
+  }
+  const handles = [];
+  let result;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    const root = await open4(
+      resolved.repositoryRoot,
+      fsConstants2.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG | NONBLOCK_FLAG
+    );
+    handles.push(root);
+    const rootStat = await root.stat();
+    if (!rootStat.isDirectory()) {
+      throw new Error(`Brownfield assessment repository root is not a directory: ${repositoryRoot}`);
+    }
+    assertSameFileIdentity(resolved.repositoryStat, rootStat, repositoryRoot);
+    let current = root;
+    for (const [index, component] of artifactPath.split("/").entries()) {
+      let next;
+      try {
+        next = await openRelativeDirectory(current, component);
+      } catch (error51) {
+        if (!createMissing || !isNodeErrorCode5(error51, "ENOENT")) throw error51;
+        try {
+          await mkdirRelative(current, component);
+        } catch (mkdirError) {
+          if (!isNodeErrorCode5(mkdirError, "EEXIST")) throw mkdirError;
+        }
+        next = await openRelativeDirectory(current, component);
+      }
+      handles.push(next);
+      const nextStat = await next.stat();
+      if (!nextStat.isDirectory()) {
+        throw new Error(`Brownfield assessment artifact path contains a non-directory component: ${artifactPath}`);
+      }
+      const validatedStat = resolved.componentStats[index];
+      if (validatedStat !== void 0) assertSameFileIdentity(validatedStat, nextStat, artifactPath);
+      current = next;
+    }
+    result = { repositoryRoot: resolved.repositoryRoot, absolutePath: resolved.absolutePath, descriptor: current };
+  } catch (error51) {
+    operationError = error51;
+    hasOperationError = true;
+  }
+  const cleanupErrors = [];
+  if (result === void 0 || hasOperationError) {
+    for (const handle2 of handles.reverse()) {
+      await attemptCleanup(cleanupErrors, () => handle2.close());
+    }
+  } else {
+    const retained = handles[handles.length - 1];
+    for (const handle2 of handles.slice(0, -1).reverse()) {
+      await attemptCleanup(cleanupErrors, () => handle2.close());
+    }
+    if (cleanupErrors.length > 0 && retained !== void 0) {
+      await attemptCleanup(cleanupErrors, () => retained.close());
+      result = void 0;
+    }
+  }
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to open ${artifactPath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${artifactPath}`);
+  return result;
+}
+async function closeBundleDirectory(directory) {
+  if (directory?.descriptor === void 0) return;
+  await directory.descriptor.close();
+}
+function stripSha256Prefix5(value) {
+  return codeIndexSha256Schema.parse(value.startsWith("sha256:") ? value.slice("sha256:".length) : value);
+}
+function assessmentPaths(assessmentId) {
+  const root = artifactPathSchema.parse(`${ASSESSMENT_ROOT}/${assessmentId}`);
+  const pathFor = (fileName) => artifactPathSchema.parse(`${root}/${fileName}`);
+  return {
+    root,
+    state: pathFor("state.json"),
+    signals: pathFor("signals.json"),
+    assumptions: pathFor("assumptions.json"),
+    findings: pathFor("findings.json"),
+    synthesis: pathFor("synthesis.json"),
+    review: pathFor("review.json")
+  };
+}
+function assertAssessmentArtifactPath(artifactPath) {
+  if (artifactPath !== ASSESSMENT_ROOT && !artifactPath.startsWith(`${ASSESSMENT_ROOT}/`)) {
+    throw new Error(`Brownfield assessment artifact path must stay under ${ASSESSMENT_ROOT}: ${artifactPath}`);
+  }
+}
+async function resolveSafeBundlePath(repositoryRoot, artifactPath) {
+  assertAssessmentArtifactPath(artifactPath);
+  const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath });
+  const repositoryRealPath = path52.resolve(resolved.repositoryRoot);
+  const repositoryStat = await lstat6(repositoryRealPath);
+  if (repositoryStat.isSymbolicLink() || !repositoryStat.isDirectory()) {
+    throw new Error(`Brownfield assessment repository root is not a directory: ${repositoryRoot}`);
+  }
+  const assessmentRealPath = path52.join(repositoryRealPath, ".legion", "project", "assessment");
+  const relativeToAssessment = path52.relative(assessmentRealPath, resolved.absolutePath);
+  if (relativeToAssessment === ".." || relativeToAssessment.startsWith(`..${path52.sep}`) || path52.isAbsolute(relativeToAssessment)) {
+    throw new Error(`Brownfield assessment artifact path escapes ${ASSESSMENT_ROOT}: ${artifactPath}`);
+  }
+  const components = artifactPath.split("/");
+  const componentStats = [];
+  let current = repositoryRealPath;
+  for (const [index, component] of components.entries()) {
+    current = path52.join(current, component);
+    let componentStat;
+    try {
+      componentStat = await lstat6(current);
+    } catch (error51) {
+      if (isNodeErrorCode5(error51, "ENOENT")) {
+        componentStats.push(void 0);
+        break;
+      }
+      throw error51;
+    }
+    componentStats.push(componentStat);
+    if (componentStat.isSymbolicLink()) {
+      throw new Error(`Brownfield assessment artifact path contains a symbolic link: ${artifactPath}`);
+    }
+    const isFinalComponent = index === components.length - 1;
+    if (!isFinalComponent && !componentStat.isDirectory()) {
+      throw new Error(`Brownfield assessment artifact path contains a non-directory component: ${artifactPath}`);
+    }
+  }
+  return {
+    repositoryRoot: repositoryRealPath,
+    repositoryPath: resolved.repositoryPath,
+    absolutePath: resolved.absolutePath,
+    repositoryStat,
+    componentStats
+  };
+}
+async function lstatIfPresent(absolutePath) {
+  try {
+    return await lstat6(absolutePath);
+  } catch (error51) {
+    if (isNodeErrorCode5(error51, "ENOENT")) return void 0;
+    throw error51;
+  }
+}
+async function fsyncDirectoryIfSupported2(directory) {
+  let handle2;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    const directoryStat = await lstat6(directory);
+    if (!directoryStat.isSymbolicLink() && directoryStat.isDirectory()) {
+      handle2 = await open4(
+        directory,
+        fsConstants2.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG | NONBLOCK_FLAG
+      );
+      const openedStat = await handle2.stat();
+      if (openedStat.isDirectory()) {
+        assertSameFileIdentity(directoryStat, openedStat, directory);
+        await handle2.sync();
+      }
+    }
+  } catch (error51) {
+    if (!(isNodeErrorCode5(error51, "EACCES") || isNodeErrorCode5(error51, "EBADF") || isNodeErrorCode5(error51, "EISDIR") || isNodeErrorCode5(error51, "EINVAL") || isNodeErrorCode5(error51, "ENOTSUP") || isNodeErrorCode5(error51, "EPERM"))) {
+      operationError = error51;
+      hasOperationError = true;
+    }
+  }
+  const cleanupErrors = [];
+  if (handle2 !== void 0) await attemptCleanup(cleanupErrors, () => handle2.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to sync ${directory}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${directory}`);
+}
+function errorWithCode(code, message) {
+  const error51 = new Error(message);
+  error51.code = code;
+  return error51;
+}
+function sameFileIdentity(left, right) {
+  if (left.dev === 0 || right.dev === 0 || left.ino === 0 || right.ino === 0) return void 0;
+  return left.dev === right.dev && left.ino === right.ino;
+}
+function assertSameFileIdentity(expected, actual, displayPath) {
+  if (sameFileIdentity(expected, actual) === false) {
+    throw new Error(`Brownfield assessment path changed while opening: ${displayPath}`);
+  }
+}
+async function attemptCleanup(cleanupErrors, cleanup) {
+  try {
+    await cleanup();
+  } catch (error51) {
+    cleanupErrors.push(error51);
+  }
+}
+function throwWithCleanup(operationError, cleanupErrors, context) {
+  if (cleanupErrors.length === 0) throw operationError;
+  if (operationError instanceof Error) {
+    Object.defineProperty(operationError, "cleanupErrors", {
+      configurable: true,
+      enumerable: false,
+      value: cleanupErrors,
+      writable: false
+    });
+    throw operationError;
+  }
+  throw new AggregateError([operationError, ...cleanupErrors], context);
+}
+function throwCleanupOnly(cleanupErrors, context) {
+  if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, context);
+}
+function boundedReadError(artifactPath) {
+  return errorWithCode(
+    "ERR_BROWNFIELD_BUNDLE_SIZE",
+    `Brownfield assessment artifact exceeds the bounded read limit: ${artifactPath}`
+  );
+}
+async function writeLockMetadata(lockPath, lockDescriptor) {
+  const token = randomUUID4();
+  const metadata2 = JSON.stringify({
+    pid: process.pid,
+    acquiredAt: Date.now(),
+    token
+  });
+  let descriptor;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    if (lockDescriptor === void 0) await assertStableAbsolutePath(lockPath, lockPath, false);
+    descriptor = lockDescriptor === void 0 ? await open4(path52.join(lockPath, PUBLISH_LOCK_METADATA), fsConstants2.O_CREAT | fsConstants2.O_EXCL | fsConstants2.O_WRONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG, 384) : await openRelativeFile(lockDescriptor, PUBLISH_LOCK_METADATA, fsConstants2.O_CREAT | fsConstants2.O_EXCL | fsConstants2.O_WRONLY, 384);
+    await descriptor.writeFile(metadata2, "utf8");
+    await descriptor.sync();
+  } catch (error51) {
+    operationError = error51;
+    hasOperationError = true;
+  }
+  const cleanupErrors = [];
+  if (descriptor !== void 0) await attemptCleanup(cleanupErrors, () => descriptor.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to write ${PUBLISH_LOCK_METADATA}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${PUBLISH_LOCK_METADATA}`);
+  return token;
+}
+function processIsAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error51) {
+    return isNodeErrorCode5(error51, "EPERM");
+  }
+}
+async function readLockMetadata(lockPath, lockDescriptor) {
+  let descriptor;
+  let result;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    const metadataPath = path52.join(lockPath, PUBLISH_LOCK_METADATA);
+    const fallbackStat = lockDescriptor === void 0 ? await lstatIfPresent(metadataPath) : void 0;
+    if (fallbackStat === void 0 || !fallbackStat.isSymbolicLink() && fallbackStat.isFile()) {
+      if (fallbackStat?.isSymbolicLink()) {
+        result = void 0;
+      } else {
+        descriptor = lockDescriptor === void 0 ? await open4(metadataPath, fsConstants2.O_RDONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG) : await openRelativeFile(lockDescriptor, PUBLISH_LOCK_METADATA, fsConstants2.O_RDONLY);
+        const metadataStat = await descriptor.stat();
+        if (metadataStat.isFile() && (fallbackStat === void 0 || sameFileIdentity(fallbackStat, metadataStat) !== false) && Number(metadataStat.size) <= MAX_PUBLISH_LOCK_METADATA_BYTES) {
+          const chunks = [];
+          let totalBytes = 0;
+          while (true) {
+            const remaining = MAX_PUBLISH_LOCK_METADATA_BYTES + 1 - totalBytes;
+            const buffer = Buffer.allocUnsafe(remaining);
+            const { bytesRead } = await descriptor.read(buffer, 0, buffer.length, null);
+            if (bytesRead === 0) break;
+            chunks.push(buffer.subarray(0, bytesRead));
+            totalBytes += bytesRead;
+            if (totalBytes > MAX_PUBLISH_LOCK_METADATA_BYTES) break;
+          }
+          const finalStat = await descriptor.stat();
+          if (totalBytes <= MAX_PUBLISH_LOCK_METADATA_BYTES && finalStat.isFile() && sameFileIdentity(metadataStat, finalStat) !== false && finalStat.size === totalBytes) {
+            result = Buffer.concat(chunks, totalBytes).toString("utf8");
+          }
+        }
+      }
+    }
+  } catch (error51) {
+    if (!isNodeErrorCode5(error51, "ENOENT")) {
+      operationError = error51;
+      hasOperationError = true;
+    }
+  }
+  const cleanupErrors = [];
+  if (descriptor !== void 0) await attemptCleanup(cleanupErrors, () => descriptor.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to read ${PUBLISH_LOCK_METADATA}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${PUBLISH_LOCK_METADATA}`);
+  return result;
+}
+function parseLockMetadata(text) {
+  if (text === void 0) return void 0;
+  try {
+    const parsed = JSON.parse(text);
+    return typeof parsed === "object" && parsed !== null ? parsed : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function lockMetadataToken(text) {
+  const token = parseLockMetadata(text)?.token;
+  return typeof token === "string" ? token : void 0;
+}
+async function lockIsStale(lockPath, lockDescriptor) {
+  const lockStat = lockDescriptor === void 0 ? await lstatIfPresent(lockPath) : await lockDescriptor.stat();
+  if (lockStat === void 0) return void 0;
+  if (lockStat.isSymbolicLink() || !lockStat.isDirectory()) {
+    throw new Error(`Brownfield assessment publication lock is unsafe: ${lockPath}`);
+  }
+  const metadataText = await readLockMetadata(lockPath, lockDescriptor);
+  const metadata2 = parseLockMetadata(metadataText);
+  if (typeof metadata2?.acquiredAt === "number" && Date.now() - metadata2.acquiredAt < PUBLISH_LOCK_STALE_MS) {
+    return void 0;
+  }
+  if (typeof metadata2?.pid === "number" && processIsAlive(metadata2.pid)) return void 0;
+  if (Date.now() - Number(lockStat.mtimeMs) < PUBLISH_LOCK_STALE_MS) return void 0;
+  const metadataToken = lockMetadataToken(metadataText);
+  return metadataToken === void 0 ? { lockIdentity: lockStat } : { lockIdentity: lockStat, metadataToken };
+}
+async function lockIsOwned(lock) {
+  const lockPathStat = lock.parentDescriptor === void 0 ? await lstatIfPresent(lock.absolutePath) : await lstatIfPresent(descriptorChildPath(lock.parentDescriptor, lock.name));
+  const lockStat = lock.lockDescriptor === void 0 ? lockPathStat : await lock.lockDescriptor.stat();
+  if (lockPathStat === void 0 || lockStat === void 0 || lockPathStat.isSymbolicLink() || !lockPathStat.isDirectory() || !lockStat.isDirectory() || sameFileIdentity(lock.lockIdentity, lockPathStat) !== true || sameFileIdentity(lock.lockIdentity, lockStat) !== true) return false;
+  const token = lockMetadataToken(await readLockMetadata(lock.absolutePath, lock.lockDescriptor));
+  const finalPathStat = lock.parentDescriptor === void 0 ? await lstatIfPresent(lock.absolutePath) : await lstatIfPresent(descriptorChildPath(lock.parentDescriptor, lock.name));
+  const finalLockStat = lock.lockDescriptor === void 0 ? finalPathStat : await lock.lockDescriptor.stat();
+  return finalPathStat !== void 0 && finalLockStat !== void 0 && !finalPathStat.isSymbolicLink() && finalPathStat.isDirectory() && finalLockStat.isDirectory() && sameFileIdentity(lock.lockIdentity, finalPathStat) === true && sameFileIdentity(lock.lockIdentity, finalLockStat) === true && token === lock.metadataToken;
+}
+async function restoreQuarantinedLock(input) {
+  const sourcePath = input.parentDescriptor === void 0 ? input.lockPath : descriptorChildPath(input.parentDescriptor, input.lockName);
+  const quarantinePath = input.parentDescriptor === void 0 ? input.quarantinePath : descriptorChildPath(input.parentDescriptor, input.quarantineName);
+  const sourceStat = await lstatIfPresent(sourcePath);
+  const quarantineStat = await lstatIfPresent(quarantinePath);
+  if (sourceStat === void 0 && quarantineStat !== void 0 && !quarantineStat.isSymbolicLink() && quarantineStat.isDirectory()) {
+    await rename6(quarantinePath, sourcePath);
+  }
+}
+async function removeLockIfOwned(parentDescriptor, lockName, lockPath, expectedIdentity, expectedToken, heldLockDescriptor) {
+  const quarantineName = `${lockName}.release-${process.pid}-${randomUUID4()}`;
+  const quarantinePath = path52.join(path52.dirname(lockPath), quarantineName);
+  let lockDescriptor = heldLockDescriptor;
+  let ownsLockDescriptor = false;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    let ownsLock = false;
+    if (parentDescriptor === void 0) {
+      const currentStat = await lstatIfPresent(lockPath);
+      if (currentStat !== void 0 && !currentStat.isSymbolicLink() && currentStat.isDirectory() && sameFileIdentity(expectedIdentity, currentStat) === true) {
+        const currentToken = expectedToken === void 0 ? void 0 : lockMetadataToken(await readLockMetadata(lockPath));
+        const finalStat = await lstatIfPresent(lockPath);
+        const finalToken = expectedToken === void 0 ? void 0 : lockMetadataToken(await readLockMetadata(lockPath));
+        ownsLock = finalStat !== void 0 && !finalStat.isSymbolicLink() && finalStat.isDirectory() && sameFileIdentity(expectedIdentity, finalStat) === true && (expectedToken === void 0 || currentToken === expectedToken && finalToken === expectedToken);
+      }
+    } else {
+      if (lockDescriptor === void 0) {
+        lockDescriptor = await openRelativeDirectory(parentDescriptor, lockName);
+        ownsLockDescriptor = true;
+      }
+      const heldStat = await lockDescriptor.stat();
+      const namedStat = await lstatIfPresent(descriptorChildPath(parentDescriptor, lockName));
+      if (heldStat.isDirectory() && namedStat !== void 0 && !namedStat.isSymbolicLink() && namedStat.isDirectory() && sameFileIdentity(expectedIdentity, heldStat) === true && sameFileIdentity(expectedIdentity, namedStat) === true) {
+        const currentToken = expectedToken === void 0 ? void 0 : lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor));
+        const finalHeldStat = await lockDescriptor.stat();
+        const finalNamedStat = await lstatIfPresent(descriptorChildPath(parentDescriptor, lockName));
+        const finalToken = expectedToken === void 0 ? void 0 : lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor));
+        ownsLock = finalHeldStat.isDirectory() && finalNamedStat !== void 0 && !finalNamedStat.isSymbolicLink() && finalNamedStat.isDirectory() && sameFileIdentity(expectedIdentity, finalHeldStat) === true && sameFileIdentity(expectedIdentity, finalNamedStat) === true && (expectedToken === void 0 || currentToken === expectedToken && finalToken === expectedToken);
+      }
+    }
+    if (ownsLock) {
+      const quarantineEntryPath = parentDescriptor === void 0 ? quarantinePath : descriptorChildPath(parentDescriptor, quarantineName);
+      if (await lstatIfPresent(quarantineEntryPath) !== void 0) {
+        throw new Error(`Brownfield assessment lock cleanup quarantine already exists: ${quarantineEntryPath}`);
+      }
+      if (parentDescriptor === void 0) {
+        await assertStableAbsolutePath(path52.dirname(lockPath), path52.dirname(lockPath), false);
+        await rename6(lockPath, quarantinePath);
+      } else {
+        await rename6(
+          descriptorChildPath(parentDescriptor, lockName),
+          descriptorChildPath(parentDescriptor, quarantineName)
+        );
+      }
+      const movedStat = await lstatIfPresent(quarantineEntryPath);
+      const movedToken = expectedToken === void 0 ? void 0 : lockMetadataToken(await readLockMetadata(quarantineEntryPath, lockDescriptor));
+      const heldMovedStat = lockDescriptor === void 0 ? movedStat : await lockDescriptor.stat();
+      const movedOwned = movedStat !== void 0 && !movedStat.isSymbolicLink() && movedStat.isDirectory() && heldMovedStat !== void 0 && heldMovedStat.isDirectory() && sameFileIdentity(expectedIdentity, movedStat) === true && sameFileIdentity(expectedIdentity, heldMovedStat) === true && (expectedToken === void 0 || movedToken === expectedToken);
+      if (!movedOwned) {
+        await restoreQuarantinedLock({
+          ...parentDescriptor === void 0 ? {} : { parentDescriptor },
+          lockName,
+          lockPath,
+          quarantineName,
+          quarantinePath
+        });
+        throw new Error(`Brownfield assessment publication lock changed while removing: ${lockPath}`);
+      }
+      if (parentDescriptor === void 0) {
+        const removed = await removePathIfOwnedAndToken(quarantinePath, expectedIdentity, expectedToken);
+        if (!removed) {
+          await restoreQuarantinedLock({
+            ...parentDescriptor === void 0 ? {} : { parentDescriptor },
+            lockName,
+            lockPath,
+            quarantineName,
+            quarantinePath
+          });
+        }
+      } else {
+        const removed = await removeRelativeIfOwnedAndToken(parentDescriptor, quarantineName, expectedIdentity, expectedToken);
+        if (!removed) {
+          await restoreQuarantinedLock({
+            parentDescriptor,
+            lockName,
+            lockPath,
+            quarantineName,
+            quarantinePath
+          });
+        }
+      }
+    }
+  } catch (error51) {
+    if (!(isNodeErrorCode5(error51, "ENOENT") || isNodeErrorCode5(error51, "ELOOP"))) {
+      operationError = error51;
+      hasOperationError = true;
+    }
+  }
+  const cleanupErrors = [];
+  if (ownsLockDescriptor && lockDescriptor !== void 0) {
+    await attemptCleanup(cleanupErrors, () => lockDescriptor.close());
+  }
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to remove ${lockPath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${lockPath}`);
+}
+async function releasePublishLock(lock) {
+  let operationError;
+  let hasOperationError = false;
+  try {
+    if (await lockIsOwned(lock)) {
+      await removeLockIfOwned(
+        lock.parentDescriptor,
+        lock.name,
+        lock.absolutePath,
+        lock.lockIdentity,
+        lock.metadataToken,
+        lock.lockDescriptor
+      );
+    }
+  } catch (error51) {
+    operationError = error51;
+    hasOperationError = true;
+  }
+  const cleanupErrors = [];
+  if (lock.lockDescriptor !== void 0) {
+    await attemptCleanup(cleanupErrors, () => lock.lockDescriptor.close());
+  }
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to release ${lock.absolutePath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${lock.absolutePath}`);
+}
+async function quarantineStaleLock(parent, lockName, lockPath, observed) {
+  const quarantineName = `${lockName}.stale-${process.pid}-${randomUUID4()}`;
+  const quarantinePath = path52.join(parent.absolutePath, quarantineName);
+  let lockDescriptor;
+  let result = false;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    const namedLockPath = parent.descriptor === void 0 ? lockPath : descriptorChildPath(parent.descriptor, lockName);
+    const namedQuarantinePath = parent.descriptor === void 0 ? quarantinePath : descriptorChildPath(parent.descriptor, quarantineName);
+    if (parent.descriptor === void 0) {
+      await assertStableAbsolutePath(parent.absolutePath, parent.absolutePath, false);
+      const currentStat = await lstatIfPresent(namedLockPath);
+      if (currentStat !== void 0 && !currentStat.isSymbolicLink() && currentStat.isDirectory() && sameFileIdentity(observed.lockIdentity, currentStat) === true) {
+        const currentToken = lockMetadataToken(await readLockMetadata(namedLockPath));
+        const finalStat = await lstatIfPresent(namedLockPath);
+        const finalToken = lockMetadataToken(await readLockMetadata(namedLockPath));
+        if (finalStat !== void 0 && !finalStat.isSymbolicLink() && finalStat.isDirectory() && sameFileIdentity(observed.lockIdentity, finalStat) === true && currentToken === observed.metadataToken && finalToken === observed.metadataToken) {
+          result = true;
+        }
+      }
+    } else {
+      lockDescriptor = await openRelativeDirectory(parent.descriptor, lockName);
+      const heldStat = await lockDescriptor.stat();
+      const namedStat = await lstatIfPresent(namedLockPath);
+      if (heldStat.isDirectory() && namedStat !== void 0 && !namedStat.isSymbolicLink() && namedStat.isDirectory() && sameFileIdentity(observed.lockIdentity, heldStat) === true && sameFileIdentity(observed.lockIdentity, namedStat) === true) {
+        const currentToken = lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor));
+        const finalHeldStat = await lockDescriptor.stat();
+        const finalNamedStat = await lstatIfPresent(namedLockPath);
+        const finalToken = lockMetadataToken(await readLockMetadata(lockPath, lockDescriptor));
+        if (finalHeldStat.isDirectory() && finalNamedStat !== void 0 && !finalNamedStat.isSymbolicLink() && finalNamedStat.isDirectory() && sameFileIdentity(observed.lockIdentity, finalHeldStat) === true && sameFileIdentity(observed.lockIdentity, finalNamedStat) === true && currentToken === observed.metadataToken && finalToken === observed.metadataToken) {
+          result = true;
+        }
+      }
+    }
+    if (result) {
+      if (await lstatIfPresent(namedQuarantinePath) !== void 0) {
+        throw new Error(`Brownfield assessment stale-lock quarantine already exists: ${namedQuarantinePath}`);
+      }
+      if (parent.descriptor === void 0) {
+        await rename6(namedLockPath, namedQuarantinePath);
+      } else {
+        await rename6(namedLockPath, namedQuarantinePath);
+      }
+      const movedStat = await lstatIfPresent(namedQuarantinePath);
+      const movedToken = lockMetadataToken(await readLockMetadata(namedQuarantinePath, lockDescriptor));
+      const heldMovedStat = lockDescriptor === void 0 ? movedStat : await lockDescriptor.stat();
+      const movedOwned = movedStat !== void 0 && !movedStat.isSymbolicLink() && movedStat.isDirectory() && heldMovedStat !== void 0 && heldMovedStat.isDirectory() && sameFileIdentity(observed.lockIdentity, movedStat) === true && sameFileIdentity(observed.lockIdentity, heldMovedStat) === true && movedToken === observed.metadataToken;
+      if (!movedOwned) {
+        await restoreQuarantinedLock({
+          ...parent.descriptor === void 0 ? {} : { parentDescriptor: parent.descriptor },
+          lockName,
+          lockPath,
+          quarantineName,
+          quarantinePath
+        });
+        throw new Error(`Brownfield assessment publication lock changed while quarantining: ${lockPath}`);
+      }
+    }
+  } catch (error51) {
+    if (isNodeErrorCode5(error51, "ENOENT")) {
+      result = false;
+    } else {
+      operationError = error51;
+      hasOperationError = true;
+    }
+  }
+  const cleanupErrors = [];
+  if (lockDescriptor !== void 0) await attemptCleanup(cleanupErrors, () => lockDescriptor.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to quarantine ${lockPath}`);
+  if (result) {
+    await attemptCleanup(cleanupErrors, async () => {
+      const removed = parent.descriptor === void 0 ? await removePathIfOwnedAndToken(quarantinePath, observed.lockIdentity, observed.metadataToken) : await removeRelativeIfOwnedAndToken(parent.descriptor, quarantineName, observed.lockIdentity, observed.metadataToken);
+      if (!removed) {
+        await restoreQuarantinedLock({
+          ...parent.descriptor === void 0 ? {} : { parentDescriptor: parent.descriptor },
+          lockName,
+          lockPath,
+          quarantineName,
+          quarantinePath
+        });
+      }
+    });
+  }
+  throwCleanupOnly(cleanupErrors, `Unable to remove quarantined lock ${quarantinePath}`);
+  return result;
+}
+async function acquirePublishLock(parent, finalPath, finalName) {
+  const lockName = `.${finalName}.publish-lock`;
+  const lockPath = path52.join(parent.absolutePath, lockName);
+  for (let attempt = 0; attempt < PUBLISH_LOCK_ATTEMPTS; attempt += 1) {
+    try {
+      if (parent.descriptor === void 0) {
+        await assertStableFallbackPath(
+          { absolutePath: parent.absolutePath },
+          artifactPathSchema.parse(ASSESSMENT_ROOT),
+          false
+        );
+        let metadataToken;
+        let lockIdentity2;
+        try {
+          await mkdir14(lockPath, { mode: 448 });
+          lockIdentity2 = await lstat6(lockPath);
+          if (!lockIdentity2.isDirectory()) throw new Error(`Brownfield assessment publication lock is unsafe: ${lockPath}`);
+          metadataToken = await writeLockMetadata(lockPath);
+          return { absolutePath: lockPath, name: lockName, lockIdentity: lockIdentity2, metadataToken };
+        } catch (error51) {
+          const cleanupErrors = [];
+          if (lockIdentity2 !== void 0) {
+            await attemptCleanup(cleanupErrors, () => removeLockIfOwned(void 0, lockName, lockPath, lockIdentity2));
+          }
+          throwWithCleanup(error51, cleanupErrors, `Unable to create ${lockPath}`);
+        }
+      }
+      let lockDescriptor;
+      let lockIdentity;
+      try {
+        await mkdirRelative(parent.descriptor, lockName);
+        const createdLockStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, lockName));
+        if (createdLockStat === void 0 || createdLockStat.isSymbolicLink() || !createdLockStat.isDirectory()) {
+          throw new Error(`Brownfield assessment publication lock is unsafe: ${lockPath}`);
+        }
+        lockIdentity = createdLockStat;
+        lockDescriptor = await openRelativeDirectory(parent.descriptor, lockName);
+        const openedLockIdentity = await lockDescriptor.stat();
+        if (!openedLockIdentity.isDirectory() || sameFileIdentity(lockIdentity, openedLockIdentity) === false) {
+          throw new Error(`Brownfield assessment publication lock changed while opening: ${lockPath}`);
+        }
+        const namedStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, lockName));
+        if (namedStat === void 0 || namedStat.isSymbolicLink() || !namedStat.isDirectory() || sameFileIdentity(openedLockIdentity, namedStat) === false) {
+          throw new Error(`Brownfield assessment publication lock changed while opening: ${lockPath}`);
+        }
+        const metadataToken = await writeLockMetadata(lockPath, lockDescriptor);
+        return {
+          absolutePath: lockPath,
+          name: lockName,
+          parentDescriptor: parent.descriptor,
+          lockDescriptor,
+          lockIdentity: openedLockIdentity,
+          metadataToken
+        };
+      } catch (error51) {
+        const cleanupErrors = [];
+        if (lockDescriptor !== void 0) await attemptCleanup(cleanupErrors, () => lockDescriptor.close());
+        if (lockIdentity !== void 0) {
+          await attemptCleanup(cleanupErrors, () => removeLockIfOwned(parent.descriptor, lockName, lockPath, lockIdentity));
+        }
+        throwWithCleanup(error51, cleanupErrors, `Unable to create ${lockPath}`);
+      }
+    } catch (error51) {
+      if (!isNodeErrorCode5(error51, "EEXIST")) throw error51;
+      const lockStat = parent.descriptor === void 0 ? await lstatIfPresent(lockPath) : await lstatIfPresent(descriptorChildPath(parent.descriptor, lockName));
+      if (lockStat !== void 0 && (lockStat.isSymbolicLink() || !lockStat.isDirectory())) {
+        throw new Error(`Brownfield assessment publication lock is unsafe: ${lockPath}`);
+      }
+      let stale;
+      if (parent.descriptor === void 0) {
+        stale = await lockIsStale(lockPath);
+      } else {
+        let lockDescriptor;
+        let staleError;
+        let hasStaleError = false;
+        try {
+          lockDescriptor = await openRelativeDirectory(parent.descriptor, lockName);
+          stale = await lockIsStale(lockPath, lockDescriptor);
+        } catch (error52) {
+          staleError = error52;
+          hasStaleError = true;
+        }
+        const cleanupErrors = [];
+        if (lockDescriptor !== void 0) await attemptCleanup(cleanupErrors, () => lockDescriptor.close());
+        if (hasStaleError) throwWithCleanup(staleError, cleanupErrors, `Unable to inspect ${lockPath}`);
+        throwCleanupOnly(cleanupErrors, `Unable to close ${lockPath}`);
+      }
+      if (stale !== void 0) {
+        await quarantineStaleLock(parent, lockName, lockPath, stale);
+        continue;
+      }
+      const finalStat = parent.descriptor === void 0 ? await lstatIfPresent(finalPath) : await lstatIfPresent(descriptorChildPath(parent.descriptor, finalName));
+      if (finalStat !== void 0) {
+        throw errorWithCode("EEXIST", `Brownfield assessment bundle already exists: ${finalPath}`);
+      }
+      await delay(1);
+    }
+  }
+  throw new Error(`Timed out waiting to publish the brownfield assessment bundle: ${finalPath}`);
+}
+async function writeStagedText(stageDirectory, fileName, text, stageDescriptor) {
+  const encodedBytes = Buffer.byteLength(text, "utf8");
+  if (encodedBytes > MAX_BUNDLE_FILE_BYTES) {
+    throw new Error(
+      `Brownfield assessment artifact ${fileName} exceeds the ${MAX_BUNDLE_FILE_BYTES}-byte publication limit (${encodedBytes} bytes).`
+    );
+  }
+  const stagedPath = path52.join(stageDirectory, fileName);
+  let stagedHandle;
+  let stagedIdentity;
+  let completed = false;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    if (stageDescriptor === void 0) await assertStableAbsolutePath(stageDirectory, stageDirectory, false);
+    stagedHandle = stageDescriptor === void 0 ? await open4(stagedPath, fsConstants2.O_CREAT | fsConstants2.O_EXCL | fsConstants2.O_WRONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG, 384) : await openRelativeFile(stageDescriptor, fileName, fsConstants2.O_CREAT | fsConstants2.O_EXCL | fsConstants2.O_WRONLY, 384);
+    const openedStat = await stagedHandle.stat();
+    if (!openedStat.isFile()) throw new Error(`Brownfield assessment staging file is not regular: ${stagedPath}`);
+    stagedIdentity = openedStat;
+    await stagedHandle.writeFile(text, "utf8");
+    await stagedHandle.sync();
+    completed = true;
+  } catch (error51) {
+    operationError = error51;
+    hasOperationError = true;
+  }
+  const cleanupErrors = [];
+  if (stagedHandle !== void 0) await attemptCleanup(cleanupErrors, () => stagedHandle.close());
+  if (!completed && stagedIdentity !== void 0) {
+    if (stageDescriptor === void 0) {
+      await attemptCleanup(cleanupErrors, () => removePathIfOwned(stagedPath, stagedIdentity));
+    } else {
+      await attemptCleanup(cleanupErrors, () => removeRelativeIfOwned(stageDescriptor, fileName, stagedIdentity));
+    }
+  }
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to write ${stagedPath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${stagedPath}`);
+}
+async function syncBundleDirectory(directory) {
+  if (directory.descriptor !== void 0) {
+    try {
+      await directory.descriptor.sync();
+    } catch (error51) {
+      if (!(isNodeErrorCode5(error51, "EBADF") || isNodeErrorCode5(error51, "EINVAL") || isNodeErrorCode5(error51, "ENOTSUP") || isNodeErrorCode5(error51, "EPERM"))) throw error51;
+    }
+    return;
+  }
+  await fsyncDirectoryIfSupported2(directory.absolutePath);
+}
+function assertOwnedFileIdentity(expected, actual, displayPath) {
+  if (sameFileIdentity(expected, actual) !== true) {
+    throw new Error(`Brownfield assessment filesystem identity changed while mutating: ${displayPath}`);
+  }
+}
+async function revalidateStagedDirectory(input) {
+  const { parent, stagedPath, stagedName, stageIdentity, stageDescriptor } = input;
+  if (!samePath(path52.dirname(stagedPath), parent.absolutePath)) {
+    throw new Error(`Brownfield assessment staging path has an unexpected parent: ${stagedPath}`);
+  }
+  if (stageDescriptor !== void 0) {
+    const heldStat = await stageDescriptor.stat();
+    if (!heldStat.isDirectory()) throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+    assertOwnedFileIdentity(stageIdentity, heldStat, stagedPath);
+    const namedStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, stagedName));
+    if (namedStat === void 0 || namedStat.isSymbolicLink() || !namedStat.isDirectory()) {
+      throw new Error(`Brownfield assessment staging path changed while publishing: ${stagedPath}`);
+    }
+    assertOwnedFileIdentity(stageIdentity, namedStat, stagedPath);
+    const finalHeldStat = await stageDescriptor.stat();
+    assertOwnedFileIdentity(stageIdentity, finalHeldStat, stagedPath);
+    return;
+  }
+  await assertStableFallbackPath({ absolutePath: stagedPath }, stagedPath, false);
+  const currentStat = await lstatIfPresent(stagedPath);
+  if (currentStat === void 0 || currentStat.isSymbolicLink() || !currentStat.isDirectory()) {
+    throw new Error(`Brownfield assessment staging path changed while publishing: ${stagedPath}`);
+  }
+  assertOwnedFileIdentity(stageIdentity, currentStat, stagedPath);
+  await assertStableFallbackPath({ absolutePath: stagedPath }, stagedPath, false);
+  const finalStat = await lstatIfPresent(stagedPath);
+  if (finalStat === void 0 || finalStat.isSymbolicLink() || !finalStat.isDirectory()) {
+    throw new Error(`Brownfield assessment staging path changed while publishing: ${stagedPath}`);
+  }
+  assertOwnedFileIdentity(stageIdentity, finalStat, stagedPath);
+}
+async function assertPublishedStagedDirectory(input) {
+  const { parent, finalPath, finalName, stageIdentity, stageDescriptor } = input;
+  const publishedStat = parent.descriptor === void 0 ? await lstatIfPresent(finalPath) : await lstatIfPresent(descriptorChildPath(parent.descriptor, finalName));
+  if (publishedStat === void 0 || publishedStat.isSymbolicLink() || !publishedStat.isDirectory()) {
+    throw new Error(`Brownfield assessment publication did not produce the staged directory: ${finalPath}`);
+  }
+  assertOwnedFileIdentity(stageIdentity, publishedStat, finalPath);
+  if (stageDescriptor !== void 0) {
+    const heldStat = await stageDescriptor.stat();
+    if (!heldStat.isDirectory()) throw new Error(`Brownfield assessment publication did not produce the staged directory: ${finalPath}`);
+    assertOwnedFileIdentity(stageIdentity, heldStat, finalPath);
+    assertOwnedFileIdentity(heldStat, publishedStat, finalPath);
+  }
+}
+async function publishStagedBundle(paths, stagedPath, parent, stageIdentity, stageDescriptor, options = {}) {
+  const replaceExisting = options.replaceExisting === true;
+  const final = await resolveSafeBundlePath(parent.repositoryRoot, paths.root);
+  const finalName = path52.basename(final.absolutePath);
+  const stagedName = path52.basename(stagedPath);
+  const lock = await acquirePublishLock(parent, final.absolutePath, finalName);
+  let previousName;
+  let previousPath;
+  let previousMoved = false;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    if (options.validateBeforePublish !== void 0) {
+      await options.validateBeforePublish();
+    }
+    const existing = parent.descriptor === void 0 ? await lstatIfPresent(final.absolutePath) : await lstatIfPresent(descriptorChildPath(parent.descriptor, finalName));
+    if (existing !== void 0 && !replaceExisting) {
+      throw errorWithCode("EEXIST", `Brownfield assessment bundle already exists: ${paths.root}`);
+    }
+    if (parent.descriptor === void 0) {
+      await assertStableFallbackPath(final, paths.root, true);
+    }
+    await revalidateStagedDirectory({
+      parent,
+      stagedPath,
+      stagedName,
+      stageIdentity,
+      ...stageDescriptor === void 0 ? {} : { stageDescriptor }
+    });
+    if (existing !== void 0) {
+      previousName = `.${finalName}.${process.pid}.${randomUUID4()}.previous`;
+      previousPath = path52.join(parent.absolutePath, previousName);
+      if (parent.descriptor === void 0) {
+        await assertStableFallbackPath(final, paths.root, false);
+        await rename6(final.absolutePath, previousPath);
+      } else {
+        await rename6(
+          descriptorChildPath(parent.descriptor, finalName),
+          descriptorChildPath(parent.descriptor, previousName)
+        );
+      }
+      previousMoved = true;
+    }
+    if (parent.descriptor === void 0) {
+      await rename6(stagedPath, final.absolutePath);
+    } else {
+      await rename6(
+        descriptorChildPath(parent.descriptor, stagedName),
+        descriptorChildPath(parent.descriptor, finalName)
+      );
+    }
+    await assertPublishedStagedDirectory({
+      parent,
+      finalPath: final.absolutePath,
+      finalName,
+      stageIdentity,
+      ...stageDescriptor === void 0 ? {} : { stageDescriptor }
+    });
+    if (previousMoved && previousName !== void 0) {
+      if (parent.descriptor === void 0) await removePathIfOwned(previousPath, await lstat6(previousPath));
+      else await removeRelative(parent.descriptor, previousName);
+      previousMoved = false;
+    }
+    await syncBundleDirectory(parent);
+  } catch (error51) {
+    operationError = error51;
+    hasOperationError = true;
+    if (previousMoved && previousName !== void 0) {
+      try {
+        const currentFinal = parent.descriptor === void 0 ? await lstatIfPresent(final.absolutePath) : await lstatIfPresent(descriptorChildPath(parent.descriptor, finalName));
+        if (currentFinal !== void 0 && sameFileIdentity(stageIdentity, currentFinal) === true) {
+          if (parent.descriptor === void 0) await removePathIfOwned(final.absolutePath, stageIdentity);
+          else await removeRelativeIfOwned(parent.descriptor, finalName, stageIdentity);
+        }
+        if (parent.descriptor === void 0) await rename6(previousPath, final.absolutePath);
+        else await rename6(descriptorChildPath(parent.descriptor, previousName), descriptorChildPath(parent.descriptor, finalName));
+        previousMoved = false;
+      } catch (rollbackError) {
+        if (operationError instanceof Error) {
+          Object.defineProperty(operationError, "rollbackError", {
+            configurable: true,
+            enumerable: false,
+            value: rollbackError,
+            writable: false
+          });
+        }
+      }
+    }
+  }
+  const cleanupErrors = [];
+  await attemptCleanup(cleanupErrors, () => releasePublishLock(lock));
+  await attemptCleanup(cleanupErrors, () => syncBundleDirectory(parent));
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to publish ${paths.root}`);
+  throwCleanupOnly(cleanupErrors, `Unable to release publication resources for ${paths.root}`);
+}
+async function openValidatedBundleFile(repositoryRoot, artifactPath) {
+  const resolved = await resolveSafeBundlePath(repositoryRoot, artifactPath);
+  if (await canUseDescriptorTraversal()) {
+    const parentArtifactPath = artifactPathSchema.parse(artifactPath.slice(0, artifactPath.lastIndexOf("/")));
+    const parent = await openBundleDirectory(repositoryRoot, parentArtifactPath, false);
+    let descriptor2;
+    let result2;
+    let operationError2;
+    let hasOperationError2 = false;
+    try {
+      const expectedFileStat = resolved.componentStats[resolved.componentStats.length - 1];
+      if (expectedFileStat === void 0) {
+        throw new Error(`Brownfield assessment artifact is missing: ${artifactPath}`);
+      }
+      descriptor2 = await openRelativeFile(parent.descriptor, path52.basename(artifactPath), fsConstants2.O_RDONLY);
+      const openedStat = await descriptor2.stat();
+      if (!openedStat.isFile()) throw new Error(`Brownfield assessment artifact is not a regular file: ${artifactPath}`);
+      assertSameFileIdentity(expectedFileStat, openedStat, artifactPath);
+      if (openedStat.size > MAX_BUNDLE_FILE_BYTES) throw boundedReadError(artifactPath);
+      result2 = { descriptor: descriptor2, openedStat };
+    } catch (error51) {
+      operationError2 = error51;
+      hasOperationError2 = true;
+    }
+    const cleanupErrors2 = [];
+    if (hasOperationError2 && descriptor2 !== void 0) await attemptCleanup(cleanupErrors2, () => descriptor2.close());
+    await attemptCleanup(cleanupErrors2, () => closeBundleDirectory(parent));
+    if (hasOperationError2) throwWithCleanup(operationError2, cleanupErrors2, `Unable to open ${artifactPath}`);
+    if (cleanupErrors2.length > 0 && result2 !== void 0) {
+      await attemptCleanup(cleanupErrors2, () => result2.descriptor.close());
+      result2 = void 0;
+    }
+    throwCleanupOnly(cleanupErrors2, `Unable to close ${artifactPath}`);
+    return result2;
+  }
+  await assertStableFallbackPath(resolved, artifactPath, false);
+  const linkStat = await lstatIfPresent(resolved.absolutePath);
+  if (linkStat === void 0) throw new Error(`Brownfield assessment artifact is missing: ${artifactPath}`);
+  if (linkStat.isSymbolicLink()) throw new Error(`Brownfield assessment artifact must not be a symbolic link: ${artifactPath}`);
+  if (!linkStat.isFile()) throw new Error(`Brownfield assessment artifact is not a regular file: ${artifactPath}`);
+  const descriptor = await open4(resolved.absolutePath, fsConstants2.O_RDONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG);
+  let result;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    const openedStat = await descriptor.stat();
+    if (!openedStat.isFile()) throw new Error(`Brownfield assessment artifact is not a regular file: ${artifactPath}`);
+    const identity = sameFileIdentity(linkStat, openedStat);
+    if (identity === false) throw new Error(`Brownfield assessment artifact changed while opening: ${artifactPath}`);
+    if (openedStat.size > MAX_BUNDLE_FILE_BYTES) throw boundedReadError(artifactPath);
+    await assertStableFallbackPath(resolved, artifactPath, false);
+    result = { descriptor, openedStat };
+  } catch (error51) {
+    operationError = error51;
+    hasOperationError = true;
+  }
+  const cleanupErrors = [];
+  if (hasOperationError) await attemptCleanup(cleanupErrors, () => descriptor.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to open ${artifactPath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${artifactPath}`);
+  return result;
+}
+async function readBoundedBundleText(descriptor, openedStat, artifactPath) {
+  const chunks = [];
+  let totalBytes = 0;
+  while (true) {
+    const remaining = MAX_BUNDLE_FILE_BYTES + 1 - totalBytes;
+    const buffer = Buffer.allocUnsafe(Math.min(BUNDLE_READ_CHUNK_BYTES, remaining));
+    const { bytesRead } = await descriptor.read(buffer, 0, buffer.length, null);
+    if (bytesRead === 0) break;
+    chunks.push(buffer.subarray(0, bytesRead));
+    totalBytes += bytesRead;
+    if (totalBytes > MAX_BUNDLE_FILE_BYTES) throw boundedReadError(artifactPath);
+  }
+  const finalStat = await descriptor.stat();
+  const finalIdentity = sameFileIdentity(openedStat, finalStat);
+  if (!finalStat.isFile() || finalIdentity === false || finalStat.size !== totalBytes) {
+    throw new Error(`Brownfield assessment artifact changed while reading: ${artifactPath}`);
+  }
+  return Buffer.concat(chunks, totalBytes).toString("utf8");
+}
+async function readBundleJson(repositoryRoot, artifactPath) {
+  const opened = await openValidatedBundleFile(repositoryRoot, artifactPath);
+  let result;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    const text = await readBoundedBundleText(opened.descriptor, opened.openedStat, artifactPath);
+    result = JSON.parse(text);
+  } catch (error51) {
+    if (isNodeErrorCode5(error51, "ERR_BROWNFIELD_BUNDLE_SIZE") || String(error51).includes("changed while reading")) {
+      operationError = error51;
+    } else {
+      operationError = new Error(`Brownfield assessment artifact is not valid JSON: ${artifactPath}`, { cause: error51 });
+    }
+    hasOperationError = true;
+  }
+  const cleanupErrors = [];
+  await attemptCleanup(cleanupErrors, () => opened.descriptor.close());
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to read ${artifactPath}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${artifactPath}`);
+  return result;
+}
+async function assertCompleteBundle(repositoryRoot, paths) {
+  const root = await openBundleDirectory(repositoryRoot, paths.root, false).catch((error51) => {
+    if (isNodeErrorCode5(error51, "ENOENT")) throw new Error(`Brownfield assessment bundle is missing: ${paths.root}`, { cause: error51 });
+    throw error51;
+  });
+  if (root.descriptor !== void 0) {
+    let operationError2;
+    let hasOperationError2 = false;
+    try {
+      let entries;
+      try {
+        entries = await readdir21(descriptorPath(root.descriptor), { withFileTypes: true });
+      } catch (error51) {
+        throw new Error(`Brownfield assessment bundle cannot be read: ${paths.root}`, { cause: error51 });
+      }
+      const expected = new Set(BUNDLE_FILE_NAMES);
+      if (entries.length !== expected.size || entries.some((entry) => !expected.has(entry.name))) {
+        throw new Error(`Brownfield assessment bundle is partial or contains unexpected files: ${paths.root}`);
+      }
+      for (const entry of entries) {
+        if (!entry.isFile() || entry.isSymbolicLink()) {
+          throw new Error(`Brownfield assessment bundle contains an unsafe file: ${paths.root}/${entry.name}`);
+        }
+        const filePath = descriptorChildPath(root.descriptor, entry.name);
+        const preStat = await lstatIfPresent(filePath);
+        if (preStat === void 0 || preStat.isSymbolicLink() || !preStat.isFile()) {
+          throw new Error(`Brownfield assessment bundle contains an unsafe file: ${paths.root}/${entry.name}`);
+        }
+        const descriptor = await openRelativeFile(root.descriptor, entry.name, fsConstants2.O_RDONLY);
+        let fileOperationError;
+        let hasFileOperationError = false;
+        try {
+          const fileStat = await descriptor.stat();
+          if (!fileStat.isFile()) throw new Error(`Brownfield assessment bundle contains an unsafe file: ${paths.root}/${entry.name}`);
+          assertSameFileIdentity(preStat, fileStat, `${paths.root}/${entry.name}`);
+        } catch (error51) {
+          fileOperationError = error51;
+          hasFileOperationError = true;
+        }
+        const fileCleanupErrors = [];
+        await attemptCleanup(fileCleanupErrors, () => descriptor.close());
+        if (hasFileOperationError) throwWithCleanup(fileOperationError, fileCleanupErrors, `Unable to inspect ${filePath}`);
+        throwCleanupOnly(fileCleanupErrors, `Unable to close ${filePath}`);
+      }
+    } catch (error51) {
+      operationError2 = error51;
+      hasOperationError2 = true;
+    }
+    const cleanupErrors2 = [];
+    await attemptCleanup(cleanupErrors2, () => closeBundleDirectory(root));
+    if (hasOperationError2) throwWithCleanup(operationError2, cleanupErrors2, `Unable to validate ${paths.root}`);
+    throwCleanupOnly(cleanupErrors2, `Unable to close ${paths.root}`);
+    return;
+  }
+  let operationError;
+  let hasOperationError = false;
+  try {
+    const rootStat = await lstatIfPresent(root.absolutePath);
+    if (rootStat === void 0) throw new Error(`Brownfield assessment bundle is missing: ${paths.root}`);
+    if (rootStat.isSymbolicLink()) throw new Error(`Brownfield assessment bundle root must not be a symbolic link: ${paths.root}`);
+    if (!rootStat.isDirectory()) throw new Error(`Brownfield assessment bundle root is not a directory: ${paths.root}`);
+    let entries;
+    try {
+      entries = await readdir21(root.absolutePath, { withFileTypes: true });
+    } catch (error51) {
+      throw new Error(`Brownfield assessment bundle cannot be read: ${paths.root}`, { cause: error51 });
+    }
+    const expected = new Set(BUNDLE_FILE_NAMES);
+    if (entries.length !== expected.size || entries.some((entry) => !expected.has(entry.name))) {
+      throw new Error(`Brownfield assessment bundle is partial or contains unexpected files: ${paths.root}`);
+    }
+    for (const entry of entries) {
+      if (!entry.isFile() || entry.isSymbolicLink()) {
+        throw new Error(`Brownfield assessment bundle contains an unsafe file: ${paths.root}/${entry.name}`);
+      }
+    }
+    for (const fileName of BUNDLE_FILE_NAMES) {
+      const artifactPath = paths[fileName.slice(0, -5)];
+      await resolveSafeBundlePath(repositoryRoot, artifactPath);
+    }
+  } catch (error51) {
+    operationError = error51;
+    hasOperationError = true;
+  }
+  const cleanupErrors = [];
+  await attemptCleanup(cleanupErrors, () => closeBundleDirectory(root));
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to validate ${paths.root}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${paths.root}`);
+}
+function parseScope(scope) {
+  if (scope === ".") return scope;
+  return codeIndexSourcePathSchema.parse(scope);
+}
+function diagnostic3(message) {
+  return new Error(`Brownfield assessment is blocked: ${message} Next action: ${REFRESH_ACTION}.`);
+}
+function inputProvenance(snapshot, scope) {
+  const parsedSnapshot = codeIndexSnapshotSchema.parse(snapshot.snapshot);
+  const snapshotArtifact = artifactReferenceSchema.parse(snapshot.snapshotArtifact);
+  const sqliteArtifact = artifactReferenceSchema.parse(snapshot.sqliteArtifact);
+  const sqliteSha256 = stripSha256Prefix5(sqliteArtifact.sha256);
+  if (snapshotArtifact.path !== snapshot.semanticIndexArtifactPath || parsedSnapshot.sqlite.path !== sqliteArtifact.path || parsedSnapshot.sqlite.sha256 !== sqliteSha256) {
+    throw diagnostic3("the structural snapshot artifact paths or SQLite provenance do not match their artifact references");
+  }
+  return {
+    generatedAt: parsedSnapshot.generatedAt,
+    scope,
+    snapshotId: parsedSnapshot.snapshotId,
+    sourceFingerprint: parsedSnapshot.sourceFingerprint,
+    semanticIndexSha256: stripSha256Prefix5(snapshotArtifact.sha256),
+    semanticSqliteSha256: sqliteSha256
+  };
+}
+function latestProvenance(latest) {
+  return inputProvenance(latest, latest.snapshot.scope);
+}
+function assertSameProvenance(expected, actual) {
+  const fields = [
+    "scope",
+    "snapshotId",
+    "sourceFingerprint",
+    "semanticIndexSha256",
+    "semanticSqliteSha256",
+    "generatedAt"
+  ];
+  for (const field of fields) {
+    if (expected[field] !== actual[field]) {
+      throw diagnostic3(`structural snapshot provenance mismatch for ${field}; the assessment is bound to a different snapshot`);
+    }
+  }
+}
+async function validateFreshStructuralSnapshot(input) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  let mapState;
+  try {
+    mapState = await resolveMapState(input.repositoryRoot, input.expected.scope, now, "structural");
+  } catch (error51) {
+    throw diagnostic3(`unable to validate the latest structural snapshot: ${error51 instanceof Error ? error51.message : String(error51)}`);
+  }
+  if ("error" in mapState) throw diagnostic3(mapState.error);
+  if (mapState.freshness !== "fresh") {
+    throw diagnostic3(`${mapState.reason} A fresh structural snapshot is required.`);
+  }
+  let discovery;
+  try {
+    discovery = await discoverLatestStructuralCodeIndex(input.repositoryRoot);
+  } catch (error51) {
+    throw diagnostic3(`unable to discover the latest structural snapshot: ${error51 instanceof Error ? error51.message : String(error51)}`);
+  }
+  const latest = discovery.record;
+  if (latest === void 0) {
+    const details = discovery.diagnostics.map((entry) => entry.message).join("; ");
+    throw diagnostic3(`no usable structural snapshot exists${details.length > 0 ? `: ${details}` : "."}`);
+  }
+  const actual = latestProvenance(latest);
+  assertSameProvenance(input.expected, actual);
+  if (input.supplied !== void 0) {
+    const suppliedProvenance = inputProvenance(input.supplied, input.expected.scope);
+    assertSameProvenance(input.expected, suppliedProvenance);
+    if (input.supplied.semanticIndexArtifactPath !== latest.semanticIndexArtifactPath || input.supplied.semanticSqliteArtifactPath !== latest.semanticSqliteArtifactPath || input.supplied.snapshot.sqlite.path !== latest.snapshot.sqlite.path) {
+      throw diagnostic3("the supplied structural snapshot artifact paths do not match the latest snapshot");
+    }
+  }
+  return latest;
+}
+function assessmentIdFor(input, effort) {
+  const identity = [
+    input.snapshotId,
+    input.scope,
+    String(effort),
+    input.sourceFingerprint,
+    input.semanticIndexSha256,
+    input.semanticSqliteSha256,
+    input.generatedAt
+  ].join("\0");
+  return `assess_${createHash27("sha256").update(identity, "utf8").digest("hex").slice(0, 24)}`;
+}
+function initialAssessment(input) {
+  return brownfieldAssessmentSchema.parse({
+    schemaVersion: 1,
+    kind: "brownfield_assessment",
+    assessmentId: input.assessmentId,
+    generatedAt: input.provenance.generatedAt,
+    effort: input.effort,
+    phase: "setup",
+    repositoryRoot: SAFE_REPOSITORY_ROOT,
+    scope: input.provenance.scope,
+    snapshotId: input.provenance.snapshotId,
+    sourceFingerprint: input.provenance.sourceFingerprint,
+    semanticIndexSha256: input.provenance.semanticIndexSha256,
+    semanticSqliteSha256: input.provenance.semanticSqliteSha256,
+    signals: {
+      sourceFiles: 0,
+      coverageFiles: 0,
+      symbols: 0,
+      imports: 0,
+      exports: 0,
+      testFiles: 0,
+      testToSourceLinks: 0,
+      dependencyEdges: 0,
+      highRiskSignals: 0,
+      unsupportedSignals: 0
+    },
+    assumptions: [],
+    findings: [],
+    nextActions: []
+  });
+}
+async function readAssessmentState(input) {
+  const value = await readBundleJson(input.repositoryRoot, input.paths.state);
+  const state = brownfieldAssessmentSchema.parse(value);
+  if (state.assessmentId !== input.assessmentId) {
+    throw new Error(`Brownfield assessment state ID does not match its directory: ${input.assessmentId}`);
+  }
+  const recomputedAssessmentId = assessmentIdFor({
+    generatedAt: state.generatedAt,
+    scope: state.scope,
+    snapshotId: state.snapshotId,
+    sourceFingerprint: state.sourceFingerprint,
+    semanticIndexSha256: state.semanticIndexSha256,
+    semanticSqliteSha256: state.semanticSqliteSha256
+  }, state.effort);
+  if (recomputedAssessmentId !== input.assessmentId) {
+    throw new Error(`Brownfield assessment identity does not match its directory or persisted state: ${input.assessmentId}`);
+  }
+  if (state.repositoryRoot !== SAFE_REPOSITORY_ROOT) {
+    throw new Error(`Brownfield assessment repositoryRoot must be the safe repository-relative value '${SAFE_REPOSITORY_ROOT}'.`);
+  }
+  return state;
+}
+async function bundleRootStatus(repositoryRoot, paths) {
+  let root;
+  try {
+    root = await openBundleDirectory(repositoryRoot, paths.root, false);
+  } catch (error51) {
+    if (isNodeErrorCode5(error51, "ENOENT")) return "missing";
+    throw error51;
+  }
+  let result;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    if (root.descriptor !== void 0) {
+      result = "existing";
+    } else {
+      const rootStat = await lstatIfPresent(root.absolutePath);
+      if (rootStat === void 0) {
+        result = "missing";
+      } else {
+        if (rootStat.isSymbolicLink()) throw new Error(`Brownfield assessment bundle root must not be a symbolic link: ${paths.root}`);
+        if (!rootStat.isDirectory()) throw new Error(`Brownfield assessment bundle root is not a directory: ${paths.root}`);
+        result = "existing";
+      }
+    }
+  } catch (error51) {
+    operationError = error51;
+    hasOperationError = true;
+  }
+  const cleanupErrors = [];
+  await attemptCleanup(cleanupErrors, () => closeBundleDirectory(root));
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to inspect ${paths.root}`);
+  throwCleanupOnly(cleanupErrors, `Unable to close ${paths.root}`);
+  return result;
+}
+async function writeInitialBundle(input) {
+  const parentArtifactPath = artifactPathSchema.parse(ASSESSMENT_ROOT);
+  let parent = await openBundleDirectory(input.repositoryRoot, parentArtifactPath, true);
+  if (parent.descriptor === void 0) {
+    let operationError2;
+    let hasOperationError2 = false;
+    try {
+      await mkdir14(parent.absolutePath, { recursive: true });
+    } catch (error51) {
+      operationError2 = error51;
+      hasOperationError2 = true;
+    }
+    const cleanupErrors2 = [];
+    await attemptCleanup(cleanupErrors2, () => closeBundleDirectory(parent));
+    if (hasOperationError2) throwWithCleanup(operationError2, cleanupErrors2, `Unable to create ${parent.absolutePath}`);
+    throwCleanupOnly(cleanupErrors2, `Unable to close ${parent.absolutePath}`);
+    parent = await openBundleDirectory(input.repositoryRoot, parentArtifactPath, false);
+  }
+  const placeholder = stableProtocolJson([]);
+  const contentByFile = {
+    "state.json": stableProtocolJson(input.state),
+    "signals.json": placeholder,
+    "assumptions.json": placeholder,
+    "findings.json": placeholder,
+    "synthesis.json": placeholder,
+    "review.json": placeholder
+  };
+  const stageName = `.${path52.basename(input.paths.root)}.${process.pid}.${randomUUID4()}.staging`;
+  const stagedPath = path52.join(parent.absolutePath, stageName);
+  let stageDirectory;
+  let stageDescriptor;
+  let stageIdentity;
+  let staged = false;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    if (parent.descriptor === void 0) {
+      await assertStableFallbackPath(
+        { absolutePath: parent.absolutePath },
+        parentArtifactPath,
+        false
+      );
+      await mkdir14(stagedPath, { mode: 448 });
+      staged = true;
+      const createdStageStat = await lstat6(stagedPath);
+      if (createdStageStat.isSymbolicLink() || !createdStageStat.isDirectory()) {
+        throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      }
+      stageIdentity = createdStageStat;
+      stageDirectory = { repositoryRoot: parent.repositoryRoot, absolutePath: stagedPath };
+    } else {
+      await mkdirRelative(parent.descriptor, stageName);
+      staged = true;
+      const preStageStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, stageName));
+      if (preStageStat === void 0 || preStageStat.isSymbolicLink() || !preStageStat.isDirectory()) {
+        throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      }
+      stageIdentity = preStageStat;
+      const openedStageDescriptor = await openRelativeDirectory(parent.descriptor, stageName);
+      stageDescriptor = openedStageDescriptor;
+      stageDirectory = {
+        repositoryRoot: parent.repositoryRoot,
+        absolutePath: stagedPath,
+        descriptor: openedStageDescriptor
+      };
+      const stageStat = await openedStageDescriptor.stat();
+      if (!stageStat.isDirectory()) {
+        throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      }
+      assertSameFileIdentity(preStageStat, stageStat, stagedPath);
+    }
+    for (const fileName of BUNDLE_FILE_NAMES) {
+      await writeStagedText(stagedPath, fileName, contentByFile[fileName], stageDirectory.descriptor);
+    }
+    await syncBundleDirectory(stageDirectory);
+    await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity, stageDescriptor);
+    staged = false;
+  } catch (error51) {
+    operationError = error51;
+    hasOperationError = true;
+  }
+  const cleanupErrors = [];
+  if (stageDescriptor !== void 0) {
+    await attemptCleanup(cleanupErrors, () => stageDescriptor.close());
+  }
+  if (staged && stageIdentity !== void 0) {
+    if (parent.descriptor === void 0) {
+      await attemptCleanup(cleanupErrors, () => removePathIfOwned(stagedPath, stageIdentity));
+    } else {
+      await attemptCleanup(cleanupErrors, () => removeRelativeIfOwned(parent.descriptor, stageName, stageIdentity));
+    }
+  }
+  await attemptCleanup(cleanupErrors, () => closeBundleDirectory(parent));
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to write ${input.paths.root}`);
+  throwCleanupOnly(cleanupErrors, `Unable to clean up ${input.paths.root}`);
+}
+async function writeUpdatedBundle(input) {
+  const contentByFile = {
+    "state.json": stableProtocolJson(input.state),
+    "signals.json": input.signals === void 0 ? stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.signals)) : stableProtocolJson(input.signals),
+    "assumptions.json": input.assumptions === void 0 ? stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.assumptions)) : stableProtocolJson(input.assumptions),
+    "findings.json": input.findings === void 0 ? stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.findings)) : stableProtocolJson(input.findings),
+    "synthesis.json": input.synthesis === void 0 ? stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.synthesis)) : stableProtocolJson(input.synthesis),
+    "review.json": input.review === void 0 ? stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.review)) : stableProtocolJson(input.review)
+  };
+  const parentArtifactPath = artifactPathSchema.parse(ASSESSMENT_ROOT);
+  const parent = await openBundleDirectory(input.repositoryRoot, parentArtifactPath, false);
+  const stageName = `.${path52.basename(input.paths.root)}.${process.pid}.${randomUUID4()}.staging`;
+  const stagedPath = path52.join(parent.absolutePath, stageName);
+  let stageDirectory;
+  let stageDescriptor;
+  let stageIdentity;
+  let staged = false;
+  let operationError;
+  let hasOperationError = false;
+  try {
+    if (parent.descriptor === void 0) {
+      await assertStableFallbackPath({ absolutePath: parent.absolutePath }, parentArtifactPath, false);
+      await mkdir14(stagedPath, { mode: 448 });
+      staged = true;
+      const createdStageStat = await lstat6(stagedPath);
+      if (createdStageStat.isSymbolicLink() || !createdStageStat.isDirectory()) {
+        throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      }
+      stageIdentity = createdStageStat;
+      stageDirectory = { repositoryRoot: parent.repositoryRoot, absolutePath: stagedPath };
+    } else {
+      await mkdirRelative(parent.descriptor, stageName);
+      staged = true;
+      const preStageStat = await lstatIfPresent(descriptorChildPath(parent.descriptor, stageName));
+      if (preStageStat === void 0 || preStageStat.isSymbolicLink() || !preStageStat.isDirectory()) {
+        throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      }
+      stageIdentity = preStageStat;
+      stageDescriptor = await openRelativeDirectory(parent.descriptor, stageName);
+      stageDirectory = { repositoryRoot: parent.repositoryRoot, absolutePath: stagedPath, descriptor: stageDescriptor };
+      const stageStat = await stageDescriptor.stat();
+      if (!stageStat.isDirectory()) throw new Error(`Brownfield assessment staging path is not a directory: ${stagedPath}`);
+      assertSameFileIdentity(preStageStat, stageStat, stagedPath);
+    }
+    for (const fileName of BUNDLE_FILE_NAMES) {
+      await writeStagedText(stagedPath, fileName, contentByFile[fileName], stageDirectory.descriptor);
+    }
+    await syncBundleDirectory(stageDirectory);
+    const validatePhaseUnderLock = async () => {
+      let existingState;
+      try {
+        existingState = await readBundleJson(input.repositoryRoot, input.paths.state);
+      } catch (error51) {
+        throw new Error(`Brownfield assessment state is unreadable under the publication lock: ${error51 instanceof Error ? error51.message : String(error51)}. The update is blocked to prevent silent regression.`);
+      }
+      const parsed = brownfieldAssessmentSchema.safeParse(existingState);
+      if (!parsed.success) {
+        throw new Error(`Brownfield assessment state is invalid or tampered under the publication lock. The update is blocked to prevent silent regression.`);
+      }
+      if (parsed.data.assessmentId !== input.state.assessmentId) {
+        throw new Error(`Brownfield assessment identity mismatch under the publication lock: expected ${input.state.assessmentId}, found ${parsed.data.assessmentId}.`);
+      }
+      const existingPhase = parsed.data.phase;
+      if (ASSESSMENT_PHASE_ORDER[existingPhase] >= ASSESSMENT_PHASE_ORDER[input.state.phase]) {
+        throw new Error(`Brownfield assessment phase has already been advanced by a concurrent updater to "${existingPhase}". The requested transition from "${input.expectedCurrentPhase}" to "${input.state.phase}" is no longer valid.`);
+      }
+    };
+    await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity, stageDescriptor, { replaceExisting: true, validateBeforePublish: validatePhaseUnderLock });
+    staged = false;
+  } catch (error51) {
+    operationError = error51;
+    hasOperationError = true;
+  }
+  const cleanupErrors = [];
+  if (stageDescriptor !== void 0) await attemptCleanup(cleanupErrors, () => stageDescriptor.close());
+  if (staged && stageIdentity !== void 0) {
+    if (parent.descriptor === void 0) await attemptCleanup(cleanupErrors, () => removePathIfOwned(stagedPath, stageIdentity));
+    else await attemptCleanup(cleanupErrors, () => removeRelativeIfOwned(parent.descriptor, stageName, stageIdentity));
+  }
+  await attemptCleanup(cleanupErrors, () => closeBundleDirectory(parent));
+  if (hasOperationError) throwWithCleanup(operationError, cleanupErrors, `Unable to update ${input.paths.root}`);
+  throwCleanupOnly(cleanupErrors, `Unable to clean up ${input.paths.root}`);
+}
+async function createBrownfieldAssessment(input) {
+  const effort = assessmentEffortSchema.parse(input.effort);
+  let suppliedSnapshot;
+  try {
+    suppliedSnapshot = codeIndexSnapshotSchema.parse(input.snapshot?.snapshot);
+  } catch (error51) {
+    let discovery;
+    try {
+      discovery = await discoverLatestStructuralCodeIndex(input.repositoryRoot);
+    } catch (discoveryError) {
+      throw diagnostic3(`no usable structural snapshot exists: ${discoveryError instanceof Error ? discoveryError.message : String(discoveryError)}`);
+    }
+    if (discovery.record === void 0) {
+      const details = discovery.diagnostics.map((entry) => entry.message).join("; ");
+      throw diagnostic3(`no usable structural snapshot exists${details.length > 0 ? `: ${details}` : "."}`);
+    }
+    throw error51;
+  }
+  const scope = parseScope(input.scope ?? suppliedSnapshot.scope);
+  if (suppliedSnapshot.scope !== scope) {
+    throw diagnostic3(`requested scope ${scope} does not exactly match the supplied structural snapshot scope ${suppliedSnapshot.scope}`);
+  }
+  const suppliedProvenance = inputProvenance(input.snapshot, scope);
+  const latest = await validateFreshStructuralSnapshot({
+    repositoryRoot: input.repositoryRoot,
+    expected: suppliedProvenance,
+    supplied: input.snapshot
+  });
+  const provenance = latestProvenance(latest);
+  assertSameProvenance(suppliedProvenance, provenance);
+  const assessmentId = assessmentIdFor(provenance, effort);
+  const paths = assessmentPaths(assessmentId);
+  const existingStatus = await bundleRootStatus(input.repositoryRoot, paths);
+  if (existingStatus === "existing") {
+    await assertCompleteBundle(input.repositoryRoot, paths);
+    await readBrownfieldAssessment({ repositoryRoot: input.repositoryRoot, assessmentId });
+    return { assessmentId, paths };
+  }
+  try {
+    await writeInitialBundle({
+      repositoryRoot: input.repositoryRoot,
+      paths,
+      state: initialAssessment({ assessmentId, effort, provenance })
+    });
+  } catch (error51) {
+    if (isNodeErrorCode5(error51, "EEXIST")) {
+      await assertCompleteBundle(input.repositoryRoot, paths);
+      await readBrownfieldAssessment({ repositoryRoot: input.repositoryRoot, assessmentId });
+      return { assessmentId, paths };
+    }
+    throw error51;
+  }
+  await assertCompleteBundle(input.repositoryRoot, paths);
+  return { assessmentId, paths };
+}
+async function readBrownfieldAssessment(input) {
+  const assessmentId = input.assessmentId;
+  const parsedAssessmentId = assessmentIdSchema.parse(assessmentId);
+  const paths = assessmentPaths(parsedAssessmentId);
+  await assertCompleteBundle(input.repositoryRoot, paths);
+  const state = await readAssessmentState({ repositoryRoot: input.repositoryRoot, assessmentId: parsedAssessmentId, paths });
+  for (const artifactPath of [paths.signals, paths.assumptions, paths.findings, paths.synthesis, paths.review]) {
+    await readBundleJson(input.repositoryRoot, artifactPath);
+  }
+  const expected = {
+    generatedAt: state.generatedAt,
+    scope: state.scope,
+    snapshotId: state.snapshotId,
+    sourceFingerprint: state.sourceFingerprint,
+    semanticIndexSha256: state.semanticIndexSha256,
+    semanticSqliteSha256: state.semanticSqliteSha256
+  };
+  await validateFreshStructuralSnapshot({ repositoryRoot: input.repositoryRoot, expected });
+  return { state, paths };
+}
+var UPDATE_PHASES = {
+  signals_complete: "signals",
+  specialists_complete: "specialists",
+  synthesis_complete: "synthesis",
+  review_complete: "complete"
+};
+var ALLOWED_UPDATE_EVENTS = {
+  setup: ["signals_complete"],
+  signals: ["specialists_complete"],
+  specialists: ["synthesis_complete"],
+  assumptions: ["synthesis_complete"],
+  synthesis: ["review_complete"],
+  review: ["review_complete"],
+  complete: [],
+  blocked: []
+};
+var ASSESSMENT_PHASE_ORDER = {
+  setup: 0,
+  signals: 1,
+  specialists: 2,
+  assumptions: 3,
+  synthesis: 4,
+  review: 5,
+  complete: 6,
+  // A blocked assessment is terminal and is handled explicitly below.
+  blocked: Number.MAX_SAFE_INTEGER
+};
+function signalSummaryFromPayload(value) {
+  if (typeof value === "object" && value !== null && !Array.isArray(value) && "summary" in value) {
+    const parsed2 = assessmentSignalSummarySchema.safeParse(value.summary);
+    if (parsed2.success) return parsed2.data;
+  }
+  const parsed = assessmentSignalSummarySchema.safeParse(value);
+  return parsed.success ? parsed.data : void 0;
+}
+function hydrateAssessmentState(current, nextPhase, input) {
+  const next = {
+    ...current,
+    phase: nextPhase
+  };
+  if (input.signals !== void 0) {
+    const summary = signalSummaryFromPayload(input.signals);
+    if (summary !== void 0) next.signals = summary;
+  }
+  if (input.findings !== void 0) {
+    if (!Array.isArray(input.findings)) throw new Error("Brownfield assessment findings payload must be an array.");
+    next.findings = input.findings.map((finding, index) => {
+      const parsed = assessmentFindingSchema.safeParse(finding);
+      if (!parsed.success) throw new Error(`Brownfield assessment findings payload is invalid at index ${index}.`);
+      return parsed.data;
+    });
+  }
+  if (input.assumptions !== void 0) {
+    if (!Array.isArray(input.assumptions)) throw new Error("Brownfield assessment assumptions payload must be an array.");
+    next.assumptions = input.assumptions.map((assumption, index) => {
+      const parsed = assessmentAssumptionSchema.safeParse(assumption);
+      if (!parsed.success) throw new Error(`Brownfield assessment assumptions payload is invalid at index ${index}.`);
+      return parsed.data;
+    });
+  }
+  return brownfieldAssessmentSchema.parse(next);
+}
+async function updateBrownfieldAssessmentState(input) {
+  const nextPhase = UPDATE_PHASES[input.phase];
+  if (nextPhase === void 0) throw new Error(`Invalid brownfield assessment phase transition: ${String(input.phase)}.`);
+  const loaded = await readBrownfieldAssessment({
+    repositoryRoot: input.repositoryRoot,
+    assessmentId: input.assessmentId
+  });
+  const currentPhase = loaded.state.phase;
+  if (currentPhase === "blocked") {
+    throw new Error(`Brownfield assessment phase transition is not allowed from terminal phase ${currentPhase}.`);
+  }
+  if (!ALLOWED_UPDATE_EVENTS[currentPhase].includes(input.phase)) {
+    throw new Error(
+      `Brownfield assessment phase transition must follow the next checkpoint: ${currentPhase} cannot accept ${input.phase}.`
+    );
+  }
+  if (ASSESSMENT_PHASE_ORDER[nextPhase] <= ASSESSMENT_PHASE_ORDER[currentPhase]) {
+    throw new Error(`Brownfield assessment phase transition must be monotonic: ${currentPhase} -> ${nextPhase}.`);
+  }
+  const nextState = hydrateAssessmentState(loaded.state, nextPhase, input);
+  await writeUpdatedBundle({
+    repositoryRoot: input.repositoryRoot,
+    paths: loaded.paths,
+    state: nextState,
+    expectedCurrentPhase: currentPhase,
+    ...input.signals === void 0 ? {} : { signals: input.signals },
+    ...input.findings === void 0 ? {} : { findings: input.findings },
+    ...input.assumptions === void 0 ? {} : { assumptions: input.assumptions },
+    ...input.synthesis === void 0 ? {} : { synthesis: input.synthesis },
+    ...input.review === void 0 ? {} : { review: input.review }
+  });
+  const verified = await readBrownfieldAssessment({
+    repositoryRoot: input.repositoryRoot,
+    assessmentId: input.assessmentId
+  });
+  if (verified.state.phase !== nextPhase) {
+    throw new Error(`Brownfield assessment phase update was not persisted: expected ${nextPhase}.`);
+  }
+}
+
+// packages/cli/src/workflow/brownfield-signals.ts
+import { createHash as createHash28 } from "node:crypto";
+import { builtinModules } from "node:module";
+import { constants } from "node:fs";
+import { lstat as lstat7, open as open5 } from "node:fs/promises";
+import path53 from "node:path";
+var MAX_BOUNDED_SOURCE_BYTES = 256 * 1024;
+var MAX_BOUNDED_MAP_BYTES = 16 * 1024 * 1024;
+var MAX_SIGNAL_EVIDENCE = 64;
+var HOTSPOT_FACT_SAMPLE_SIZE = 8;
+var BOUNDED_SAMPLE_NOTE = `Bounded sample: first ${MAX_SIGNAL_EVIDENCE} deterministic evidence references.`;
+var BOUNDED_HOTSPOT_SAMPLE_NOTE = `Bounded hotspot sample: first ${HOTSPOT_FACT_SAMPLE_SIZE} hotspot facts; global evidence cap is ${MAX_SIGNAL_EVIDENCE} references.`;
+var OPAQUE_IMPORT_SPECIFIER = "opaque external import specifier (redacted)";
+var BUILTIN_IMPORT_SPECIFIERS = new Set(
+  builtinModules.flatMap((specifier) => specifier.startsWith("node:") ? [specifier] : [specifier, `node:${specifier}`])
+);
+var TEST_DIRECTORY_NAMES = /* @__PURE__ */ new Set(["test", "tests", "spec", "__tests__"]);
+var CI_FILE_NAMES = /* @__PURE__ */ new Set(["jenkinsfile", ".gitlab-ci.yml", ".gitlab-ci.yaml", "azure-pipelines.yml"]);
+var CI_CONFIG_EXTENSIONS = /* @__PURE__ */ new Set([".yml", ".yaml"]);
+var BINARY_EXTENSIONS = /* @__PURE__ */ new Set([
+  ".a",
+  ".bin",
+  ".class",
+  ".dll",
+  ".dylib",
+  ".exe",
+  ".gif",
+  ".gz",
+  ".ico",
+  ".jar",
+  ".jpeg",
+  ".jpg",
+  ".mov",
+  ".mp3",
+  ".mp4",
+  ".o",
+  ".pdf",
+  ".png",
+  ".so",
+  ".tar",
+  ".ttf",
+  ".wasm",
+  ".wav",
+  ".webp",
+  ".woff",
+  ".woff2",
+  ".zip"
+]);
+var GENERATED_DIRECTORY_NAMES = /* @__PURE__ */ new Set(["build", "dist", "generated", "gen", "out", "target", "__generated__"]);
+var NOFOLLOW_FLAG2 = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+var READ_ONLY_ARTIFACT_FLAGS = constants.O_RDONLY | NOFOLLOW_FLAG2;
+function compareStrings9(left, right) {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+function sorted(values, compare2) {
+  return [...values].sort(compare2);
+}
+function sourceEvidence(observation, note) {
+  return {
+    kind: "source-file",
+    path: observation.path,
+    sha256: observation.sha256,
+    note
+  };
+}
+function structuralFactEvidence(sqliteArtifactPath, sqliteSha256, fact, note) {
+  return {
+    kind: "structural-fact",
+    path: sqliteArtifactPath,
+    sha256: sqliteSha256,
+    factId: codeIndexFactIdSchema.parse(fact.id),
+    note
+  };
+}
+function testNamingConventions(sourcePath) {
+  const parts2 = sourcePath.split("/");
+  const basename = parts2.at(-1) ?? sourcePath;
+  const extension = path53.posix.extname(basename);
+  const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
+  const conventions = [];
+  if (parts2.slice(0, -1).some((part) => TEST_DIRECTORY_NAMES.has(part.toLowerCase()))) {
+    conventions.push("directory");
+  }
+  if (/(?:[._-])(test|spec)$/iu.test(stem)) {
+    conventions.push("delimiter suffix");
+  }
+  if (/(?:Tests?|Spec)$/u.test(stem)) {
+    conventions.push("CamelCase suffix");
+  }
+  if (/^(?:Tests?|Spec)[A-Z]/u.test(stem)) {
+    conventions.push("prefix");
+  }
+  if (/^test[._-]/iu.test(stem)) {
+    conventions.push("prefix");
+  }
+  return conventions.slice(0, 4);
+}
+function isTestFile(sourcePath) {
+  if (testNamingConventions(sourcePath).length > 0) return true;
+  const basename = path53.posix.basename(sourcePath);
+  const extension = path53.posix.extname(basename);
+  const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
+  return /(?:^|[._-])(test|spec)(?:$|[._-])/iu.test(stem);
+}
+function sourceStem(sourcePath) {
+  const basename = path53.posix.basename(sourcePath);
+  const extension = path53.posix.extname(basename);
+  const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
+  return stem.replace(/(?:[._-])(test|spec)$/iu, "").replace(/(?:Tests?|Spec)$/u, "").replace(/^(?:Tests?|Spec)(?=[A-Z])/u, "").replace(/^test[._-]/iu, "");
+}
+function sourceBasename(sourcePath) {
+  return sourceStem(sourcePath).toLowerCase();
+}
+function sourceExtension(sourcePath) {
+  return path53.posix.extname(sourcePath).toLowerCase();
+}
+function isGeneratedPath(sourcePath) {
+  const parts2 = sourcePath.toLowerCase().split("/");
+  const basename = path53.posix.basename(sourcePath).toLowerCase();
+  const extension = path53.posix.extname(basename);
+  const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
+  return parts2.slice(0, -1).some((part) => GENERATED_DIRECTORY_NAMES.has(part)) || /(?:^|[._-])(?:generated|gen)(?:$|[._-])/u.test(stem);
+}
+function isEligibleSourceForTestNeighbor(coverage) {
+  return coverage.status === "parsed" && AUTHORED_SOURCE_EXTENSIONS.has(sourceExtension(coverage.path)) && !isGeneratedPath(coverage.path) && !isDocumentation(coverage.path) && !isManifestOrCi(coverage.path);
+}
+function topLevelRoot(sourcePath) {
+  return sourcePath.split("/")[0] ?? sourcePath;
+}
+function isManifestOrCi(sourcePath) {
+  const normalizedPath = sourcePath.toLowerCase();
+  const basename = path53.posix.basename(sourcePath).toLowerCase();
+  const isCiConfig = normalizedPath.startsWith("ci/") && !AUTHORED_SOURCE_EXTENSIONS.has(sourceExtension(sourcePath));
+  const isCircleCiConfig = normalizedPath.startsWith(".circleci/") && CI_CONFIG_EXTENSIONS.has(sourceExtension(sourcePath));
+  const isTravisConfig = normalizedPath === ".travis.yml" || normalizedPath === ".travis.yaml";
+  return AUTHORED_DEPENDENCY_MANIFESTS.has(basename) || AUTHORED_BUILD_CONFIGURATION.has(basename) || basename.startsWith("package.") && basename.endsWith(".json") || CI_FILE_NAMES.has(basename) || isCiConfig || isCircleCiConfig || isTravisConfig || normalizedPath.startsWith(".github/workflows/") && normalizedPath.split("/").length > 2;
+}
+function isBinaryPath(sourcePath) {
+  return BINARY_EXTENSIONS.has(sourceExtension(sourcePath));
+}
+function isDocumentation(sourcePath) {
+  const extension = path53.posix.extname(sourcePath).toLowerCase();
+  return extension === ".md" || extension === ".mdx" || sourcePath.toLowerCase().includes("/docs/") || sourcePath.toLowerCase().startsWith("docs/");
+}
+function isEligibleTestInventoryPath(sourcePath) {
+  return !isGeneratedPath(sourcePath) && !isDocumentation(sourcePath) && !isManifestOrCi(sourcePath) && !isBinaryPath(sourcePath);
+}
+function addSignal(target, code, severity, statement, evidence, boundedSample = false, boundedSampleNote = BOUNDED_SAMPLE_NOTE) {
+  if (evidence.length === 0) throw new Error(`Brownfield signal ${code} has no evidence.`);
+  const isBoundedSample = boundedSample || evidence.length > MAX_SIGNAL_EVIDENCE;
+  const sampledEvidence = evidence.slice(0, MAX_SIGNAL_EVIDENCE);
+  const finalEvidence = isBoundedSample ? sampledEvidence.map((reference) => ({
+    ...reference,
+    note: `${reference.note.slice(0, Math.max(0, 512 - boundedSampleNote.length - 1))} ${boundedSampleNote}`
+  })) : sampledEvidence;
+  const finalStatement = isBoundedSample ? `${statement} Evidence is a bounded sample capped at ${MAX_SIGNAL_EVIDENCE} references.` : statement;
+  target.push({ code, severity: assessmentSeveritySchema.parse(severity), statement: finalStatement, evidence: finalEvidence });
+}
+function sortSignals(signals) {
+  return sorted(
+    signals,
+    (left, right) => compareStrings9(left.code, right.code) || compareStrings9(left.statement, right.statement) || compareStrings9(JSON.stringify(left.evidence), JSON.stringify(right.evidence))
+  );
+}
+async function openValidatedArtifact(absolutePath, label) {
+  let linkStat;
+  try {
+    linkStat = await lstat7(absolutePath);
+  } catch (error51) {
+    throw new Error(`${label} is missing or unreadable at ${absolutePath}.`, { cause: error51 });
+  }
+  if (linkStat.isSymbolicLink()) {
+    throw new Error(`${label} must not be a symbolic link at ${absolutePath}.`);
+  }
+  if (!linkStat.isFile()) {
+    throw new Error(`${label} is not a regular file at ${absolutePath}.`);
+  }
+  let descriptor;
+  try {
+    descriptor = await open5(absolutePath, READ_ONLY_ARTIFACT_FLAGS);
+  } catch (error51) {
+    throw new Error(`${label} is missing or unreadable at ${absolutePath}.`, { cause: error51 });
+  }
+  try {
+    const openedStat = await descriptor.stat();
+    if (!openedStat.isFile()) throw new Error(`${label} is not a regular file at ${absolutePath}.`);
+    if (linkStat.dev !== 0 && openedStat.dev !== 0 && (linkStat.dev !== openedStat.dev || linkStat.ino !== openedStat.ino)) {
+      throw new Error(`${label} changed while it was being opened at ${absolutePath}.`);
+    }
+    return descriptor;
+  } catch (error51) {
+    await descriptor.close().catch(() => void 0);
+    throw error51;
+  }
+}
+async function openValidatedSourceFile(repositoryRoot, sourcePath) {
+  const validatedSourcePath = codeIndexSourcePathSchema.parse(sourcePath);
+  const root = path53.resolve(repositoryRoot);
+  const absolutePath = path53.resolve(root, ...validatedSourcePath.split("/"));
+  const comparisonRoot = process.platform === "win32" ? root.toLowerCase() : root;
+  const comparisonPath = process.platform === "win32" ? absolutePath.toLowerCase() : absolutePath;
+  const relativePath = path53.relative(comparisonRoot, comparisonPath);
+  if (relativePath === "" || relativePath.startsWith("..") || path53.isAbsolute(relativePath)) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} escapes the repository root.`);
+  }
+  const components = validatedSourcePath.split("/");
+  let parentPath = root;
+  for (const component of components.slice(0, -1)) {
+    parentPath = path53.join(parentPath, component);
+    let parentStat;
+    try {
+      parentStat = await lstat7(parentPath);
+    } catch (error51) {
+      throw new Error(`Snapshot source path ${validatedSourcePath} has a missing or unreadable parent.`, { cause: error51 });
+    }
+    if (parentStat.isSymbolicLink()) {
+      throw new Error(`Snapshot source path ${validatedSourcePath} has a symbolic link parent.`);
+    }
+    if (!parentStat.isDirectory()) {
+      throw new Error(`Snapshot source path ${validatedSourcePath} has a non-directory parent.`);
+    }
+  }
+  let linkStat;
+  try {
+    linkStat = await lstat7(absolutePath);
+  } catch (error51) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} is missing or unreadable.`, { cause: error51 });
+  }
+  if (linkStat.isSymbolicLink()) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} must not be a symbolic link.`);
+  }
+  if (!linkStat.isFile()) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} is not a regular file.`);
+  }
+  let descriptor;
+  try {
+    descriptor = await open5(absolutePath, READ_ONLY_ARTIFACT_FLAGS);
+  } catch (error51) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} is missing or unreadable.`, { cause: error51 });
+  }
+  try {
+    const openedStat = await descriptor.stat();
+    if (!openedStat.isFile()) {
+      throw new Error(`Snapshot source path ${validatedSourcePath} is not a regular file.`);
+    }
+    const linkIdentityAvailable = typeof linkStat.dev === "number" && typeof linkStat.ino === "number" && linkStat.dev !== 0 && linkStat.ino !== 0;
+    const openedIdentityAvailable = typeof openedStat.dev === "number" && typeof openedStat.ino === "number" && openedStat.dev !== 0 && openedStat.ino !== 0;
+    if (linkIdentityAvailable && openedIdentityAvailable && (linkStat.dev !== openedStat.dev || linkStat.ino !== openedStat.ino)) {
+      throw new Error(`Snapshot source path ${validatedSourcePath} changed while it was being opened.`);
+    }
+    return descriptor;
+  } catch (error51) {
+    await descriptor.close().catch(() => void 0);
+    throw error51;
+  }
+}
+async function artifactPathForSqlite(repositoryRoot, sqlitePath, expected, expectedSha256) {
+  const root = path53.resolve(repositoryRoot);
+  const absolute = path53.resolve(root, sqlitePath);
+  const relative = path53.relative(root, absolute).split(path53.sep).join("/");
+  const parsed = artifactPathSchema.parse(relative);
+  if (parsed !== expected) {
+    throw new Error(`SQLite path ${sqlitePath} does not match the validated snapshot path ${expected}.`);
+  }
+  const resolved = await resolveProjectArtifactPath({ repositoryRoot: root, artifactPath: parsed });
+  const descriptor = await openValidatedArtifact(resolved.absolutePath, "SQLite materialization");
+  try {
+    const actualSha256 = await hashFile(descriptor);
+    if (actualSha256 !== expectedSha256) {
+      throw new Error(`SQLite materialization hash does not match the snapshot: expected ${expectedSha256}, got ${actualSha256}.`);
+    }
+  } finally {
+    await descriptor.close();
+  }
+  return parsed;
+}
+async function hashFile(descriptor) {
+  const digest = createHash28("sha256");
+  const chunk = Buffer.allocUnsafe(64 * 1024);
+  while (true) {
+    const result = await descriptor.read(chunk, 0, chunk.length, null);
+    if (result.bytesRead === 0) break;
+    digest.update(chunk.subarray(0, result.bytesRead));
+  }
+  return codeIndexSha256Schema.parse(digest.digest("hex"));
+}
+function scanBoundedSource(bytes) {
+  if (bytes.includes(0)) {
+    return {
+      todoFixme: false,
+      emptyFunction: false,
+      catchAndIgnore: false,
+      credentialLikeString: false,
+      unboundedInput: false
+    };
+  }
+  const text = bytes.toString("utf8");
+  return {
+    todoFixme: /\b(?:TODO|FIXME)\b/iu.test(text),
+    emptyFunction: /(?:\bfunction\s+[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\{\s*\}|=>\s*\{\s*\})/u.test(text),
+    catchAndIgnore: /\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/u.test(text),
+    credentialLikeString: /\b(?:password|passwd|secret|api[_-]?key|token)\b\s*[:=]\s*["'][^"']{4,}["']/iu.test(text),
+    unboundedInput: /\b(?:req|request)\.(?:body|query|params)\b|\bprocess\.stdin\b/iu.test(text)
+  };
+}
+async function inspectSourceFile(repositoryRoot, sourcePath, expectedHashes) {
+  const validatedSourcePath = codeIndexSourcePathSchema.parse(sourcePath);
+  const expectedHash = expectedHashes.get(validatedSourcePath);
+  if (expectedHash === void 0) {
+    throw new Error(`Snapshot source path ${validatedSourcePath} has no validated source hash.`);
+  }
+  const descriptor = await openValidatedSourceFile(repositoryRoot, validatedSourcePath);
+  try {
+    const fileStat = await descriptor.stat();
+    if (!fileStat.isFile()) throw new Error(`Snapshot source path is not a regular file: ${validatedSourcePath}.`);
+    const prefix = Buffer.alloc(Math.min(fileStat.size, MAX_BOUNDED_SOURCE_BYTES));
+    const digest = createHash28("sha256");
+    const chunk = Buffer.allocUnsafe(64 * 1024);
+    let prefixBytes = 0;
+    while (true) {
+      const result = await descriptor.read(chunk, 0, chunk.length, null);
+      if (result.bytesRead === 0) break;
+      const bytes = chunk.subarray(0, result.bytesRead);
+      digest.update(bytes);
+      if (prefixBytes < prefix.length) {
+        const bytesToCopy = Math.min(bytes.length, prefix.length - prefixBytes);
+        bytes.copy(prefix, prefixBytes, 0, bytesToCopy);
+        prefixBytes += bytesToCopy;
+      }
+    }
+    const sha2564 = codeIndexSha256Schema.parse(digest.digest("hex"));
+    if (expectedHash !== sha2564) {
+      throw new Error(`Source file ${validatedSourcePath} changed after the validated structural snapshot.`);
+    }
+    return {
+      path: validatedSourcePath,
+      sha256: sha2564,
+      patternMatches: scanBoundedSource(prefix.subarray(0, prefixBytes))
+    };
+  } finally {
+    await descriptor.close();
+  }
+}
+async function readBoundedMapDocument(absolutePath) {
+  const descriptor = await openValidatedArtifact(absolutePath, "Snapshot source hash inventory");
+  try {
+    const fileStat = await descriptor.stat();
+    if (fileStat.size > MAX_BOUNDED_MAP_BYTES) {
+      throw new Error(`Snapshot source hash inventory exceeds the bounded metadata limit at ${absolutePath}.`);
+    }
+    const chunks = [];
+    const chunk = Buffer.allocUnsafe(64 * 1024);
+    let totalBytes = 0;
+    while (totalBytes <= MAX_BOUNDED_MAP_BYTES) {
+      const bytesToRead = Math.min(chunk.length, MAX_BOUNDED_MAP_BYTES + 1 - totalBytes);
+      const result = await descriptor.read(chunk, 0, bytesToRead, null);
+      if (result.bytesRead === 0) break;
+      chunks.push(Buffer.from(chunk.subarray(0, result.bytesRead)));
+      totalBytes += result.bytesRead;
+    }
+    if (totalBytes > MAX_BOUNDED_MAP_BYTES) {
+      throw new Error(`Snapshot source hash inventory exceeds the bounded metadata limit at ${absolutePath}.`);
+    }
+    const finalStat = await descriptor.stat();
+    if (finalStat.size !== totalBytes) {
+      throw new Error(`Snapshot source hash inventory changed while it was being read at ${absolutePath}.`);
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(Buffer.concat(chunks, totalBytes).toString("utf8"));
+    } catch (error51) {
+      throw new Error(`Snapshot source hash inventory is not valid JSON at ${absolutePath}.`, { cause: error51 });
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`Snapshot source hash inventory must be an object at ${absolutePath}.`);
+    }
+    return parsed;
+  } finally {
+    await descriptor.close();
+  }
+}
+async function expectedSourceHashes(repositoryRoot, sqliteArtifactPath, snapshot) {
+  const mapArtifactPath = artifactPathSchema.parse(`${path53.posix.dirname(sqliteArtifactPath)}/map.json`);
+  const mapResolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: mapArtifactPath });
+  const mapDocument = await readBoundedMapDocument(mapResolved.absolutePath);
+  if (mapDocument["schemaVersion"] !== 1 || mapDocument["kind"] !== "codebase_map") {
+    throw new Error("Snapshot source hash inventory has invalid map identity.");
+  }
+  if (mapDocument["scope"] !== snapshot.scope) {
+    throw new Error("Snapshot source hash inventory scope does not match the validated structural snapshot.");
+  }
+  if (mapDocument["generatedAt"] !== snapshot.generatedAt) {
+    throw new Error("Snapshot source hash inventory timestamp does not match the validated structural snapshot.");
+  }
+  const declaredSourceFingerprint = codeIndexSha256Schema.parse(mapDocument["sourceFingerprint"]);
+  const declaredSourceFileCount = mapDocument["sourceFileCount"];
+  if (!Number.isSafeInteger(declaredSourceFileCount) || Number(declaredSourceFileCount) < 0) {
+    throw new Error("Snapshot source hash inventory has an invalid source file count.");
+  }
+  const files = mapDocument["files"];
+  if (!Array.isArray(files)) throw new Error("Snapshot source hash inventory has no file entries.");
+  const sourceHashes = /* @__PURE__ */ new Map();
+  const fingerprintEntries = [];
+  for (const file2 of files) {
+    if (file2 === null || typeof file2 !== "object" || Array.isArray(file2)) {
+      throw new Error("Snapshot source hash inventory contains an invalid file entry.");
+    }
+    const record2 = file2;
+    const sourcePath = codeIndexSourcePathSchema.parse(record2["path"]);
+    const sourceSha256 = codeIndexSha256Schema.parse(record2["sha256"]);
+    if (sourceHashes.has(sourcePath)) throw new Error(`Snapshot source hash inventory contains a duplicate path: ${sourcePath}.`);
+    sourceHashes.set(sourcePath, sourceSha256);
+    fingerprintEntries.push({
+      path: sourcePath,
+      sha256: sourceSha256,
+      sizeBytes: 0,
+      lineCount: 0,
+      symbols: [],
+      headings: [],
+      summary: ""
+    });
+  }
+  if (declaredSourceFileCount !== files.length || files.length !== snapshot.coverage.length) {
+    throw new Error("Snapshot source hash inventory file count does not match the validated structural snapshot coverage.");
+  }
+  const coveragePaths = new Set(snapshot.coverage.map((coverage) => coverage.path));
+  for (const sourcePath of sourceHashes.keys()) {
+    if (!coveragePaths.has(sourcePath)) {
+      throw new Error(`Snapshot source hash inventory path ${sourcePath} is absent from snapshot coverage.`);
+    }
+  }
+  for (const coverage of snapshot.coverage) {
+    if (!sourceHashes.has(coverage.path)) {
+      throw new Error(`Snapshot source hash inventory has no hash for coverage path ${coverage.path}.`);
+    }
+  }
+  const computedSourceFingerprint = fingerprintSourceFiles(fingerprintEntries);
+  if (declaredSourceFingerprint !== computedSourceFingerprint) {
+    throw new Error("Snapshot source hash inventory fingerprint does not match its validated file entries.");
+  }
+  if (declaredSourceFingerprint !== snapshot.sourceFingerprint) {
+    throw new Error("Snapshot source hash inventory does not match the validated structural snapshot fingerprint.");
+  }
+  const result = /* @__PURE__ */ new Map();
+  for (const coverage of snapshot.coverage) {
+    const sourceSha256 = sourceHashes.get(coverage.path);
+    if (sourceSha256 === void 0) {
+      throw new Error(`Snapshot source hash inventory has no hash for coverage path ${coverage.path}.`);
+    }
+    result.set(coverage.path, sourceSha256);
+  }
+  for (const fact of [...snapshot.symbols, ...snapshot.imports, ...snapshot.exports]) {
+    const sourceSha256 = result.get(fact.path);
+    if (sourceSha256 === void 0) {
+      throw new Error(`Structural fact path ${fact.path} is absent from snapshot coverage.`);
+    }
+    if (sourceSha256 !== fact.sourceSha256) {
+      throw new Error(`Structural snapshot has inconsistent source hashes for ${fact.path}.`);
+    }
+  }
+  return result;
+}
+function findTestLinks(testFiles, coverage) {
+  const sourceCandidatesByBasename = /* @__PURE__ */ new Map();
+  const sourceCandidatesByBasenameAndExtension = /* @__PURE__ */ new Map();
+  const sourceCandidatesByBasenameExtensionAndDirectory = /* @__PURE__ */ new Map();
+  const candidateKey = (basename, extension, directory) => `${basename}\0${extension}\0${directory ?? ""}`;
+  const addCandidate = (index, key, sourcePath) => {
+    const candidates = index.get(key) ?? [];
+    candidates.push(sourcePath);
+    index.set(key, candidates);
+  };
+  for (const entry of coverage) {
+    if (isTestFile(entry.path) || !isEligibleSourceForTestNeighbor(entry)) continue;
+    const basename = sourceBasename(entry.path);
+    const extension = sourceExtension(entry.path);
+    const directory = path53.posix.dirname(entry.path);
+    addCandidate(sourceCandidatesByBasename, basename, entry.path);
+    addCandidate(sourceCandidatesByBasenameAndExtension, candidateKey(basename, extension), entry.path);
+    addCandidate(sourceCandidatesByBasenameExtensionAndDirectory, candidateKey(basename, extension, directory), entry.path);
+  }
+  for (const index of [
+    sourceCandidatesByBasename,
+    sourceCandidatesByBasenameAndExtension,
+    sourceCandidatesByBasenameExtensionAndDirectory
+  ]) {
+    for (const candidates of index.values()) candidates.sort(compareStrings9);
+  }
+  const testFileSet = new Set(testFiles);
+  const eligibleTestPaths = new Set(
+    coverage.filter((entry) => testFileSet.has(entry.path) && isEligibleSourceForTestNeighbor(entry)).map((entry) => entry.path)
+  );
+  const links = [];
+  for (const testPath of sorted(testFiles, compareStrings9)) {
+    if (!eligibleTestPaths.has(testPath)) continue;
+    const testStem = sourceBasename(testPath);
+    const testExtension = sourceExtension(testPath);
+    const testDirectory = path53.posix.dirname(testPath);
+    const candidates = sourceCandidatesByBasename.get(testStem);
+    if (candidates === void 0 || candidates.length === 0) continue;
+    let sourcePath;
+    if (candidates.length === 1) {
+      sourcePath = candidates[0];
+    } else {
+      const compatibleCandidates = sourceCandidatesByBasenameAndExtension.get(candidateKey(testStem, testExtension));
+      if (compatibleCandidates?.length === 1) {
+        sourcePath = compatibleCandidates[0];
+      } else if (compatibleCandidates !== void 0 && compatibleCandidates.length > 1) {
+        const sameDirectoryCandidates = sourceCandidatesByBasenameExtensionAndDirectory.get(
+          candidateKey(testStem, testExtension, testDirectory)
+        );
+        if (sameDirectoryCandidates?.length === 1) sourcePath = sameDirectoryCandidates[0];
+      }
+    }
+    if (sourcePath === void 0) continue;
+    const conventions = testNamingConventions(testPath);
+    if (conventions.length === 0) continue;
+    links.push({
+      testPath,
+      sourcePath,
+      reason: `parsed, supported, non-generated test-convention path; conventions: ${conventions.join(", ")}; heuristic filename/path match; low confidence`
+    });
+  }
+  return links;
+}
+function isRelativeImportSpecifier(specifier) {
+  return specifier === "." || specifier === ".." || specifier.startsWith("./") || specifier.startsWith("../");
+}
+function isOpaqueImportSpecifier(specifier) {
+  if (specifier.includes("%")) return true;
+  if (!isRelativeImportSpecifier(specifier)) return true;
+  return new RegExp("(?:^|\\/)\\p{L}[\\p{L}\\d+.-]*:", "u").test(specifier) || /(?:^|\/)[^/?#\s:@]+:[^/?#\s@]+@/u.test(specifier) || /[?#]/u.test(specifier);
+}
+function safeImportSpecifier(specifier) {
+  if (BUILTIN_IMPORT_SPECIFIERS.has(specifier)) return specifier;
+  if (isOpaqueImportSpecifier(specifier)) return OPAQUE_IMPORT_SPECIFIER;
+  const pathOnly = specifier.split(/[?#]/u, 1)[0] ?? ".";
+  const normalized = path53.posix.normalize(pathOnly);
+  const relative = normalized === "." || normalized === ".." || normalized.startsWith("../") ? normalized : `./${normalized}`;
+  const safe = relative.replace(/[^A-Za-z0-9._/-]/gu, "_").slice(0, 256);
+  return safe.length > 0 ? safe : "./_";
+}
+function importTargetPaths(fact, availablePaths) {
+  const specifier = fact.specifier;
+  if (!isRelativeImportSpecifier(specifier)) return [];
+  const target = path53.posix.normalize(path53.posix.join(path53.posix.dirname(fact.path), specifier));
+  const candidates = [target];
+  const extension = sourceExtension(target);
+  if (extension === ".js") candidates.push(`${target.slice(0, -extension.length)}.ts`, `${target.slice(0, -extension.length)}.tsx`);
+  else if (extension === ".jsx") candidates.push(`${target.slice(0, -extension.length)}.tsx`);
+  else if (extension.length === 0) {
+    for (const candidateExtension of [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".py"]) {
+      candidates.push(`${target}${candidateExtension}`);
+    }
+    for (const candidateExtension of [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx"]) {
+      candidates.push(`${target}/index${candidateExtension}`);
+    }
+  }
+  return candidates.filter((candidate, index) => availablePaths.has(candidate) && candidates.indexOf(candidate) === index);
+}
+function modulesWithResolvedImports(snapshot) {
+  const availablePaths = new Set(snapshot.coverage.map((coverage) => coverage.path));
+  const importedPaths = /* @__PURE__ */ new Set();
+  for (const fact of snapshot.imports) {
+    for (const target of importTargetPaths(fact, availablePaths)) importedPaths.add(target);
+  }
+  return importedPaths;
+}
+function importFactEvidence(sqliteArtifactPath, sqliteSha256, fact) {
+  return structuralFactEvidence(sqliteArtifactPath, sqliteSha256, fact, "Persisted import fact; specifier is not a resolved dependency claim.");
+}
+function sourceObservationFor(observations, sourcePath) {
+  const observation = observations.get(sourcePath);
+  if (observation === void 0) throw new Error(`Missing bounded source observation for ${sourcePath}.`);
+  return observation;
+}
+function collectArchitectureSignals(input) {
+  const { snapshot, observations, sqliteArtifactPath } = input;
+  const signals = [];
+  const sourceFacts = /* @__PURE__ */ new Map();
+  for (const fact of snapshot.imports) {
+    const facts = sourceFacts.get(fact.path) ?? [];
+    facts.push(fact);
+    sourceFacts.set(fact.path, facts);
+  }
+  const sqliteSha256 = snapshot.sqlite.sha256;
+  for (const [sourcePath, facts] of [...sourceFacts.entries()].sort(([left], [right]) => compareStrings9(left, right))) {
+    if (facts.length < 2) continue;
+    const observation = sourceObservationFor(observations, sourcePath);
+    addSignal(
+      signals,
+      "fan-out-hotspot",
+      "moderate",
+      `File ${sourcePath} contains ${facts.length} persisted import facts; this is a structural fan-out hotspot, not a resolved dependency claim.`,
+      [sourceEvidence(observation, "Source file for persisted import fan-out."), ...facts.slice(0, HOTSPOT_FACT_SAMPLE_SIZE).map((fact) => importFactEvidence(sqliteArtifactPath, sqliteSha256, fact))],
+      facts.length > HOTSPOT_FACT_SAMPLE_SIZE,
+      BOUNDED_HOTSPOT_SAMPLE_NOTE
+    );
+  }
+  const importsBySpecifier = /* @__PURE__ */ new Map();
+  for (const fact of snapshot.imports) {
+    const facts = importsBySpecifier.get(fact.specifier) ?? [];
+    facts.push(fact);
+    importsBySpecifier.set(fact.specifier, facts);
+  }
+  for (const [specifier, facts] of [...importsBySpecifier.entries()].sort(([left], [right]) => compareStrings9(left, right))) {
+    if (facts.length < 2) continue;
+    const observationsForFacts = facts.slice(0, HOTSPOT_FACT_SAMPLE_SIZE).map((fact) => sourceEvidence(
+      sourceObservationFor(observations, fact.path),
+      "Source file containing a repeated persisted import specifier."
+    ));
+    addSignal(
+      signals,
+      "fan-in-hotspot",
+      "moderate",
+      `Import specifier ${safeImportSpecifier(specifier)} appears in ${facts.length} persisted import facts; the collector does not resolve it to a module.`,
+      [...observationsForFacts, ...facts.slice(0, HOTSPOT_FACT_SAMPLE_SIZE).map((fact) => importFactEvidence(sqliteArtifactPath, sqliteSha256, fact))],
+      facts.length > HOTSPOT_FACT_SAMPLE_SIZE,
+      BOUNDED_HOTSPOT_SAMPLE_NOTE
+    );
+  }
+  const modulesWithImports = modulesWithResolvedImports(snapshot);
+  for (const fact of snapshot.exports) {
+    if (!fact.name || modulesWithImports.has(fact.path)) continue;
+    const observation = sourceObservationFor(observations, fact.path);
+    addSignal(
+      signals,
+      "orphan-export",
+      "minor",
+      `Exported symbol ${fact.name} in ${fact.path} has no resolved relative import to its module; this is an unreferenced module-level export heuristic, not symbol-level import matching or proof of unused behavior.`,
+      [sourceEvidence(observation, "Source file containing the exported symbol."), structuralFactEvidence(sqliteArtifactPath, sqliteSha256, fact, "Persisted export fact used for orphan-export heuristic.")]
+    );
+  }
+  const modulesByBasename = /* @__PURE__ */ new Map();
+  for (const coverage of snapshot.coverage) {
+    const basename = sourceBasename(coverage.path);
+    const paths = modulesByBasename.get(basename) ?? [];
+    paths.push(coverage.path);
+    modulesByBasename.set(basename, paths);
+  }
+  for (const [basename, paths] of [...modulesByBasename.entries()].sort(([left], [right]) => compareStrings9(left, right))) {
+    const uniqueRoots = new Set(paths.map((sourcePath) => path53.posix.dirname(sourcePath)));
+    if (paths.length < 2 || uniqueRoots.size < 2) continue;
+    addSignal(
+      signals,
+      "duplicate-module-basename",
+      "moderate",
+      `Module basename ${JSON.stringify(basename)} occurs across ${uniqueRoots.size} repository roots; path identity must remain explicit.`,
+      sorted(paths, compareStrings9).map((sourcePath) => sourceEvidence(
+        sourceObservationFor(observations, sourcePath),
+        "Source file participating in duplicate module basename heuristic."
+      ))
+    );
+  }
+  for (const coverage of snapshot.coverage) {
+    const observation = sourceObservationFor(observations, coverage.path);
+    if (coverage.status === "parser-error") {
+      addSignal(
+        signals,
+        "parser-error",
+        "moderate",
+        `Structural parsing reported an error for ${coverage.path}; static facts for this file are incomplete.`,
+        [sourceEvidence(observation, "Source file with persisted parser-error coverage.")]
+      );
+    } else if (coverage.status === "unsupported" || coverage.status === "opaque" || coverage.status === "size-limited") {
+      addSignal(
+        signals,
+        "unsupported-file",
+        "moderate",
+        `Structural coverage for ${coverage.path} is ${coverage.status}; architecture conclusions are incomplete for this file.`,
+        [sourceEvidence(observation, "Source file with unsupported, opaque, or size-limited coverage.")]
+      );
+    }
+  }
+  for (const fact of snapshot.imports) {
+    if (fact.specifier !== ".." && !fact.specifier.startsWith("../")) continue;
+    const sourceRoot = topLevelRoot(fact.path);
+    const lexicalTarget = path53.posix.normalize(path53.posix.join(path53.posix.dirname(fact.path), fact.specifier));
+    const targetRoot = topLevelRoot(lexicalTarget);
+    if (sourceRoot === targetRoot) continue;
+    const observation = sourceObservationFor(observations, fact.path);
+    addSignal(
+      signals,
+      "cross-boundary-import",
+      "moderate",
+      `Relative import specifier ${safeImportSpecifier(fact.specifier)} from ${fact.path} crosses a repository root boundary; it is not resolved here.`,
+      [sourceEvidence(observation, "Source file containing the cross-boundary relative import."), importFactEvidence(sqliteArtifactPath, sqliteSha256, fact)]
+    );
+  }
+  for (const coverage of snapshot.coverage) {
+    if (!isDocumentation(coverage.path)) continue;
+    addSignal(
+      signals,
+      "documentation-metadata",
+      "informational",
+      `Documentation file ${coverage.path} is present as bounded metadata; presence is not product-intent or behavioral proof.`,
+      [sourceEvidence(sourceObservationFor(observations, coverage.path), "Bounded documentation metadata source file.")]
+    );
+  }
+  return signals;
+}
+async function collectRiskSignals(input) {
+  const { observations, sourceFiles, testFiles, testLinks, eligibleTestNeighborSources } = input;
+  const signals = [];
+  const linkedSources = new Set(testLinks.map((link2) => link2.sourcePath));
+  const verificationEvidence = testFiles.slice(0, MAX_SIGNAL_EVIDENCE - 1).map((testPath) => sourceEvidence(
+    sourceObservationFor(observations, testPath),
+    "Test source inventory; no command result was supplied to this deterministic collector."
+  ));
+  const verificationEvidenceBounded = testFiles.length > MAX_SIGNAL_EVIDENCE - 1;
+  for (const sourcePath of sourceFiles) {
+    const observation = sourceObservationFor(observations, sourcePath);
+    const patternMatches = observation.patternMatches;
+    if (patternMatches.todoFixme) {
+      addSignal(signals, "todo-fixme", "informational", `Static TODO/FIXME marker present in ${sourcePath}; marker presence is not proof of an unfinished behavior.`, [sourceEvidence(observation, "Bounded source read containing TODO/FIXME marker.")]);
+    }
+    if (patternMatches.emptyFunction) {
+      addSignal(signals, "empty-function", "minor", `Empty function body pattern present in ${sourcePath}; static pattern requires review.`, [sourceEvidence(observation, "Bounded source read containing empty function pattern.")]);
+    }
+    if (patternMatches.catchAndIgnore) {
+      addSignal(signals, "catch-and-ignore", "minor", `Empty catch body pattern present in ${sourcePath}; static pattern does not establish runtime error handling behavior.`, [sourceEvidence(observation, "Bounded source read containing catch-and-ignore pattern.")]);
+    }
+    if (patternMatches.credentialLikeString) {
+      addSignal(signals, "credential-like-string", "moderate", `Credential-like assignment pattern present in ${sourcePath}; this is a conservative static match, not confirmed secret exposure.`, [sourceEvidence(observation, "Bounded source read containing credential-like assignment pattern.")]);
+    }
+    if (patternMatches.unboundedInput) {
+      addSignal(signals, "unbounded-input", "major", `Potentially unbounded input access pattern present in ${sourcePath}; runtime validation and limits are not proven by static structure.`, [sourceEvidence(observation, "Bounded source read containing unbounded-input pattern.")]);
+    }
+    if (eligibleTestNeighborSources.has(sourcePath) && !linkedSources.has(sourcePath)) {
+      addSignal(signals, "missing-test-neighbor", "minor", `No conservative test-to-source neighbor was found for ${sourcePath}; static absence is not proof that no test exists.`, [sourceEvidence(observation, "Source file without a conservative test neighbor link.")]);
+    }
+    if (isManifestOrCi(sourcePath)) {
+      addSignal(
+        signals,
+        "verification-evidence-missing",
+        "moderate",
+        `Manifest or CI file ${sourcePath} is present without a command-result or test-result evidence record in this collector input.`,
+        [sourceEvidence(observation, "Manifest or CI source file requiring explicit verification evidence."), ...verificationEvidence],
+        verificationEvidenceBounded
+      );
+    }
+  }
+  return signals;
+}
+async function collectBrownfieldSignals(input) {
+  if (input.snapshot.profile !== "structural") throw new Error("Brownfield signals require a structural CodeIndexSnapshot.");
+  const sqliteArtifactPath = await artifactPathForSqlite(
+    input.repositoryRoot,
+    input.sqlitePath,
+    input.snapshot.sqlite.path,
+    input.snapshot.sqlite.sha256
+  );
+  const sourcePaths = sorted(input.snapshot.coverage.map((coverage) => coverage.path), compareStrings9);
+  const expectedHashes = await expectedSourceHashes(input.repositoryRoot, sqliteArtifactPath, input.snapshot);
+  const observations = /* @__PURE__ */ new Map();
+  for (const sourcePath of sourcePaths) {
+    const observation = await inspectSourceFile(input.repositoryRoot, sourcePath, expectedHashes);
+    observations.set(sourcePath, observation);
+  }
+  const testFiles = sorted(
+    input.snapshot.coverage.filter((coverage) => isTestFile(coverage.path) && isEligibleTestInventoryPath(coverage.path)).map((coverage) => coverage.path),
+    compareStrings9
+  );
+  const riskScanFiles = sourcePaths.filter((sourcePath) => !isTestFile(sourcePath) || isManifestOrCi(sourcePath));
+  const eligibleTestNeighborSources = new Set(
+    input.snapshot.coverage.filter((coverage) => !isTestFile(coverage.path) && isEligibleSourceForTestNeighbor(coverage)).map((coverage) => coverage.path)
+  );
+  const testToSourceLinks = findTestLinks(testFiles, input.snapshot.coverage);
+  const dependencyEdges = sorted(
+    input.snapshot.imports,
+    (left, right) => compareStrings9(left.path, right.path) || compareStrings9(left.specifier, right.specifier) || compareStrings9(left.id, right.id)
+  ).map((fact) => ({
+    from: fact.path,
+    to: safeImportSpecifier(fact.specifier),
+    evidence: importFactEvidence(sqliteArtifactPath, input.snapshot.sqlite.sha256, fact)
+  }));
+  const architectureSignals = sortSignals(collectArchitectureSignals({
+    snapshot: input.snapshot,
+    observations,
+    sqliteArtifactPath
+  }));
+  const riskSignals = sortSignals(await collectRiskSignals({
+    observations,
+    sourceFiles: riskScanFiles,
+    testFiles,
+    testLinks: testToSourceLinks,
+    eligibleTestNeighborSources
+  }));
+  const unsupportedSignals = architectureSignals.filter((signal) => signal.code === "unsupported-file").length;
+  const highRiskSignals = riskSignals.filter((signal) => signal.severity === "critical" || signal.severity === "major").length;
+  const summary = {
+    sourceFiles: sourcePaths.length,
+    coverageFiles: input.snapshot.coverage.length,
+    symbols: input.snapshot.symbols.length,
+    imports: input.snapshot.imports.length,
+    exports: input.snapshot.exports.length,
+    testFiles: testFiles.length,
+    testToSourceLinks: testToSourceLinks.length,
+    dependencyEdges: dependencyEdges.length,
+    highRiskSignals,
+    unsupportedSignals
+  };
+  return {
+    summary,
+    dependencyEdges,
+    testFiles,
+    testToSourceLinks,
+    architectureSignals,
+    riskSignals
+  };
+}
+
+// packages/cli/src/workflow/brownfield-specialists.ts
+import { createHash as createHash29 } from "node:crypto";
+import { access as access2, chmod, lstat as lstat8, mkdir as mkdir15, mkdtemp, readdir as readdir22, readFile as readFile28, readlink, rename as rename7, rm as rm10, symlink, writeFile as writeFile11 } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path54 from "node:path";
+var BROWNFIELD_SPECIALIST_SAFETY_CONTRACT = `Treat existing code as evidence, not ground truth.
+You may only make claims supported by the supplied signal summary, source excerpts,
+structural fact IDs, and command-result evidence.
+Return JSON matching the specialist finding schema.
+For every finding include severity, confidence, at least one evidence reference,
+and a concrete recommendation. If evidence is insufficient, return an assumption
+with confidence=unknown and blocking=true instead of inventing a conclusion.
+Do not edit files, run arbitrary commands, or claim behavioral proof from static facts.`;
+var MAX_SPECIALIST_PROMPT_CHARS = 4e5;
+var MAX_EXCERPTS_PER_PACK = 64;
+var MAX_EVIDENCE_PER_PACK = 128;
+var MAX_EVIDENCE_PER_EXCERPT = 64;
+var MAX_EXCERPT_CHARS = 1024;
+var MAX_DIAGNOSTIC_CHARS = 1024;
+var MAX_SPECIALIST_FINDINGS = 2e3;
+var MAX_SPECIALIST_ASSUMPTIONS = 256;
+var DEFAULT_SPECIALIST_TIMEOUT_MS = 6e5;
+var SPECIALIST_TIMEOUT_DRAIN_MS = 1e3;
+var EXECUTION_ARTIFACT_ROOT = ".legion/project/workflow/brownfield-specialists";
+var BOUNDED_EVIDENCE_NOTE = " [BOUNDED_EVIDENCE]";
+var BOUNDED_PROMPT_NOTE = "\n[BOUNDED_PROMPT_TRUNCATED]";
+var BOUNDED_PACK_NOTE = "[BOUNDED_PACK_TRUNCATED]";
+var MAX_READ_ONLY_SNAPSHOT_ENTRIES = 5e4;
+var MAX_READ_ONLY_SNAPSHOT_FILE_BYTES = 16 * 1024 * 1024;
+var MAX_READ_ONLY_SNAPSHOT_BYTES = 128 * 1024 * 1024;
+var MAX_READ_ONLY_SYMLINK_BYTES = 64 * 1024;
+var cleanupAdapterArtifacts = (root) => rm10(root, { recursive: true, force: true });
+var MAX_REDACTION_DECODE_LENGTH2 = 64 * 1024;
+var ROSTER = [
+  { name: "architecture", pass: 1, focus: "module boundaries, imports, exports, and structural architecture" },
+  { name: "code", pass: 1, focus: "implementation risks, static code signals, and error handling" },
+  { name: "tests", pass: 1, focus: "test inventory, conservative test links, and proof gaps" },
+  { name: "documentation", pass: 1, focus: "bounded documentation metadata and documentation coverage" },
+  { name: "product-intent", pass: 1, focus: "evidence-backed product intent and unresolved intent questions" },
+  { name: "security", pass: 1, focus: "credential-like, input-boundary, supply-chain, and verification risk signals" },
+  { name: "code", pass: 2, focus: "an independent second code pass over the supplied evidence" },
+  // The protocol's finding specialist enum has no separate integration value.
+  // This remains a tests specialist so its output is representable by the v1
+  // protocol, while the focus makes the adversarial integration scope explicit.
+  { name: "tests", pass: 2, focus: "adversarial integration pass over boundaries and proof gaps" }
+];
+function compareStrings10(left, right) {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+function sorted2(values, compare2) {
+  return [...values].sort(compare2);
+}
+function boundedText(value, limit) {
+  const sanitized = redactBrownfieldSpecialistText(value).replace(/\r\n?/gu, "\n").trim();
+  if (sanitized.length <= limit) return sanitized;
+  const marker = " \u2026[TRUNCATED]";
+  return `${sanitized.slice(0, Math.max(1, limit - marker.length))}${marker}`;
+}
+var redactBrownfieldSpecialistText = redactAdapterTranscript;
+function evidenceKey(reference) {
+  switch (reference.kind) {
+    case "structural-fact":
+      return [reference.kind, reference.path, reference.sha256 ?? "", reference.factId].join("\0");
+    case "source-file":
+      return [reference.kind, reference.path, reference.sha256].join("\0");
+    default:
+      return [reference.kind, reference.path].join("\0");
+  }
+}
+function evidenceSortKey(reference) {
+  return [evidenceKey(reference), reference.note].join("\0");
+}
+function normalizedEvidenceReference(reference) {
+  return assessmentEvidenceRefSchema.parse(reference);
+}
+function parseSpecialistAssumption(value) {
+  if (!isRecord14(value) || !Array.isArray(value["evidence"])) {
+    return assessmentAssumptionSchema.parse(value);
+  }
+  const evidence = value["evidence"].map((entry) => sanitizeEvidence(entry));
+  return assessmentAssumptionSchema.parse({ ...value, evidence });
+}
+function parseSpecialistFinding(value) {
+  if (!isRecord14(value) || !Array.isArray(value["evidence"])) {
+    return assessmentFindingSchema.parse(value);
+  }
+  const evidence = value["evidence"].map((entry) => sanitizeEvidence(entry));
+  return assessmentFindingSchema.parse({ ...value, evidence });
+}
+function sanitizeEvidence(reference) {
+  const parsed = normalizedEvidenceReference(reference);
+  const note = boundedText(parsed.note, 512);
+  switch (parsed.kind) {
+    case "structural-fact":
+      return assessmentEvidenceRefSchema.parse({
+        kind: parsed.kind,
+        path: parsed.path,
+        ...parsed.sha256 === void 0 ? {} : { sha256: parsed.sha256 },
+        factId: parsed.factId,
+        note
+      });
+    case "source-file":
+      return assessmentEvidenceRefSchema.parse({ kind: parsed.kind, path: parsed.path, sha256: parsed.sha256, note });
+    case "command-result":
+    case "manifest":
+    case "test-result":
+    case "git-metadata":
+      return assessmentEvidenceRefSchema.parse({ kind: parsed.kind, path: parsed.path, note });
+    case "user-input":
+      return assessmentEvidenceRefSchema.parse({
+        kind: parsed.kind,
+        path: parsed.path,
+        note
+      });
+  }
+}
+function uniqueEvidence(values) {
+  const byKey = /* @__PURE__ */ new Map();
+  for (const value of values) {
+    const sanitized = sanitizeEvidence(value);
+    const key = evidenceSortKey(sanitized);
+    if (!byKey.has(key)) byKey.set(key, sanitized);
+  }
+  return sorted2([...byKey.values()], (left, right) => compareStrings10(evidenceSortKey(left), evidenceSortKey(right)));
+}
+function primaryEvidence(evidence) {
+  return evidence.find((entry) => entry.kind === "source-file") ?? evidence[0];
+}
+function coverageStatus(snapshot, sourcePath) {
+  return snapshot.coverage.find((entry) => entry.path === sourcePath)?.status;
+}
+function supportedTestLink(snapshot, link2) {
+  return coverageStatus(snapshot, link2.testPath) === "parsed" && coverageStatus(snapshot, link2.sourcePath) === "parsed";
+}
+function snapshotCoverageSourceHashes(snapshot) {
+  const sourceHashes = /* @__PURE__ */ new Map();
+  for (const coverage of snapshot.coverage) {
+    if (coverage.sha256 === void 0) continue;
+    const sourceSha256 = codeIndexSha256Schema.parse(coverage.sha256);
+    const previous = sourceHashes.get(coverage.path);
+    if (previous !== void 0 && previous !== sourceSha256) {
+      throw new Error(`Snapshot coverage has inconsistent source hashes for ${coverage.path}.`);
+    }
+    sourceHashes.set(coverage.path, sourceSha256);
+  }
+  return sourceHashes;
+}
+function snapshotSourceHashes(snapshot) {
+  const sourceHashes = new Map(snapshotCoverageSourceHashes(snapshot));
+  for (const fact of [...snapshot.symbols, ...snapshot.imports, ...snapshot.exports]) {
+    const previous = sourceHashes.get(fact.path);
+    if (previous !== void 0 && previous !== fact.sourceSha256) {
+      throw new Error(`Structural snapshot has inconsistent source hashes for ${fact.path}.`);
+    }
+    sourceHashes.set(fact.path, fact.sourceSha256);
+  }
+  return sourceHashes;
+}
+function attachCoverageSourceHashes(snapshot, hashes) {
+  for (const coverage of snapshot.coverage) {
+    const existing = coverage.sha256;
+    const sha2564 = hashes.get(coverage.path);
+    if (sha2564 === void 0) continue;
+    if (existing !== void 0 && existing !== sha2564) {
+      throw new Error(`Snapshot source hash mismatch for ${coverage.path}: pre-attached ${existing} vs inventory ${sha2564}.`);
+    }
+    if (existing !== void 0) continue;
+    Object.defineProperty(coverage, "sha256", { value: sha2564, enumerable: false, configurable: true });
+  }
+}
+async function inventoryHashesForSnapshot(repositoryRoot, snapshot) {
+  const mapArtifactPath = `${path54.posix.dirname(snapshot.sqlite.path)}/map.json`;
+  const absolutePath = path54.join(repositoryRoot, ...mapArtifactPath.split("/"));
+  try {
+    await access2(absolutePath);
+  } catch {
+    return /* @__PURE__ */ new Map();
+  }
+  return expectedSourceHashes(repositoryRoot, snapshot.sqlite.path, snapshot);
+}
+function testMetadataEvidence(sourceHashes, sourcePath, note) {
+  const path59 = codeIndexSourcePathSchema.parse(sourcePath);
+  const sha2564 = sourceHashes.get(path59);
+  if (sha2564 === void 0) throw new Error(`Snapshot has no source hash for test metadata path ${path59}.`);
+  return assessmentEvidenceRefSchema.parse({
+    kind: "source-file",
+    path: path59,
+    sha256: sha2564,
+    note: boundedText(note, 512)
+  });
+}
+function excerptFrom(input) {
+  const allEvidence = uniqueEvidence(input.evidence);
+  const evidenceWasBounded = allEvidence.length > MAX_EVIDENCE_PER_EXCERPT;
+  const evidence = allEvidence.slice(0, MAX_EVIDENCE_PER_EXCERPT);
+  const primary = primaryEvidence(evidence);
+  if (primary === void 0) throw new Error("Brownfield specialist excerpt has no evidence.");
+  const factIds = evidence.filter((entry) => entry.kind === "structural-fact").map((entry) => entry.factId).sort(compareStrings10);
+  const primarySha256 = "sha256" in primary ? primary.sha256 : void 0;
+  const textLimit = evidenceWasBounded ? MAX_EXCERPT_CHARS - BOUNDED_EVIDENCE_NOTE.length : MAX_EXCERPT_CHARS;
+  return {
+    kind: input.kind,
+    path: primary.path,
+    ...primarySha256 === void 0 ? {} : { sha256: primarySha256 },
+    factIds,
+    evidence,
+    text: `${boundedText(input.text, Math.max(1, textLimit))}${evidenceWasBounded ? BOUNDED_EVIDENCE_NOTE : ""}`
+  };
+}
+function validateSnapshot(snapshotInput) {
+  const coverageSourceHashes = snapshotCoverageSourceHashes(snapshotInput);
+  const schemaInput = coverageSourceHashes.size === 0 ? snapshotInput : {
+    ...snapshotInput,
+    coverage: snapshotInput.coverage.map((coverage) => {
+      const { sha256: _sourceSha256, ...schemaCoverage } = coverage;
+      return schemaCoverage;
+    })
+  };
+  const snapshot = codeIndexSnapshotSchema.parse(schemaInput);
+  if (snapshot.profile !== "structural") throw new Error("Brownfield specialists require a structural CodeIndexSnapshot.");
+  for (const coverage of snapshot.coverage) {
+    const sourceSha256 = coverageSourceHashes.get(coverage.path);
+    if (sourceSha256 !== void 0) {
+      Object.defineProperty(coverage, "sha256", { value: sourceSha256, enumerable: false });
+    }
+  }
+  return snapshot;
+}
+function validateSignals(input, snapshot) {
+  const summary = assessmentSignalSummarySchema.parse(input.signals.summary);
+  const coveredPaths = new Set(snapshot.coverage.map((entry) => entry.path));
+  const factIds = /* @__PURE__ */ new Set([
+    ...snapshot.symbols.map((entry) => entry.id),
+    ...snapshot.imports.map((entry) => entry.id),
+    ...snapshot.exports.map((entry) => entry.id)
+  ]);
+  const sourceHashes = snapshotSourceHashes(snapshot);
+  const sourceEvidence2 = /* @__PURE__ */ new Set();
+  const structuralEvidence = /* @__PURE__ */ new Set();
+  const commandEvidence = /* @__PURE__ */ new Set();
+  const signalEvidence2 = [];
+  const metadataEvidence = [];
+  const register = (referenceInput, origin) => {
+    const reference = assessmentEvidenceRefSchema.parse(referenceInput);
+    if (reference.kind === "source-file") {
+      if (!coveredPaths.has(reference.path)) throw new Error(`${origin} references a source path outside snapshot coverage.`);
+      const expectedSha256 = sourceHashes.get(reference.path);
+      if (expectedSha256 === void 0) throw new Error(`${origin} references a source path without a snapshot source hash.`);
+      if (reference.sha256 !== expectedSha256) throw new Error(`${origin} references a source file with the wrong source hash.`);
+      sourceEvidence2.add(evidenceKey(reference));
+    } else if (reference.kind === "structural-fact") {
+      if (reference.path !== snapshot.sqlite.path || !factIds.has(reference.factId)) {
+        throw new Error(`${origin} references an unknown structural fact.`);
+      }
+      if (reference.sha256 !== void 0 && reference.sha256 !== snapshot.sqlite.sha256) {
+        throw new Error(`${origin} references a structural fact with the wrong SQLite hash.`);
+      }
+      structuralEvidence.add(evidenceKey(reference));
+      structuralEvidence.add([reference.kind, reference.path, "", reference.factId].join("\0"));
+      structuralEvidence.add([reference.kind, reference.path, snapshot.sqlite.sha256, reference.factId].join("\0"));
+    } else if (reference.kind === "command-result") {
+      throw new Error(`${origin} contains command-result evidence without explicit command-result input.`);
+    } else {
+      throw new Error(`${origin} contains unsupported evidence kind ${reference.kind}.`);
+    }
+    signalEvidence2.push(reference);
+  };
+  for (const [index, signal] of [...input.signals.architectureSignals, ...input.signals.riskSignals].entries()) {
+    if (typeof signal.code !== "string" || typeof signal.statement !== "string") throw new Error(`Signal ${index} has invalid text.`);
+    assessmentSeveritySchema.parse(signal.severity);
+    if (!Array.isArray(signal.evidence) || signal.evidence.length === 0) throw new Error(`Signal ${index} has no evidence.`);
+    for (const reference of signal.evidence) register(reference, `Signal ${signal.code}`);
+  }
+  for (const [index, edge] of input.signals.dependencyEdges.entries()) {
+    codeIndexSourcePathSchema.parse(edge.from);
+    if (!coveredPaths.has(edge.from) || typeof edge.to !== "string") throw new Error(`Dependency edge ${index} is outside snapshot coverage.`);
+    register(edge.evidence, `Dependency edge ${index}`);
+  }
+  for (const [index, link2] of input.signals.testToSourceLinks.entries()) {
+    codeIndexSourcePathSchema.parse(link2.testPath);
+    codeIndexSourcePathSchema.parse(link2.sourcePath);
+    if (!coveredPaths.has(link2.testPath) || !coveredPaths.has(link2.sourcePath)) throw new Error(`Test link ${index} is outside snapshot coverage.`);
+    if (typeof link2.reason !== "string") throw new Error(`Test link ${index} has invalid reason.`);
+    if (supportedTestLink(snapshot, link2)) {
+      const refs = [
+        testMetadataEvidence(sourceHashes, link2.testPath, `Bounded test inventory metadata for ${link2.testPath}; link is retained only for parsed supported coverage.`),
+        testMetadataEvidence(sourceHashes, link2.sourcePath, `Bounded source target metadata for ${link2.sourcePath}; linked from parsed supported test ${link2.testPath}.`)
+      ];
+      metadataEvidence.push(...refs);
+      for (const reference of refs) sourceEvidence2.add(evidenceKey(reference));
+    }
+  }
+  for (const [index, testPath] of input.signals.testFiles.entries()) {
+    codeIndexSourcePathSchema.parse(testPath);
+    if (!coveredPaths.has(testPath)) throw new Error(`Test file ${index} is outside snapshot coverage.`);
+    const reference = testMetadataEvidence(sourceHashes, testPath, `Bounded test inventory metadata for ${testPath}; presence is not execution or coverage proof.`);
+    metadataEvidence.push(reference);
+    sourceEvidence2.add(evidenceKey(reference));
+  }
+  const commandResults = [];
+  for (const [index, commandResultInput] of (input.commandResults ?? []).entries()) {
+    const commandResult = assessmentEvidenceRefSchema.parse(commandResultInput);
+    if (commandResult.kind !== "command-result") throw new Error(`Command-result evidence ${index} has the wrong kind.`);
+    const sanitized = sanitizeEvidence(commandResult);
+    commandResults.push(sanitized);
+    commandEvidence.add(evidenceKey(sanitized));
+  }
+  return {
+    summary,
+    evidence: uniqueEvidence([...signalEvidence2, ...metadataEvidence]),
+    commandResults: uniqueEvidence(commandResults),
+    support: { source: sourceEvidence2, structural: structuralEvidence, command: commandEvidence }
+  };
+}
+function rosterForEffort(effortInput) {
+  const effort = assessmentEffortSchema.parse(effortInput);
+  const count = effort === 1 ? 2 : effort === 2 ? 3 : effort === 3 ? 5 : effort === 4 ? 6 : 8;
+  const seen = /* @__PURE__ */ new Set();
+  return ROSTER.slice(0, count).filter((specialist) => {
+    const key = `${specialist.name}\0${specialist.pass}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map((specialist) => ({ ...specialist }));
+}
+function selectedExcerptKinds(specialist) {
+  switch (specialist.name) {
+    case "architecture":
+      return /* @__PURE__ */ new Set(["architecture-signal", "dependency-edge"]);
+    case "code":
+      return /* @__PURE__ */ new Set(["architecture-signal", "risk-signal", "dependency-edge"]);
+    case "tests":
+      return specialist.pass === 2 ? /* @__PURE__ */ new Set(["architecture-signal", "risk-signal", "dependency-edge", "test-inventory", "test-link"]) : /* @__PURE__ */ new Set(["risk-signal", "test-inventory", "test-link"]);
+    case "documentation":
+    case "product-intent":
+      return /* @__PURE__ */ new Set(["architecture-signal"]);
+    case "security":
+      return /* @__PURE__ */ new Set(["risk-signal", "dependency-edge"]);
+  }
+}
+function buildExcerpts(input, specialist, validated) {
+  const excerpts = [];
+  const selected = selectedExcerptKinds(specialist);
+  const add = (entry) => {
+    if (selected.has(entry.kind)) excerpts.push(entry);
+  };
+  for (const signal of sorted2(
+    [...input.signals.architectureSignals],
+    (left, right) => compareStrings10(left.code, right.code) || compareStrings10(left.statement, right.statement)
+  )) {
+    add(excerptFrom({
+      kind: "architecture-signal",
+      text: `Signal ${signal.code} (${signal.severity}): ${signal.statement}`,
+      evidence: signal.evidence
+    }));
+  }
+  for (const signal of sorted2(
+    [...input.signals.riskSignals],
+    (left, right) => compareStrings10(left.code, right.code) || compareStrings10(left.statement, right.statement)
+  )) {
+    add(excerptFrom({
+      kind: "risk-signal",
+      text: `Risk signal ${signal.code} (${signal.severity}): ${signal.statement}`,
+      evidence: signal.evidence
+    }));
+  }
+  for (const edge of sorted2(
+    [...input.signals.dependencyEdges],
+    (left, right) => compareStrings10(left.from, right.from) || compareStrings10(left.to, right.to)
+  )) {
+    add(excerptFrom({
+      kind: "dependency-edge",
+      text: `Persisted import edge from ${edge.from} to ${edge.to}. This is an import fact, not a resolved runtime dependency claim.`,
+      evidence: [edge.evidence]
+    }));
+  }
+  for (const testPath of sorted2([...input.signals.testFiles], compareStrings10)) {
+    const evidence = validated.evidence.filter(
+      (entry) => (entry.kind === "source-file" || entry.kind === "user-input") && entry.path === testPath
+    );
+    if (evidence.length > 0) {
+      add(excerptFrom({
+        kind: "test-inventory",
+        text: `Test inventory path: ${testPath}. Presence is not execution or coverage proof.`,
+        evidence
+      }));
+    }
+  }
+  for (const link2 of sorted2(
+    [...input.signals.testToSourceLinks],
+    (left, right) => compareStrings10(left.testPath, right.testPath) || compareStrings10(left.sourcePath, right.sourcePath)
+  )) {
+    if (!supportedTestLink(input.snapshot, link2)) continue;
+    const evidence = validated.evidence.filter(
+      (entry) => (entry.kind === "source-file" || entry.kind === "user-input") && (entry.path === link2.testPath || entry.path === link2.sourcePath)
+    );
+    if (evidence.length > 0) {
+      add(excerptFrom({
+        kind: "test-link",
+        text: `Conservative test-to-source link: ${link2.testPath} -> ${link2.sourcePath}; ${link2.reason}`,
+        evidence
+      }));
+    }
+  }
+  return sorted2(
+    excerpts,
+    (left, right) => compareStrings10(left.kind, right.kind) || compareStrings10(left.path, right.path) || compareStrings10(left.text, right.text) || compareStrings10(JSON.stringify(left.evidence), JSON.stringify(right.evidence))
+  );
+}
+function boundedPrompt(prompt) {
+  if (prompt.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(prompt, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS) return prompt;
+  const maxPrefixLength = Math.max(0, MAX_SPECIALIST_PROMPT_CHARS - BOUNDED_PROMPT_NOTE.length);
+  let low = 0;
+  let high = Math.min(prompt.length, maxPrefixLength);
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    const candidate = `${prompt.slice(0, middle)}${BOUNDED_PROMPT_NOTE}`;
+    if (candidate.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(candidate, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS) low = middle;
+    else high = middle - 1;
+  }
+  return `${prompt.slice(0, low)}${BOUNDED_PROMPT_NOTE}`;
+}
+function packPrompt(input) {
+  const evidence = uniqueEvidence(input.evidence);
+  const excerpts = input.excerpts.map((excerpt) => ({
+    kind: excerpt.kind,
+    path: excerpt.path,
+    ...excerpt.sha256 === void 0 ? {} : { sha256: excerpt.sha256 },
+    factIds: [...excerpt.factIds],
+    evidence: uniqueEvidence(excerpt.evidence),
+    text: boundedText(excerpt.text, MAX_EXCERPT_CHARS)
+  }));
+  const packMarker = input.truncation.bounded ? `${BOUNDED_PACK_NOTE} excerpts_omitted=${input.truncation.excerptsOmitted} evidence_omitted=${input.truncation.evidenceOmitted}` : "[BOUNDED_PACK_COMPLETE]";
+  const prompt = [
+    `You are the ${input.specialist.name} assessor for a brownfield repository.`,
+    packMarker,
+    BROWNFIELD_SPECIALIST_SAFETY_CONTRACT,
+    `Specialist pass: ${input.specialist.pass}. Focus: ${input.specialist.focus}.`,
+    `Snapshot ID: ${input.snapshot.snapshotId}. Scope: ${input.snapshot.scope}.`,
+    `Signal summary: ${JSON.stringify(input.summary)}.`,
+    "Only the following bounded evidence pack is supplied; do not infer beyond it.",
+    `Evidence references (bounded and deduplicated): ${JSON.stringify(evidence)}.`,
+    `Excerpts (bounded and deduplicated): ${JSON.stringify(excerpts)}.`,
+    "Return one JSON object with only `findings` and `assumptions` arrays."
+  ].join("\n");
+  const bounded = boundedPrompt(prompt);
+  return { prompt: bounded, promptTruncated: bounded !== prompt };
+}
+function excerptsForPack(excerpts, evidence) {
+  const included = new Set(evidence.map(evidenceKey));
+  return excerpts.flatMap((excerpt) => {
+    const retainedEvidence = excerpt.evidence.filter((reference) => included.has(evidenceKey(reference)));
+    if (retainedEvidence.length === 0) return [];
+    const retainedFactIds = retainedEvidence.filter((reference) => reference.kind === "structural-fact").map((reference) => reference.factId).sort(compareStrings10);
+    const evidenceWasDropped = retainedEvidence.length !== excerpt.evidence.length;
+    return [{
+      ...excerpt,
+      factIds: retainedFactIds,
+      evidence: retainedEvidence,
+      text: evidenceWasDropped ? `${boundedText(excerpt.text, Math.max(1, MAX_EXCERPT_CHARS - BOUNDED_EVIDENCE_NOTE.length))}${BOUNDED_EVIDENCE_NOTE}` : excerpt.text
+    }];
+  });
+}
+function buildBrownfieldExcerptPacks(input) {
+  const snapshot = validateSnapshot(input.snapshot);
+  const effort = assessmentEffortSchema.parse(input.effort);
+  const validated = validateSignals(input, snapshot);
+  const roster = rosterForEffort(effort);
+  const provenance = snapshotProvenance(snapshot);
+  return roster.map((specialist) => {
+    const allExcerpts = buildExcerpts(input, specialist, validated);
+    const limitedExcerpts = allExcerpts.slice(0, MAX_EXCERPTS_PER_PACK);
+    const allEvidence = uniqueEvidence([
+      ...allExcerpts.flatMap((excerpt) => excerpt.evidence),
+      ...validated.commandResults
+    ]);
+    const evidence = allEvidence.slice(0, MAX_EVIDENCE_PER_PACK);
+    const excerpts = excerptsForPack(limitedExcerpts, evidence);
+    const baseTruncation = {
+      bounded: allExcerpts.length > MAX_EXCERPTS_PER_PACK || allEvidence.length > MAX_EVIDENCE_PER_PACK,
+      excerptsTotal: allExcerpts.length,
+      excerptsIncluded: excerpts.length,
+      excerptsOmitted: allExcerpts.length - excerpts.length,
+      excerptsTruncated: allExcerpts.length > MAX_EXCERPTS_PER_PACK,
+      evidenceTotal: allEvidence.length,
+      evidenceIncluded: evidence.length,
+      evidenceOmitted: allEvidence.length - evidence.length,
+      evidenceTruncated: allEvidence.length > MAX_EVIDENCE_PER_PACK,
+      promptTruncated: false
+    };
+    const packedPrompt = packPrompt({ specialist, snapshot, summary: validated.summary, excerpts, evidence, truncation: baseTruncation });
+    const truncation = {
+      ...baseTruncation,
+      promptTruncated: packedPrompt.promptTruncated,
+      bounded: baseTruncation.bounded || packedPrompt.promptTruncated
+    };
+    return {
+      specialist,
+      snapshotId: snapshot.snapshotId,
+      ...provenance,
+      summary: validated.summary,
+      excerpts,
+      evidence,
+      truncation,
+      prompt: packedPrompt.prompt,
+      promptHash: hashUnknown(packedPrompt.prompt),
+      promptSize: packedPrompt.prompt.length,
+      promptBytes: Buffer.byteLength(packedPrompt.prompt, "utf8")
+    };
+  });
+}
+function hashUnknown(value) {
+  let text;
+  if (typeof value === "string") {
+    text = value;
+  } else {
+    try {
+      text = JSON.stringify(value) ?? "";
+    } catch {
+      text = String(value);
+    }
+  }
+  return codeIndexSha256Schema.parse(createHash29("sha256").update(text, "utf8").digest("hex"));
+}
+function snapshotProvenance(snapshot) {
+  return {
+    sourceFingerprint: snapshot.sourceFingerprint,
+    semanticIndexSha256: hashUnknown(stableProtocolJson(snapshot)),
+    semanticSqliteSha256: snapshot.sqlite.sha256
+  };
+}
+function serializedSize(value) {
+  if (typeof value === "string") return Buffer.byteLength(value, "utf8");
+  if (value instanceof Error) {
+    const code = value.code;
+    return Buffer.byteLength(JSON.stringify({
+      name: value.name,
+      message: value.message,
+      ...code === void 0 ? {} : { code }
+    }), "utf8");
+  }
+  try {
+    return Buffer.byteLength(JSON.stringify(value) ?? "", "utf8");
+  } catch {
+    return 0;
+  }
+}
+function hashExecutionOutcome(outcome) {
+  const raw = outcome.raw instanceof Error ? { error: outcome.raw.message } : outcome.raw;
+  return hashUnknown({ status: outcome.status, diagnostic: outcome.diagnostic, output: raw });
+}
+function safeDiagnostic(value) {
+  const message = value instanceof Error ? value.message : typeof value === "string" ? value : "Specialist execution failed.";
+  return boundedText(message, MAX_DIAGNOSTIC_CHARS) || "Specialist execution failed.";
+}
+function isRecord14(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isExecutionResult(value) {
+  return isRecord14(value) && (value["status"] === "succeeded" || value["status"] === "failed" || value["status"] === "blocked") && typeof value["summary"] === "string" && Array.isArray(value["findings"]);
+}
+function parseJsonText(text) {
+  if (text.trim().length === 0) throw new Error("Specialist returned empty output.");
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("Specialist returned malformed JSON.");
+  }
+}
+function isSpecialistPayload(value) {
+  if (!isRecord14(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length > 0 && keys.every((key) => key === "findings" || key === "assumptions");
+}
+function unwrapSpecialistPayload(value) {
+  let current = value;
+  const seen = /* @__PURE__ */ new Set();
+  for (let depth = 0; depth < 8; depth += 1) {
+    if (isSpecialistPayload(current)) return current;
+    if (typeof current === "string") {
+      current = parseJsonText(current);
+      continue;
+    }
+    if (!isRecord14(current)) return void 0;
+    if (seen.has(current)) return void 0;
+    seen.add(current);
+    let next;
+    for (const key of ["structuredOutput", "output", "text", "result", "payload"]) {
+      if (current[key] !== void 0) {
+        next = current[key];
+        break;
+      }
+    }
+    if (next === void 0) return void 0;
+    current = next;
+  }
+  return void 0;
+}
+function specialistPayloadFrom(value) {
+  if (isExecutionResult(value)) {
+    if (value.status !== "succeeded") {
+      return { status: value.status, diagnostic: value.summary || "Executor did not complete the specialist." };
+    }
+    const envelope = value;
+    const structured = value.structuredOutput ?? envelope["output"] ?? envelope["text"];
+    if (structured === void 0) {
+      return { status: "failed", diagnostic: "Specialist executor completed without structured JSON output." };
+    }
+    try {
+      const payload = unwrapSpecialistPayload(structured);
+      if (payload === void 0) throw new Error("Specialist executor structured output did not contain a findings/assumptions object.");
+      return {
+        status: "succeeded",
+        payload,
+        diagnostic: ""
+      };
+    } catch (error51) {
+      return { status: "failed", diagnostic: safeDiagnostic(error51) };
+    }
+  }
+  if (typeof value === "string") {
+    try {
+      return { status: "succeeded", payload: unwrapSpecialistPayload(value), diagnostic: "" };
+    } catch (error51) {
+      return { status: "failed", diagnostic: safeDiagnostic(error51) };
+    }
+  }
+  return { status: "succeeded", payload: value, diagnostic: "" };
+}
+function supportedEvidence(referenceInput, support) {
+  const reference = normalizedEvidenceReference(referenceInput);
+  if (reference.kind === "source-file") return support.source.has(evidenceKey(reference));
+  if (reference.kind === "structural-fact") return support.structural.has(evidenceKey(reference));
+  if (reference.kind === "command-result") return support.command.has(evidenceKey(reference));
+  return false;
+}
+function assertEvidenceClosure(evidence, support) {
+  if (evidence.length === 0) throw new Error("Specialist finding or assumption has no evidence.");
+  for (const reference of evidence) {
+    const parsed = normalizedEvidenceReference(reference);
+    if (!supportedEvidence(parsed, support)) {
+      throw new Error(`Specialist evidence reference is not backed by the supplied signal pack: ${parsed.path}.`);
+    }
+  }
+}
+function normalizeSpecialistOutput(input) {
+  const { value, specialist, support } = input;
+  if (!isRecord14(value)) throw new Error("Specialist output must be a JSON object.");
+  const keys = Object.keys(value);
+  if (keys.some((key) => key !== "findings" && key !== "assumptions")) {
+    throw new Error("Specialist output contains unknown fields.");
+  }
+  const rawFindings = value["findings"];
+  const rawAssumptions = value["assumptions"];
+  if (rawFindings !== void 0 && !Array.isArray(rawFindings)) throw new Error("Specialist findings must be an array.");
+  if (rawAssumptions !== void 0 && !Array.isArray(rawAssumptions)) throw new Error("Specialist assumptions must be an array.");
+  const findingInputs = rawFindings ?? [];
+  const assumptionInputs = rawAssumptions ?? [];
+  if (findingInputs.length > MAX_SPECIALIST_FINDINGS) throw new Error("Specialist findings exceeded the bounded output limit.");
+  if (assumptionInputs.length > MAX_SPECIALIST_ASSUMPTIONS) throw new Error("Specialist assumptions exceeded the bounded output limit.");
+  if (findingInputs.length === 0 && assumptionInputs.length === 0) throw new Error("Specialist returned empty output.");
+  const assumptions = [];
+  const assumptionIdMap = /* @__PURE__ */ new Map();
+  for (const valueInput of assumptionInputs) {
+    const parsed = parseSpecialistAssumption(valueInput);
+    if (assumptionIdMap.has(parsed.id)) throw new Error("Specialist returned duplicate assumption IDs.");
+    assertEvidenceClosure(parsed.evidence, support);
+    const sanitized = parseSpecialistAssumption({
+      ...parsed,
+      statement: boundedText(parsed.statement, 2e3),
+      resolution: boundedText(parsed.resolution, 1e3),
+      evidence: parsed.evidence.map(sanitizeEvidence)
+    });
+    assumptionIdMap.set(parsed.id, sanitized.id);
+    assumptions.push(sanitized);
+  }
+  const findings = [];
+  const findingIds = /* @__PURE__ */ new Set();
+  for (const valueInput of findingInputs) {
+    const parsed = parseSpecialistFinding(valueInput);
+    if (parsed.specialist !== specialist.name) {
+      throw new Error(`Specialist finding names ${parsed.specialist}, expected ${specialist.name}.`);
+    }
+    if (findingIds.has(parsed.id)) throw new Error("Specialist returned duplicate finding IDs.");
+    findingIds.add(parsed.id);
+    assertEvidenceClosure(parsed.evidence, support);
+    const assumptionsForFinding = [];
+    const seenAssumptions = /* @__PURE__ */ new Set();
+    for (const assumptionId of parsed.assumptions) {
+      if (seenAssumptions.has(assumptionId)) throw new Error("Finding assumption references must be unique.");
+      const normalizedId = assumptionIdMap.get(assumptionId);
+      if (normalizedId === void 0) throw new Error("Finding references an assumption outside this specialist output.");
+      seenAssumptions.add(assumptionId);
+      assumptionsForFinding.push(normalizedId);
+    }
+    findings.push(parseSpecialistFinding({
+      ...parsed,
+      title: boundedText(parsed.title, 256),
+      statement: boundedText(parsed.statement, 4e3),
+      recommendation: boundedText(parsed.recommendation, 4e3),
+      evidence: parsed.evidence.map(sanitizeEvidence),
+      assumptions: assumptionsForFinding
+    }));
+  }
+  return { findings, assumptions };
+}
+function syntheticFailureEvidenceReference(assessmentId, specialist) {
+  return assessmentEvidenceRefSchema.parse({
+    kind: "user-input",
+    path: artifactPathSchema.parse(`${EXECUTION_ARTIFACT_ROOT}/${assessmentId}/${specialist.name}-pass-${specialist.pass}/failure-evidence.json`),
+    note: "Synthetic user-input evidence for a failed, blocked, or invalid specialist result; explicit user input or command-result evidence is required for resolution."
+  });
+}
+function fallbackEvidence(pack, snapshot, assessmentId) {
+  const synthetic = syntheticFailureEvidenceReference(assessmentId, pack.specialist);
+  if (pack.evidence.length > 0) return [...pack.evidence.slice(0, 1), synthetic];
+  const fact = [...snapshot.symbols, ...snapshot.imports, ...snapshot.exports].sort((left, right) => compareStrings10(left.id, right.id))[0];
+  if (fact === void 0) return [synthetic];
+  return [
+    assessmentEvidenceRefSchema.parse({
+      kind: "structural-fact",
+      path: snapshot.sqlite.path,
+      sha256: snapshot.sqlite.sha256,
+      factId: codeIndexFactIdSchema.parse(fact.id),
+      note: "Structural snapshot evidence for an unknown specialist result."
+    }),
+    synthetic
+  ];
+}
+function unknownAssumption(input) {
+  const evidence = input.evidence.length > 0 ? input.evidence : [syntheticFailureEvidenceReference(input.assessmentId, input.specialist)];
+  const idDigest = createHash29("sha256").update([input.assessmentId, input.specialist.name, String(input.specialist.pass), input.diagnostic].join("\0"), "utf8").digest("hex");
+  const id = `asm_${idDigest.slice(0, 24)}`;
+  return parseSpecialistAssumption({
+    id,
+    statement: boundedText(`The ${input.specialist.name} specialist pass ${input.specialist.pass} could not establish a supported conclusion: ${input.diagnostic}`, 2e3),
+    confidence: "unknown",
+    blocking: true,
+    resolution: "Rerun this bounded specialist with a functioning executor and explicit evidence-backed output.",
+    evidence: evidence.map(sanitizeEvidence)
+  });
+}
+function specialistArtifactPath(assessmentId, specialist, fileName) {
+  const base = `${EXECUTION_ARTIFACT_ROOT}/${assessmentId}/${specialist.name}-pass-${specialist.pass}`;
+  return {
+    base: `${base}`,
+    context: `${base}/context-pack.json`,
+    prompt: `${base}/executor-prompt.md`,
+    result: `${base}/executor-result.json`,
+    raw: `${base}/executor-raw.log`,
+    redacted: `${base}/executor-redacted.log`,
+    fileName
+  };
+}
+function syntheticTask(input) {
+  const suffix = `brownfield-${createHash29("sha256").update(`${input.assessmentId}\0${input.specialist.name}\0${input.specialist.pass}`, "utf8").digest("hex").slice(0, 24)}`;
+  const projectId = formatEntityId("project", suffix);
+  const changeId = formatEntityId("change", suffix);
+  const requirementId = formatEntityId("requirement", suffix);
+  const contractId = formatEntityId("contract", suffix);
+  const oracleId = formatEntityId("oracle", suffix);
+  return taskContractSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: utcTimestampSchema.parse(input.createdAt),
+    kind: "task-contract",
+    id: contractId,
+    projectId,
+    changeId,
+    revision: 1,
+    title: `Brownfield ${input.specialist.name} assessment`,
+    objective: "Produce bounded, evidence-backed specialist findings without editing the repository.",
+    requirementIds: [requirementId],
+    wave: "LEGACY",
+    agents: ["legacy-agent"],
+    dependencies: [],
+    context: { specRefs: [], designRefs: [], predecessorArtifacts: [] },
+    scope: { read: ["."], write: ["."], forbidden: [], sequentialFiles: [], budget: { maxFilesChanged: 1, maxLinesChanged: 1, maxNewFiles: 0 } },
+    interfaces: { consumes: [], produces: [{ name: "brownfield.specialist.findings", description: "Typed evidence-bound specialist findings." }] },
+    oracleRefs: [oracleId],
+    verification: [{ command: "legion", args: ["assess"], expectedExitCode: 0 }],
+    risk: { tier: "R2", reasons: ["read-only bounded assessment"] },
+    approvals: [],
+    completion: {
+      expectedArtifacts: [],
+      requiredEvidence: ["snapshot"],
+      blockedConditions: ["executor failure", "unsupported evidence"],
+      diffReconciliation: { required: false, allowUnlistedReads: true }
+    }
+  });
+}
+function cleanupFailureResult(error51) {
+  const diagnostic4 = safeDiagnostic(error51);
+  return {
+    ok: false,
+    status: "blocked",
+    summary: `Adapter artifact cleanup failed; specialist execution is blocked. ${diagnostic4}`,
+    filesChanged: [],
+    commandsRun: [],
+    findings: [{
+      id: "adapter-artifact-cleanup-failed",
+      title: "Adapter artifact cleanup failed",
+      body: `The isolated adapter artifact root was not removed. ${diagnostic4}`,
+      severity: "blocking"
+    }]
+  };
+}
+function assertNoRepositorySymlinks(snapshot) {
+  const symlinks = [...snapshot.entries()].filter(([, entry]) => entry.kind === "symlink").map(([relativePath]) => relativePath.length === 0 ? "repository root" : relativePath).sort(compareStrings10);
+  if (symlinks.length === 0) return;
+  const error51 = new Error(
+    `Specialist execution is blocked because the repository contains symlinked paths: ${symlinks.slice(0, 8).join(", ")}${symlinks.length > 8 ? `, and ${symlinks.length - 8} more` : ""}.`
+  );
+  error51.code = "SPECIALIST_SYMLINK_BLOCKED";
+  throw error51;
+}
+function specialistAdapterHasStrictReadOnlyContainment(executor) {
+  return executor === "fake" || executor === "manual";
+}
+function externalAdapterContainmentError(executor) {
+  const error51 = new Error(
+    `External ${executor} specialist execution is blocked because no strict OS-level read-only containment is available.`
+  );
+  error51.code = "SPECIALIST_CONTAINMENT_UNAVAILABLE";
+  return error51;
+}
+async function runWithExistingAdapter(input) {
+  const adapterArtifactRoot = await mkdtemp(path54.join(tmpdir(), "legion-brownfield-adapter-"));
+  let adapterResult;
+  let executionFailure;
+  let repositoryBaseline;
+  try {
+    const artifacts = specialistArtifactPath(input.assessmentId, input.pack.specialist, "executor-result.json");
+    const artifactPaths = [artifacts.context, artifacts.prompt, artifacts.result, artifacts.raw, artifacts.redacted];
+    const resolvedPaths = await Promise.all(artifactPaths.map(async (artifactPath) => {
+      const parsed = artifactPathSchema.parse(artifactPath);
+      const resolved = await resolveProjectArtifactPath({ repositoryRoot: adapterArtifactRoot, artifactPath: parsed });
+      return { parsed, absolutePath: resolved.absolutePath };
+    }));
+    const [context, prompt, result, raw, redacted] = resolvedPaths;
+    if (context === void 0 || prompt === void 0 || result === void 0 || raw === void 0 || redacted === void 0) {
+      throw new Error("Unable to prepare specialist adapter artifacts.");
+    }
+    await writeProjectTextFile({ repositoryRoot: adapterArtifactRoot, artifactPath: context.parsed, text: JSON.stringify({
+      snapshotId: input.snapshot.snapshotId,
+      summary: input.pack.summary,
+      excerpts: input.pack.excerpts
+    }) });
+    await writeProjectTextFile({ repositoryRoot: adapterArtifactRoot, artifactPath: prompt.parsed, text: input.pack.prompt });
+    const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+    const task = syntheticTask({ assessmentId: input.assessmentId, specialist: input.pack.specialist, createdAt });
+    const request = {
+      repositoryRoot: input.repositoryRoot,
+      artifactRepositoryRoot: adapterArtifactRoot,
+      changeId: task.changeId,
+      runId: formatEntityId("run", `brownfield-${createHash29("sha256").update(`${input.assessmentId}\0${input.pack.specialist.name}\0${input.pack.specialist.pass}`, "utf8").digest("hex").slice(0, 24)}`),
+      task,
+      mode: "review",
+      executor: input.executor,
+      readOnly: true,
+      prompt: input.pack.prompt,
+      contextPackArtifactPath: context.parsed,
+      contextPackAbsolutePath: context.absolutePath,
+      promptArtifactPath: prompt.parsed,
+      promptAbsolutePath: prompt.absolutePath,
+      resultArtifactPath: result.parsed,
+      resultAbsolutePath: result.absolutePath,
+      rawLogArtifactPath: raw.parsed,
+      rawLogAbsolutePath: raw.absolutePath,
+      redactedLogArtifactPath: redacted.parsed,
+      redactedLogAbsolutePath: redacted.absolutePath
+    };
+    repositoryBaseline = await snapshotRepository(input.repositoryRoot);
+    assertNoRepositorySymlinks(repositoryBaseline);
+    if (!specialistAdapterHasStrictReadOnlyContainment(input.executor)) {
+      executionFailure = { error: externalAdapterContainmentError(input.executor) };
+    } else {
+      try {
+        adapterResult = await adapterForKind(input.executor).run(request);
+      } catch (error51) {
+        executionFailure = { error: error51 };
+      }
+    }
+  } catch (error51) {
+    executionFailure = { error: error51 };
+  }
+  if (repositoryBaseline !== void 0) {
+    let repositoryAfter;
+    try {
+      repositoryAfter = await snapshotRepository(input.repositoryRoot, { allowUnboundedFiles: true });
+    } catch (error51) {
+      try {
+        await restoreRepositoryFromBaseline(input.repositoryRoot, repositoryBaseline);
+        executionFailure = {
+          error: new Error(`Read-only external adapter state could not be inspected; baseline restoration completed before rejecting: ${safeDiagnostic(error51)}.`)
+        };
+      } catch (cleanupError) {
+        executionFailure = {
+          error: new Error(`Read-only external adapter cleanup failed while inspecting repository state: ${safeDiagnostic(error51)} Cleanup failed: ${safeDiagnostic(cleanupError)}.`)
+        };
+      }
+    }
+    if (repositoryAfter !== void 0) {
+      const changed = changedRepositoryPaths(repositoryBaseline, repositoryAfter);
+      if (changed.length > 0) {
+        const mutation = boundedText(
+          `External specialist adapter violated the read-only repository boundary: ${changed.slice(0, 8).join(", ")}${changed.length > 8 ? `, and ${changed.length - 8} more` : ""}.`,
+          MAX_DIAGNOSTIC_CHARS
+        );
+        try {
+          await restoreRepository(input.repositoryRoot, repositoryBaseline, repositoryAfter);
+          executionFailure = { error: new Error(mutation) };
+        } catch (error51) {
+          const restoreError = new Error(`${mutation} External adapter cleanup failed: ${safeDiagnostic(error51)}.`);
+          restoreError.code = "READ_ONLY_RESTORE_FAILED";
+          executionFailure = { error: restoreError };
+        }
+      }
+    }
+  }
+  try {
+    await cleanupAdapterArtifacts(adapterArtifactRoot);
+  } catch (error51) {
+    return cleanupFailureResult(error51);
+  }
+  try {
+    await access2(adapterArtifactRoot);
+  } catch (error51) {
+    if (isRecord14(error51) && error51["code"] === "ENOENT") {
+      if (executionFailure !== void 0) throw executionFailure.error;
+      if (adapterResult === void 0) throw new Error("Adapter completed without a result.");
+      return adapterResult;
+    }
+    return cleanupFailureResult(error51);
+  }
+  return cleanupFailureResult(new Error("Isolated adapter artifact root still exists after cleanup."));
+}
+function timeoutError(timeoutMs) {
+  const error51 = new Error(`Specialist executor timed out after ${timeoutMs}ms.`);
+  error51.code = "SPECIALIST_TIMEOUT";
+  return error51;
+}
+async function withTimeout(promise2, timeoutMs) {
+  let timer;
+  try {
+    return await new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs);
+      timer.unref();
+      promise2.then(resolve, reject);
+    });
+  } finally {
+    if (timer !== void 0) clearTimeout(timer);
+  }
+}
+async function drainPromise(promise2, timeoutMs) {
+  return await new Promise((resolve) => {
+    let timer;
+    const finish = (drained) => {
+      if (timer !== void 0) clearTimeout(timer);
+      resolve(drained);
+    };
+    timer = setTimeout(() => finish(false), timeoutMs);
+    timer.unref();
+    promise2.then(() => finish(true), () => finish(true));
+  });
+}
+function outputLimitError(outputSize) {
+  const error51 = new Error(`Specialist executor output exceeded the ${MAX_ADAPTER_OUTPUT_BYTES}-byte limit (${outputSize} bytes).`);
+  error51.code = "SPECIALIST_OUTPUT_LIMIT";
+  return error51;
+}
+function cloneAndFreeze(value) {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((entry) => cloneAndFreeze(entry)));
+  }
+  if (typeof value !== "object" || value === null) return value;
+  const clone2 = {};
+  for (const [key, entry] of Object.entries(value)) clone2[key] = cloneAndFreeze(entry);
+  return Object.freeze(clone2);
+}
+function repositoryAbsolutePath(root, relativePath) {
+  if (relativePath.includes("\0")) throw new Error("In-process specialist repository path contains a NUL byte.");
+  const absoluteRoot = path54.resolve(root);
+  const absolutePath = relativePath.length === 0 ? absoluteRoot : path54.resolve(absoluteRoot, ...relativePath.split("/"));
+  const relative = path54.relative(absoluteRoot, absolutePath);
+  if (path54.isAbsolute(relative) || relative === ".." || relative.startsWith(`..${path54.sep}`)) {
+    throw new Error(`In-process specialist repository path escapes the repository root: ${relativePath}.`);
+  }
+  return absolutePath;
+}
+function repositoryMode(mode) {
+  return mode & 4095;
+}
+async function snapshotRepository(root, options = {}) {
+  const entries = /* @__PURE__ */ new Map();
+  let rootStat;
+  try {
+    rootStat = await lstat8(root);
+  } catch (error51) {
+    if (isRecord14(error51) && error51["code"] === "ENOENT") return entries;
+    throw error51;
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw new Error("In-process specialist repository root is not a directory.");
+  }
+  let snapshotBytes = 0;
+  const addEntry = (relativePath, entry) => {
+    if (entries.size >= MAX_READ_ONLY_SNAPSHOT_ENTRIES) {
+      throw new Error(`In-process specialist repository snapshot exceeded ${MAX_READ_ONLY_SNAPSHOT_ENTRIES} entries.`);
+    }
+    entries.set(relativePath, entry);
+  };
+  addEntry("", { kind: "directory", digest: "", mode: repositoryMode(rootStat.mode) });
+  const visit = async (absoluteRoot, relativeRoot) => {
+    const children = (await readdir22(absoluteRoot, { withFileTypes: true })).sort((left, right) => compareStrings10(left.name, right.name));
+    for (const child of children) {
+      const absolutePath = path54.join(absoluteRoot, child.name);
+      const relativePath = relativeRoot.length === 0 ? child.name : `${relativeRoot}/${child.name}`;
+      const stat11 = await lstat8(absolutePath);
+      if (stat11.isDirectory()) {
+        addEntry(relativePath, { kind: "directory", digest: "", mode: repositoryMode(stat11.mode) });
+        await visit(absolutePath, relativePath);
+        continue;
+      }
+      if (stat11.isFile()) {
+        const fileWithinBudget = Number.isSafeInteger(stat11.size) && stat11.size <= MAX_READ_ONLY_SNAPSHOT_FILE_BYTES && snapshotBytes + stat11.size <= MAX_READ_ONLY_SNAPSHOT_BYTES;
+        if (!fileWithinBudget) {
+          if (options.allowUnboundedFiles !== true) {
+            throw new Error(`In-process specialist repository file exceeds the bounded restoration limit: ${relativePath}.`);
+          }
+          addEntry(relativePath, {
+            kind: "file",
+            digest: `unavailable:${stat11.size}`,
+            mode: repositoryMode(stat11.mode)
+          });
+          continue;
+        }
+        const bytes = await readFile28(absolutePath);
+        if (bytes.length > MAX_READ_ONLY_SNAPSHOT_FILE_BYTES || snapshotBytes + bytes.length > MAX_READ_ONLY_SNAPSHOT_BYTES) {
+          if (options.allowUnboundedFiles !== true) {
+            throw new Error(`In-process specialist repository file changed beyond the bounded restoration limit: ${relativePath}.`);
+          }
+          addEntry(relativePath, {
+            kind: "file",
+            digest: `unavailable:${bytes.length}`,
+            mode: repositoryMode(stat11.mode)
+          });
+          continue;
+        }
+        snapshotBytes += bytes.length;
+        addEntry(relativePath, {
+          kind: "file",
+          digest: createHash29("sha256").update(bytes).digest("hex"),
+          mode: repositoryMode(stat11.mode),
+          bytes
+        });
+        continue;
+      }
+      if (stat11.isSymbolicLink()) {
+        const linkTarget = await readlink(absolutePath);
+        if (Buffer.byteLength(linkTarget, "utf8") > MAX_READ_ONLY_SYMLINK_BYTES) {
+          if (options.allowUnboundedFiles !== true) {
+            throw new Error(`In-process specialist repository symlink exceeds the bounded restoration limit: ${relativePath}.`);
+          }
+          addEntry(relativePath, {
+            kind: "symlink",
+            digest: "unavailable",
+            mode: repositoryMode(stat11.mode)
+          });
+          continue;
+        }
+        addEntry(relativePath, {
+          kind: "symlink",
+          digest: createHash29("sha256").update(linkTarget, "utf8").digest("hex"),
+          mode: repositoryMode(stat11.mode),
+          linkTarget
+        });
+        continue;
+      }
+      addEntry(relativePath, {
+        kind: "other",
+        digest: `${stat11.mode}:${stat11.size}`,
+        mode: repositoryMode(stat11.mode)
+      });
+    }
+  };
+  await visit(root, "");
+  return entries;
+}
+function sameRepositoryEntry(left, right) {
+  return left.kind === right.kind && left.digest === right.digest && left.mode === right.mode && left.linkTarget === right.linkTarget;
+}
+function repositoryPathDepth(relativePath) {
+  return relativePath.length === 0 ? 0 : relativePath.split("/").length;
+}
+function repositoryChangeLabel(action, relativePath) {
+  return `${action} ${relativePath.length === 0 ? "repository root" : relativePath}`;
+}
+function changedRepositoryPaths(before, after) {
+  const changed = [];
+  const paths = [.../* @__PURE__ */ new Set([...before.keys(), ...after.keys()])].sort(compareStrings10);
+  for (const relativePath of paths) {
+    const previous = before.get(relativePath);
+    const current = after.get(relativePath);
+    if (previous === void 0) changed.push(repositoryChangeLabel("added", relativePath));
+    else if (current === void 0) changed.push(repositoryChangeLabel("removed", relativePath));
+    else if (!sameRepositoryEntry(previous, current)) changed.push(repositoryChangeLabel("changed", relativePath));
+  }
+  return changed;
+}
+function mutationDiagnostic(changed) {
+  if (changed.length === 0) return void 0;
+  return boundedText(
+    `In-process specialist callback violated the read-only repository boundary: ${changed.slice(0, 8).join(", ")}${changed.length > 8 ? `, and ${changed.length - 8} more` : ""}.`,
+    MAX_DIAGNOSTIC_CHARS
+  );
+}
+function addedSymlinkPaths(before, after) {
+  return [...after.entries()].filter(([relativePath, entry]) => entry.kind === "symlink" && before.get(relativePath) === void 0).map(([relativePath]) => repositoryChangeLabel("added", relativePath)).sort(compareStrings10);
+}
+async function removeRepositoryEntry(root, relativePath) {
+  if (relativePath.length === 0) throw new Error("Refusing to remove the in-process specialist repository root.");
+  const absolutePath = repositoryAbsolutePath(root, relativePath);
+  let stat11;
+  try {
+    stat11 = await lstat8(absolutePath);
+  } catch (error51) {
+    if (isRecord14(error51) && error51["code"] === "ENOENT") return;
+    throw error51;
+  }
+  await rm10(absolutePath, { recursive: stat11.isDirectory() && !stat11.isSymbolicLink(), force: false });
+}
+async function ensureRepositoryDirectory(root, relativePath) {
+  const absoluteRoot = repositoryAbsolutePath(root, "");
+  let rootStat;
+  try {
+    rootStat = await lstat8(absoluteRoot);
+  } catch (error51) {
+    if (!(isRecord14(error51) && error51["code"] === "ENOENT")) throw error51;
+    await mkdir15(absoluteRoot, { mode: 448 });
+    rootStat = await lstat8(absoluteRoot);
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("Cannot safely restore a repository directory through a non-directory root.");
+  if (relativePath.length === 0) return absoluteRoot;
+  const components = relativePath.split("/");
+  let currentRelative = "";
+  for (const component of components) {
+    currentRelative = currentRelative.length === 0 ? component : `${currentRelative}/${component}`;
+    const current = repositoryAbsolutePath(root, currentRelative);
+    let stat11;
+    try {
+      stat11 = await lstat8(current);
+    } catch (error51) {
+      if (!(isRecord14(error51) && error51["code"] === "ENOENT")) throw error51;
+      await mkdir15(current, { mode: 448 });
+      continue;
+    }
+    if (!stat11.isDirectory() || stat11.isSymbolicLink()) throw new Error(`Cannot safely restore through repository path ${currentRelative}.`);
+  }
+  return repositoryAbsolutePath(root, relativePath);
+}
+async function restoreFile(root, relativePath, entry) {
+  if (entry.bytes === void 0) throw new Error(`Missing bounded bytes for repository file ${relativePath}.`);
+  const parentRelative = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/")) : "";
+  const parent = await ensureRepositoryDirectory(root, parentRelative);
+  const absolutePath = repositoryAbsolutePath(root, relativePath);
+  const temporaryRoot = await mkdtemp(path54.join(parent, ".legion-read-only-restore-"));
+  const temporaryPath = path54.join(temporaryRoot, "entry");
+  try {
+    await writeFile11(temporaryPath, entry.bytes, { mode: entry.mode });
+    await chmod(temporaryPath, entry.mode);
+    await rename7(temporaryPath, absolutePath);
+    await chmod(absolutePath, entry.mode);
+  } finally {
+    await rm10(temporaryRoot, { recursive: true, force: true });
+  }
+}
+async function restoreSymlink(root, relativePath, entry) {
+  if (entry.linkTarget === void 0) throw new Error(`Missing bounded link target for repository symlink ${relativePath}.`);
+  const parentRelative = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/")) : "";
+  const parent = await ensureRepositoryDirectory(root, parentRelative);
+  const absolutePath = repositoryAbsolutePath(root, relativePath);
+  const temporaryRoot = await mkdtemp(path54.join(parent, ".legion-read-only-restore-"));
+  const temporaryPath = path54.join(temporaryRoot, "entry");
+  try {
+    await symlink(entry.linkTarget, temporaryPath);
+    await rename7(temporaryPath, absolutePath);
+  } finally {
+    await rm10(temporaryRoot, { recursive: true, force: true });
+  }
+}
+async function clearRepositoryRoot(root) {
+  const absoluteRoot = repositoryAbsolutePath(root, "");
+  let rootStat;
+  try {
+    rootStat = await lstat8(absoluteRoot);
+  } catch (error51) {
+    if (!(isRecord14(error51) && error51["code"] === "ENOENT")) throw error51;
+    await mkdir15(absoluteRoot, { mode: 448 });
+    return;
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    await rm10(absoluteRoot, { recursive: false, force: false });
+    await mkdir15(absoluteRoot, { mode: 448 });
+    return;
+  }
+  const children = (await readdir22(absoluteRoot, { withFileTypes: true })).sort((left, right) => compareStrings10(left.name, right.name));
+  for (const child of children) await removeRepositoryEntry(root, child.name);
+}
+async function prepareRepositoryTreeForRestore(root) {
+  const absoluteRoot = repositoryAbsolutePath(root, "");
+  let rootStat;
+  try {
+    rootStat = await lstat8(absoluteRoot);
+  } catch (error51) {
+    if (isRecord14(error51) && error51["code"] === "ENOENT") {
+      await mkdir15(absoluteRoot, { mode: 448 });
+      return;
+    }
+    throw error51;
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) return;
+  const queue = [absoluteRoot];
+  let visited = 0;
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === void 0) continue;
+    if (visited >= MAX_READ_ONLY_SNAPSHOT_ENTRIES) {
+      throw new Error(`Read-only repository cleanup exceeded ${MAX_READ_ONLY_SNAPSHOT_ENTRIES} directory entries while restoring access.`);
+    }
+    visited += 1;
+    await chmod(current, 448);
+    const children = (await readdir22(current, { withFileTypes: true })).sort((left, right) => compareStrings10(left.name, right.name));
+    for (const child of children) {
+      if (!child.isDirectory() || child.isSymbolicLink()) continue;
+      const childPath = path54.join(current, child.name);
+      await chmod(childPath, 448);
+      queue.push(childPath);
+    }
+  }
+}
+async function restoreRepositoryFromBaseline(root, before) {
+  if ([...before.values()].some((entry) => entry.kind === "other")) {
+    throw new Error("Cannot safely restore a repository containing non-regular entries from a bounded snapshot.");
+  }
+  await prepareRepositoryTreeForRestore(root);
+  await clearRepositoryRoot(root);
+  const pathsToRestore = [...before.keys()].sort((left, right) => repositoryPathDepth(left) - repositoryPathDepth(right) || compareStrings10(left, right));
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    if (previous === void 0) continue;
+    if (previous.kind === "directory") {
+      const absolutePath = await ensureRepositoryDirectory(root, relativePath);
+      await chmod(absolutePath, 448);
+    }
+  }
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    if (previous === void 0) continue;
+    if (previous.kind === "file") {
+      await restoreFile(root, relativePath, previous);
+    } else if (previous.kind === "symlink") {
+      await restoreSymlink(root, relativePath, previous);
+    }
+  }
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    if (previous === void 0) continue;
+    if (previous.kind === "directory") {
+      const absolutePath = await ensureRepositoryDirectory(root, relativePath);
+      await chmod(absolutePath, previous.mode);
+    }
+  }
+  const verified = await snapshotRepository(root);
+  const residual = changedRepositoryPaths(before, verified);
+  if (residual.length > 0) {
+    throw new Error(`Read-only repository cleanup did not restore the original state: ${residual.slice(0, 8).join(", ")}${residual.length > 8 ? `, and ${residual.length - 8} more` : ""}.`);
+  }
+}
+async function restoreRepository(root, before, after) {
+  const changed = changedRepositoryPaths(before, after);
+  if (changed.length === 0) return;
+  for (const [relativePath, previous] of before.entries()) {
+    if (previous.kind !== "other") continue;
+    const current = after.get(relativePath);
+    if (current === void 0 || !sameRepositoryEntry(previous, current)) {
+      throw new Error(`Cannot safely restore non-regular repository entry ${relativePath.length === 0 ? "repository root" : relativePath}.`);
+    }
+  }
+  const pathsToRestore = [...before.keys()].sort((left, right) => repositoryPathDepth(left) - repositoryPathDepth(right) || compareStrings10(left, right));
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    const current = after.get(relativePath);
+    if (previous?.kind === "directory" && (current === void 0 || current.kind === "directory")) {
+      const absolutePath = await ensureRepositoryDirectory(root, relativePath);
+      await chmod(absolutePath, 448);
+    }
+  }
+  const pathsToRemove = [...after.keys()].filter((relativePath) => {
+    if (relativePath.length === 0) return false;
+    const previous = before.get(relativePath);
+    const current = after.get(relativePath);
+    return current !== void 0 && (previous === void 0 || previous.kind !== current.kind);
+  }).sort((left, right) => repositoryPathDepth(right) - repositoryPathDepth(left) || compareStrings10(left, right));
+  for (const relativePath of pathsToRemove) await removeRepositoryEntry(root, relativePath);
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    if (previous === void 0) continue;
+    const current = after.get(relativePath);
+    if (previous.kind === "file") {
+      if (current === void 0 || current.kind !== "file" || !sameRepositoryEntry(previous, current)) {
+        await restoreFile(root, relativePath, previous);
+      }
+    } else if (previous.kind === "symlink") {
+      if (current === void 0 || current.kind !== "symlink" || !sameRepositoryEntry(previous, current)) {
+        await restoreSymlink(root, relativePath, previous);
+      }
+    }
+  }
+  for (const relativePath of pathsToRestore) {
+    const previous = before.get(relativePath);
+    if (previous === void 0) continue;
+    if (previous.kind === "directory") {
+      const absolutePath = await ensureRepositoryDirectory(root, relativePath);
+      await chmod(absolutePath, previous.mode);
+    }
+  }
+  const verified = await snapshotRepository(root);
+  const residual = changedRepositoryPaths(before, verified);
+  if (residual.length > 0) {
+    throw new Error(`Read-only repository cleanup did not restore the original state: ${residual.slice(0, 8).join(", ")}${residual.length > 8 ? `, and ${residual.length - 8} more` : ""}.`);
+  }
+}
+async function runReadOnlyInProcessCallback(input) {
+  const before = input.baseline ?? await snapshotRepository(input.repositoryRoot);
+  assertNoRepositorySymlinks(before);
+  const callbackPromise = Promise.resolve().then(() => input.execute(input.request));
+  let result;
+  let callbackError;
+  try {
+    result = await withTimeout(callbackPromise, input.timeoutMs);
+  } catch (error51) {
+    callbackError = error51;
+    if (isRecord14(error51) && error51["code"] === "SPECIALIST_TIMEOUT") {
+      const drained = await drainPromise(callbackPromise, SPECIALIST_TIMEOUT_DRAIN_MS);
+      if (!drained) {
+        try {
+          await restoreRepositoryFromBaseline(input.repositoryRoot, before);
+        } catch (cleanupError) {
+          const restoreError = new Error(`Read-only repository cleanup failed after specialist timeout: ${safeDiagnostic(cleanupError)}.`);
+          restoreError.code = "READ_ONLY_RESTORE_FAILED";
+          throw restoreError;
+        }
+        const drainError = timeoutError(input.timeoutMs);
+        drainError.code = "SPECIALIST_TIMEOUT_DRAIN";
+        throw drainError;
+      }
+    }
+  }
+  let after;
+  try {
+    after = await snapshotRepository(input.repositoryRoot, { allowUnboundedFiles: true });
+  } catch (error51) {
+    try {
+      await restoreRepositoryFromBaseline(input.repositoryRoot, before);
+    } catch (cleanupError) {
+      const restoreError = new Error(`Read-only repository cleanup failed while inspecting callback state: ${safeDiagnostic(error51)} Cleanup failed: ${safeDiagnostic(cleanupError)}.`);
+      restoreError.code = "READ_ONLY_RESTORE_FAILED";
+      throw restoreError;
+    }
+    throw new Error(`Read-only callback state exceeded the bounded inspection limit; cleanup restored the baseline before rejecting: ${safeDiagnostic(error51)}.`);
+  }
+  const mutation = mutationDiagnostic(changedRepositoryPaths(before, after));
+  if (mutation !== void 0) {
+    const createdSymlinks = addedSymlinkPaths(before, after);
+    let cleanupError;
+    try {
+      await restoreRepository(input.repositoryRoot, before, after);
+    } catch (error51) {
+      cleanupError = error51 instanceof Error ? error51 : new Error(safeDiagnostic(error51));
+    }
+    if (cleanupError !== void 0) {
+      const restoreError = new Error(`${mutation} Read-only repository cleanup failed: ${safeDiagnostic(cleanupError)}.`);
+      restoreError.code = "READ_ONLY_RESTORE_FAILED";
+      throw restoreError;
+    }
+    const symlinkDiagnostic = createdSymlinks.length === 0 ? mutation : `In-process specialist callback created repository symlink(s) during execution: ${createdSymlinks.slice(0, 8).join(", ")}${createdSymlinks.length > 8 ? `, and ${createdSymlinks.length - 8} more` : ""}. External writes through those links cannot be undone; the result is blocked and the repository was restored.`;
+    const diagnostic4 = createdSymlinks.length > 0 ? symlinkDiagnostic : callbackError === void 0 ? mutation : `${safeDiagnostic(callbackError)} ${mutation}`;
+    const mutationError = new Error(diagnostic4);
+    if (createdSymlinks.length > 0) {
+      mutationError.code = "SPECIALIST_SYMLINK_BLOCKED";
+    } else if (isRecord14(callbackError) && typeof callbackError["code"] === "string") {
+      mutationError.code = callbackError["code"];
+    }
+    throw mutationError;
+  }
+  if (callbackError !== void 0) throw callbackError;
+  return result;
+}
+function evidenceSupportForPack(pack) {
+  const source = /* @__PURE__ */ new Set();
+  const structural = /* @__PURE__ */ new Set();
+  const command = /* @__PURE__ */ new Set();
+  const add = (referenceInput) => {
+    const reference = normalizedEvidenceReference(referenceInput);
+    if (reference.kind === "source-file") source.add(evidenceKey(reference));
+    else if (reference.kind === "structural-fact") {
+      structural.add(evidenceKey(reference));
+      structural.add([reference.kind, reference.path, "", reference.factId].join("\0"));
+    } else if (reference.kind === "command-result") command.add(evidenceKey(reference));
+  };
+  for (const reference of pack.evidence) add(reference);
+  return { source, structural, command };
+}
+async function runOne(input) {
+  const { pack } = input;
+  const request = cloneAndFreeze({
+    repositoryRoot: input.repositoryRoot,
+    assessmentId: input.assessmentId,
+    snapshotId: pack.snapshotId,
+    specialist: { ...pack.specialist },
+    summary: { ...pack.summary },
+    evidence: pack.evidence.map(sanitizeEvidence),
+    excerptMetadata: pack.excerpts.map((excerpt) => ({
+      path: excerpt.path,
+      ...excerpt.sha256 === void 0 ? {} : { sha256: excerpt.sha256 },
+      factIds: [...excerpt.factIds]
+    })),
+    prompt: pack.prompt,
+    promptHash: pack.promptHash,
+    sourceFingerprint: pack.sourceFingerprint,
+    semanticIndexSha256: pack.semanticIndexSha256,
+    semanticSqliteSha256: pack.semanticSqliteSha256,
+    executor: input.executor
+  });
+  const support = evidenceSupportForPack(pack);
+  let outcome;
+  let observedOutputSize;
+  let abortRemaining = false;
+  try {
+    let raw;
+    if (input.execute === void 0) {
+      raw = await runWithExistingAdapter({
+        repositoryRoot: input.repositoryRoot,
+        assessmentId: input.assessmentId,
+        snapshot: input.snapshot,
+        pack,
+        executor: input.executor
+      });
+    } else {
+      raw = await runReadOnlyInProcessCallback({
+        repositoryRoot: input.repositoryRoot,
+        execute: input.execute,
+        request,
+        timeoutMs: input.timeoutMs,
+        ...input.readOnlyBaseline === void 0 ? {} : { baseline: input.readOnlyBaseline }
+      });
+    }
+    observedOutputSize = serializedSize(raw);
+    if (input.execute !== void 0 && observedOutputSize > MAX_ADAPTER_OUTPUT_BYTES) throw outputLimitError(observedOutputSize);
+    const parsedEnvelope = specialistPayloadFrom(raw);
+    outcome = { status: parsedEnvelope.status, raw, ...parsedEnvelope.payload === void 0 ? {} : { payload: parsedEnvelope.payload }, diagnostic: parsedEnvelope.diagnostic };
+  } catch (error51) {
+    const diagnostic5 = safeDiagnostic(error51);
+    const errorCode2 = error51?.code;
+    abortRemaining = errorCode2 === "READ_ONLY_RESTORE_FAILED" || errorCode2 === "SPECIALIST_TIMEOUT_DRAIN";
+    outcome = {
+      status: errorCode2 === "SPECIALIST_TIMEOUT" || errorCode2 === "SPECIALIST_TIMEOUT_DRAIN" || errorCode2 === "SPECIALIST_SYMLINK_BLOCKED" || errorCode2 === "SPECIALIST_CONTAINMENT_UNAVAILABLE" ? "blocked" : "failed",
+      raw: error51,
+      diagnostic: diagnostic5
+    };
+  }
+  let parsed;
+  let diagnostic4 = outcome.diagnostic;
+  let status2 = outcome.status;
+  if (status2 === "succeeded") {
+    try {
+      parsed = normalizeSpecialistOutput({ value: outcome.payload, specialist: pack.specialist, support });
+    } catch (error51) {
+      status2 = "failed";
+      diagnostic4 = safeDiagnostic(error51);
+    }
+  }
+  const evidence = pack.evidence;
+  const record2 = {
+    specialist: pack.specialist,
+    executor: input.executor,
+    transport: input.execute === void 0 ? "adapter" : "in-process",
+    status: status2,
+    snapshotId: input.snapshot.snapshotId,
+    sourceFingerprint: pack.sourceFingerprint,
+    semanticIndexSha256: pack.semanticIndexSha256,
+    semanticSqliteSha256: pack.semanticSqliteSha256,
+    summary: pack.summary,
+    evidence,
+    excerptPaths: pack.excerpts.map((excerpt) => ({
+      path: excerpt.path,
+      ...excerpt.sha256 === void 0 ? {} : { sha256: excerpt.sha256 },
+      factIds: excerpt.factIds
+    })),
+    truncation: pack.truncation,
+    promptHash: pack.promptHash,
+    promptSize: pack.promptSize,
+    promptBytes: pack.promptBytes,
+    resultHash: hashExecutionOutcome(outcome),
+    outputSize: observedOutputSize ?? serializedSize(outcome.raw),
+    diagnostic: status2 === "succeeded" ? "" : boundedText(diagnostic4 || "Specialist output was rejected.", MAX_DIAGNOSTIC_CHARS)
+  };
+  return {
+    record: record2,
+    ...parsed === void 0 ? {} : { parsed },
+    ...status2 === "succeeded" ? {} : { diagnostic: record2.diagnostic },
+    ...abortRemaining ? { abortRemaining: true } : {}
+  };
+}
+function unexecutedRecord(input) {
+  const diagnostic4 = boundedText(input.diagnostic, MAX_DIAGNOSTIC_CHARS);
+  return {
+    specialist: input.pack.specialist,
+    executor: input.executor,
+    transport: input.execute === void 0 ? "adapter" : "in-process",
+    status: input.status,
+    snapshotId: input.snapshot.snapshotId,
+    sourceFingerprint: input.pack.sourceFingerprint,
+    semanticIndexSha256: input.pack.semanticIndexSha256,
+    semanticSqliteSha256: input.pack.semanticSqliteSha256,
+    summary: input.pack.summary,
+    evidence: input.pack.evidence,
+    excerptPaths: input.pack.excerpts.map((excerpt) => ({
+      path: excerpt.path,
+      ...excerpt.sha256 === void 0 ? {} : { sha256: excerpt.sha256 },
+      factIds: excerpt.factIds
+    })),
+    truncation: input.pack.truncation,
+    promptHash: input.pack.promptHash,
+    promptSize: input.pack.promptSize,
+    promptBytes: input.pack.promptBytes,
+    resultHash: hashUnknown({ status: input.status, diagnostic: diagnostic4 }),
+    outputSize: 0,
+    diagnostic: diagnostic4
+  };
+}
+async function runBrownfieldSpecialists(input) {
+  const snapshot = validateSnapshot(input.snapshot);
+  attachCoverageSourceHashes(snapshot, await inventoryHashesForSnapshot(input.repositoryRoot, snapshot));
+  const assessmentId = assessmentIdSchema.parse(input.assessmentId);
+  const effort = assessmentEffortSchema.parse(input.effort);
+  const timeoutMs = input.timeoutMs ?? DEFAULT_SPECIALIST_TIMEOUT_MS;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new Error("Specialist timeoutMs must be a positive safe integer.");
+  const selected = await selectExecutionAdapterKind(input.executor);
+  if (typeof selected !== "string") throw new Error(selected.diagnostic.message);
+  const packInput = {
+    snapshot,
+    signals: input.signals,
+    effort,
+    ...input.commandResults === void 0 ? {} : { commandResults: input.commandResults }
+  };
+  const packs = buildBrownfieldExcerptPacks(packInput);
+  const records = [];
+  const findings = [];
+  const assumptions = [];
+  const diagnostics = [];
+  let readOnlyBaseline;
+  let baselineFailure;
+  if (input.execute !== void 0) {
+    try {
+      readOnlyBaseline = await snapshotRepository(input.repositoryRoot);
+    } catch (error51) {
+      baselineFailure = `In-process specialist baseline could not be captured: ${safeDiagnostic(error51)}.`;
+    }
+  }
+  const seenFindingIds = /* @__PURE__ */ new Set();
+  const seenAssumptionIds = /* @__PURE__ */ new Set();
+  const appendFailure = (pack, record2, diagnosticInput) => {
+    const diagnostic4 = diagnosticInput || "Specialist execution failed.";
+    records.push(record2);
+    const evidence = fallbackEvidence(pack, snapshot, assessmentId);
+    try {
+      const assumption = unknownAssumption({ assessmentId, specialist: pack.specialist, diagnostic: diagnostic4, evidence });
+      if (!seenAssumptionIds.has(assumption.id)) {
+        seenAssumptionIds.add(assumption.id);
+        assumptions.push(assumption);
+      }
+    } catch (error51) {
+      diagnostics.push(safeDiagnostic(error51));
+    }
+    const specialistDiagnostic = `${pack.specialist.name} pass ${pack.specialist.pass}: ${diagnostic4}`;
+    if (!diagnostics.includes(specialistDiagnostic)) diagnostics.push(specialistDiagnostic);
+  };
+  if (baselineFailure !== void 0) {
+    for (const pack of packs) {
+      appendFailure(pack, unexecutedRecord({
+        pack,
+        snapshot,
+        executor: selected,
+        execute: input.execute,
+        status: "failed",
+        diagnostic: baselineFailure
+      }), baselineFailure);
+    }
+  }
+  for (const [packIndex, pack] of packs.entries()) {
+    if (baselineFailure !== void 0) break;
+    const run2 = await runOne({
+      repositoryRoot: input.repositoryRoot,
+      assessmentId,
+      snapshot,
+      executor: selected,
+      pack,
+      execute: input.execute,
+      ...readOnlyBaseline === void 0 ? {} : { readOnlyBaseline },
+      timeoutMs
+    });
+    let record2 = run2.record;
+    let parsed = run2.parsed;
+    if (parsed !== void 0) {
+      const duplicateAssumption = parsed.assumptions.some((assumption) => seenAssumptionIds.has(assumption.id));
+      const duplicateFinding = parsed.findings.some((finding) => seenFindingIds.has(finding.id));
+      if (duplicateAssumption || duplicateFinding) {
+        const diagnostic4 = "Output reused an ID from an earlier specialist pass.";
+        record2 = { ...record2, status: "failed", diagnostic: diagnostic4 };
+        parsed = void 0;
+      }
+    }
+    if (parsed === void 0) {
+      const diagnostic4 = run2.diagnostic ?? record2.diagnostic;
+      appendFailure(pack, record2, diagnostic4);
+      if (run2.abortRemaining === true) {
+        const remainingDiagnostic = `Specialist dispatch halted after ${pack.specialist.name} pass ${pack.specialist.pass}: repository restoration did not complete safely.`;
+        for (const remainingPack of packs.slice(packIndex + 1)) {
+          appendFailure(remainingPack, unexecutedRecord({
+            pack: remainingPack,
+            snapshot,
+            executor: selected,
+            execute: input.execute,
+            status: "blocked",
+            diagnostic: remainingDiagnostic
+          }), remainingDiagnostic);
+        }
+        break;
+      }
+      continue;
+    }
+    records.push(record2);
+    for (const assumption of parsed.assumptions) {
+      seenAssumptionIds.add(assumption.id);
+      assumptions.push(assumption);
+    }
+    for (const finding of parsed.findings) {
+      seenFindingIds.add(finding.id);
+      findings.push(finding);
+    }
+  }
+  return {
+    ok: records.every((record2) => record2.status === "succeeded") && diagnostics.length === 0,
+    roster: rosterForEffort(effort),
+    packs,
+    findings,
+    assumptions,
+    executionRecords: records,
+    diagnostics
+  };
+}
+
+// packages/cli/src/workflow/brownfield-synthesis.ts
+import { createHash as createHash30 } from "node:crypto";
+var MAX_TITLE_CHARS = 256;
+var MAX_SUMMARY_CHARS = 4e3;
+var MAX_STRENGTHS = 64;
+var MAX_FINDINGS = 2e3;
+var MAX_ASSUMPTIONS = 256;
+var MAX_IMPROVEMENTS = 2e3;
+var MAX_GAPS = 256;
+var MAX_QUESTIONS = 256;
+var MAX_STRING_CHARS = 4e3;
+var MAX_FINDING_ASSUMPTIONS = 32;
+var SYNTHESIS_EVIDENCE_PATH = ".legion/project/assessment/synthesis-input.json";
+var SEVERITY_ORDER = {
+  critical: 0,
+  major: 1,
+  moderate: 2,
+  minor: 3,
+  informational: 4
+};
+var CONFIDENCE_ORDER = {
+  high: 0,
+  medium: 1,
+  low: 2,
+  unknown: 3
+};
+var EMPTY_SUMMARY = {
+  sourceFiles: 0,
+  coverageFiles: 0,
+  symbols: 0,
+  imports: 0,
+  exports: 0,
+  testFiles: 0,
+  testToSourceLinks: 0,
+  dependencyEdges: 0,
+  highRiskSignals: 0,
+  unsupportedSignals: 0
+};
+function compareStrings11(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function normalizedText(value) {
+  return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("en-US");
+}
+function redactText(value) {
+  return redactBrownfieldSpecialistText(value).replace(/\b(?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;}]+)/giu, "$1=[REDACTED]").replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu, "Bearer [REDACTED]").replace(/\b(?:sk|ghp|gho|xox[baprs]-)[A-Za-z0-9_-]{8,}\b/gu, "[REDACTED]").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, " ");
+}
+function boundedText2(value, limit, fallback = "Unknown") {
+  const source = typeof value === "string" ? value : fallback;
+  const sanitized = redactText(source).replace(/\r\n?/gu, "\n").trim();
+  if (sanitized.length <= limit) return sanitized || fallback;
+  const marker = " \u2026[TRUNCATED]";
+  return `${sanitized.slice(0, Math.max(1, limit - marker.length))}${marker}`;
+}
+function hash24(value) {
+  return createHash30("sha256").update(value, "utf8").digest("hex").slice(0, 24);
+}
+function isRecord15(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function validConfidence(value) {
+  const parsed = assessmentConfidenceSchema.safeParse(value);
+  return parsed.success ? parsed.data : "unknown";
+}
+function validSeverity(value) {
+  const parsed = assessmentSeveritySchema.safeParse(value);
+  return parsed.success ? parsed.data : "moderate";
+}
+function validSpecialist(value) {
+  return value === "architecture" || value === "code" || value === "tests" || value === "security" || value === "product-intent" || value === "documentation" ? value : "code";
+}
+function evidenceIdentity(reference) {
+  switch (reference.kind) {
+    case "structural-fact":
+      return [reference.kind, reference.path, reference.sha256 ?? "", reference.factId].join("\0");
+    case "source-file":
+      return [reference.kind, reference.path, reference.sha256].join("\0");
+    default:
+      return [reference.kind, reference.path].join("\0");
+  }
+}
+function evidenceSortKey2(reference) {
+  return `${evidenceIdentity(reference)}\0${reference.note}`;
+}
+function normalizeEvidence(values) {
+  const byIdentity = /* @__PURE__ */ new Map();
+  for (const value of values ?? []) {
+    const parsed = assessmentEvidenceRefSchema.safeParse(value);
+    if (!parsed.success) continue;
+    const candidate = parsed.data;
+    const sanitized = assessmentEvidenceRefSchema.parse({ ...candidate, note: boundedText2(candidate.note, 512) });
+    const key = evidenceIdentity(sanitized);
+    const existing = byIdentity.get(key);
+    if (existing === void 0 || compareStrings11(sanitized.note, existing.note) < 0) byIdentity.set(key, sanitized);
+  }
+  return [...byIdentity.values()].sort((left, right) => compareStrings11(evidenceSortKey2(left), evidenceSortKey2(right)));
+}
+function fallbackEvidence2(note) {
+  return assessmentEvidenceRefSchema.parse({
+    kind: "user-input",
+    path: artifactPathSchema.parse(SYNTHESIS_EVIDENCE_PATH),
+    note: boundedText2(note, 512)
+  });
+}
+function signalEvidence(signal, fallback) {
+  const evidence = normalizeEvidence(signal.evidence);
+  return evidence.length > 0 ? evidence.slice(0, 128) : [fallbackEvidence2(fallback)];
+}
+function findingSemanticKey(finding) {
+  return JSON.stringify({
+    title: normalizedText(finding.title),
+    statement: normalizedText(finding.statement),
+    severity: finding.severity,
+    confidence: finding.confidence,
+    recommendation: normalizedText(finding.recommendation),
+    evidence: [...finding.evidence].map(evidenceIdentity).sort(compareStrings11),
+    assumptions: [...finding.assumptions].sort(compareStrings11)
+  });
+}
+function findingTieKey(finding) {
+  return [
+    findingSemanticKey(finding),
+    finding.specialist,
+    finding.id
+  ].join("\0");
+}
+function sourcePathKey(finding) {
+  const sourcePaths = finding.evidence.filter((reference) => reference.kind === "source-file").map((reference) => reference.path).sort(compareStrings11);
+  const paths = (sourcePaths.length > 0 ? sourcePaths : finding.evidence.map((reference) => reference.path)).sort(compareStrings11);
+  return paths[0] ?? "~";
+}
+function factIdKey(finding) {
+  const factIds = finding.evidence.filter((reference) => reference.kind === "structural-fact").map((reference) => reference.factId).sort(compareStrings11);
+  return factIds[0] ?? "~";
+}
+function findingRank(left, right) {
+  return SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity] || CONFIDENCE_ORDER[left.confidence] - CONFIDENCE_ORDER[right.confidence] || right.evidence.length - left.evidence.length || compareStrings11(sourcePathKey(left), sourcePathKey(right)) || compareStrings11(factIdKey(left), factIdKey(right)) || compareStrings11(findingTieKey(left), findingTieKey(right));
+}
+function deterministicFindingId(input) {
+  return `af_${hash24(JSON.stringify({
+    specialist: input.specialist,
+    title: normalizedText(input.title),
+    statement: normalizedText(input.statement),
+    severity: input.severity,
+    evidence: input.evidence.map(evidenceIdentity).sort(compareStrings11)
+  }))}`;
+}
+function normalizeFinding(value, sourceOrder) {
+  if (!isRecord15(value)) return void 0;
+  const title = boundedText2(value["title"], 256, "Unnamed finding");
+  const statement = boundedText2(value["statement"], 4e3, "The evidence requires further investigation.");
+  const recommendation = boundedText2(value["recommendation"], 4e3, "Investigate the bounded evidence before changing source.");
+  const severity = validSeverity(value["severity"]);
+  const confidence = validConfidence(value["confidence"]);
+  const specialist = validSpecialist(value["specialist"]);
+  const evidence = normalizeEvidence(Array.isArray(value["evidence"]) ? value["evidence"] : void 0);
+  const retainedEvidence = evidence.length > 0 ? evidence.slice(0, 128) : [fallbackEvidence2(`Evidence is required to validate finding '${title}'.`)];
+  const idCandidate = typeof value["id"] === "string" && assessmentFindingIdSchema.safeParse(value["id"]).success ? value["id"] : deterministicFindingId({ specialist, title, statement, severity, evidence: retainedEvidence });
+  const assumptions = Array.isArray(value["assumptions"]) ? value["assumptions"].filter((entry) => typeof entry === "string" && assessmentAssumptionIdSchema.safeParse(entry).success) : [];
+  const parsed = assessmentFindingSchema.safeParse({
+    id: idCandidate,
+    specialist,
+    title,
+    statement,
+    severity,
+    confidence,
+    evidence: retainedEvidence,
+    assumptions: [...new Set(assumptions)].slice(0, MAX_FINDING_ASSUMPTIONS),
+    recommendation
+  });
+  if (!parsed.success) return void 0;
+  return { ...parsed.data, _sourceOrder: sourceOrder };
+}
+function deterministicSignalFinding(input) {
+  const title = `Structural signal: ${boundedText2(input.code, 256, "unknown")}`;
+  const statement = boundedText2(input.statement, 4e3, "A deterministic signal requires review.");
+  const evidence = signalEvidence({ evidence: input.evidence }, `Deterministic evidence for ${input.code}.`);
+  const id = deterministicFindingId({ ...input, title, statement });
+  return assessmentFindingSchema.parse({
+    id,
+    specialist: input.specialist,
+    title,
+    statement,
+    severity: input.severity,
+    confidence: "high",
+    evidence,
+    assumptions: [],
+    recommendation: boundedText2(`Review the ${input.code} signal and verify its impact before making changes.`, 4e3)
+  });
+}
+function signalFindings(signals) {
+  const architecture = signals.architectureSignals.map((signal) => deterministicSignalFinding({
+    ...signal,
+    specialist: "architecture"
+  }));
+  const risks = signals.riskSignals.map((signal) => {
+    const security = /credential|secret|security|input|supply-chain/iu.test(signal.code);
+    return deterministicSignalFinding({ ...signal, specialist: security ? "security" : "code" });
+  });
+  return [...architecture, ...risks];
+}
+function normalizeAssumption(value, fallback, seed) {
+  if (!isRecord15(value)) return void 0;
+  const evidence = normalizeEvidence(Array.isArray(value["evidence"]) ? value["evidence"] : void 0);
+  const retainedEvidence = evidence.length > 0 ? evidence.slice(0, 64) : fallback.slice(0, 64);
+  const statement = boundedText2(value["statement"], 2e3, "An assessment assumption requires owner input.");
+  const confidence = validConfidence(value["confidence"]);
+  const blocking = value["blocking"] === true;
+  const resolution = boundedText2(value["resolution"], 1e3, "Provide bounded evidence or explicit owner input.");
+  const suppliedId = typeof value["id"] === "string" && assessmentAssumptionIdSchema.safeParse(value["id"]).success ? value["id"] : `asm_${hash24(`${seed}\0${normalizedText(statement)}\0${confidence}\0${blocking}`)}`;
+  const parsed = assessmentAssumptionSchema.safeParse({
+    id: suppliedId,
+    statement,
+    confidence,
+    blocking,
+    resolution,
+    evidence: retainedEvidence.length > 0 ? retainedEvidence : [fallbackEvidence2("Assumption evidence requires owner input.")]
+  });
+  return parsed.success ? parsed.data : void 0;
+}
+function assumptionSemanticKey(assumption) {
+  return JSON.stringify({
+    statement: normalizedText(assumption.statement),
+    confidence: assumption.confidence,
+    blocking: assumption.blocking,
+    resolution: normalizedText(assumption.resolution),
+    evidence: assumption.evidence.map(evidenceIdentity).sort(compareStrings11)
+  });
+}
+function addAssumption(accumulator, value, fallbackEvidence3, seed, options = {}) {
+  const assumption = normalizeAssumption(value, fallbackEvidence3, seed);
+  if (assumption === void 0) return void 0;
+  const key = assumptionSemanticKey(assumption);
+  const existing = accumulator.byKey.get(key);
+  if (existing !== void 0 && options.deduplicate === true) return existing.id;
+  let id = assumption.id;
+  let collision = 0;
+  while (accumulator.ids.has(id)) {
+    collision += 1;
+    id = `asm_${hash24(`${seed}\0${key}\0${collision}`)}`;
+  }
+  const retained = assessmentAssumptionSchema.parse({ ...assumption, id: assessmentAssumptionIdSchema.parse(id) });
+  if (existing === void 0) accumulator.byKey.set(key, retained);
+  accumulator.ids.add(id);
+  accumulator.values.push(retained);
+  return id;
+}
+function emptySummary() {
+  return assessmentSignalSummarySchema.parse(EMPTY_SUMMARY);
+}
+function normalizeSignals(input) {
+  if (input === null || input === void 0) {
+    return {
+      summary: emptySummary(),
+      dependencyEdges: [],
+      testFiles: [],
+      testToSourceLinks: [],
+      architectureSignals: [],
+      riskSignals: []
+    };
+  }
+  const summary = assessmentSignalSummarySchema.parse(input.summary);
+  return {
+    summary,
+    dependencyEdges: Array.isArray(input.dependencyEdges) ? input.dependencyEdges : [],
+    testFiles: Array.isArray(input.testFiles) ? [...input.testFiles].sort(compareStrings11) : [],
+    testToSourceLinks: Array.isArray(input.testToSourceLinks) ? input.testToSourceLinks : [],
+    architectureSignals: Array.isArray(input.architectureSignals) ? input.architectureSignals : [],
+    riskSignals: Array.isArray(input.riskSignals) ? input.riskSignals : []
+  };
+}
+function deduplicateAndRankFindings(values) {
+  const canonical4 = [...values].sort((left, right) => compareStrings11(findingTieKey(left), findingTieKey(right)));
+  const unique = /* @__PURE__ */ new Map();
+  const usedIds = /* @__PURE__ */ new Set();
+  for (const candidate of canonical4) {
+    const semanticKey = findingSemanticKey(candidate);
+    if (unique.has(semanticKey)) continue;
+    let id = candidate.id;
+    if (usedIds.has(id)) id = `af_${hash24(`${semanticKey}\0${candidate.id}`)}`;
+    const { _sourceOrder: ignoredSourceOrder, ...findingWithoutSourceOrder } = candidate;
+    void ignoredSourceOrder;
+    const retained = assessmentFindingSchema.parse({
+      ...findingWithoutSourceOrder,
+      id: assessmentFindingIdSchema.parse(id)
+    });
+    unique.set(semanticKey, retained);
+    usedIds.add(id);
+  }
+  return [...unique.values()].sort(findingRank).slice(0, MAX_FINDINGS);
+}
+function makeGeneratedAssumption(input) {
+  const evidence = normalizeEvidence(input.evidence);
+  const id = `asm_${hash24(`${input.seed}\0${normalizedText(input.statement)}\0${evidence.map(evidenceIdentity).sort(compareStrings11).join("")}`)}`;
+  return assessmentAssumptionSchema.parse({
+    id,
+    statement: boundedText2(input.statement, 2e3),
+    confidence: "unknown",
+    blocking: true,
+    resolution: boundedText2(input.resolution, 1e3),
+    evidence: evidence.length > 0 ? evidence.slice(0, 64) : [fallbackEvidence2("Generated assumption requires owner input.")]
+  });
+}
+function addGeneratedAssumption(accumulator, assumption) {
+  return addAssumption(accumulator, assumption, [...assumption.evidence], assumption.id, { deduplicate: true }) ?? assumption.id;
+}
+function isBehavioralClaim(finding) {
+  return /\b(runtime|behavior|behaviour|execute(?:s|d)?|execution|integration|coverage|tested|test suite|works safely|production)\b/iu.test(
+    `${finding.title} ${finding.statement} ${finding.recommendation}`
+  );
+}
+function collectUniqueText(accumulator, value) {
+  const bounded = boundedText2(value, MAX_STRING_CHARS);
+  const key = normalizedText(value);
+  const existing = accumulator.get(key);
+  if (existing === void 0 || bounded < existing) accumulator.set(key, bounded);
+}
+function finalizeBoundedSet(accumulator, limit) {
+  return [...accumulator.entries()].sort(([leftKey], [rightKey]) => compareStrings11(leftKey, rightKey)).slice(0, limit).map(([, value]) => value);
+}
+function criticalInputAssumption(finding) {
+  return makeGeneratedAssumption({
+    seed: `critical\0${findingSemanticKey(finding)}`,
+    statement: `[needs-user-input] Critical finding '${finding.title}' has ${finding.confidence} confidence and requires owner validation before action.`,
+    resolution: "Confirm the critical finding with an explicit command-result, test-result, or repository-owner decision.",
+    evidence: finding.evidence
+  });
+}
+function assumptionIsBlocking(accumulator, id) {
+  return accumulator.values.some((assumption) => assumption.id === id && assumption.blocking);
+}
+function capFindingAssumptions(assumptions, generatedBlockingIds, accumulator) {
+  const unique = [...new Set(assumptions)];
+  if (unique.length <= MAX_FINDING_ASSUMPTIONS) return unique;
+  const reserved = unique.filter((id) => generatedBlockingIds.has(id));
+  const candidates = unique.filter((id) => !generatedBlockingIds.has(id));
+  const blocking = candidates.filter((id) => assumptionIsBlocking(accumulator, id));
+  const nonBlocking = candidates.filter((id) => !assumptionIsBlocking(accumulator, id)).sort((left, right) => {
+    const leftAssumption = accumulator.values.find((assumption) => assumption.id === left);
+    const rightAssumption = accumulator.values.find((assumption) => assumption.id === right);
+    return CONFIDENCE_ORDER[leftAssumption?.confidence ?? "unknown"] - CONFIDENCE_ORDER[rightAssumption?.confidence ?? "unknown"] || compareStrings11(left, right);
+  });
+  const available = Math.max(0, MAX_FINDING_ASSUMPTIONS - reserved.length);
+  const retainedBlocking = blocking.slice(0, available);
+  const retainedNonBlocking = nonBlocking.slice(0, Math.max(0, available - retainedBlocking.length));
+  const retained = /* @__PURE__ */ new Set([...reserved, ...retainedBlocking, ...retainedNonBlocking]);
+  return unique.filter((id) => retained.has(id));
+}
+function dissentAssumption(title, findings) {
+  const evidence = findings.flatMap((finding) => finding.evidence);
+  return makeGeneratedAssumption({
+    seed: `dissent\0${normalizedText(title)}`,
+    statement: `[needs-user-input] Specialists disagree about '${boundedText2(title, 256)}'; their evidence-backed interpretations must not be averaged.`,
+    resolution: "Ask the repository owner which interpretation reflects the intended architecture or behavior, then run bounded verification.",
+    evidence
+  });
+}
+function improvementPriority(severity) {
+  switch (severity) {
+    case "critical":
+      return "P0";
+    case "major":
+      return "P1";
+    case "moderate":
+      return "P2";
+    case "minor":
+    case "informational":
+      return "P3";
+  }
+}
+function improvementVerification(finding) {
+  const behavioralEvidence = finding.evidence.find((reference) => reference.kind === "command-result" || reference.kind === "test-result");
+  if (behavioralEvidence !== void 0) {
+    return [boundedText2(`Re-run the recorded verification represented by ${behavioralEvidence.path}.`, 1e3)];
+  }
+  return ["needs-user-input: provide an executable command-result or test-result verification before implementation."];
+}
+function makeImprovement(finding) {
+  const prerequisites = finding.assumptions.map((id) => `Resolve assumption ${id} before implementation.`).sort(compareStrings11);
+  const objective = boundedText2(`Bounded objective: address ${finding.title}.`, 1e3);
+  const rationale = boundedText2(`${finding.statement} Recommendation: ${finding.recommendation}`, 4e3);
+  return {
+    id: `imp_${hash24(JSON.stringify({ finding: findingSemanticKey(finding), objective, prerequisites }))}`,
+    priority: improvementPriority(finding.severity),
+    objective,
+    rationale,
+    evidence: normalizeEvidence(finding.evidence),
+    prerequisites,
+    verification: improvementVerification(finding)
+  };
+}
+function currentArchitectureSummary(signals) {
+  const summary = signals.summary;
+  return boundedText2(
+    `The validated structural view covers ${summary.sourceFiles} source files (${summary.coverageFiles} coverage entries), ${summary.symbols} symbols, ${summary.imports} imports, ${summary.exports} exports, and ${summary.dependencyEdges} persisted dependency edges. It inventories ${summary.testFiles} test files and ${summary.testToSourceLinks} conservative test-to-source links. These are structural observations, not runtime proof.`,
+    MAX_SUMMARY_CHARS
+  );
+}
+function executiveSummary(signals, findings, assumptions, gaps) {
+  return boundedText2(
+    `Synthesis produced ${findings.length} prioritized findings from deterministic signals and specialist output, retained ${assumptions.length} assumptions requiring input, and identified ${gaps.length} behavioral-proof gaps. Severity and confidence are ranked deterministically; dissent remains explicit rather than averaged.`,
+    MAX_SUMMARY_CHARS
+  );
+}
+function synthesizeBrownfieldDesign(input = {}) {
+  const signals = normalizeSignals(input.signals);
+  const specialistResult = input.specialists;
+  const specialistRecord = Array.isArray(specialistResult) ? { findings: specialistResult } : specialistResult ?? void 0;
+  const candidates = [];
+  let sourceOrder = 0;
+  for (const finding of signalFindings(signals)) candidates.push({ ...finding, _sourceOrder: sourceOrder++ });
+  for (const finding of [
+    ...input.findings ?? [],
+    ...input.specialistFindings ?? [],
+    ...specialistRecord?.findings ?? []
+  ]) {
+    const normalized = normalizeFinding(finding, sourceOrder++);
+    if (normalized !== void 0) candidates.push(normalized);
+  }
+  const prioritizedFindings = deduplicateAndRankFindings(candidates);
+  const accumulator = { values: [], byKey: /* @__PURE__ */ new Map(), ids: /* @__PURE__ */ new Set() };
+  const assumptionInputs = [
+    ...input.assumptions ?? [],
+    ...input.specialistAssumptions ?? [],
+    ...specialistRecord?.assumptions ?? []
+  ];
+  for (const assumption of assumptionInputs) addAssumption(accumulator, assumption, [fallbackEvidence2("Assumption evidence requires owner input.")], "input-assumption");
+  const specialistFindings = specialistRecord?.findings ?? [];
+  const specialistAssumptions = specialistRecord?.assumptions ?? [];
+  const specialistDiagnostics = specialistRecord?.diagnostics ?? [];
+  if (input.specialists === null || input.specialists !== void 0 && specialistFindings.length === 0 && specialistAssumptions.length === 0) {
+    addGeneratedAssumption(accumulator, makeGeneratedAssumption({
+      seed: input.specialists === null ? "specialists-null" : "specialists-empty",
+      statement: input.specialists === null ? "[needs-user-input] Specialist output was explicitly unavailable; no specialist conclusion can be treated as established." : "[needs-user-input] Specialist output was empty; no specialist conclusion can be treated as established.",
+      resolution: "Run the bounded specialist roster or provide an owner-reviewed specialist result.",
+      evidence: [fallbackEvidence2("Explicit null specialist result; specialist execution did not provide output.")]
+    }));
+  }
+  const findingsWithResolvedAssumptions = [];
+  for (const finding of prioritizedFindings) {
+    const resolvedAssumptions = [];
+    for (const assumptionId of finding.assumptions) {
+      if (accumulator.ids.has(assumptionId)) {
+        resolvedAssumptions.push(assumptionId);
+      } else {
+        const newId = addGeneratedAssumption(accumulator, makeGeneratedAssumption({
+          seed: `unresolved\0${assumptionId}`,
+          statement: `[needs-user-input] Finding '${finding.title}' references unresolved assumption ${assumptionId}.`,
+          resolution: "Provide the missing assumption record or remove the unresolved reference.",
+          evidence: finding.evidence
+        }));
+        resolvedAssumptions.push(newId);
+      }
+    }
+    findingsWithResolvedAssumptions.push(assessmentFindingSchema.parse({
+      ...finding,
+      assumptions: [...new Set(resolvedAssumptions)]
+    }));
+  }
+  const byTitle = /* @__PURE__ */ new Map();
+  for (const finding of findingsWithResolvedAssumptions) {
+    const key = normalizedText(finding.title);
+    const group = byTitle.get(key) ?? [];
+    group.push(finding);
+    byTitle.set(key, group);
+  }
+  const dissentQuestionTitles = [];
+  const dissentIds = /* @__PURE__ */ new Map();
+  for (const [titleKey, group] of byTitle) {
+    const opinionKeys = new Set(group.map((finding) => JSON.stringify({
+      statement: normalizedText(finding.statement),
+      severity: finding.severity,
+      confidence: finding.confidence,
+      recommendation: normalizedText(finding.recommendation)
+    })));
+    if (opinionKeys.size <= 1) continue;
+    const title = group.map((finding) => finding.title).sort(compareStrings11)[0] ?? titleKey;
+    const id = addGeneratedAssumption(accumulator, dissentAssumption(title, group));
+    dissentIds.set(titleKey, id);
+    dissentQuestionTitles.push(title);
+  }
+  const criticalIds = /* @__PURE__ */ new Map();
+  for (const finding of findingsWithResolvedAssumptions) {
+    if (finding.severity !== "critical" || finding.confidence !== "low" && finding.confidence !== "unknown") continue;
+    criticalIds.set(finding.id, addGeneratedAssumption(accumulator, criticalInputAssumption(finding)));
+  }
+  const generatedBlockingIds = /* @__PURE__ */ new Set([...dissentIds.values(), ...criticalIds.values()]);
+  const finalFindings = findingsWithResolvedAssumptions.map((finding) => {
+    const added = [];
+    const dissentId = dissentIds.get(normalizedText(finding.title));
+    if (dissentId !== void 0) added.push(dissentId);
+    const criticalId = criticalIds.get(finding.id);
+    if (criticalId !== void 0) added.push(criticalId);
+    return assessmentFindingSchema.parse({
+      ...finding,
+      assumptions: capFindingAssumptions([...finding.assumptions, ...added], generatedBlockingIds, accumulator)
+    });
+  });
+  const gapCollector = /* @__PURE__ */ new Map();
+  const commandResultEvidenceKeys = new Set(input.commandResults?.map(evidenceIdentity) ?? []);
+  for (const testPath of signals.testFiles) {
+    collectUniqueText(gapCollector, `Test inventory entry '${testPath}' does not prove test execution or coverage.`);
+  }
+  for (const link2 of signals.testToSourceLinks) {
+    collectUniqueText(gapCollector, `Conservative test-to-source link '${link2.testPath}' -> '${link2.sourcePath}' is not behavioral proof.`);
+  }
+  if (signals.summary.unsupportedSignals > 0) {
+    collectUniqueText(gapCollector, `${signals.summary.unsupportedSignals} unsupported structural area(s) remain without behavioral proof.`);
+  }
+  for (const signal of [...signals.architectureSignals, ...signals.riskSignals]) {
+    if (/unsupported|opaque|size-limit|parser-error|unreadable/iu.test(signal.code)) {
+      collectUniqueText(gapCollector, `Unsupported or incomplete coverage signal '${signal.code}' requires explicit verification.`);
+    }
+  }
+  for (const command of input.unrunCommands ?? []) {
+    collectUniqueText(gapCollector, `Unrun command: ${command}`);
+  }
+  for (const area of input.unsupportedAreas ?? []) {
+    collectUniqueText(gapCollector, `Unsupported area: ${area}`);
+  }
+  for (const diagnostic4 of specialistDiagnostics) {
+    collectUniqueText(gapCollector, `Unresolved specialist output: ${diagnostic4}`);
+  }
+  for (const record2 of specialistRecord?.executionRecords ?? []) {
+    if (record2.status === "succeeded") continue;
+    const name2 = isRecord15(record2.specialist) && typeof record2.specialist["name"] === "string" ? record2.specialist["name"] : "unknown";
+    const pass = isRecord15(record2.specialist) && typeof record2.specialist["pass"] === "number" ? String(record2.specialist["pass"]) : "?";
+    collectUniqueText(gapCollector, `Specialist ${name2} pass ${pass} did not produce resolved output; behavioral proof is unavailable.`);
+  }
+  for (const finding of finalFindings) {
+    const hasCommandEvidence = finding.evidence.some(
+      (reference) => reference.kind === "command-result" || reference.kind === "test-result" || commandResultEvidenceKeys.has(evidenceIdentity(reference))
+    );
+    if (isBehavioralClaim(finding) && !hasCommandEvidence) {
+      collectUniqueText(gapCollector, `Behavioral claim '${finding.title}' lacks explicit command-result or test-result evidence.`);
+    }
+  }
+  const behavioralProofGaps = finalizeBoundedSet(gapCollector, MAX_GAPS);
+  const referencedAssumptionIds = new Set(finalFindings.flatMap((finding) => finding.assumptions));
+  const requiringInputCandidates = accumulator.values.filter((assumption) => assumption.confidence === "unknown" || assumption.blocking || referencedAssumptionIds.has(assumption.id));
+  const referencedAssumptions = requiringInputCandidates.filter((assumption) => referencedAssumptionIds.has(assumption.id));
+  const unreferencedAssumptions = requiringInputCandidates.filter((assumption) => !referencedAssumptionIds.has(assumption.id));
+  const retainedAssumptionIds = new Set([
+    ...referencedAssumptions,
+    ...unreferencedAssumptions.slice(0, Math.max(0, MAX_ASSUMPTIONS - referencedAssumptions.length))
+  ].map((assumption) => assumption.id));
+  const assumptionsRequiringInput = accumulator.values.filter((assumption) => retainedAssumptionIds.has(assumption.id)).sort((left, right) => compareStrings11(left.id, right.id));
+  const questionCollector = /* @__PURE__ */ new Map();
+  for (const question of input.openQuestions ?? []) collectUniqueText(questionCollector, question);
+  for (const title of dissentQuestionTitles.sort(compareStrings11)) {
+    collectUniqueText(questionCollector, `Which evidence-backed interpretation of '${title}' reflects the intended architecture or behavior?`);
+  }
+  for (const assumption of assumptionsRequiringInput) {
+    collectUniqueText(questionCollector, `Resolve assumption ${assumption.id}: ${assumption.statement}`);
+  }
+  const openQuestions = finalizeBoundedSet(questionCollector, MAX_QUESTIONS);
+  const improvementPlan = finalFindings.slice(0, MAX_IMPROVEMENTS).map(makeImprovement);
+  const summary = signals.summary;
+  const strengthCollector = /* @__PURE__ */ new Map();
+  for (const value of input.strengths ?? []) collectUniqueText(strengthCollector, value);
+  if (strengthCollector.size === 0 && summary.sourceFiles > 0) {
+    collectUniqueText(strengthCollector, `A bounded structural snapshot covers ${summary.sourceFiles} source files and ${summary.coverageFiles} coverage entries.`);
+  }
+  if (summary.testToSourceLinks > 0) collectUniqueText(strengthCollector, `${summary.testToSourceLinks} conservative test-to-source link(s) are available for follow-up verification.`);
+  const strengths = finalizeBoundedSet(strengthCollector, MAX_STRENGTHS);
+  return {
+    title: boundedText2(input.title, MAX_TITLE_CHARS, "Brownfield assessment improvement design"),
+    executiveSummary: executiveSummary(signals, finalFindings, assumptionsRequiringInput, behavioralProofGaps),
+    currentArchitecture: currentArchitectureSummary(signals),
+    evidenceBackedStrengths: strengths,
+    prioritizedFindings: finalFindings,
+    assumptionsRequiringInput,
+    improvementPlan,
+    nonGoals: [
+      "Do not modify source files, manifests, or runtime configuration as part of synthesis.",
+      "Do not infer runtime behavior, product intent, or test coverage from structural evidence alone.",
+      "Do not silently average conflicting specialist findings."
+    ].sort(compareStrings11),
+    behavioralProofGaps,
+    openQuestions
+  };
+}
+
+// packages/cli/src/commands/workflow/assess.ts
+var REFRESH_ACTION2 = "legion map --refresh --profile structural";
+var ASSESS_HELP = `legion assess [--effort 1|2|3|4|5] [--scope <path>] [--resume <assessment-id>]
+
+Run a read-only brownfield assessment from a fresh structural code index. The
+assessment bundle is written under .legion/project/assessment/<assessment-id>;
+source files, manifests, and runtime configuration are never modified.
+
+--effort <1|2|3|4|5>  Scale the specialist roster. Defaults to 1.
+--scope <path>       Assess the scope covered by the structural map.
+--resume <id>        Continue an existing assessment from its persisted phase.
+                      The assessment id is required.
+
+If no fresh structural map exists, run:
+  legion map --refresh --profile structural
+
+Examples:
+  legion assess
+  legion assess --effort 3 --scope src
+  legion assess --resume assess_0123456789abcdef01234567 --json`;
+var ASSESS_REVIEW_NEXT_ACTION = nextAction(
+  "legion status",
+  "Review the evidence-bound assessment bundle before planning source changes."
+);
+async function handleAssessWorkflow(context) {
+  if (hasFlag(context, "help") || context.args.positionals[0] === "help") {
+    return helpResult(ASSESS_HELP);
+  }
+  if (context.args.positionals.length > 0) {
+    return usageError("legion assess does not take positional arguments. Use --scope <path> to narrow the assessment.");
+  }
+  const effort = parseEffort(context);
+  if (typeof effort !== "number") return effort;
+  const scope = parseOptionalValue(context, "scope");
+  if (isCliResultValue(scope)) return scope;
+  const resume = parseResume(context);
+  if (isCliResultValue(resume)) return resume;
+  let discovery;
+  try {
+    discovery = await discoverLatestStructuralCodeIndex(context.repositoryRoot);
+  } catch (error51) {
+    return blockedAssessment(`Unable to discover a structural code index: ${errorMessage2(error51)}.`);
+  }
+  if (discovery.record === void 0) {
+    return blockedAssessment(
+      "No usable structural code index exists. Run legion map --refresh --profile structural first.",
+      discovery.diagnostics
+    );
+  }
+  try {
+    let assessmentId;
+    let paths;
+    let loaded;
+    if (resume !== void 0) {
+      loaded = await readBrownfieldAssessment({
+        repositoryRoot: context.repositoryRoot,
+        assessmentId: resume
+      });
+      if (scope !== void 0 && scope !== loaded.state.scope) {
+        return usageError(
+          `--scope ${JSON.stringify(scope)} does not match the resumed assessment scope ${JSON.stringify(loaded.state.scope)}.`
+        );
+      }
+      assessmentId = resume;
+      paths = loaded.paths;
+    } else {
+      const created = await createBrownfieldAssessment({
+        repositoryRoot: context.repositoryRoot,
+        effort,
+        snapshot: discovery.record,
+        ...scope === void 0 ? {} : { scope }
+      });
+      assessmentId = created.assessmentId;
+      paths = created.paths;
+      loaded = await readBrownfieldAssessment({
+        repositoryRoot: context.repositoryRoot,
+        assessmentId
+      });
+    }
+    let state = loaded.state;
+    if (resume !== void 0 && discovery.record.snapshot.snapshotId !== loaded.state.snapshotId) {
+      return usageError(
+        `Resumed assessment was bound to snapshot ${loaded.state.snapshotId}, but the current structural map is ${discovery.record.snapshot.snapshotId}. Run "legion assess" (without --resume) to start a fresh assessment, or restore the previous map.`
+      );
+    }
+    if (resume !== void 0 && context.args.options.has("effort") && effort !== loaded.state.effort) {
+      return usageError(
+        `--effort ${effort} does not match the resumed assessment effort ${loaded.state.effort}.`
+      );
+    }
+    if (state.phase === "blocked") {
+      return failure(
+        {
+          ok: false,
+          status: "blocked",
+          workflow: "assess",
+          assessmentId,
+          bundlePaths: paths,
+          diagnostics: [{ code: "assessment_blocked", message: "The persisted assessment is in terminal blocked state." }],
+          nextAction: nextAction(REFRESH_ACTION2, "Start a new assessment after refreshing the structural map.")
+        },
+        ["Brownfield assessment is blocked.", `Assessment: ${assessmentId}`, renderNextAction(nextAction(REFRESH_ACTION2, "Start a new assessment after refreshing the structural map."))].join("\n")
+      );
+    }
+    if (state.phase === "complete") {
+      return completedAssessment(
+        assessmentId,
+        paths,
+        state,
+        void 0,
+        await readCompletedDesign(context.repositoryRoot, paths.synthesis)
+      );
+    }
+    let signals;
+    let specialists;
+    let design;
+    if (state.phase === "setup") {
+      signals = await collectBrownfieldSignals({
+        repositoryRoot: context.repositoryRoot,
+        snapshot: discovery.record.snapshot,
+        sqlitePath: discovery.record.semanticSqliteArtifactPath
+      });
+      await updateBrownfieldAssessmentState({
+        repositoryRoot: context.repositoryRoot,
+        assessmentId,
+        phase: "signals_complete",
+        signals
+      });
+      loaded = await readBrownfieldAssessment({ repositoryRoot: context.repositoryRoot, assessmentId });
+      state = loaded.state;
+    }
+    if (signals === void 0) {
+      signals = await readAssessmentArtifact(context.repositoryRoot, paths.signals);
+    }
+    if (state.phase === "signals") {
+      specialists = await runBrownfieldSpecialists({
+        repositoryRoot: context.repositoryRoot,
+        assessmentId,
+        snapshot: discovery.record.snapshot,
+        signals,
+        effort: state.effort
+      });
+      await updateBrownfieldAssessmentState({
+        repositoryRoot: context.repositoryRoot,
+        assessmentId,
+        phase: "specialists_complete",
+        findings: specialists.findings,
+        assumptions: specialists.assumptions,
+        review: specialistStatusArtifact(specialists)
+      });
+      loaded = await readBrownfieldAssessment({ repositoryRoot: context.repositoryRoot, assessmentId });
+      state = loaded.state;
+    }
+    if (state.phase === "specialists" || state.phase === "assumptions") {
+      if (specialists === void 0) {
+        const findings = await readAssessmentArtifact(context.repositoryRoot, paths.findings);
+        const assumptions = await readAssessmentArtifact(context.repositoryRoot, paths.assumptions);
+        const specialistStatus = await readAssessmentArtifact(context.repositoryRoot, paths.review);
+        specialists = persistedSpecialists(findings, assumptions, specialistStatus);
+      }
+      design = synthesizeBrownfieldDesign({ signals, specialists });
+      await updateBrownfieldAssessmentState({
+        repositoryRoot: context.repositoryRoot,
+        assessmentId,
+        phase: "synthesis_complete",
+        findings: design.prioritizedFindings,
+        assumptions: design.assumptionsRequiringInput,
+        synthesis: design
+      });
+      loaded = await readBrownfieldAssessment({ repositoryRoot: context.repositoryRoot, assessmentId });
+      state = loaded.state;
+    }
+    if (state.phase === "synthesis" || state.phase === "review") {
+      if (design === void 0) design = await readAssessmentArtifact(context.repositoryRoot, paths.synthesis);
+      const review = {
+        schemaVersion: 1,
+        kind: "brownfield_assessment_review",
+        assessmentId,
+        status: "complete",
+        findingCount: design.prioritizedFindings.length,
+        assumptionCount: design.assumptionsRequiringInput.length,
+        behavioralProofGaps: design.behavioralProofGaps,
+        openQuestions: design.openQuestions
+      };
+      await updateBrownfieldAssessmentState({
+        repositoryRoot: context.repositoryRoot,
+        assessmentId,
+        phase: "review_complete",
+        review
+      });
+      loaded = await readBrownfieldAssessment({ repositoryRoot: context.repositoryRoot, assessmentId });
+      state = loaded.state;
+    }
+    if (state.phase !== "complete") {
+      throw new Error(`Brownfield assessment stopped before completion at phase ${state.phase}.`);
+    }
+    return completedAssessment(assessmentId, paths, state, specialists, design);
+  } catch (error51) {
+    const message = errorMessage2(error51);
+    if (message.includes(REFRESH_ACTION2) || /fresh structural|structural snapshot|code index/iu.test(message)) {
+      return blockedAssessment(`Brownfield assessment is blocked: ${message}`);
+    }
+    return usageError(`Unable to run brownfield assessment: ${message}`);
+  }
+}
+function parseEffort(context) {
+  const raw = stringOption(context, "effort");
+  if (context.args.options.get("effort") === true || raw === "") {
+    return usageError("Missing required value for --effort. Use one of 1, 2, 3, 4, or 5.");
+  }
+  if (raw === void 0) return 1;
+  if (!/^[1-5]$/u.test(raw)) {
+    return usageError(`Invalid --effort value ${JSON.stringify(raw)}. Use one of 1, 2, 3, 4, or 5.`);
+  }
+  return assessmentEffortSchema.parse(Number(raw));
+}
+function parseOptionalValue(context, key) {
+  const raw = stringOption(context, key);
+  if (context.args.options.get(key) === true || raw === "") return usageError(`Missing required value for --${key}.`);
+  return raw;
+}
+function parseResume(context) {
+  const raw = stringOption(context, "resume");
+  if (context.args.options.get("resume") === true || raw === "") {
+    return usageError("Missing required value for --resume. Use --resume <assessment-id>.");
+  }
+  if (raw === void 0) return void 0;
+  const parsed = assessmentIdSchema.safeParse(raw);
+  if (!parsed.success) return usageError(`Invalid assessment id ${JSON.stringify(raw)} for --resume.`);
+  return parsed.data;
+}
+var SPECIALIST_STATUS_KIND = "brownfield_specialist_status";
+function specialistStatusArtifact(specialists) {
+  return {
+    kind: SPECIALIST_STATUS_KIND,
+    ok: specialists.ok,
+    roster: specialists.roster,
+    executionRecords: specialists.executionRecords,
+    diagnostics: specialists.diagnostics
+  };
+}
+function isRecord16(value) {
+  return typeof value === "object" && value !== null;
+}
+function persistedSpecialists(findings, assumptions, status2) {
+  if (isRecord16(status2) && status2["kind"] === SPECIALIST_STATUS_KIND) {
+    const roster = status2["roster"];
+    const executionRecords = status2["executionRecords"];
+    const diagnostics = status2["diagnostics"];
+    return {
+      ok: status2["ok"] === true,
+      roster: Array.isArray(roster) ? roster : [],
+      packs: [],
+      findings,
+      assumptions,
+      executionRecords: Array.isArray(executionRecords) ? executionRecords : [],
+      diagnostics: Array.isArray(diagnostics) ? diagnostics.filter((entry) => typeof entry === "string") : []
+    };
+  }
+  return {
+    ok: true,
+    roster: [],
+    packs: [],
+    findings,
+    assumptions,
+    executionRecords: [],
+    diagnostics: []
+  };
+}
+async function readCompletedDesign(repositoryRoot, synthesisPath) {
+  try {
+    const design = await readAssessmentArtifact(repositoryRoot, synthesisPath);
+    if (!isRecord16(design) || !Array.isArray(design["prioritizedFindings"]) || !Array.isArray(design["assumptionsRequiringInput"])) {
+      return void 0;
+    }
+    return design;
+  } catch {
+    return void 0;
+  }
+}
+async function readAssessmentArtifact(repositoryRoot, artifactPath) {
+  const absolutePath = path55.join(repositoryRoot, ...artifactPath.split("/"));
+  return JSON.parse(await readFile29(absolutePath, "utf8"));
+}
+function bundlePaths(paths) {
+  return {
+    root: paths.root,
+    state: paths.state,
+    signals: paths.signals,
+    assumptions: paths.assumptions,
+    findings: paths.findings,
+    synthesis: paths.synthesis,
+    review: paths.review
+  };
+}
+function completedAssessment(assessmentId, paths, state, specialists, design) {
+  const serializedPaths = bundlePaths(paths);
+  const payload = {
+    ok: true,
+    status: "completed",
+    workflow: "assess",
+    assessmentId,
+    paths: serializedPaths,
+    bundlePaths: serializedPaths,
+    phase: state.phase,
+    scope: state.scope,
+    effort: state.effort,
+    snapshotId: state.snapshotId,
+    sourceFingerprint: state.sourceFingerprint,
+    ...design === void 0 ? {} : {
+      findingCount: design.prioritizedFindings.length,
+      assumptionCount: design.assumptionsRequiringInput.length,
+      behavioralProofGapCount: design.behavioralProofGaps.length
+    },
+    ...specialists === void 0 ? {} : {
+      specialistsOk: specialists.ok,
+      specialistDiagnostics: specialists.diagnostics
+    },
+    nextAction: ASSESS_REVIEW_NEXT_ACTION,
+    diagnostics: specialists?.diagnostics ?? []
+  };
+  return success2(
+    payload,
+    [
+      `Brownfield assessment complete: ${assessmentId}.`,
+      `Bundle: ${paths.root}`,
+      ...design === void 0 ? [] : [`Findings: ${design.prioritizedFindings.length}; assumptions requiring input: ${design.assumptionsRequiringInput.length}.`],
+      renderNextAction(ASSESS_REVIEW_NEXT_ACTION)
+    ].join("\n")
+  );
+}
+function blockedAssessment(message, diagnostics = []) {
+  const action = nextAction(REFRESH_ACTION2, "A fresh structural map is required before a brownfield assessment can run.");
+  const allDiagnostics = [
+    ...diagnostics,
+    { code: "assessment_structural_required", message }
+  ];
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      workflow: "assess",
+      diagnostics: allDiagnostics,
+      nextAction: action
+    },
+    ["Brownfield assessment is blocked.", message, renderNextAction(action)].join("\n")
+  );
+}
+function isCliResultValue(value) {
+  return typeof value === "object" && value !== null && "exitCode" in value && "payload" in value && "human" in value;
+}
+function errorMessage2(error51) {
+  return error51 instanceof Error ? error51.message : String(error51);
+}
+
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat10 } from "node:fs/promises";
-import path53 from "node:path";
+import path57 from "node:path";
 
 // packages/cli/src/workflow/settings-check.ts
-import { readFile as readFile28 } from "node:fs/promises";
-import path52 from "node:path";
+import { readFile as readFile30 } from "node:fs/promises";
+import path56 from "node:path";
 var SETTINGS_FILE = "settings.json";
 async function checkSettings(repositoryRoot) {
   let text;
   try {
-    text = await readFile28(path52.join(repositoryRoot, SETTINGS_FILE), "utf8");
+    text = await readFile30(path56.join(repositoryRoot, SETTINGS_FILE), "utf8");
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
       return { status: "absent", path: SETTINGS_FILE, diagnostics: [], warnings: [] };
@@ -65374,8 +71446,8 @@ async function handleValidateCommand(context) {
 ${renderCoverage(trace.coverage)}`) : failure(payload, validationFailureHuman(diagnostics));
   return applyWarnings(base, [...demoted.map(asWarning), ...settings.warnings]);
 }
-function asWarning(diagnostic3) {
-  return { code: diagnostic3.code, message: diagnostic3.message };
+function asWarning(diagnostic4) {
+  return { code: diagnostic4.code, message: diagnostic4.message };
 }
 function applyWarnings(result, warnings) {
   return warnings.reduce((carried, warning) => withWarning(carried, warning), result);
@@ -65461,7 +71533,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat10(path53.join(root, relativePath));
+    await stat10(path57.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -65603,6 +71675,7 @@ var DECLARED = Object.freeze({
   learn: ["list", "recall", "summary", "tags", "type"],
   explore: ["entry", "executor"],
   map: ["check", "profile", "query", "refresh", "scope", "why"],
+  assess: ["effort", "resume", "scope"],
   // phase and milestone are declared so the handler's own refusal is what the
   // caller sees: it explains that a scoped retrospective is not implemented,
   // which is more use than "this command does not read --phase".
@@ -65645,6 +71718,7 @@ var COMMAND_SPECIFIC_HELP = /* @__PURE__ */ new Set([
   "learn",
   "explore",
   "map",
+  "assess",
   "retro",
   "milestone",
   "council",
@@ -65691,6 +71765,9 @@ async function handleWorkflowCommand(context) {
       return handleAdHocWorkflow(commandContext, command);
     case "explore":
     case "map":
+      return handleContextualWorkflow(commandContext, command);
+    case "assess":
+      return handleAssessWorkflow(commandContext);
     case "retro":
     case "milestone":
     case "council":
@@ -65720,7 +71797,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path54.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path58.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -65772,8 +71849,8 @@ function stringMapValue(map2, key) {
   const value = map2.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path54.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path54.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path58.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path58.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

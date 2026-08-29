@@ -162,13 +162,26 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
     await writeFile(path.join(root, "README.md"), "# Structural Map\n", "utf8");
     await writeFile(
       path.join(root, "src", "asset-service.ts"),
-      "export interface AssetRecord { id: string }\nexport function resolveAsset(input: AssetRecord) { return input.id; }\n",
+      "import { join } from \"node:path\";\nexport interface AssetRecord { id: string }\nexport function resolveAsset(input: AssetRecord) { return join(\"assets\", input.id); }\n",
       "utf8"
     );
 
     const absent = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--json"]);
     assert.equal(absent.exitCode, 0, absent.stderr);
     assert.equal(parseJsonOutput(absent).status, "absent");
+
+    const humanRefresh = await runCliCapture([
+      "--repository-root", root,
+      "map", "--refresh", "--profile", "structural",
+      "--created-at", "2026-06-23T12:01:00.000Z"
+    ]);
+    assert.equal(humanRefresh.exitCode, 0, humanRefresh.stderr);
+    assert.match(humanRefresh.stdout, /symbols: 2/u);
+    assert.match(humanRefresh.stdout, /imports: 1/u);
+    assert.match(humanRefresh.stdout, /exports: 2/u);
+    assert.equal(humanRefresh.stdout.includes("semantic-index.json"), true);
+    assert.equal(humanRefresh.stdout.includes("semantic-index.sqlite"), true);
+    assert.match(humanRefresh.stdout, /structural source mapping, not behavioral proof/iu);
 
     const refresh = await runCliCapture([
       "--repository-root", root,
@@ -191,8 +204,14 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
     assert.equal(run.outputs.mapArtifactSha256, sha256Hex(await readFile(path.join(root, ...refreshPayload.mapArtifactPath.split("/")))));
     assert.match(refreshPayload.snapshotId, /^idx_[0-9a-f]{24}$/);
     assert.match(refreshPayload.semanticIndexArtifactPath, /semantic-index\.json$/);
-    assert.match(refreshPayload.semanticSqliteArtifactPath, /semantic-index\.sqlite$/);
+    assert.match(refreshPayload.semanticSqliteArtifactPath, /semantic-index\.sqlite$/u);
     assert.match(refreshPayload.semanticIndexSha256, /^[0-9a-f]{64}$/u);
+    assert.equal(refreshPayload.coverageCount, 2);
+    assert.deepEqual(refreshPayload.coverageStatusCounts, { "metadata-only": 1, parsed: 1 });
+    assert.equal(refreshPayload.symbolCount, 2);
+    assert.equal(refreshPayload.importCount, 1);
+    assert.equal(refreshPayload.exportCount, 2);
+    assert.equal(refreshPayload.totalFactCount, 5);
     await assertFile(root, refreshPayload.semanticIndexArtifactPath);
     await assertFile(root, refreshPayload.semanticSqliteArtifactPath);
 
@@ -207,7 +226,49 @@ test("structural map refresh persists a semantic snapshot, supports query and wh
 
     const checkFresh = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
     assert.equal(checkFresh.exitCode, 0, checkFresh.stderr);
-    assert.equal(parseJsonOutput(checkFresh).status, "fresh");
+    const checkFreshPayload = parseJsonOutput(checkFresh);
+    assert.equal(checkFreshPayload.status, "fresh");
+    assert.equal(checkFreshPayload.semanticIndexArtifactPath, refreshPayload.semanticIndexArtifactPath);
+    assert.equal(checkFreshPayload.semanticSqliteArtifactPath, refreshPayload.semanticSqliteArtifactPath);
+    assert.equal(checkFreshPayload.coverageCount, 2);
+    assert.deepEqual(checkFreshPayload.coverageStatusCounts, { "metadata-only": 1, parsed: 1 });
+    assert.equal(checkFreshPayload.symbolCount, 2);
+    assert.equal(checkFreshPayload.importCount, 1);
+    assert.equal(checkFreshPayload.exportCount, 2);
+    assert.equal(checkFreshPayload.totalFactCount, 5);
+
+    const summary = await runCliCapture(["--repository-root", root, "map", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
+    assert.equal(summary.exitCode, 0, summary.stderr);
+    const summaryPayload = parseJsonOutput(summary);
+    assert.equal(summaryPayload.mode, "summary");
+    assert.equal(summaryPayload.semanticIndexArtifactPath, refreshPayload.semanticIndexArtifactPath);
+    assert.equal(summaryPayload.semanticSqliteArtifactPath, refreshPayload.semanticSqliteArtifactPath);
+    assert.equal(summaryPayload.coverageCount, 2);
+    assert.deepEqual(summaryPayload.coverageStatusCounts, { "metadata-only": 1, parsed: 1 });
+    assert.equal(summaryPayload.symbolCount, 2);
+    assert.equal(summaryPayload.importCount, 1);
+    assert.equal(summaryPayload.exportCount, 2);
+    assert.equal(summaryPayload.totalFactCount, 5);
+
+    const humanCheck = await runCliCapture(["--repository-root", root, "map", "--check", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z"]);
+    assert.equal(humanCheck.exitCode, 0, humanCheck.stderr);
+    assert.match(humanCheck.stdout, /symbols: 2/u);
+    assert.match(humanCheck.stdout, /imports: 1/u);
+    assert.match(humanCheck.stdout, /exports: 2/u);
+    assert.match(humanCheck.stdout, /metadata-only: 1/u);
+    assert.equal(humanCheck.stdout.includes("semantic-index.json"), true);
+    assert.equal(humanCheck.stdout.includes("semantic-index.sqlite"), true);
+    assert.match(humanCheck.stdout, /structural source mapping, not behavioral proof/iu);
+
+    const humanSummary = await runCliCapture(["--repository-root", root, "map", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z"]);
+    assert.equal(humanSummary.exitCode, 0, humanSummary.stderr);
+    assert.match(humanSummary.stdout, /symbols: 2/u);
+    assert.match(humanSummary.stdout, /imports: 1/u);
+    assert.match(humanSummary.stdout, /exports: 2/u);
+    assert.match(humanSummary.stdout, /metadata-only: 1/u);
+    assert.equal(humanSummary.stdout.includes("semantic-index.json"), true);
+    assert.equal(humanSummary.stdout.includes("semantic-index.sqlite"), true);
+    assert.match(humanSummary.stdout, /structural source mapping, not behavioral proof/iu);
 
     const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--profile", "structural", "--created-at", "2026-06-23T12:05:00.000Z", "--json"]);
     assert.equal(query.exitCode, 0, query.stderr);

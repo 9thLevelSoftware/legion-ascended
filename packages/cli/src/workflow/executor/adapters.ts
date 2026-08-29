@@ -1,4 +1,5 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
+import { open } from "node:fs/promises";
 import { promisify } from "node:util";
 
 import { artifactPathSchema } from "@legion/protocol";
@@ -16,8 +17,6 @@ import {
   normalizeExecutionResult,
   parseResultFromText,
   prepareProjectTextFile,
-  readOptionalText,
-  redactTranscript,
   writeProjectExecutionResult,
   writeProjectTextFile
 } from "./result.js";
@@ -28,12 +27,266 @@ const DEFAULT_CLAUDE_EXEC_TIMEOUT_MS = 900_000;
 const DEFAULT_HERMES_EXEC_TIMEOUT_MS = 600_000;
 const DEFAULT_GROK_EXEC_TIMEOUT_MS = 600_000;
 const GROK_VERSION_RE = /^grok\s+(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\s+\([0-9A-Za-z-]+\))?(?:\s+\[[A-Za-z0-9.-]+\])?\s*$/u;
+const SECRET_ASSIGNMENT_RE =
+  /\b(?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization|password|passwd|pwd|token|secret)\b\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;}]+)/giu;
+const JSON_CREDENTIAL_RE =
+  /["'](?:api[_-]?key|api[_-]?secret|api[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization|password|passwd|pwd|token|secret)["']\s*:\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,\s}]+)/giu;
+// Treat every URI with an authority as sensitive. This deliberately uses an
+// opaque replacement rather than trying to preserve a public URL while
+// accidentally leaking userinfo, query, or fragment credentials.
+const BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu;
+const TOKEN_RE = /\b(?:sk|ghp|gho|xox[baprs]-)[A-Za-z0-9_-]{8,}\b/gu;
+const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu;
+const ENCODED_SEGMENT_RE = /[^\s]*%[0-9a-f]{2}[^\s]*/giu;
+const ENCODED_ESCAPE_RE = /%[0-9a-f]{2}/iu;
+const MAX_REDACTION_DECODE_PASSES = 16;
+const MAX_REDACTION_DECODE_LENGTH = 64 * 1024;
+const MAX_REDACTION_INPUT_LENGTH = 1024 * 1024;
+const MAX_URL_SCHEME_LENGTH = 1024;
+const MAX_URL_LENGTH = 64 * 1024;
+export const MAX_ADAPTER_OUTPUT_BYTES = 1 * 1024 * 1024;
+const ADAPTER_OUTPUT_TRUNCATION_MARKER = "\n[ADAPTER_OUTPUT_TRUNCATED]";
+const BOUNDED_READ_CHUNK_BYTES = 64 * 1024;
+const PROCESS_TERM_GRACE_MS = 250;
+const PROCESS_QUIESCENCE_TIMEOUT_MS = 5_000;
+const PROCESS_QUIESCENCE_POLL_MS = 25;
+const WINDOWS_PROCESS_TABLE_TIMEOUT_MS = 2_000;
 
-// Claude Code has no OS-level sandbox flag, so a read-only run is enforced by
-// denying every tool that can mutate the repository. The guarded execution
-// harness is the second line of defense for a tool that still writes despite
-// this list, but leaving Bash enabled would make the adapter's read-only claim
-// false by construction.
+let adapterProcessContainmentOverride: boolean | undefined;
+
+/** Test-only seam for exercising the unsupported-platform policy. */
+export function setAdapterProcessContainmentForTests(available: boolean | undefined): void {
+  adapterProcessContainmentOverride = available;
+}
+
+function isAsciiAlpha(character: string | undefined): boolean {
+  return character !== undefined && ((character >= "a" && character <= "z") || (character >= "A" && character <= "Z"));
+}
+
+function isAsciiWord(character: string | undefined): boolean {
+  return character !== undefined && (
+    isAsciiAlpha(character) ||
+    (character >= "0" && character <= "9") ||
+    character === "_"
+  );
+}
+
+function isUrlSchemeCharacter(character: string | undefined): boolean {
+  return character !== undefined && (
+    isAsciiAlpha(character) ||
+    (character >= "0" && character <= "9") ||
+    character === "+" ||
+    character === "-" ||
+    character === "."
+  );
+}
+
+function isUrlTerminator(character: string | undefined): boolean {
+  return character === undefined || /[\s<>"'`]/u.test(character);
+}
+
+interface RedactionSpan {
+  readonly start: number;
+  readonly end: number;
+  readonly replacement: string;
+  readonly priority: number;
+}
+
+/**
+ * Find URI authorities opaquely without putting an unbounded scheme or URL
+ * body in a backtracking regex. The scanner still recognizes over-limit
+ * scheme/body lengths and consumes the whole candidate so they fail closed.
+ */
+function findUrlRedactionSpans(value: string): RedactionSpan[] {
+  const spans: RedactionSpan[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const character = value[cursor];
+    const boundary = cursor === 0 || !isAsciiWord(value[cursor - 1]);
+    if (isAsciiAlpha(character) && boundary) {
+      const schemeScanLimit = Math.min(value.length, cursor + 1 + MAX_URL_SCHEME_LENGTH);
+      let schemeEnd = cursor + 1;
+      while (schemeEnd < schemeScanLimit && isUrlSchemeCharacter(value[schemeEnd])) schemeEnd += 1;
+      if (schemeEnd === schemeScanLimit && isUrlSchemeCharacter(value[schemeEnd])) {
+        while (schemeEnd < value.length && isUrlSchemeCharacter(value[schemeEnd])) schemeEnd += 1;
+      }
+      if (value.slice(schemeEnd, schemeEnd + 3) === "://") {
+        let urlEnd = schemeEnd + 3;
+        const urlScanLimit = Math.min(value.length, cursor + MAX_URL_LENGTH);
+        while (urlEnd < urlScanLimit && !isUrlTerminator(value[urlEnd])) urlEnd += 1;
+        if (urlEnd >= urlScanLimit && urlEnd < value.length && !isUrlTerminator(value[urlEnd])) {
+          while (urlEnd < value.length && !isUrlTerminator(value[urlEnd])) urlEnd += 1;
+        }
+        const schemeLength = schemeEnd - cursor;
+        const urlLength = urlEnd - cursor;
+        if (schemeLength > 0 && urlLength > 3) {
+          spans.push({ start: cursor, end: urlEnd, replacement: "[REDACTED_URL]", priority: 6 });
+          cursor = urlEnd;
+          continue;
+        }
+      }
+    }
+    cursor += 1;
+  }
+  return spans;
+}
+
+function decodeRepeatedly(value: string): { readonly decoded: string; readonly exhausted: boolean } {
+  if (value.length > MAX_REDACTION_DECODE_LENGTH) return { decoded: value, exhausted: true };
+  let decoded = value;
+  for (let attempt = 0; attempt < MAX_REDACTION_DECODE_PASSES; attempt += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) return { decoded, exhausted: false };
+      if (next.length > MAX_REDACTION_DECODE_LENGTH) return { decoded, exhausted: true };
+      decoded = next;
+    } catch {
+      return { decoded, exhausted: ENCODED_ESCAPE_RE.test(decoded) };
+    }
+  }
+  return { decoded, exhausted: ENCODED_ESCAPE_RE.test(decoded) };
+}
+
+interface NormalizedJsonRepresentation {
+  readonly text: string;
+  readonly originalSpans: readonly { readonly start: number; readonly end: number }[];
+}
+
+function normalizeJsonRepresentation(value: string): NormalizedJsonRepresentation {
+  const characters: string[] = [];
+  const originalSpans: { start: number; end: number }[] = [];
+  let index = 0;
+  while (index < value.length) {
+    const slashStart = index;
+    const character = value[index];
+    if (character === undefined) break;
+    if (character === "\\") {
+      let slashEnd = index;
+      while (slashEnd < value.length && value[slashEnd] === "\\") slashEnd += 1;
+      if (/[{}\[\],:"]/u.test(value[slashEnd] ?? "")) index = slashEnd;
+    }
+    const normalizedCharacter = value[index];
+    if (normalizedCharacter === undefined) break;
+    characters.push(normalizedCharacter);
+    originalSpans.push({ start: slashStart, end: index + 1 });
+    index += 1;
+  }
+  return { text: characters.join(""), originalSpans };
+}
+
+function normalizeEscapedJsonRepresentation(value: string): string {
+  // Adapter envelopes and model messages can contain JSON serialized more than
+  // once. Remove every escape layer that protects JSON punctuation before the
+  // credential scanner runs, without decoding arbitrary backslash escapes.
+  return normalizeJsonRepresentation(value).text;
+}
+
+function regexRedactionSpans(
+  value: string,
+  pattern: RegExp,
+  replacement: string,
+  priority: number
+): RedactionSpan[] {
+  const spans: RedactionSpan[] = [];
+  pattern.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(value)) !== null) {
+    spans.push({ start: match.index, end: match.index + match[0].length, replacement, priority });
+    if (match[0].length === 0) pattern.lastIndex += 1;
+  }
+  pattern.lastIndex = 0;
+  return spans;
+}
+
+function coalesceRedactionSpans(spans: readonly RedactionSpan[]): RedactionSpan[] {
+  const ordered = [...spans].sort((left, right) =>
+    left.start - right.start || right.end - left.end || left.priority - right.priority
+  );
+  const coalesced: RedactionSpan[] = [];
+  for (const span of ordered) {
+    const previous = coalesced[coalesced.length - 1];
+    if (previous === undefined || span.start >= previous.end) {
+      coalesced.push(span);
+      continue;
+    }
+    if (span.end > previous.end) {
+      if (span.priority < previous.priority) {
+        coalesced[coalesced.length - 1] = {
+          start: previous.start,
+          end: span.end,
+          replacement: span.replacement,
+          priority: span.priority
+        };
+      } else if (span.priority > previous.priority) {
+        coalesced.push({
+          start: previous.end,
+          end: span.end,
+          replacement: span.replacement,
+          priority: span.priority
+        });
+      } else {
+        coalesced[coalesced.length - 1] = {
+          ...previous,
+          end: span.end
+        };
+      }
+    }
+  }
+  return coalesced;
+}
+
+function redactDirectText(value: string): string {
+  const normalized = normalizeJsonRepresentation(value);
+  const spans: RedactionSpan[] = [
+    ...regexRedactionSpans(normalized.text, CONTROL_RE, "�", 0),
+    ...regexRedactionSpans(normalized.text, JSON_CREDENTIAL_RE, "[REDACTED_JSON_SECRET]", 1),
+    ...regexRedactionSpans(normalized.text, BEARER_RE, "Bearer [REDACTED_TOKEN]", 2),
+    ...regexRedactionSpans(normalized.text, SECRET_ASSIGNMENT_RE, "[REDACTED_SECRET]", 3),
+    ...regexRedactionSpans(normalized.text, TOKEN_RE, "[REDACTED_TOKEN]", 4),
+    ...findUrlRedactionSpans(normalized.text)
+  ];
+  if (spans.length === 0) return value;
+
+  const selected = coalesceRedactionSpans(spans);
+  let result = "";
+  let originalCursor = 0;
+  let normalizedCursor = 0;
+  for (const span of selected) {
+    if (span.start < normalizedCursor) continue;
+    const originalStart = normalized.originalSpans[span.start]?.start;
+    const originalEnd = normalized.originalSpans[span.end - 1]?.end;
+    if (originalStart === undefined || originalEnd === undefined) continue;
+    result += value.slice(originalCursor, originalStart);
+    result += span.replacement;
+    originalCursor = originalEnd;
+    normalizedCursor = span.end;
+  }
+  return result + value.slice(originalCursor);
+}
+
+export function redactAdapterTranscript(text: string): string {
+  if (text.length > MAX_REDACTION_INPUT_LENGTH) return "[REDACTED_TRANSCRIPT]";
+  const direct = redactDirectText(text);
+  if (!direct.includes("%")) return direct;
+  return direct.replace(ENCODED_SEGMENT_RE, (match) => {
+    if (!match.includes("%")) return match;
+    if (match.length > MAX_REDACTION_DECODE_LENGTH) return "[REDACTED_ENCODED_SECRET]";
+    const decodedResult = decodeRepeatedly(match);
+    // A bounded decoder must fail closed. Returning a partially decoded value
+    // after the budget is exhausted would preserve an opaque credential that
+    // can be decoded by the next consumer of the transcript.
+    if (decodedResult.exhausted) return "[REDACTED_ENCODED_SECRET]";
+    const decoded = decodedResult.decoded;
+    return decoded !== match && redactDirectText(decoded) !== decoded
+      ? "[REDACTED_ENCODED_SECRET]"
+      : match;
+  });
+}
+
+// Claude Code has no OS-level sandbox flag. These disallowed-tool arguments
+// reduce accidental writes, but they are not sufficient containment for
+// specialist orchestration because a child can still spawn an uncontained
+// descendant. The orchestration boundary must gate this adapter separately.
 const CLAUDE_READ_ONLY_DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"] as const;
 
 export function claudeExecArgs(input: {
@@ -164,6 +417,50 @@ export function adapterForKind(kind: ExecutionAdapterKind): ExecutionAdapter {
   }
 }
 
+function artifactRepositoryRoot(request: ExecutionRequest): string {
+  return request.artifactRepositoryRoot ?? request.repositoryRoot;
+}
+
+function isolatedArtifactText(_request: ExecutionRequest, text: string): string {
+  // Adapter-owned artifacts are persistent outputs even when a caller does not
+  // request an isolated root. Never allow the compatibility fallback to write
+  // the raw transcript/result bytes.
+  return redactAdapterTranscript(text);
+}
+
+function isolatedExecutionResult(_request: ExecutionRequest, result: ExecutionResult): ExecutionResult {
+  return {
+    ...(result.structuredOutput === undefined ? {} : { structuredOutput: redactAdapterTranscript(result.structuredOutput) }),
+    ok: result.ok,
+    status: result.status,
+    summary: redactAdapterTranscript(result.summary),
+    filesChanged: result.filesChanged.map((entry) => redactAdapterTranscript(entry)),
+    commandsRun: result.commandsRun.map((entry) => ({
+      command: redactAdapterTranscript(entry.command),
+      args: entry.args.map((arg) => redactAdapterTranscript(arg)),
+      exitCode: entry.exitCode
+    })),
+    findings: result.findings.map((entry) => ({
+      id: redactAdapterTranscript(entry.id),
+      title: redactAdapterTranscript(entry.title),
+      body: redactAdapterTranscript(entry.body),
+      severity: entry.severity,
+      ...(entry.evidenceRefs === undefined ? {} : { evidenceRefs: entry.evidenceRefs.map((ref) => redactAdapterTranscript(ref)) })
+    })),
+    ...(result.reviewVerdicts === undefined ? {} : { reviewVerdicts: result.reviewVerdicts }),
+    ...(result.rawOutput === undefined ? {} : { rawOutput: redactAdapterTranscript(result.rawOutput) }),
+    ...(result.exitCode === undefined ? {} : { exitCode: result.exitCode })
+  };
+}
+
+async function persistExecutionResult(request: ExecutionRequest, result: ExecutionResult): Promise<void> {
+  await writeProjectExecutionResult({
+    repositoryRoot: artifactRepositoryRoot(request),
+    artifactPath: request.resultArtifactPath,
+    result: isolatedExecutionResult(request, result)
+  });
+}
+
 async function codexAvailable(): Promise<boolean> {
   try {
     const invocation = codexInvocation(["exec", "--help"]);
@@ -219,24 +516,29 @@ export async function grokAvailable(): Promise<boolean> {
   }
 }
 
+function quoteWindowsCmdToken(token: string): string {
+  if (token.length === 0) return '""';
+  if (!/[\s"&<>|^()]/.test(token)) return token;
+  return `"${token.replaceAll('"', '\\"')}"`;
+}
+
+/** cmd.exe /c must receive one command string or later flags are dropped. */
+export function windowsCmdSpawnArgs(command: string, args: readonly string[]): readonly string[] {
+  return ["/d", "/s", "/c", [command, ...args].map(quoteWindowsCmdToken).join(" ")];
+}
+
 function hermesInvocation(args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
   if (process.platform !== "win32") {
     return { command: "hermes", args };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "hermes", ...args]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("hermes", args) };
 }
 
 function grokInvocation(args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
   if (process.platform !== "win32") {
     return { command: "grok", args };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "grok", ...args]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("grok", args) };
 }
 
 function hermesExecTimeoutMs(): number {
@@ -253,9 +555,65 @@ function grokExecTimeoutMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GROK_EXEC_TIMEOUT_MS;
 }
 
+export function hermesReadOnlyBlockedResult(): ExecutionResult {
+  return {
+    ok: false,
+    status: "blocked",
+    summary: "Hermes Agent cannot guarantee read-only execution for this specialist request.",
+    filesChanged: [],
+    commandsRun: [],
+    findings: [{
+      id: "hermes-read-only-unsupported",
+      title: "Hermes read-only execution is unavailable",
+      body: "The Hermes adapter has no platform-enforced read-only mode for this request. The specialist is blocked rather than being run with prompt-only safety claims.",
+      severity: "blocking"
+    }]
+  };
+}
+
+function processContainmentBlockedResult(kind: Exclude<ExecutionAdapterKind, "fake" | "manual">, label: string): ExecutionResult {
+  return {
+    ok: false,
+    status: "blocked",
+    summary: `${label} executor is unavailable because strict process-group containment is unsupported on this platform.`,
+    filesChanged: [],
+    commandsRun: [],
+    findings: [{
+      id: `${kind}-process-containment-unavailable`,
+      title: `${label} process containment is unavailable`,
+      body: `${label} was not spawned because Legion cannot guarantee strict process-group/session containment for external specialist execution on this platform.`,
+      severity: "blocking"
+    }]
+  };
+}
+
+async function processContainmentBlockedBeforeSpawn(
+  request: ExecutionRequest,
+  kind: Exclude<ExecutionAdapterKind, "fake" | "manual">,
+  label: string
+): Promise<ExecutionResult> {
+  const result = processContainmentBlockedResult(kind, label);
+  const artifactRoot = artifactRepositoryRoot(request);
+  const text = `${result.summary}\n`;
+  await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text });
+  await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text });
+  await persistExecutionResult(request, result);
+  return result;
+}
+
 const hermesAdapter: ExecutionAdapter = {
   kind: "hermes",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "hermes", "Hermes Agent");
+    if (request.readOnly) {
+      const result = hermesReadOnlyBlockedResult();
+      const artifactRoot = artifactRepositoryRoot(request);
+      const text = `${result.summary}\n`;
+      await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text });
+      await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text });
+      await persistExecutionResult(request, result);
+      return result;
+    }
     // hermes chat -q takes the query as an argv argument (no stdin support).
     // The prompt is a task description, not a secret — argv exposure via `ps`
     // is acceptable here, matching how claude passes --print prompts.
@@ -266,7 +624,8 @@ const hermesAdapter: ExecutionAdapter = {
       invocation.args,
       "",  // stdin unused — hermes reads from -q arg
       request.repositoryRoot,
-      hermesExecTimeoutMs()
+      hermesExecTimeoutMs(),
+      "Hermes Agent"
     );
     const rawOutput = [
       processResult.stdout,
@@ -275,9 +634,11 @@ const hermesAdapter: ExecutionAdapter = {
     const parsed = parseResultFromText(rawOutput);
     const status: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode !== 0
-        ? "failed"
-        : "succeeded";
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0
+          ? "failed"
+          : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
       status,
       summary: processResult.exitCode === 0
@@ -286,6 +647,17 @@ const hermesAdapter: ExecutionAdapter = {
       rawOutput,
       exitCode: processResult.exitCode
     });
+    const resultStatus: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0
+          ? "failed"
+          : normalized.status;
+    const hermesOutput = hermesStructuredOutput(parsed);
+    const withStructured: ExecutionResult = hermesOutput === undefined
+      ? normalized
+      : { ...normalized, structuredOutput: hermesOutput };
     const blockingFindings: ExecutionFinding[] = [];
     if (processResult.timedOut) {
       blockingFindings.push({
@@ -294,19 +666,30 @@ const hermesAdapter: ExecutionAdapter = {
         body: `Hermes did not complete within ${processResult.timeoutMs}ms. Check Hermes auth/configuration, raise LEGION_HERMES_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
         severity: "blocking"
       });
+    } else if (processResult.outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Hermes Agent", "hermes-executor-output-limit"));
     }
-    const result: ExecutionResult = blockingFindings.length === 0
-      ? normalized
-      : {
-          ...normalized,
-          ok: false,
-          status: processResult.timedOut ? "blocked" : "failed",
-          findings: [...normalized.findings, ...blockingFindings]
-        };
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "hermes-executor-process-not-quiescent",
+        title: "Hermes executor descendants were not quiescent",
+        body: "Hermes exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
+    const result: ExecutionResult = {
+      ...withStructured,
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0
+        ? resultStatus
+        : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
+    };
+    const redacted = redactAdapterTranscript(rawOutput);
+    const artifactRoot = artifactRepositoryRoot(request);
+    await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -325,6 +708,7 @@ interface GrokEnvelopeFailure {
 const grokAdapter: ExecutionAdapter = {
   kind: "grok",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "grok", "Grok Build");
     const timeoutMs = grokExecTimeoutMs();
     const args = grokExecArgs({
       repositoryRoot: request.repositoryRoot,
@@ -348,7 +732,9 @@ const grokAdapter: ExecutionAdapter = {
         stdout: "",
         stderr: "Grok Build executable could not be started.",
         timedOut: false,
-        timeoutMs
+        outputLimitExceeded: false,
+        timeoutMs,
+        quiescenceProven: true
       };
     }
 
@@ -358,11 +744,13 @@ const grokAdapter: ExecutionAdapter = {
     const envelope = parseGrokEnvelope(processResult.stdout);
     const processStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode !== 0
-        ? "failed"
-        : envelope.ok
-          ? "succeeded"
-          : "failed";
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0
+          ? "failed"
+          : envelope.ok
+            ? "succeeded"
+            : "failed";
     const parsed = envelope.ok ? envelope.result : undefined;
     const normalized = normalizeExecutionResult(parsed, {
       status: processStatus,
@@ -380,10 +768,23 @@ const grokAdapter: ExecutionAdapter = {
     // become a success merely because its last JSON body said `succeeded`.
     const resultStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode !== 0 || !envelope.ok
-        ? "failed"
-        : normalized.status;
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0 || !envelope.ok
+          ? "failed"
+          : normalized.status;
     const findings: ExecutionFinding[] = [];
+    if (processResult.outputLimitExceeded) {
+      findings.push(outputLimitFinding("Grok Build", "grok-executor-output-limit"));
+    }
+    if (!processResult.quiescenceProven) {
+      findings.push({
+        id: "grok-executor-process-not-quiescent",
+        title: "Grok Build descendants were not quiescent",
+        body: "Grok Build exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
     if (!envelope.ok) {
       findings.push({
         id: "grok-executor-invalid-output",
@@ -417,22 +818,18 @@ const grokAdapter: ExecutionAdapter = {
       findings: [...withEnvelope.findings, ...findings]
     };
 
-    const redacted = redactTranscript(rawOutput);
+    const redacted = redactAdapterTranscript(rawOutput);
     await writeProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: request.rawLogArtifactPath,
-      text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n`
+      text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}\n`)
     });
     await writeProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: request.redactedLogArtifactPath,
-      text: redacted.length > 0 ? redacted : `${result.summary}\n`
+      text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`)
     });
-    await writeProjectExecutionResult({
-      repositoryRoot: request.repositoryRoot,
-      artifactPath: request.resultArtifactPath,
-      result
-    });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -447,7 +844,14 @@ function parseGrokEnvelope(stdout: string): GrokEnvelopeSuccess | GrokEnvelopeFa
     return { ok: false, message: "Grok Build output was not one complete JSON envelope." };
   }
   if (!isRecordValue(value)) return { ok: false, message: "Grok Build output was not a JSON object envelope." };
-  if (value["type"] === "error") return { ok: false, message: "Grok Build reported an error envelope." };
+  const discriminator = value["type"];
+  if (discriminator === "error") return { ok: false, message: "Grok Build reported an error envelope." };
+  if (discriminator !== "result") {
+    return { ok: false, message: "Grok Build result envelope has an unknown or missing type discriminator." };
+  }
+  if (!hasRequiredKeys(value, ["type", "text", "stopReason", "sessionId", "requestId"])) {
+    return { ok: false, message: "Grok Build result envelope is missing required core fields." };
+  }
   const text = value["text"];
   if (typeof text !== "string" || text.trim().length === 0) {
     return { ok: false, message: "Grok Build result envelope is missing non-empty text." };
@@ -478,6 +882,10 @@ function parseGrokEnvelope(stdout: string): GrokEnvelopeSuccess | GrokEnvelopeFa
 }
 
 function isCompleteGrokResult(value: unknown): value is Record<string, unknown> {
+  return isCompleteExecutionResult(value) || isCompleteSpecialistPayload(value);
+}
+
+function isCompleteExecutionResult(value: unknown): value is Record<string, unknown> {
   if (!isRecordValue(value)) return false;
   return (
     (value["status"] === "succeeded" || value["status"] === "failed" || value["status"] === "blocked") &&
@@ -489,8 +897,35 @@ function isCompleteGrokResult(value: unknown): value is Record<string, unknown> 
   );
 }
 
+function isCompleteSpecialistPayload(value: unknown): value is Record<string, unknown> {
+  if (!isRecordValue(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length > 0 &&
+    keys.every((key) => key === "findings" || key === "assumptions") &&
+    (value["findings"] === undefined || Array.isArray(value["findings"])) &&
+    (value["assumptions"] === undefined || Array.isArray(value["assumptions"]));
+}
+
+function hasRequiredKeys(value: Record<string, unknown>, required: readonly string[]): boolean {
+  return required.every((key) => Object.hasOwn(value, key));
+}
+
 function isRecordValue(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hermesStructuredOutput(value: unknown): string | undefined {
+  if (!isRecordValue(value)) return undefined;
+  for (const key of ["structuredOutput", "output", "text", "result"]) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && parseResultFromText(candidate) !== undefined) return candidate;
+    if (isRecordValue(candidate) || Array.isArray(candidate)) {
+      const serialized = JSON.stringify(candidate);
+      if (serialized !== undefined) return serialized;
+    }
+  }
+  if (Array.isArray(value["findings"]) && Array.isArray(value["assumptions"])) return JSON.stringify(value);
+  return undefined;
 }
 
 const fakeAdapter: ExecutionAdapter = {
@@ -528,9 +963,9 @@ const fakeAdapter: ExecutionAdapter = {
           }
         : {})
     };
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${result.summary}\n` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redactTranscript(`${result.summary}\n`) });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, `${result.summary}\n`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, `${result.summary}\n`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -560,9 +995,9 @@ const manualAdapter: ExecutionAdapter = {
         }
       ]
     };
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${summary}\n` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: `${summary}\n` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, `${summary}\n`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, `${summary}\n`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -570,6 +1005,7 @@ const manualAdapter: ExecutionAdapter = {
 const claudeAdapter: ExecutionAdapter = {
   kind: "claude",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "claude", "Claude");
     const args = claudeExecArgs({ readOnly: request.readOnly });
     const invocation = claudeInvocation(args);
     const processResult = await spawnWithInput(
@@ -577,7 +1013,8 @@ const claudeAdapter: ExecutionAdapter = {
       invocation.args,
       request.prompt,
       request.repositoryRoot,
-      claudeExecTimeoutMs()
+      claudeExecTimeoutMs(),
+      "Claude"
     );
     const rawOutput = [
       processResult.stdout,
@@ -596,19 +1033,28 @@ const claudeAdapter: ExecutionAdapter = {
     // fact: the process died, the harness reported its own error, or the model
     // stopped early. `is_error` is the envelope's own verdict and outranks a
     // zero exit code -- claude exits 0 on an API error it reports in-band.
-    const status: ExecutionStatus = processResult.timedOut
+    const processStatus: ExecutionStatus = processResult.timedOut
       ? "blocked"
-      : processResult.exitCode !== 0 || envelope?.isError === true
-        ? "failed"
-        : "succeeded";
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true
+          ? "failed"
+          : "succeeded";
 
     const normalized = normalizeExecutionResult(parsed, {
-      status,
+      status: processStatus,
       summary: claudeFallbackSummary(processResult, envelope),
       rawOutput,
       exitCode: processResult.exitCode
     });
-    const withStructured: ExecutionResult = lastMessage.length > 0
+    const resultStatus: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : processResult.outputLimitExceeded || processResult.exitCode !== 0 || envelope?.isError === true
+          ? "failed"
+          : normalized.status;
+    const withStructured: ExecutionResult = lastMessage.length > 0 && resultStatus === "succeeded"
       ? { ...normalized, structuredOutput: lastMessage }
       : normalized;
 
@@ -618,6 +1064,23 @@ const claudeAdapter: ExecutionAdapter = {
         id: "claude-executor-timeout",
         title: "Claude executor timed out",
         body: `Claude did not complete within ${processResult.timeoutMs}ms. Check Claude Code auth/configuration, raise LEGION_CLAUDE_EXEC_TIMEOUT_MS, or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    } else if (processResult.outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Claude", "claude-executor-output-limit"));
+    } else if (processResult.exitCode !== 0) {
+      blockingFindings.push({
+        id: "claude-executor-failed",
+        title: "Claude executor exited unsuccessfully",
+        body: `Claude exited with code ${processResult.exitCode}. Check the raw and redacted executor logs before retrying.`,
+        severity: "blocking"
+      });
+    }
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "claude-executor-process-not-quiescent",
+        title: "Claude executor descendants were not quiescent",
+        body: "Claude exited, but its process group could not be proven quiescent before the result was finalized.",
         severity: "blocking"
       });
     }
@@ -633,19 +1096,19 @@ const claudeAdapter: ExecutionAdapter = {
       });
     }
 
-    const result: ExecutionResult = blockingFindings.length === 0
-      ? withStructured
-      : {
-          ...withStructured,
-          ok: false,
-          status: processResult.timedOut ? "blocked" : "failed",
-          findings: [...withStructured.findings, ...blockingFindings]
-        };
+    const result: ExecutionResult = {
+      ...withStructured,
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0
+        ? resultStatus
+        : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
+    };
 
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    const redacted = redactAdapterTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}\n`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -700,9 +1163,10 @@ function claudeFallbackSummary(
 const codexAdapter: ExecutionAdapter = {
   kind: "codex",
   async run(request) {
+    if (!supportsIsolatedProcessGroup()) return processContainmentBlockedBeforeSpawn(request, "codex", "Codex");
     const outputLastMessageArtifactPath = artifactPathSchema.parse(request.resultArtifactPath.replace(/executor-result\.json$/u, "executor-last-message.txt"));
     const outputLastMessagePath = await prepareProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
+      repositoryRoot: artifactRepositoryRoot(request),
       artifactPath: outputLastMessageArtifactPath
     });
     const args = codexExecArgs({
@@ -716,48 +1180,88 @@ const codexAdapter: ExecutionAdapter = {
       invocation.args,
       request.prompt,
       request.repositoryRoot,
-      codexExecTimeoutMs()
+      codexExecTimeoutMs(),
+      "Codex"
     );
     const rawOutput = [
       processResult.stdout,
       processResult.stderr
     ].filter((entry) => entry.length > 0).join("\n");
-    const lastMessage = await readOptionalText(outputLastMessagePath);
+    const lastMessageResult = await readBoundedText(outputLastMessagePath);
+    const lastMessage = lastMessageResult.text;
+    const outputLimitExceeded = processResult.outputLimitExceeded || lastMessageResult.outputLimitExceeded;
+    // Codex writes this file itself. Scrub it immediately after reading, before
+    // parsing or any later persistence can fail and reach the cleanup fence.
+    await writeProjectTextFile({
+      repositoryRoot: artifactRepositoryRoot(request),
+      artifactPath: outputLastMessageArtifactPath,
+      text: lastMessage.length > 0 ? redactAdapterTranscript(lastMessage) : ""
+    });
     const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
-    const status = processResult.timedOut ? "blocked" : processResult.exitCode === 0 ? "succeeded" : "failed";
+    const processStatus: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : outputLimitExceeded || processResult.exitCode !== 0 ? "failed" : "succeeded";
     const normalized = normalizeExecutionResult(parsed, {
-      status,
+      status: processStatus,
       summary: processResult.timedOut
         ? `Codex executor timed out after ${processResult.timeoutMs}ms.`
         : processResult.exitCode === 0 ? "Codex executor completed." : "Codex executor failed.",
       rawOutput,
       exitCode: processResult.exitCode
     });
+    const resultStatus: ExecutionStatus = processResult.timedOut
+      ? "blocked"
+      : !processResult.quiescenceProven
+        ? "blocked"
+        : outputLimitExceeded || processResult.exitCode !== 0
+          ? "failed"
+          : normalized.status;
     // Kept separate from rawOutput, which is process output. Downstream typed
     // parsing needs the reply the contract asked for, not the log around it.
-    const withStructured: ExecutionResult = lastMessage.length > 0
+    // Never claim a structured reply after a failed child process.
+    const withStructured: ExecutionResult = lastMessage.length > 0 && resultStatus === "succeeded"
       ? { ...normalized, structuredOutput: lastMessage }
       : normalized;
-    const result: ExecutionResult = processResult.timedOut
-      ? {
-          ...withStructured,
-          ok: false,
-          status: "blocked",
-          findings: [
-            ...normalized.findings,
-            {
-              id: "codex-executor-timeout",
-              title: "Codex executor timed out",
-              body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
-              severity: "blocking"
-            }
-          ]
-        }
-      : withStructured;
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    const blockingFindings: ExecutionFinding[] = [];
+    if (processResult.timedOut) {
+      blockingFindings.push({
+        id: "codex-executor-timeout",
+        title: "Codex executor timed out",
+        body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
+        severity: "blocking"
+      });
+    } else if (outputLimitExceeded) {
+      blockingFindings.push(outputLimitFinding("Codex", "codex-executor-output-limit"));
+    } else if (processResult.exitCode !== 0) {
+      blockingFindings.push({
+        id: "codex-executor-failed",
+        title: "Codex executor exited unsuccessfully",
+        body: `Codex exited with code ${processResult.exitCode}. Check the raw and redacted executor logs before retrying.`,
+        severity: "blocking"
+      });
+    }
+    if (!processResult.quiescenceProven) {
+      blockingFindings.push({
+        id: "codex-executor-process-not-quiescent",
+        title: "Codex executor descendants were not quiescent",
+        body: "Codex exited, but its process group could not be proven quiescent before the result was finalized.",
+        severity: "blocking"
+      });
+    }
+    const result: ExecutionResult = {
+      ...withStructured,
+      ok: resultStatus === "succeeded" && blockingFindings.length === 0,
+      status: blockingFindings.length === 0
+        ? resultStatus
+        : processResult.timedOut || !processResult.quiescenceProven ? "blocked" : "failed",
+      findings: [...withStructured.findings, ...blockingFindings]
+    };
+    const redacted = redactAdapterTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.rawLogArtifactPath, text: isolatedArtifactText(request, rawOutput.length > 0 ? rawOutput : `${result.summary}\n`) });
+    await writeProjectTextFile({ repositoryRoot: artifactRepositoryRoot(request), artifactPath: request.redactedLogArtifactPath, text: isolatedArtifactText(request, redacted.length > 0 ? redacted : `${result.summary}\n`) });
+    await persistExecutionResult(request, result);
     return result;
   }
 };
@@ -804,141 +1308,623 @@ function claudeExecTimeoutMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CLAUDE_EXEC_TIMEOUT_MS;
 }
 
-async function spawnWithInput(command: string, args: readonly string[], input: string, cwd: string, timeoutMs: number): Promise<{
+function utf8Prefix(value: string, maxBytes: number): string {
+  if (maxBytes <= 0) return "";
+  let result = Buffer.from(value, "utf8").subarray(0, maxBytes).toString("utf8");
+  while (Buffer.byteLength(result, "utf8") > maxBytes) result = result.slice(0, -1);
+  return result;
+}
+
+type OutputStream = "stdout" | "stderr";
+
+class BoundedOutputCapture {
+  private stdoutValue = "";
+  private stderrValue = "";
+  private totalBytes = 0;
+  private exceeded = false;
+
+  append(stream: OutputStream, chunk: string | Buffer): void {
+    if (this.exceeded) return;
+    const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    const remaining = MAX_ADAPTER_OUTPUT_BYTES - this.totalBytes;
+    const markerBytes = Buffer.byteLength(ADAPTER_OUTPUT_TRUNCATION_MARKER, "utf8");
+    const chunkBytes = Buffer.byteLength(text, "utf8");
+    if (chunkBytes <= remaining) {
+      this.set(stream, this.get(stream) + text);
+      this.totalBytes += chunkBytes;
+      return;
+    }
+    const prefixBudget = Math.max(0, remaining - markerBytes);
+    const bounded = `${utf8Prefix(text, prefixBudget)}${remaining >= markerBytes ? ADAPTER_OUTPUT_TRUNCATION_MARKER : ""}`;
+    this.set(stream, this.get(stream) + bounded);
+    this.totalBytes += Buffer.byteLength(bounded, "utf8");
+    this.exceeded = true;
+  }
+
+  get stdout(): string {
+    return this.stdoutValue;
+  }
+
+  get stderr(): string {
+    return this.stderrValue;
+  }
+
+  get outputLimitExceeded(): boolean {
+    return this.exceeded;
+  }
+
+  private get(stream: OutputStream): string {
+    return stream === "stdout" ? this.stdoutValue : this.stderrValue;
+  }
+
+  private set(stream: OutputStream, value: string): void {
+    if (stream === "stdout") this.stdoutValue = value;
+    else this.stderrValue = value;
+  }
+}
+
+function waitForOutputStreamEnd(stream: NodeJS.ReadableStream): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    // On Windows, ChildProcess `close` can be observed before queued pipe data
+    // has reached the stream's `data` listeners. The `end` event is the point
+    // at which a flowing readable has delivered all buffered data. Stream errors
+    // are also terminal for capture and must not leave the child promise open.
+    stream.once("end", finish);
+    stream.once("error", finish);
+  });
+}
+
+async function readBoundedText(filePath: string): Promise<{ readonly text: string; readonly outputLimitExceeded: boolean }> {
+  let handle;
+  try {
+    handle = await open(filePath, "r");
+  } catch (error) {
+    if (isRecordValue(error) && error["code"] === "ENOENT") return { text: "", outputLimitExceeded: false };
+    throw error;
+  }
+  const capture = new BoundedOutputCapture();
+  const buffer = Buffer.allocUnsafe(BOUNDED_READ_CHUNK_BYTES);
+  try {
+    while (true) {
+      const read = await handle.read(buffer, 0, buffer.length, null);
+      if (read.bytesRead === 0) break;
+      capture.append("stdout", buffer.subarray(0, read.bytesRead));
+      if (capture.outputLimitExceeded) break;
+    }
+    return { text: capture.stdout, outputLimitExceeded: capture.outputLimitExceeded };
+  } finally {
+    await handle.close();
+  }
+}
+
+function outputLimitFinding(executorLabel: string, findingId: string): ExecutionFinding {
+  return {
+    id: findingId,
+    title: `${executorLabel} executor output exceeded the bounded capture limit`,
+    body: `${executorLabel} output exceeded the ${MAX_ADAPTER_OUTPUT_BYTES}-byte capture limit and the process or payload was rejected before unbounded accumulation.`,
+    severity: "blocking"
+  };
+}
+
+interface SpawnedProcessResult {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
   readonly timedOut: boolean;
+  readonly outputLimitExceeded: boolean;
   readonly timeoutMs: number;
-}> {
+  readonly quiescenceProven: boolean;
+}
+
+async function spawnWithInput(
+  command: string,
+  args: readonly string[],
+  input: string,
+  cwd: string,
+  timeoutMs: number,
+  executorLabel: string
+): Promise<SpawnedProcessResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      windowsHide: true,
-      stdio: ["pipe", "pipe", "pipe"]
+      ...adapterSpawnOptions({ stdio: ["pipe", "pipe", "pipe"] })
     });
-    let stdout = "";
-    let stderr = "";
+    const output = new BoundedOutputCapture();
     let settled = false;
     let timedOut = false;
+    let outputLimitExceeded = false;
+    let terminationPending = false;
+    let terminationExitCode: number | undefined;
+    let terminationPromise: Promise<void> | undefined;
+    let spawnError: Error | undefined;
+    let quiescenceProven = true;
 
     const settle = (exitCode: number) => {
-      if (settled) return;
+      if (settled || terminationPending) return;
       settled = true;
       clearTimeout(timeout);
+      if (spawnError !== undefined) {
+        reject(spawnError);
+        return;
+      }
       resolve({
         exitCode,
-        stdout,
-        stderr,
+        stdout: output.stdout,
+        stderr: output.stderr,
         timedOut,
-        timeoutMs
+        outputLimitExceeded,
+        timeoutMs,
+        quiescenceProven
+      });
+    };
+
+    const requestTermination = (exitCode: number): void => {
+      if (terminationExitCode === undefined) terminationExitCode = exitCode;
+      if (terminationPromise !== undefined) return;
+      terminationPending = true;
+      terminationPromise = terminateProcessTree(child.pid).catch(() => false).then((proven) => {
+        quiescenceProven = proven;
+        terminationPending = false;
+        settle(terminationExitCode ?? exitCode);
       });
     };
 
     const timeout = setTimeout(() => {
+      if (settled) return;
       timedOut = true;
-      stderr += `${stderr.length === 0 ? "" : "\n"}Codex executor timed out after ${timeoutMs}ms.`;
-      terminateProcessTree(child.pid);
-      setTimeout(() => settle(124), 1_000).unref();
+      output.append("stderr", `${output.stderr.length === 0 ? "" : "\n"}${executorLabel} executor timed out after ${timeoutMs}ms.`);
+      requestTermination(124);
     }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
+      output.append("stdout", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
+      output.append("stderr", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
+    // Wait for stream end AFTER data handlers so streams are in flowing mode
+    // before we listen for 'end'. On Windows, listening for 'end' before a
+    // 'data' handler puts the stream in flowing mode can cause 'end' to fire
+    // with zero data events delivered.
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     child.stdin.on("error", () => {});
     child.on("error", (error) => {
       if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(error);
+      spawnError = error;
+      requestTermination(1);
     });
+    const settleAfterQuiescence = async (exitCode: number): Promise<void> => {
+      if (settled || terminationPending) return;
+      if (!supportsIsolatedProcessGroup()) {
+        quiescenceProven = false;
+      } else if (child.pid !== undefined && processTreeStillExists(child.pid)) {
+        // A normal leader exit is not a safe completion boundary when a
+        // descendant remains. Kill the entire group before settling so no late
+        // write can race repository reconciliation or artifact publication.
+        if (process.platform === "win32") {
+          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
+        } else {
+          quiescenceProven = false;
+          await terminateProcessTree(child.pid).catch(() => false);
+        }
+      } else {
+        quiescenceProven = true;
+      }
+      settle(exitCode);
+    };
     child.on("close", (code) => {
-      settle(timedOut ? 124 : code ?? 1);
+      void Promise.all([stdoutEnded, stderrEnded]).then(() => {
+        // Windows can report ChildProcess `close` before queued pipe data has
+        // reached the stream listeners. Wait for both readables to end before
+        // exposing the bounded capture to the adapter result.
+        const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+        return settleAfterQuiescence(exitCode);
+      });
     });
     child.stdin.end(input);
   });
 }
 
-async function spawnWithoutInput(command: string, args: readonly string[], cwd: string, timeoutMs: number): Promise<{
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly timedOut: boolean;
-  readonly timeoutMs: number;
-}> {
+async function spawnWithoutInput(command: string, args: readonly string[], cwd: string, timeoutMs: number): Promise<SpawnedProcessResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      windowsHide: true,
+      ...adapterSpawnOptions({ stdio: ["ignore", "pipe", "pipe"] }),
       // Grok consumes the prompt from --prompt-file. `ignore` is deliberate:
       // Legion neither writes a prompt to stdin nor leaves a pipe for a child
       // to mistake for an interactive session.
-      stdio: ["ignore", "pipe", "pipe"]
     });
-    let stdout = "";
-    let stderr = "";
+    const output = new BoundedOutputCapture();
     let settled = false;
     let timedOut = false;
+    let outputLimitExceeded = false;
+    let terminationPending = false;
+    let terminationExitCode: number | undefined;
+    let terminationPromise: Promise<void> | undefined;
+    let spawnError: Error | undefined;
+    let quiescenceProven = true;
 
     const settle = (exitCode: number) => {
-      if (settled) return;
+      if (settled || terminationPending) return;
       settled = true;
       clearTimeout(timeout);
-      resolve({ exitCode, stdout, stderr, timedOut, timeoutMs });
+      if (spawnError !== undefined) {
+        reject(spawnError);
+        return;
+      }
+      resolve({
+        exitCode,
+        stdout: output.stdout,
+        stderr: output.stderr,
+        timedOut,
+        outputLimitExceeded,
+        timeoutMs,
+        quiescenceProven
+      });
+    };
+
+    const requestTermination = (exitCode: number): void => {
+      if (terminationExitCode === undefined) terminationExitCode = exitCode;
+      if (terminationPromise !== undefined) return;
+      terminationPending = true;
+      terminationPromise = terminateProcessTree(child.pid).catch(() => false).then((proven) => {
+        quiescenceProven = proven;
+        terminationPending = false;
+        settle(terminationExitCode ?? exitCode);
+      });
     };
 
     const timeout = setTimeout(() => {
+      if (settled) return;
       timedOut = true;
-      stderr += `${stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`;
-      terminateProcessTree(child.pid);
-      setTimeout(() => settle(124), 1_000).unref();
+      output.append("stderr", `${output.stderr.length === 0 ? "" : "\n"}Grok Build executor timed out after ${timeoutMs}ms.`);
+      requestTermination(124);
     }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
+      output.append("stdout", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
+      output.append("stderr", String(chunk));
+      if (output.outputLimitExceeded && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        requestTermination(125);
+      }
     });
+    // Wait for stream end AFTER data handlers so streams are in flowing mode
+    // before we listen for 'end'. On Windows, listening for 'end' before a
+    // 'data' handler puts the stream in flowing mode can cause 'end' to fire
+    // with zero data events delivered.
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     child.on("error", (error) => {
       if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(error);
+      spawnError = error;
+      requestTermination(1);
     });
+    const settleAfterQuiescence = async (exitCode: number): Promise<void> => {
+      if (settled || terminationPending) return;
+      if (!supportsIsolatedProcessGroup()) {
+        quiescenceProven = false;
+      } else if (child.pid !== undefined && processTreeStillExists(child.pid)) {
+        // A normal leader exit is not a safe completion boundary when a
+        // descendant remains. Kill the entire group before settling so no late
+        // write can race repository reconciliation or artifact publication.
+        if (process.platform === "win32") {
+          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
+        } else {
+          quiescenceProven = false;
+          await terminateProcessTree(child.pid).catch(() => false);
+        }
+      } else {
+        quiescenceProven = true;
+      }
+      settle(exitCode);
+    };
     child.on("close", (code) => {
-      settle(timedOut ? 124 : code ?? 1);
+      void Promise.all([stdoutEnded, stderrEnded]).then(() => {
+        // Windows can report ChildProcess `close` before queued pipe data has
+        // reached the stream listeners. Wait for both readables to end before
+        // exposing the bounded capture to the adapter result.
+        const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+        return settleAfterQuiescence(exitCode);
+      });
     });
   });
 }
 
-function terminateProcessTree(pid: number | undefined): void {
-  if (pid === undefined) return;
-  if (process.platform === "win32") {
-    const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
+type AdapterSpawnStdio = ["pipe" | "ignore", "pipe", "pipe"];
+
+export function adapterSpawnOptions<const T extends AdapterSpawnStdio>(input: {
+  readonly platform?: NodeJS.Platform;
+  readonly stdio: T;
+}): {
+  readonly windowsHide: true;
+  readonly detached: boolean;
+  readonly stdio: T;
+} {
+  const platform = input.platform ?? process.platform;
+  const containmentAvailable = platform === process.platform
+    ? supportsIsolatedProcessGroup()
+    : supportsIsolatedProcessGroupForPlatform(platform);
+  return {
+    windowsHide: true,
+    detached: platform !== "win32" && containmentAvailable,
+    stdio: input.stdio
+  };
+}
+
+function supportsIsolatedProcessGroupForPlatform(platform: NodeJS.Platform): boolean {
+  return platform !== "android";
+}
+
+function supportsIsolatedProcessGroup(): boolean {
+  if (adapterProcessContainmentOverride !== undefined) return adapterProcessContainmentOverride;
+  // POSIX uses detached sessions/process groups. Windows uses taskkill /t in
+  // terminateProcessTree, which provides the equivalent child-tree boundary.
+  return supportsIsolatedProcessGroupForPlatform(process.platform);
+}
+
+function processStillExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !(error !== null && typeof error === "object" && "code" in error && error.code === "ESRCH");
+  }
+}
+
+function processGroupStillExists(pid: number): boolean {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    return !(error !== null && typeof error === "object" && "code" in error && error.code === "ESRCH");
+  }
+}
+
+interface WindowsProcessRow {
+  readonly parentProcessId: number;
+  readonly processId: number;
+}
+
+type ProcessExistsProbe = (pid: number) => boolean;
+type WindowsDescendantEnumerator = (pid: number) => readonly number[];
+interface WindowsProcessProbeOptions {
+  readonly encoding: "utf8";
+  readonly windowsHide: true;
+  readonly stdio: ["ignore", "pipe", "ignore"];
+  readonly timeout: number;
+}
+type WindowsProcessProbe = (
+  command: string,
+  args: readonly string[],
+  options: WindowsProcessProbeOptions
+) => string | Buffer;
+type WindowsTaskkillProbe = (args: readonly string[]) => Promise<void>;
+
+function parseWindowsProcessRows(output: string): readonly WindowsProcessRow[] {
+  const rows: WindowsProcessRow[] = [];
+  for (const line of output.split(/\r?\n/u)) {
+    const fields = line
+      .split(",")
+      .map((field) => field.trim().replace(/^"|"$/gu, ""));
+    const numericFields = fields.filter((field) => /^\d+$/u.test(field));
+    if (numericFields.length < 2) continue;
+    const parentProcessId = Number(numericFields[numericFields.length - 2]);
+    const processId = Number(numericFields[numericFields.length - 1]);
+    if (!Number.isSafeInteger(parentProcessId) || !Number.isSafeInteger(processId)) continue;
+    rows.push({ parentProcessId, processId });
+  }
+  return rows;
+}
+
+function runWindowsProcessProbe(
+  command: string,
+  args: readonly string[],
+  options: WindowsProcessProbeOptions
+): string | Buffer {
+  return execFileSync(command, args, options);
+}
+
+function windowsProcessRows(probe: WindowsProcessProbe = runWindowsProcessProbe): readonly WindowsProcessRow[] {
+  try {
+    const output = probe(
+      "wmic",
+      ["process", "get", "ParentProcessId,ProcessId", "/format:csv"],
+      {
+        encoding: "utf8",
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: WINDOWS_PROCESS_TABLE_TIMEOUT_MS
+      }
+    );
+    return parseWindowsProcessRows(String(output));
+  } catch (wmicError) {
+    try {
+      const output = probe(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Get-CimInstance -ClassName Win32_Process | Select-Object ParentProcessId,ProcessId | ConvertTo-Csv -NoTypeInformation"
+        ],
+        {
+          encoding: "utf8",
+          windowsHide: true,
+          stdio: ["ignore", "pipe", "ignore"],
+          timeout: WINDOWS_PROCESS_TABLE_TIMEOUT_MS
+        }
+      );
+      return parseWindowsProcessRows(String(output));
+    } catch {
+      throw wmicError;
+    }
+  }
+}
+
+/** Test-only seam for verifying bounded Windows process-table probes. */
+export function windowsProcessRowsForTests(probe: WindowsProcessProbe): readonly WindowsProcessRow[] {
+  return windowsProcessRows(probe);
+}
+
+function enumerateWindowsDescendantPids(pid: number): readonly number[] {
+  const childrenByParent = new Map<number, number[]>();
+  for (const row of windowsProcessRows()) {
+    const children = childrenByParent.get(row.parentProcessId) ?? [];
+    children.push(row.processId);
+    childrenByParent.set(row.parentProcessId, children);
+  }
+
+  const descendants: number[] = [];
+  const pending = [pid];
+  const seen = new Set([pid]);
+  while (pending.length > 0) {
+    const parent = pending.shift();
+    if (parent === undefined) continue;
+    for (const child of childrenByParent.get(parent) ?? []) {
+      if (seen.has(child)) continue;
+      seen.add(child);
+      descendants.push(child);
+      pending.push(child);
+    }
+  }
+  return descendants;
+}
+
+export function processTreeStillExistsForPlatform(
+  pid: number,
+  platform: NodeJS.Platform,
+  probes: {
+    readonly windowsDescendantPids?: WindowsDescendantEnumerator;
+    readonly processStillExists?: ProcessExistsProbe;
+    readonly processGroupStillExists?: ProcessExistsProbe;
+  } = {}
+): boolean {
+  const processExists = probes.processStillExists ?? processStillExists;
+  if (platform !== "win32") {
+    return (probes.processGroupStillExists ?? processGroupStillExists)(pid);
+  }
+  if (processExists(pid)) return true;
+  try {
+    return (probes.windowsDescendantPids ?? enumerateWindowsDescendantPids)(pid)
+      .some((descendantPid) => processExists(descendantPid));
+  } catch {
+    // A failed process-table query cannot prove the tree is gone. Keep the
+    // process non-quiescent so the caller takes the fail-closed teardown path.
+    return true;
+  }
+}
+
+function processTreeStillExists(pid: number): boolean {
+  return processTreeStillExistsForPlatform(pid, process.platform);
+}
+
+async function waitForQuiescence(check: () => boolean, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (check() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, PROCESS_QUIESCENCE_POLL_MS));
+  }
+}
+
+async function processQuiescenceProven(pid: number | undefined): Promise<boolean> {
+  if (pid === undefined) return true;
+  if (!supportsIsolatedProcessGroup()) return false;
+  const stillExists = () => processTreeStillExists(pid);
+  await waitForQuiescence(stillExists, PROCESS_QUIESCENCE_TIMEOUT_MS);
+  return !stillExists();
+}
+
+function spawnWindowsTaskkill(args: readonly string[]): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const killer = spawn("taskkill", args, {
       windowsHide: true,
       stdio: "ignore"
     });
-    killer.on("error", () => {});
-    return;
+    killer.on("error", () => resolve());
+    killer.on("close", () => resolve());
+  });
+}
+
+async function taskkillWindowsPids(
+  pid: number,
+  descendantPids: readonly number[],
+  taskkill: WindowsTaskkillProbe = spawnWindowsTaskkill
+): Promise<void> {
+  const seen = new Set<number>();
+  for (const targetPid of [pid, ...descendantPids]) {
+    if (seen.has(targetPid)) continue;
+    seen.add(targetPid);
+    await taskkill(["/pid", String(targetPid), "/t", "/f"]);
+  }
+}
+
+/** Test-only seam for verifying individual Windows descendant termination. */
+export function windowsTaskkillPidsForTests(
+  pid: number,
+  descendantPids: readonly number[],
+  taskkill: WindowsTaskkillProbe
+): Promise<void> {
+  return taskkillWindowsPids(pid, descendantPids, taskkill);
+}
+
+async function terminateWindowsProcessTree(pid: number): Promise<boolean> {
+  let descendantPids: readonly number[] = [];
+  try {
+    // Enumerate before killing the leader so a dead leader cannot make its
+    // descendants unreachable to the process-table probe.
+    descendantPids = enumerateWindowsDescendantPids(pid);
+  } catch {
+    // Still kill the leader, then let the fail-closed quiescence probe report
+    // that the tree could not be proven gone.
+  }
+  await taskkillWindowsPids(pid, descendantPids);
+  return processQuiescenceProven(pid);
+}
+
+async function terminateProcessTree(pid: number | undefined): Promise<boolean> {
+  if (pid === undefined) return true;
+  if (!supportsIsolatedProcessGroup()) return false;
+  if (process.platform === "win32") {
+    return terminateWindowsProcessTree(pid);
   }
   try {
-    process.kill(pid, "SIGTERM");
+    process.kill(-pid, "SIGTERM");
   } catch {
-    // The process may have exited just before the timeout handler ran.
+    // The process group may have exited between timeout and termination.
   }
-  setTimeout(() => {
+  await waitForQuiescence(() => processGroupStillExists(pid), PROCESS_TERM_GRACE_MS);
+  if (processGroupStillExists(pid)) {
     try {
-      process.kill(pid, "SIGKILL");
+      process.kill(-pid, "SIGKILL");
     } catch {
-      // The process may already be gone.
+      // The process group may have exited between the probes.
     }
-  }, 1_000).unref();
+  }
+  // Do not let reconciliation run while a descendant remains in the group.
+  return processQuiescenceProven(pid);
 }

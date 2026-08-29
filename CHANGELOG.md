@@ -2,6 +2,16 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.4.0] - GA-pending
+
+### Added
+- Read-only brownfield assessment coverage now produces evidence-bound audit
+  reports and preserves unresolved assumptions for owner review.
+
+### Changed
+- Release documentation and the product site now describe the `legion assess`
+  brownfield assessment workflow.
+
 ## [9.3.1] - GA-pending
 
 ### Fixed

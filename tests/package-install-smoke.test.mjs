@@ -1,17 +1,56 @@
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
+import { createRequire } from "node:module";
 
 import { selectPackReport } from "../scripts/check-package-contents.mjs";
+
+const require = createRequire(import.meta.url);
+const { packageManagerExecutable, packageManagerSpawnConfig } = require("../bin/install.js");
 
 const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
 const GROK_FIXTURE_ROOT = path.join(ROOT, "tests", "fixtures", "grok");
+
+function withPlatform(platform, run) {
+  const original = process.platform;
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  try {
+    return run();
+  } finally {
+    Object.defineProperty(process, "platform", { value: original, configurable: true });
+  }
+}
+
+test("installer selects npm.cmd for Windows package-manager spawns", () => {
+  withPlatform("linux", () => {
+    assert.equal(packageManagerExecutable("npm"), "npm");
+    assert.equal(packageManagerExecutable("npx"), "npx");
+  });
+  withPlatform("win32", () => {
+    assert.equal(packageManagerExecutable("npm"), "npm.cmd");
+    assert.equal(packageManagerExecutable("npx"), "npx.cmd");
+  });
+});
+
+test("Windows package-manager spawn config disables shell execution", () => {
+  const args = ["--version"];
+  const options = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+  withPlatform("win32", () => {
+    const config = packageManagerSpawnConfig("npm", args, options);
+    assert.equal(config.executable, "cmd.exe");
+    assert.deepEqual(config.args, ["/d", "/s", "/c", "npm.cmd", ...args]);
+    assert.equal(config.options.shell, false);
+    assert.equal(config.options.windowsHide, true);
+    assert.equal(config.options.encoding, "utf8");
+    assert.deepEqual(config.options.stdio, ["ignore", "pipe", "pipe"]);
+  });
+});
 
 const STRUCTURAL_RUNTIME_ASSETS = [
   "dist/web-tree-sitter.wasm",
@@ -23,12 +62,28 @@ const STRUCTURAL_RUNTIME_ASSETS = [
   "dist/tree-sitter-yaml.wasm"
 ];
 
+function envWithBinDir(env, binDir) {
+  const next = { ...env };
+  const pathKeys = Object.keys(next).filter((key) => key.toLowerCase() === "path");
+  const current = process.platform === "win32"
+    ? (pathKeys.length > 0 ? String(next[pathKeys[0]]) : "")
+    : `/usr/bin${path.delimiter}/bin`;
+  for (const key of pathKeys) delete next[key];
+  next[process.platform === "win32" ? "Path" : "PATH"] = `${binDir}${path.delimiter}${current}`;
+  return next;
+}
+
 async function installPackedFakeGrok(root) {
   const binDir = path.join(root, "fake-grok-bin");
   await mkdir(binDir, { recursive: true });
   const fixture = path.join(GROK_FIXTURE_ROOT, "fake-grok.cjs");
   if (process.platform === "win32") {
-    await writeFile(path.join(binDir, "grok.cmd"), `@echo off\r\n"${process.execPath}" "${fixture}" %*\r\nexit /b %errorlevel%\r\n`, "utf8");
+    await copyFile(fixture, path.join(binDir, "fake-grok.cjs"));
+    await writeFile(
+      path.join(binDir, "grok.cmd"),
+      `@echo off\r\n"${process.execPath}" "%~dp0fake-grok.cjs" %*\r\n`,
+      "utf8"
+    );
   } else {
     const shim = path.join(binDir, "grok");
     await writeFile(shim, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(fixture)} "$@"\n`, "utf8");
@@ -159,13 +214,14 @@ test("published package installs production dependencies and executes a fake Gro
       npm_config_audit: "false",
       npm_config_fund: "false"
     };
-    await execFileAsync("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", "--prefer-offline"], {
+    const npmInstallConfig = packageManagerSpawnConfig("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", "--prefer-offline"], {
       cwd: packageRoot,
       env: npmEnv,
       encoding: "utf8",
       timeout: 180_000,
       maxBuffer: 20 * 1024 * 1024
     });
+    await execFileAsync(npmInstallConfig.executable, npmInstallConfig.args, npmInstallConfig.options);
     const help = await runPackedCli(packedBin, packageRoot, npmEnv, ["--help"]);
     assert.match(help.stdout, /legion <command>/);
 
@@ -173,19 +229,16 @@ test("published package installs production dependencies and executes a fake Gro
     await mkdir(project, { recursive: true });
     const recordPath = path.join(scratch, "grok-invocations.jsonl");
     const fake = await installPackedFakeGrok(scratch);
-    const env = {
+    const env = envWithBinDir({
       ...npmEnv,
       HOME: path.join(scratch, "home"),
       USERPROFILE: path.join(scratch, "home"),
-      PATH: process.platform === "win32"
-        ? `${fake.binDir}${path.delimiter}${npmEnv.PATH ?? ""}`
-        : `${fake.binDir}${path.delimiter}/usr/bin${path.delimiter}/bin`,
       FAKE_GROK_RESPONSE_FILE: path.join(GROK_FIXTURE_ROOT, "json-success.json"),
       FAKE_GROK_RECORD_FILE: recordPath,
       FAKE_GROK_MODE: "success",
       FAKE_GROK_SLEEP_MS: "0",
       NO_COLOR: "1"
-    };
+    }, fake.binDir);
     delete env.XAI_API_KEY;
     await mkdir(env.HOME, { recursive: true });
 
@@ -235,7 +288,7 @@ test("published package installs production dependencies and executes a fake Gro
     const executions = records.filter((record) => record.args[0] === "--prompt-file");
     assert.equal(executions.length, 3);
     for (const record of executions) {
-      assert.equal(record.cwd, canonicalProject);
+      assert.equal(await realpath(record.cwd), canonicalProject);
       assert.equal(record.stdinLength, 0);
       assert.equal(record.xaiApiKeyPresent, false);
       assert.deepEqual(record.args.slice(-4), ["--output-format", "json", "--permission-mode", "bypassPermissions"]);

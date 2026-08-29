@@ -8,6 +8,7 @@ export * from "./api/contracts.js";
 export * from "./api/schema-documents.js";
 export * from "./entities/approval.js";
 export * from "./entities/attestation.js";
+export * from "./entities/brownfield-assessment.js";
 export * from "./entities/change.js";
 export * from "./entities/code-index.js";
 export * from "./entities/common.js";

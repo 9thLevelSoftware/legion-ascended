@@ -17,6 +17,7 @@ import { handleAttestWorkflow } from "./attest.js";
 import { handleReleaseWorkflow } from "./release.js";
 import { handleAdHocWorkflow } from "./ad-hoc.js";
 import { handleContextualWorkflow } from "./contextual.js";
+import { handleAssessWorkflow } from "./assess.js";
 import { handleShipWorkflow } from "./ship.js";
 import { handleDoctorCommand, handleValidateCommand } from "./validate.js";
 import { undeclaredOptionError } from "./declared-options.js";
@@ -43,6 +44,7 @@ const COMMAND_SPECIFIC_HELP = new Set([
   "learn",
   "explore",
   "map",
+  "assess",
   "retro",
   "milestone",
   "council",
@@ -93,6 +95,9 @@ export async function handleWorkflowCommand(context: CliContext): Promise<CliRes
       return handleAdHocWorkflow(commandContext, command);
     case "explore":
     case "map":
+      return handleContextualWorkflow(commandContext, command);
+    case "assess":
+      return handleAssessWorkflow(commandContext);
     case "retro":
     case "milestone":
     case "council":

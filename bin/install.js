@@ -303,14 +303,46 @@ function commandExists(commandName) {
   return result.status === 0;
 }
 
+function windowsCommandPath(commandName) {
+  const result = spawnSync('where.exe', [commandName], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true
+  });
+  if (result.error || result.status !== 0) return null;
+  return String(result.stdout || '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) || null;
+}
+
+function windowsCommandSpawnConfig(command, args, options) {
+  return {
+    executable: 'cmd.exe',
+    args: ['/d', '/s', '/c', command, ...args],
+    options: {
+      ...options,
+      shell: false,
+      windowsHide: true
+    }
+  };
+}
+
+function spawnWindowsCommand(command, args, options) {
+  const config = windowsCommandSpawnConfig(command, args, options);
+  return spawnSync(config.executable, config.args, config.options);
+}
+
 function grokVersionDetected(commandName) {
-  const result = spawnSync(commandName, ['--version'], {
+  const executable = process.platform === 'win32' ? windowsCommandPath(commandName) : commandName;
+  if (!executable) return false;
+  const options = {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
     timeout: 3000,
     maxBuffer: 64 * 1024
-  });
+  };
+  const result = process.platform === 'win32'
+    ? spawnWindowsCommand(executable, ['--version'], options)
+    : spawnSync(executable, ['--version'], options);
   if (result.error || result.status !== 0) return false;
   const output = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
   return /^grok(?:\s+build)?\s+v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?(?:\s|$)/i.test(output);
@@ -2529,22 +2561,20 @@ function packageManagerExecutable(name) {
   return process.platform === 'win32' ? `${name}.cmd` : name;
 }
 
-function quoteWindowsCommandArg(value) {
-  const text = String(value);
-  if (/^[A-Za-z0-9_@%+.,:/=-]+$/.test(text)) return text;
-  return `"${text.replace(/(["^&|<>])/g, '^$1')}"`;
+function packageManagerSpawnConfig(name, args, options) {
+  const executable = packageManagerExecutable(name);
+  if (process.platform === 'win32') {
+    return windowsCommandSpawnConfig(executable, args, options);
+  }
+  return { executable, args, options };
 }
 
 function spawnPackageManager(name, args, options) {
-  const executable = packageManagerExecutable(name);
   if (process.platform === 'win32') {
-    return spawnSync(
-      [executable, ...args].map(quoteWindowsCommandArg).join(' '),
-      [],
-      { ...options, shell: true }
-    );
+    return spawnWindowsCommand(packageManagerExecutable(name), args, options);
   }
-  return spawnSync(executable, args, options);
+  const config = packageManagerSpawnConfig(name, args, options);
+  return spawnSync(config.executable, config.args, config.options);
 }
 
 function runPackageManager(name, args, description) {
@@ -2562,9 +2592,23 @@ function runPackageManager(name, args, description) {
   }
 }
 
+function canonicalPath(value) {
+  const resolved = path.resolve(value);
+  if (process.platform === 'win32') {
+    try {
+      const real = typeof fs.realpathSync.native === 'function'
+        ? fs.realpathSync.native(resolved)
+        : fs.realpathSync(resolved);
+      return normalizePath(real).replace(/\/$/, '').toLowerCase();
+    } catch {
+      // Fall back to the normalized absolute path when the target is absent.
+    }
+  }
+  return normalizePath(resolved).replace(/\/$/, '').toLowerCase();
+}
+
 function samePath(left, right) {
-  const normalize = (value) => normalizePath(path.resolve(value)).replace(/\/$/, '').toLowerCase();
-  return normalize(left) === normalize(right);
+  return canonicalPath(left) === canonicalPath(right);
 }
 
 function isGlobalPackageInvocation(packageName) {
@@ -2723,7 +2767,12 @@ if (require.main === module) {
 }
 
 module.exports = {
-  main
+  commandDetected,
+  main,
+  packageManagerExecutable,
+  packageManagerSpawnConfig,
+  samePath,
+  spawnPackageManager
 };
 
 
