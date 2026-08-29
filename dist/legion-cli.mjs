@@ -41163,8 +41163,6 @@ async function spawnWithInput(command, args2, input, cwd, timeoutMs, executorLab
       stdio: ["pipe", "pipe", "pipe"]
     });
     const output = new BoundedOutputCapture();
-    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
-    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     let settled = false;
     let timedOut = false;
     let outputLimitExceeded = false;
@@ -41223,6 +41221,8 @@ async function spawnWithInput(command, args2, input, cwd, timeoutMs, executorLab
         requestTermination(125);
       }
     });
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     child.stdin.on("error", () => {
     });
     child.on("error", (error51) => {
@@ -41263,8 +41263,6 @@ async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
       stdio: ["ignore", "pipe", "pipe"]
     });
     const output = new BoundedOutputCapture();
-    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
-    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     let settled = false;
     let timedOut = false;
     let outputLimitExceeded = false;
@@ -41323,6 +41321,8 @@ async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
         requestTermination(125);
       }
     });
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     child.on("error", (error51) => {
       if (settled) return;
       spawnError = error51;

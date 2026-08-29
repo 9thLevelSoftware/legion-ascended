@@ -1329,8 +1329,6 @@ async function spawnWithInput(
       stdio: ["pipe", "pipe", "pipe"]
     });
     const output = new BoundedOutputCapture();
-    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
-    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     let settled = false;
     let timedOut = false;
     let outputLimitExceeded = false;
@@ -1393,6 +1391,12 @@ async function spawnWithInput(
         requestTermination(125);
       }
     });
+    // Wait for stream end AFTER data handlers so streams are in flowing mode
+    // before we listen for 'end'. On Windows, listening for 'end' before a
+    // 'data' handler puts the stream in flowing mode can cause 'end' to fire
+    // with zero data events delivered.
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     child.stdin.on("error", () => {});
     child.on("error", (error) => {
       if (settled) return;
@@ -1439,8 +1443,6 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
       stdio: ["ignore", "pipe", "pipe"]
     });
     const output = new BoundedOutputCapture();
-    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
-    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     let settled = false;
     let timedOut = false;
     let outputLimitExceeded = false;
@@ -1503,6 +1505,8 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
         requestTermination(125);
       }
     });
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     child.on("error", (error) => {
       if (settled) return;
       spawnError = error;
