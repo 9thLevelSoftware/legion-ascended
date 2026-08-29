@@ -41112,6 +41112,18 @@ var BoundedOutputCapture = class {
     else this.stderrValue = value;
   }
 };
+function waitForOutputStreamEnd(stream) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    stream.once("end", finish);
+    stream.once("error", finish);
+  });
+}
 async function readBoundedText(filePath) {
   let handle2;
   try {
@@ -41151,6 +41163,8 @@ async function spawnWithInput(command, args2, input, cwd, timeoutMs, executorLab
       stdio: ["pipe", "pipe", "pipe"]
     });
     const output = new BoundedOutputCapture();
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     let settled = false;
     let timedOut = false;
     let outputLimitExceeded = false;
@@ -41229,8 +41243,10 @@ async function spawnWithInput(command, args2, input, cwd, timeoutMs, executorLab
       settle(exitCode);
     };
     child.on("close", (code) => {
-      const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
-      void settleAfterQuiescence(exitCode);
+      void Promise.all([stdoutEnded, stderrEnded]).then(() => {
+        const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+        return settleAfterQuiescence(exitCode);
+      });
     });
     child.stdin.end(input);
   });
@@ -41247,6 +41263,8 @@ async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
       stdio: ["ignore", "pipe", "pipe"]
     });
     const output = new BoundedOutputCapture();
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     let settled = false;
     let timedOut = false;
     let outputLimitExceeded = false;
@@ -41323,8 +41341,10 @@ async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
       settle(exitCode);
     };
     child.on("close", (code) => {
-      const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
-      void settleAfterQuiescence(exitCode);
+      void Promise.all([stdoutEnded, stderrEnded]).then(() => {
+        const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+        return settleAfterQuiescence(exitCode);
+      });
     });
   });
 }
