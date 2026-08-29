@@ -7,6 +7,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import { createRequire } from "node:module";
+import { directoryLinkType, requireDirSymlink } from "./helpers/symlink-capability.mjs";
 
 const require = createRequire(import.meta.url);
 const {
@@ -383,7 +384,8 @@ test("Grok detection honors Windows PATHEXT entries returned by where.exe", asyn
   });
 });
 
-test("samePath canonicalizes aliases before comparing Windows-style paths", async () => {
+test("samePath canonicalizes aliases before comparing Windows-style paths", async (t) => {
+  if (!requireDirSymlink(t)) return;
   const root = await mkdtemp(path.join(tmpdir(), "legion-path-comparison-"));
   const targetDir = path.join(root, "long-directory");
   const aliasDir = path.join(root, "short-directory");
@@ -392,7 +394,7 @@ test("samePath canonicalizes aliases before comparing Windows-style paths", asyn
   try {
     await mkdir(path.dirname(targetFile), { recursive: true });
     await writeFile(targetFile, "same file\n", "utf8");
-    await symlink(targetDir, aliasDir, process.platform === "win32" ? "junction" : "dir");
+    await symlink(targetDir, aliasDir, directoryLinkType());
 
     withPlatform("win32", () => {
       assert.equal(samePath(aliasFile, targetFile), true);

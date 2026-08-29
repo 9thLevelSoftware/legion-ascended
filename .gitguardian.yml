@@ -1,6 +1,8 @@
 version: 2
 
 secret:
-  ignored-paths:
+  ignored_paths:
     - "packages/cli/test/brownfield-signals.test.mjs"
     - "packages/cli/test/brownfield-specialists.test.mjs"
+    - "**/brownfield-signals.test.mjs"
+    - "**/brownfield-specialists.test.mjs"
