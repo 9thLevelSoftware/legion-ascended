@@ -59,6 +59,10 @@ const DIRECTORY_FLAG = typeof fsConstants.O_DIRECTORY === "number" ? fsConstants
 // validation and open. Regular files are unaffected by O_NONBLOCK.
 const NONBLOCK_FLAG = typeof fsConstants.O_NONBLOCK === "number" ? fsConstants.O_NONBLOCK : 0;
 const DESCRIPTOR_PATH_ROOT = process.platform === "linux" ? "/proc/self/fd" : undefined;
+/** Test-only barrier: while this path exists, publishers wait after staging and before rename. */
+export const ASSESSMENT_PRE_PUBLISH_HOLD_FILE_ENV = "LEGION_ASSESSMENT_PRE_PUBLISH_HOLD_FILE";
+const PRE_PUBLISH_HOLD_TIMEOUT_MS = 15_000;
+const PRE_PUBLISH_HOLD_POLL_MS = 10;
 
 export interface BrownfieldAssessmentPaths {
   readonly root: ArtifactPath;
@@ -1055,6 +1059,20 @@ async function acquirePublishLock(
   throw new Error(`Timed out waiting to publish the brownfield assessment bundle: ${finalPath}`);
 }
 
+async function waitForOptionalPrePublishHold(): Promise<void> {
+  const holdFile = process.env[ASSESSMENT_PRE_PUBLISH_HOLD_FILE_ENV];
+  if (holdFile === undefined || holdFile.length === 0) return;
+  const deadline = Date.now() + PRE_PUBLISH_HOLD_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      await access(holdFile);
+    } catch {
+      return;
+    }
+    await delay(PRE_PUBLISH_HOLD_POLL_MS);
+  }
+}
+
 async function writeStagedText(
   stageDirectory: string,
   fileName: BundleFileName,
@@ -1772,6 +1790,7 @@ async function writeInitialBundle(input: {
       await writeStagedText(stagedPath, fileName, contentByFile[fileName], stageDirectory.descriptor);
     }
     await syncBundleDirectory(stageDirectory);
+    await waitForOptionalPrePublishHold();
     await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity!, stageDescriptor);
     staged = false;
   } catch (error) {
@@ -1883,6 +1902,7 @@ async function writeUpdatedBundle(input: {
         throw new Error(`Brownfield assessment phase has already been advanced by a concurrent updater to "${existingPhase}". The requested transition from "${input.expectedCurrentPhase}" to "${input.state.phase}" is no longer valid.`);
       }
     };
+    await waitForOptionalPrePublishHold();
     await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity!, stageDescriptor, { replaceExisting: true, validateBeforePublish: validatePhaseUnderLock });
     staged = false;
   } catch (error) {

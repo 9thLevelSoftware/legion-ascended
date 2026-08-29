@@ -19,6 +19,7 @@ import {
 } from "../dist/workflow/codebase-map.js";
 import { buildStructuralCodeIndex } from "../dist/workflow/code-index.js";
 import {
+  ASSESSMENT_PRE_PUBLISH_HOLD_FILE_ENV,
   createBrownfieldAssessment,
   readBrownfieldAssessment,
   updateBrownfieldAssessmentState
@@ -406,17 +407,23 @@ function signalChild(child, signal) {
 
 test("does not publish a replacement staging directory", async (t) => {
   if (process.platform === "win32") {
-    t.skip("requires POSIX SIGSTOP to pause publishers mid-stage");
+    t.skip("requires renaming a staging directory still open in the publisher");
     return;
   }
   const fixture = await writeMapFixture();
   const children = [];
+  const previousHold = process.env[ASSESSMENT_PRE_PUBLISH_HOLD_FILE_ENV];
+  let holdPath;
   try {
     const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
     const bundlePath = path.join(fixture.repositoryRoot, ...created.paths.root.split("/"));
     const parentPath = path.dirname(bundlePath);
     const bundleName = path.basename(bundlePath);
     await rm(bundlePath, { recursive: true, force: true });
+
+    holdPath = path.join(parentPath, ".pre-publish-hold");
+    await writeFile(holdPath, "hold\n", "utf8");
+    process.env[ASSESSMENT_PRE_PUBLISH_HOLD_FILE_ENV] = holdPath;
 
     const replacementTemplate = path.join(parentPath, ".replacement-stage-template");
     await mkdir(replacementTemplate);
@@ -431,7 +438,7 @@ test("does not publish a replacement staging directory", async (t) => {
     ));
 
     const stagePrefix = `.${bundleName}.`;
-    const deadline = Date.now() + 8_000;
+    const deadline = Date.now() + 10_000;
     let stagePath;
     let swapped = false;
     let lastError;
@@ -458,9 +465,6 @@ test("does not publish a replacement staging directory", async (t) => {
         }
         if (stageEntries.length !== 6) continue;
         stagePath = candidatePath;
-        for (const child of children) signalChild(child, "SIGSTOP");
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        for (const child of children) signalChild(child, "SIGSTOP");
         try {
           await rename(candidatePath, `${candidatePath}.hidden`);
           await cp(replacementTemplate, candidatePath, { recursive: true });
@@ -469,7 +473,6 @@ test("does not publish a replacement staging directory", async (t) => {
         } catch (error) {
           lastError = error;
           failedCandidates.add(entry);
-          for (const child of children) signalChild(child, "SIGCONT");
         }
       }
       if (!swapped) await new Promise((resolve) => setImmediate(resolve));
@@ -481,7 +484,8 @@ test("does not publish a replacement staging directory", async (t) => {
     );
     assert.equal(swapped, true, lastError === undefined ? "swap did not complete" : formatObservedError(lastError));
 
-    for (const child of children) signalChild(child, "SIGCONT");
+    await rm(holdPath, { force: true });
+    holdPath = undefined;
     await Promise.all(childResults);
 
     const entries = await readdir(parentPath);
@@ -489,10 +493,10 @@ test("does not publish a replacement staging directory", async (t) => {
       assert.notEqual(await readFile(path.join(bundlePath, "state.json"), "utf8"), "replacement-stage\n");
     }
   } finally {
-    for (const child of children) {
-      signalChild(child, "SIGCONT");
-      signalChild(child, "SIGKILL");
-    }
+    if (holdPath !== undefined) await rm(holdPath, { force: true });
+    if (previousHold === undefined) delete process.env[ASSESSMENT_PRE_PUBLISH_HOLD_FILE_ENV];
+    else process.env[ASSESSMENT_PRE_PUBLISH_HOLD_FILE_ENV] = previousHold;
+    for (const child of children) signalChild(child, "SIGKILL");
     await fixture.cleanup();
   }
 });
