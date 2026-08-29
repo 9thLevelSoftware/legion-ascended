@@ -33,6 +33,7 @@ import { resolveProjectArtifactPath, stableProtocolJson } from "@legion/artifact
 import type { BrownfieldSignals } from "./brownfield-signals.js";
 import {
   adapterForKind,
+  MAX_ADAPTER_OUTPUT_BYTES,
   redactAdapterTranscript,
   selectExecutionAdapterKind,
   writeProjectTextFile,
@@ -64,6 +65,7 @@ const MAX_DIAGNOSTIC_CHARS = 1_024;
 const MAX_SPECIALIST_FINDINGS = 2_000;
 const MAX_SPECIALIST_ASSUMPTIONS = 256;
 const DEFAULT_SPECIALIST_TIMEOUT_MS = 600_000;
+const SPECIALIST_TIMEOUT_DRAIN_MS = 1_000;
 const EXECUTION_ARTIFACT_ROOT = ".legion/project/workflow/brownfield-specialists";
 const BOUNDED_EVIDENCE_NOTE = " [BOUNDED_EVIDENCE]";
 const BOUNDED_PROMPT_NOTE = "\n[BOUNDED_PROMPT_TRUNCATED]";
@@ -351,12 +353,22 @@ function supportedTestLink(snapshot: CodeIndexSnapshot, link: BrownfieldSignals[
   return coverageStatus(snapshot, link.testPath) === "parsed" && coverageStatus(snapshot, link.sourcePath) === "parsed";
 }
 
-function testMetadataEvidence(sourcePath: string, note: string): AssessmentEvidenceRef {
+function snapshotSourceHashes(snapshot: CodeIndexSnapshot): ReadonlyMap<string, CodeIndexSha256> {
+  const sourceHashes = new Map<string, CodeIndexSha256>();
+  for (const fact of [...snapshot.symbols, ...snapshot.imports, ...snapshot.exports]) {
+    const previous = sourceHashes.get(fact.path);
+    if (previous !== undefined && previous !== fact.sourceSha256) {
+      throw new Error(`Structural snapshot has inconsistent source hashes for ${fact.path}.`);
+    }
+    sourceHashes.set(fact.path, fact.sourceSha256);
+  }
+  return sourceHashes;
+}
+
+function testMetadataEvidence(sourceHashes: ReadonlyMap<string, CodeIndexSha256>, sourcePath: string, note: string): AssessmentEvidenceRef {
   const path = codeIndexSourcePathSchema.parse(sourcePath);
-  // Test inventory is path metadata, not content or execution proof. Keep the
-  // source-path schema on the path and use a deterministic metadata anchor so
-  // the final protocol evidence remains a real source-file reference.
-  const sha256 = codeIndexSha256Schema.parse(createHash("sha256").update(`test-inventory\u0000${path}`, "utf8").digest("hex"));
+  const sha256 = sourceHashes.get(path);
+  if (sha256 === undefined) throw new Error(`Snapshot has no source hash for test metadata path ${path}.`);
   return assessmentEvidenceRefSchema.parse({
     kind: "source-file",
     path,
@@ -410,6 +422,7 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
     ...snapshot.imports.map((entry): string => entry.id),
     ...snapshot.exports.map((entry): string => entry.id)
   ]);
+  const sourceHashes = snapshotSourceHashes(snapshot);
   const sourceEvidence = new Set<string>();
   const structuralEvidence = new Set<string>();
   const commandEvidence = new Set<string>();
@@ -420,6 +433,9 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
     const reference = assessmentEvidenceRefSchema.parse(referenceInput);
     if (reference.kind === "source-file") {
       if (!coveredPaths.has(reference.path)) throw new Error(`${origin} references a source path outside snapshot coverage.`);
+      const expectedSha256 = sourceHashes.get(reference.path);
+      if (expectedSha256 === undefined) throw new Error(`${origin} references a source path without a snapshot source hash.`);
+      if (reference.sha256 !== expectedSha256) throw new Error(`${origin} references a source file with the wrong source hash.`);
       sourceEvidence.add(evidenceKey(reference));
     } else if (reference.kind === "structural-fact") {
       if (reference.path !== snapshot.sqlite.path || !factIds.has(reference.factId)) {
@@ -458,8 +474,8 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
     if (typeof link.reason !== "string") throw new Error(`Test link ${index} has invalid reason.`);
     if (supportedTestLink(snapshot, link)) {
       const refs = [
-        testMetadataEvidence(link.testPath, `Bounded test inventory metadata for ${link.testPath}; link is retained only for parsed supported coverage.`),
-        testMetadataEvidence(link.sourcePath, `Bounded source target metadata for ${link.sourcePath}; linked from parsed supported test ${link.testPath}.`)
+        testMetadataEvidence(sourceHashes, link.testPath, `Bounded test inventory metadata for ${link.testPath}; link is retained only for parsed supported coverage.`),
+        testMetadataEvidence(sourceHashes, link.sourcePath, `Bounded source target metadata for ${link.sourcePath}; linked from parsed supported test ${link.testPath}.`)
       ];
       metadataEvidence.push(...refs);
       for (const reference of refs) sourceEvidence.add(evidenceKey(reference));
@@ -468,7 +484,7 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
   for (const [index, testPath] of input.signals.testFiles.entries()) {
     codeIndexSourcePathSchema.parse(testPath);
     if (!coveredPaths.has(testPath)) throw new Error(`Test file ${index} is outside snapshot coverage.`);
-    const reference = testMetadataEvidence(testPath, `Bounded test inventory metadata for ${testPath}; presence is not execution or coverage proof.`);
+    const reference = testMetadataEvidence(sourceHashes, testPath, `Bounded test inventory metadata for ${testPath}; presence is not execution or coverage proof.`);
     metadataEvidence.push(reference);
     sourceEvidence.add(evidenceKey(reference));
   }
@@ -1239,6 +1255,25 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   }
 }
 
+async function drainPromise(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  return await new Promise<boolean>((resolve) => {
+    let timer: NodeJS.Timeout | undefined;
+    const finish = (drained: boolean): void => {
+      if (timer !== undefined) clearTimeout(timer);
+      resolve(drained);
+    };
+    timer = setTimeout(() => finish(false), timeoutMs);
+    timer.unref();
+    promise.then(() => finish(true), () => finish(true));
+  });
+}
+
+function outputLimitError(outputSize: number): Error & { readonly code: string } {
+  const error = new Error(`Specialist executor output exceeded the ${MAX_ADAPTER_OUTPUT_BYTES}-byte limit (${outputSize} bytes).`) as Error & { code: string };
+  error.code = "SPECIALIST_OUTPUT_LIMIT";
+  return error;
+}
+
 function cloneAndFreeze<T>(value: T): T {
   if (Array.isArray(value)) {
     return Object.freeze(value.map((entry) => cloneAndFreeze(entry))) as T;
@@ -1681,9 +1716,8 @@ async function runReadOnlyInProcessCallback(input: {
   // Keep the callback promise alive after the observation timeout. An
   // in-process callback cannot be cancelled safely, so returning at the race
   // boundary would let it mutate the repository while the next specialist is
-  // already running. The timeout is therefore observed for diagnostics, but
-  // the callback is drained before the repository is rehashed and the caller
-  // is allowed to dispatch the next specialist.
+  // already running. Drain it for a bounded interval; if it still does not
+  // settle, restore the baseline and abort the remaining roster.
   const callbackPromise = Promise.resolve().then(() => input.execute(input.request));
   let result: unknown;
   let callbackError: unknown;
@@ -1692,12 +1726,20 @@ async function runReadOnlyInProcessCallback(input: {
   } catch (error) {
     callbackError = error;
     if (isRecord(error) && error["code"] === "SPECIALIST_TIMEOUT") {
-      // Awaiting the original promise also consumes a late rejection, so a
-      // timed-out callback never becomes an unhandled rejection after return.
-      try {
-        await callbackPromise;
-      } catch {
-        // Preserve the timeout as the observed execution outcome.
+      // Await the original promise long enough to consume a late rejection,
+      // but never let an uncooperative callback hold the roster forever.
+      const drained = await drainPromise(callbackPromise, SPECIALIST_TIMEOUT_DRAIN_MS);
+      if (!drained) {
+        try {
+          await restoreRepositoryFromBaseline(input.repositoryRoot, before);
+        } catch (cleanupError) {
+          const restoreError = new Error(`Read-only repository cleanup failed after specialist timeout: ${safeDiagnostic(cleanupError)}.`) as Error & { code?: string };
+          restoreError.code = "READ_ONLY_RESTORE_FAILED";
+          throw restoreError;
+        }
+        const drainError = timeoutError(input.timeoutMs) as Error & { code?: string };
+        drainError.code = "SPECIALIST_TIMEOUT_DRAIN";
+        throw drainError;
       }
     }
   }
@@ -1709,7 +1751,9 @@ async function runReadOnlyInProcessCallback(input: {
     try {
       await restoreRepositoryFromBaseline(input.repositoryRoot, before);
     } catch (cleanupError) {
-      throw new Error(`Read-only repository cleanup failed while inspecting callback state: ${safeDiagnostic(error)} Cleanup failed: ${safeDiagnostic(cleanupError)}.`);
+      const restoreError = new Error(`Read-only repository cleanup failed while inspecting callback state: ${safeDiagnostic(error)} Cleanup failed: ${safeDiagnostic(cleanupError)}.`) as Error & { code?: string };
+      restoreError.code = "READ_ONLY_RESTORE_FAILED";
+      throw restoreError;
     }
     throw new Error(`Read-only callback state exceeded the bounded inspection limit; cleanup restored the baseline before rejecting: ${safeDiagnostic(error)}.`);
   }
@@ -1784,6 +1828,7 @@ async function runOne(input: {
   readonly record: BrownfieldSpecialistExecutionRecord;
   readonly parsed?: ParsedSpecialistOutput;
   readonly diagnostic?: string;
+  readonly abortRemaining?: boolean;
 }> {
   const { pack } = input;
   const request = cloneAndFreeze<BrownfieldSpecialistExecutionRequest>({
@@ -1807,6 +1852,8 @@ async function runOne(input: {
   });
   const support = evidenceSupportForPack(pack);
   let outcome: SpecialistRunOutcome;
+  let observedOutputSize: number | undefined;
+  let abortRemaining = false;
   try {
     let raw: unknown;
     if (input.execute === undefined) {
@@ -1826,13 +1873,17 @@ async function runOne(input: {
         ...(input.readOnlyBaseline === undefined ? {} : { baseline: input.readOnlyBaseline })
       });
     }
+    observedOutputSize = serializedSize(raw);
+    if (input.execute !== undefined && observedOutputSize > MAX_ADAPTER_OUTPUT_BYTES) throw outputLimitError(observedOutputSize);
     const parsedEnvelope = specialistPayloadFrom(raw);
     outcome = { status: parsedEnvelope.status, raw, ...(parsedEnvelope.payload === undefined ? {} : { payload: parsedEnvelope.payload }), diagnostic: parsedEnvelope.diagnostic };
   } catch (error) {
     const diagnostic = safeDiagnostic(error);
     const errorCode = (error as { readonly code?: unknown })?.code;
+    abortRemaining = errorCode === "READ_ONLY_RESTORE_FAILED" || errorCode === "SPECIALIST_TIMEOUT_DRAIN";
     outcome = {
       status: errorCode === "SPECIALIST_TIMEOUT" ||
+        errorCode === "SPECIALIST_TIMEOUT_DRAIN" ||
         errorCode === "SPECIALIST_SYMLINK_BLOCKED" ||
         errorCode === "SPECIALIST_CONTAINMENT_UNAVAILABLE"
         ? "blocked"
@@ -1875,13 +1926,49 @@ async function runOne(input: {
     promptSize: pack.promptSize,
     promptBytes: pack.promptBytes,
     resultHash: hashExecutionOutcome(outcome),
-    outputSize: serializedSize(outcome.raw),
+    outputSize: observedOutputSize ?? serializedSize(outcome.raw),
     diagnostic: status === "succeeded" ? "" : boundedText(diagnostic || "Specialist output was rejected.", MAX_DIAGNOSTIC_CHARS)
   };
   return {
     record,
     ...(parsed === undefined ? {} : { parsed }),
-    ...(status === "succeeded" ? {} : { diagnostic: record.diagnostic })
+    ...(status === "succeeded" ? {} : { diagnostic: record.diagnostic }),
+    ...(abortRemaining ? { abortRemaining: true } : {})
+  };
+}
+
+function unexecutedRecord(input: {
+  readonly pack: BrownfieldExcerptPack;
+  readonly snapshot: CodeIndexSnapshot;
+  readonly executor: ExecutionAdapterKind;
+  readonly execute: BrownfieldSpecialistExecutor | undefined;
+  readonly status: "failed" | "blocked";
+  readonly diagnostic: string;
+}): BrownfieldSpecialistExecutionRecord {
+  const diagnostic = boundedText(input.diagnostic, MAX_DIAGNOSTIC_CHARS);
+  return {
+    specialist: input.pack.specialist,
+    executor: input.executor,
+    transport: input.execute === undefined ? "adapter" : "in-process",
+    status: input.status,
+    snapshotId: input.snapshot.snapshotId,
+    sourceFingerprint: input.pack.sourceFingerprint,
+    semanticIndexSha256: input.pack.semanticIndexSha256,
+    semanticSqliteSha256: input.pack.semanticSqliteSha256,
+    summary: input.pack.summary,
+    evidence: input.pack.evidence,
+    excerptPaths: input.pack.excerpts.map((excerpt) => ({
+      path: excerpt.path,
+      ...(excerpt.sha256 === undefined ? {} : { sha256: excerpt.sha256 }),
+      factIds: excerpt.factIds
+    })),
+    truncation: input.pack.truncation,
+    promptHash: input.pack.promptHash,
+    promptSize: input.pack.promptSize,
+    promptBytes: input.pack.promptBytes,
+    resultHash: hashUnknown({ status: input.status, diagnostic }),
+    outputSize: 0,
+    diagnostic
   };
 }
 
@@ -1920,13 +2007,49 @@ export async function runBrownfieldSpecialists(input: {
   const findings: AssessmentFinding[] = [];
   const assumptions: AssessmentAssumption[] = [];
   const diagnostics: string[] = [];
-  const readOnlyBaseline = input.execute === undefined
-    ? undefined
-    : await snapshotRepository(input.repositoryRoot);
+  let readOnlyBaseline: RepositorySnapshot | undefined;
+  let baselineFailure: string | undefined;
+  if (input.execute !== undefined) {
+    try {
+      readOnlyBaseline = await snapshotRepository(input.repositoryRoot);
+    } catch (error) {
+      baselineFailure = `In-process specialist baseline could not be captured: ${safeDiagnostic(error)}.`;
+    }
+  }
   const seenFindingIds = new Set<string>();
   const seenAssumptionIds = new Set<string>();
+  const appendFailure = (pack: BrownfieldExcerptPack, record: BrownfieldSpecialistExecutionRecord, diagnosticInput: string): void => {
+    const diagnostic = diagnosticInput || "Specialist execution failed.";
+    records.push(record);
+    const evidence = fallbackEvidence(pack, snapshot, assessmentId);
+    try {
+      const assumption = unknownAssumption({ assessmentId, specialist: pack.specialist, diagnostic, evidence });
+      if (!seenAssumptionIds.has(assumption.id)) {
+        seenAssumptionIds.add(assumption.id);
+        assumptions.push(assumption);
+      }
+    } catch (error) {
+      diagnostics.push(safeDiagnostic(error));
+    }
+    const specialistDiagnostic = `${pack.specialist.name} pass ${pack.specialist.pass}: ${diagnostic}`;
+    if (!diagnostics.includes(specialistDiagnostic)) diagnostics.push(specialistDiagnostic);
+  };
 
-  for (const pack of packs) {
+  if (baselineFailure !== undefined) {
+    for (const pack of packs) {
+      appendFailure(pack, unexecutedRecord({
+        pack,
+        snapshot,
+        executor: selected,
+        execute: input.execute,
+        status: "failed",
+        diagnostic: baselineFailure
+      }), baselineFailure);
+    }
+  }
+
+  for (const [packIndex, pack] of packs.entries()) {
+    if (baselineFailure !== undefined) break;
     const run = await runOne({
       repositoryRoot: input.repositoryRoot,
       assessmentId,
@@ -1948,24 +2071,26 @@ export async function runBrownfieldSpecialists(input: {
         parsed = undefined;
       }
     }
-    records.push(record);
     if (parsed === undefined) {
       const diagnostic = run.diagnostic ?? record.diagnostic;
-      const evidence = fallbackEvidence(pack, snapshot, assessmentId);
-      try {
-        const assumption = unknownAssumption({ assessmentId, specialist: pack.specialist, diagnostic, evidence });
-        if (!seenAssumptionIds.has(assumption.id)) {
-          seenAssumptionIds.add(assumption.id);
-          assumptions.push(assumption);
+      appendFailure(pack, record, diagnostic);
+      if (run.abortRemaining === true) {
+        const remainingDiagnostic = `Specialist dispatch halted after ${pack.specialist.name} pass ${pack.specialist.pass}: repository restoration did not complete safely.`;
+        for (const remainingPack of packs.slice(packIndex + 1)) {
+          appendFailure(remainingPack, unexecutedRecord({
+            pack: remainingPack,
+            snapshot,
+            executor: selected,
+            execute: input.execute,
+            status: "blocked",
+            diagnostic: remainingDiagnostic
+          }), remainingDiagnostic);
         }
-      } catch (error) {
-        diagnostics.push(safeDiagnostic(error));
-      }
-      if (!diagnostics.includes(`${pack.specialist.name} pass ${pack.specialist.pass}: ${diagnostic}`)) {
-        diagnostics.push(`${pack.specialist.name} pass ${pack.specialist.pass}: ${diagnostic}`);
+        break;
       }
       continue;
     }
+    records.push(record);
     for (const assumption of parsed.assumptions) {
       seenAssumptionIds.add(assumption.id);
       assumptions.push(assumption);

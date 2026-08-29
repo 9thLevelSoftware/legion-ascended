@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFile as execFileCallback } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -23,7 +24,15 @@ import * as adapterModule from "../dist/workflow/executor/adapters.js";
 import { selectExecutionAdapterKind } from "../dist/workflow/executor/adapters.js";
 import { directoryLinkType, requireDirSymlink } from "../../../tests/helpers/symlink-capability.mjs";
 
+const execFile = (file, args) => new Promise((resolve, reject) => {
+  execFileCallback(file, args, (error, stdout, stderr) => {
+    if (error) reject(Object.assign(error, { stdout, stderr }));
+    else resolve({ stdout, stderr });
+  });
+});
+
 const SOURCE_SHA = "a".repeat(64);
+const TEST_SHA = "d".repeat(64);
 const SQLITE_SHA = "b".repeat(64);
 const SNAPSHOT_ID = "idx_000000000000000000000001";
 const ASSESSMENT_ID = "assess_000000000000000000000001";
@@ -61,14 +70,24 @@ function snapshotFixture({ sourcePath = SOURCE_PATH, testPath } = {}) {
     sqlite: { path: SQLITE_PATH, sha256: SQLITE_SHA },
     coverage,
     symbols: [],
-    imports: [{
-      id: FACT_EVIDENCE.factId,
-      path: sourcePath,
-      sourceSha256: SOURCE_SHA,
-      range: { startByte: 0, endByte: 20, startLine: 0, startColumn: 0, endLine: 0, endColumn: 20 },
-      extractorVersion: "fixture",
-      specifier: "./dependency.js"
-    }],
+    imports: [
+      {
+        id: FACT_EVIDENCE.factId,
+        path: sourcePath,
+        sourceSha256: SOURCE_SHA,
+        range: { startByte: 0, endByte: 20, startLine: 0, startColumn: 0, endLine: 0, endColumn: 20 },
+        extractorVersion: "fixture",
+        specifier: "./dependency.js"
+      },
+      ...(testPath === undefined ? [] : [{
+        id: "imp_000000000000000000000002",
+        path: testPath,
+        sourceSha256: TEST_SHA,
+        range: { startByte: 0, endByte: 20, startLine: 0, startColumn: 0, endLine: 0, endColumn: 20 },
+        extractorVersion: "fixture",
+        specifier: "./subject.js"
+      }])
+    ],
     exports: []
   });
 }
@@ -151,10 +170,11 @@ function oversizedPackInput(count = 140) {
   const snapshot = codeIndexSnapshotSchema.parse({
     ...baseSnapshot,
     coverage: sourcePaths.map((sourcePath) => ({ path: sourcePath, status: "parsed", language: "typescript" })),
-    imports: [{
+    imports: sourcePaths.map((sourcePath, index) => ({
       ...baseSnapshot.imports[0],
-      path: SOURCE_PATH
-    }]
+      id: index === 0 ? FACT_EVIDENCE.factId : `imp_${(index + 1).toString(16).padStart(24, "0")}`,
+      path: sourcePath
+    }))
   });
   const architectureSignals = sourcePaths.slice(1).map((sourcePath, index) => ({
     code: `overflow-${String(index).padStart(3, "0")}`,
@@ -498,6 +518,21 @@ test("rejects missing or out-of-bounds evidence and records the specialist failu
   assert.ok(outOfBounds.assumptions.every(hasSyntheticUserInput));
 });
 
+test("rejects source evidence whose digest does not match the structural snapshot", () => {
+  const fixture = input();
+  const wrongSha256 = "e".repeat(64);
+  assert.throws(() => buildBrownfieldExcerptPacks({
+    ...fixture,
+    signals: {
+      ...fixture.signals,
+      architectureSignals: [{
+        ...fixture.signals.architectureSignals[0],
+        evidence: [{ ...SOURCE_EVIDENCE, sha256: wrongSha256 }, FACT_EVIDENCE]
+      }]
+    }
+  }), /source.*hash|digest/iu);
+});
+
 test("drains a timed-out callback before the next specialist and before returning", async () => {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-timeout-"));
   const delayedFile = path.join(repositoryRoot, "late.txt");
@@ -541,6 +576,31 @@ test("drains a timed-out callback before the next specialist and before returnin
     assert.match(result.executionRecords[0].diagnostic, /timed out|read-only|changed/iu);
     assert.equal(result.executionRecords[1].status, "succeeded");
     await assert.rejects(readFile(delayedFile, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("bounds the timeout drain when an in-process callback never settles", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-timeout-drain-"));
+  let callbackCount = 0;
+  try {
+    const result = await Promise.race([
+      runBrownfieldSpecialists({
+        ...input({ repositoryRoot }),
+        timeoutMs: 50,
+        execute: async () => {
+          callbackCount += 1;
+          return new Promise(() => {});
+        }
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("specialist timeout drain remained unbounded")), 2_500))
+    ]);
+    assert.equal(callbackCount, 1);
+    assert.equal(result.executionRecords.length, 2);
+    assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
+    assert.match(result.executionRecords[0].diagnostic, /timed out/iu);
+    assert.match(result.executionRecords[1].diagnostic, /halted|blocked/iu);
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }
@@ -591,6 +651,43 @@ test("times out an executor without losing a typed record", async () => {
   assert.ok(result.assumptions.every(hasSyntheticUserInput));
   assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
   assert.ok(result.executionRecords.every((record) => /timed out/u.test(record.diagnostic)));
+});
+
+test("rejects oversized in-process callback output before parsing or hashing it", async () => {
+  const oversized = "x".repeat(adapterModule.MAX_ADAPTER_OUTPUT_BYTES + 1);
+  const result = await runBrownfieldSpecialists({
+    ...input(),
+    execute: async () => oversized
+  });
+  assert.equal(result.findings.length, 0);
+  assert.equal(result.assumptions.length, 2);
+  assert.ok(result.executionRecords.every((record) => record.status === "failed"));
+  assert.ok(result.executionRecords.every((record) => /output|bounded|limit/iu.test(record.diagnostic)));
+  assert.ok(result.executionRecords.every((record) => record.outputSize === Buffer.byteLength(oversized, "utf8")));
+});
+
+test("returns failed records instead of rejecting when the in-process baseline is oversized", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-oversized-baseline-"));
+  const oversizedFile = path.join(repositoryRoot, "oversized.bin");
+  let callbackCount = 0;
+  try {
+    await writeFile(oversizedFile, Buffer.alloc(16 * 1024 * 1024 + 1));
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: async () => {
+        callbackCount += 1;
+        return executeFinding({ specialist: { name: "architecture" } });
+      }
+    });
+    assert.equal(callbackCount, 0);
+    assert.equal(result.executionRecords.length, 2);
+    assert.ok(result.executionRecords.every((record) => record.status === "failed"));
+    assert.ok(result.executionRecords.every((record) => /bounded|snapshot|limit/iu.test(record.diagnostic)));
+    assert.equal(result.assumptions.length, 2);
+    assert.ok(result.assumptions.every(hasSyntheticUserInput));
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
 });
 
 test("honors explicit fake selection and inherited Grok nested-session guards", async () => {
@@ -693,6 +790,18 @@ test("accepts Unicode and ampersands in source and test metadata paths", () => {
   assert.ok(pack.excerpts.some((excerpt) => excerpt.kind === "test-link" && excerpt.text.includes(`${testPath} -> ${sourcePath}`)));
   assert.ok(pack.evidence.some((entry) => entry.path === testPath));
   assert.ok(pack.evidence.some((entry) => entry.path === sourcePath));
+});
+
+test("binds test inventory metadata to the test source digest in the snapshot", () => {
+  const testPath = "test/app.test.ts";
+  const packs = buildBrownfieldExcerptPacks({ ...testInventoryInput({ testPath }), effort: 2 });
+  const testPacks = packs.filter((pack) => pack.specialist.name === "tests");
+  assert.ok(testPacks.length > 0);
+  for (const pack of testPacks) {
+    const testEvidence = pack.evidence.filter((entry) => entry.kind === "source-file" && entry.path === testPath);
+    assert.ok(testEvidence.length > 0);
+    assert.ok(testEvidence.every((entry) => entry.sha256 === TEST_SHA));
+  }
 });
 
 test("preserves Unicode and ampersand source evidence in blocking assumptions after malformed effort two output", async () => {
@@ -943,6 +1052,35 @@ test("rejects in-process callbacks that add repository files", async () => {
     assert.ok(result.executionRecords.every((record) => record.status === "failed"));
     assert.ok(result.executionRecords.every((record) => /read-only|add|changed|source/iu.test(record.diagnostic)));
     await assert.rejects(readFile(addedFile, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("aborts the remaining roster when repository restoration fails", async () => {
+  if (process.platform === "win32") return;
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-specialist-restore-abort-"));
+  const specialFile = path.join(repositoryRoot, "special-entry");
+  let callbackCount = 0;
+  try {
+    await execFile("mkfifo", [specialFile]);
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: async (request) => {
+        callbackCount += 1;
+        await rm(specialFile);
+        await writeFile(specialFile, "replacement bytes\\n", "utf8");
+        return executeFinding(request);
+      }
+    });
+    assert.equal(callbackCount, 1);
+    assert.equal(result.executionRecords.length, 2);
+    assert.ok(["failed", "blocked"].includes(result.executionRecords[0].status));
+    assert.equal(result.executionRecords[1].status, "blocked");
+    assert.match(result.executionRecords[0].diagnostic, /restore|non-regular/iu);
+    assert.match(result.executionRecords[1].diagnostic, /halted|remaining|blocked/iu);
+    assert.equal(result.assumptions.length, 2);
+    assert.ok(result.assumptions.every(hasSyntheticUserInput));
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }
