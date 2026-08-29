@@ -40523,23 +40523,25 @@ async function grokAvailable() {
     return false;
   }
 }
+function quoteWindowsCmdToken(token) {
+  if (token.length === 0) return '""';
+  if (!/[\s"&<>|^()]/.test(token)) return token;
+  return `"${token.replaceAll('"', '\\"')}"`;
+}
+function windowsCmdSpawnArgs(command, args2) {
+  return ["/d", "/s", "/c", [command, ...args2].map(quoteWindowsCmdToken).join(" ")];
+}
 function hermesInvocation(args2) {
   if (process.platform !== "win32") {
     return { command: "hermes", args: args2 };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "hermes", ...args2]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("hermes", args2) };
 }
 function grokInvocation(args2) {
   if (process.platform !== "win32") {
     return { command: "grok", args: args2 };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "grok", ...args2]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("grok", args2) };
 }
 function hermesExecTimeoutMs() {
   const configured = process.env["LEGION_HERMES_EXEC_TIMEOUT_MS"];

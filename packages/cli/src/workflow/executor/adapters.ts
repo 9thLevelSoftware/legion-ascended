@@ -502,24 +502,29 @@ export async function grokAvailable(): Promise<boolean> {
   }
 }
 
+function quoteWindowsCmdToken(token: string): string {
+  if (token.length === 0) return '""';
+  if (!/[\s"&<>|^()]/.test(token)) return token;
+  return `"${token.replaceAll('"', '\\"')}"`;
+}
+
+/** cmd.exe /c must receive one command string or later flags are dropped. */
+export function windowsCmdSpawnArgs(command: string, args: readonly string[]): readonly string[] {
+  return ["/d", "/s", "/c", [command, ...args].map(quoteWindowsCmdToken).join(" ")];
+}
+
 function hermesInvocation(args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
   if (process.platform !== "win32") {
     return { command: "hermes", args };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "hermes", ...args]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("hermes", args) };
 }
 
 function grokInvocation(args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
   if (process.platform !== "win32") {
     return { command: "grok", args };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "grok", ...args]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("grok", args) };
 }
 
 function hermesExecTimeoutMs(): number {

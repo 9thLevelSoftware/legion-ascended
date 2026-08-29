@@ -6,8 +6,23 @@ import path from "node:path";
 
 import * as adapterModule from "../dist/workflow/executor/adapters.js";
 
-const { adapterForKind, adapterSpawnOptions, hermesReadOnlyBlockedResult, redactAdapterTranscript } = adapterModule;
+const { adapterForKind, adapterSpawnOptions, hermesReadOnlyBlockedResult, redactAdapterTranscript, windowsCmdSpawnArgs } = adapterModule;
 const stdio = ["pipe", "pipe", "pipe"];
+
+test("windows cmd spawn args keep grok flags in one /c string", () => {
+  assert.equal(typeof windowsCmdSpawnArgs, "function");
+  if (typeof windowsCmdSpawnArgs !== "function") return;
+  const args = windowsCmdSpawnArgs("grok", [
+    "--prompt-file",
+    "C:\\Users\\RUNNER~1\\prompt.md",
+    "--cwd",
+    "C:\\Users\\RUNNER~1\\project"
+  ]);
+  assert.deepEqual(args.slice(0, 3), ["/d", "/s", "/c"]);
+  assert.equal(args.length, 4);
+  assert.match(args[3] ?? "", /^grok --prompt-file /);
+  assert.match(args[3] ?? "", /--cwd /);
+});
 
 test("keeps piped Windows adapter children attached while preserving containment policy", () => {
   assert.equal(typeof adapterSpawnOptions, "function");
