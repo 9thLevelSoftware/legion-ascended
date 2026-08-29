@@ -2018,6 +2018,15 @@ const ASSESSMENT_PHASE_ORDER: Readonly<Record<BrownfieldAssessment["phase"], num
   blocked: Number.MAX_SAFE_INTEGER
 };
 
+function signalSummaryFromPayload(value: unknown): BrownfieldAssessment["signals"] | undefined {
+  if (typeof value === "object" && value !== null && !Array.isArray(value) && "summary" in value) {
+    const parsed = assessmentSignalSummarySchema.safeParse(value.summary);
+    if (parsed.success) return parsed.data;
+  }
+  const parsed = assessmentSignalSummarySchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
 function hydrateAssessmentState(
   current: BrownfieldAssessment,
   nextPhase: BrownfieldAssessment["phase"],
@@ -2034,10 +2043,8 @@ function hydrateAssessmentState(
     phase: nextPhase
   };
   if (input.signals !== undefined) {
-    if (typeof input.signals !== "object" || input.signals === null || !("summary" in input.signals)) {
-      throw new Error("Brownfield assessment signals payload is missing a signal summary.");
-    }
-    next.signals = assessmentSignalSummarySchema.parse(input.signals.summary);
+    const summary = signalSummaryFromPayload(input.signals);
+    if (summary !== undefined) next.signals = summary;
   }
   if (input.findings !== undefined) {
     if (!Array.isArray(input.findings)) throw new Error("Brownfield assessment findings payload must be an array.");

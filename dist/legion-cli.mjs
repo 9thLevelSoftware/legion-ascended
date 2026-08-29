@@ -67865,16 +67865,22 @@ var ASSESSMENT_PHASE_ORDER = {
   // A blocked assessment is terminal and is handled explicitly below.
   blocked: Number.MAX_SAFE_INTEGER
 };
+function signalSummaryFromPayload(value) {
+  if (typeof value === "object" && value !== null && !Array.isArray(value) && "summary" in value) {
+    const parsed2 = assessmentSignalSummarySchema.safeParse(value.summary);
+    if (parsed2.success) return parsed2.data;
+  }
+  const parsed = assessmentSignalSummarySchema.safeParse(value);
+  return parsed.success ? parsed.data : void 0;
+}
 function hydrateAssessmentState(current, nextPhase, input) {
   const next = {
     ...current,
     phase: nextPhase
   };
   if (input.signals !== void 0) {
-    if (typeof input.signals !== "object" || input.signals === null || !("summary" in input.signals)) {
-      throw new Error("Brownfield assessment signals payload is missing a signal summary.");
-    }
-    next.signals = assessmentSignalSummarySchema.parse(input.signals.summary);
+    const summary = signalSummaryFromPayload(input.signals);
+    if (summary !== void 0) next.signals = summary;
   }
   if (input.findings !== void 0) {
     if (!Array.isArray(input.findings)) throw new Error("Brownfield assessment findings payload must be an array.");

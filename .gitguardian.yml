@@ -6,3 +6,10 @@ secret:
     - "packages/cli/test/brownfield-specialists.test.mjs"
     - "**/brownfield-signals.test.mjs"
     - "**/brownfield-specialists.test.mjs"
+  ignored-matches:
+    # Historical fixture strings used to exercise redaction. Current tests
+    # assemble the same values at runtime so they are no longer contiguous.
+    - name: Basic Auth String
+      match: alice:super-secret
+    - name: FTP Credentials
+      match: ftp-user:ftp-secret
