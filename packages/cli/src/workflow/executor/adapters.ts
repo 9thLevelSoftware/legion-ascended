@@ -1,4 +1,4 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { open } from "node:fs/promises";
 import { promisify } from "node:util";
 
@@ -84,13 +84,20 @@ function isUrlTerminator(character: string | undefined): boolean {
   return character === undefined || /[\s<>"'`]/u.test(character);
 }
 
+interface RedactionSpan {
+  readonly start: number;
+  readonly end: number;
+  readonly replacement: string;
+  readonly priority: number;
+}
+
 /**
- * Redact URI authorities opaquely without putting an unbounded scheme or URL
+ * Find URI authorities opaquely without putting an unbounded scheme or URL
  * body in a backtracking regex. The scanner still recognizes over-limit
  * scheme/body lengths and consumes the whole candidate so they fail closed.
  */
-function redactUrls(value: string): string {
-  let result = "";
+function findUrlRedactionSpans(value: string): RedactionSpan[] {
+  const spans: RedactionSpan[] = [];
   let cursor = 0;
   while (cursor < value.length) {
     const character = value[cursor];
@@ -112,16 +119,15 @@ function redactUrls(value: string): string {
         const schemeLength = schemeEnd - cursor;
         const urlLength = urlEnd - cursor;
         if (schemeLength > 0 && urlLength > 3) {
-          result += "[REDACTED_URL]";
+          spans.push({ start: cursor, end: urlEnd, replacement: "[REDACTED_URL]", priority: 6 });
           cursor = urlEnd;
           continue;
         }
       }
     }
-    result += character;
     cursor += 1;
   }
-  return result;
+  return spans;
 }
 
 function decodeRepeatedly(value: string): { readonly decoded: string; readonly exhausted: boolean } {
@@ -140,26 +146,107 @@ function decodeRepeatedly(value: string): { readonly decoded: string; readonly e
   return { decoded, exhausted: ENCODED_ESCAPE_RE.test(decoded) };
 }
 
-const ESCAPED_JSON_PUNCTUATION_RE = /\\+(?=[{}\[\],:"])/gu;
+interface NormalizedJsonRepresentation {
+  readonly text: string;
+  readonly originalSpans: readonly { readonly start: number; readonly end: number }[];
+}
+
+function normalizeJsonRepresentation(value: string): NormalizedJsonRepresentation {
+  const characters: string[] = [];
+  const originalSpans: { start: number; end: number }[] = [];
+  let index = 0;
+  while (index < value.length) {
+    const slashStart = index;
+    const character = value[index];
+    if (character === undefined) break;
+    if (character === "\\") {
+      let slashEnd = index;
+      while (slashEnd < value.length && value[slashEnd] === "\\") slashEnd += 1;
+      if (/[{}\[\],:"]/u.test(value[slashEnd] ?? "")) index = slashEnd;
+    }
+    const normalizedCharacter = value[index];
+    if (normalizedCharacter === undefined) break;
+    characters.push(normalizedCharacter);
+    originalSpans.push({ start: slashStart, end: index + 1 });
+    index += 1;
+  }
+  return { text: characters.join(""), originalSpans };
+}
 
 function normalizeEscapedJsonRepresentation(value: string): string {
   // Adapter envelopes and model messages can contain JSON serialized more than
   // once. Remove every escape layer that protects JSON punctuation before the
   // credential scanner runs, without decoding arbitrary backslash escapes.
-  return value.replace(ESCAPED_JSON_PUNCTUATION_RE, "");
+  return normalizeJsonRepresentation(value).text;
+}
+
+function regexRedactionSpans(
+  value: string,
+  pattern: RegExp,
+  replacement: string,
+  priority: number
+): RedactionSpan[] {
+  const spans: RedactionSpan[] = [];
+  pattern.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(value)) !== null) {
+    spans.push({ start: match.index, end: match.index + match[0].length, replacement, priority });
+    if (match[0].length === 0) pattern.lastIndex += 1;
+  }
+  pattern.lastIndex = 0;
+  return spans;
+}
+
+function coalesceRedactionSpans(spans: readonly RedactionSpan[]): RedactionSpan[] {
+  const ordered = [...spans].sort((left, right) =>
+    left.start - right.start || right.end - left.end || left.priority - right.priority
+  );
+  const coalesced: RedactionSpan[] = [];
+  for (const span of ordered) {
+    const previous = coalesced[coalesced.length - 1];
+    if (previous === undefined || span.start >= previous.end) {
+      coalesced.push(span);
+      continue;
+    }
+    if (span.end > previous.end) {
+      coalesced[coalesced.length - 1] = {
+        start: previous.start,
+        end: span.end,
+        replacement: span.replacement,
+        priority: span.priority
+      };
+    }
+  }
+  return coalesced;
 }
 
 function redactDirectText(value: string): string {
-  const normalized = normalizeEscapedJsonRepresentation(value);
-  const redacted = redactUrls(normalized
-    .replace(CONTROL_RE, "�")
-    .replace(JSON_CREDENTIAL_RE, "[REDACTED_JSON_SECRET]")
-    .replace(BEARER_RE, "Bearer [REDACTED_TOKEN]")
-    .replace(SECRET_ASSIGNMENT_RE, "[REDACTED_SECRET]")
-    .replace(TOKEN_RE, "[REDACTED_TOKEN]"));
-  // Preserve non-sensitive escaped text byte-for-byte. A changed normalized
-  // form is returned only when redaction or another direct sanitizer did work.
-  return redacted === normalized ? value : redacted;
+  const normalized = normalizeJsonRepresentation(value);
+  const spans: RedactionSpan[] = [
+    ...regexRedactionSpans(normalized.text, CONTROL_RE, "�", 0),
+    ...regexRedactionSpans(normalized.text, JSON_CREDENTIAL_RE, "[REDACTED_JSON_SECRET]", 1),
+    ...regexRedactionSpans(normalized.text, BEARER_RE, "Bearer [REDACTED_TOKEN]", 2),
+    ...regexRedactionSpans(normalized.text, SECRET_ASSIGNMENT_RE, "[REDACTED_SECRET]", 3),
+    ...regexRedactionSpans(normalized.text, TOKEN_RE, "[REDACTED_TOKEN]", 4),
+    ...findUrlRedactionSpans(normalized.text)
+  ];
+  if (spans.length === 0) return value;
+
+  const selected = coalesceRedactionSpans(spans);
+  let result = "";
+  let originalCursor = 0;
+  let normalizedCursor = 0;
+  for (const span of selected) {
+    if (span.start < normalizedCursor) continue;
+    const originalStart = normalized.originalSpans[span.start]?.start;
+    const originalEnd = normalized.originalSpans[span.end - 1]?.end;
+    if (originalStart === undefined || originalEnd === undefined) continue;
+    result += value.slice(originalCursor, originalStart);
+    result += span.replacement;
+    originalCursor = originalEnd;
+    normalizedCursor = span.end;
+  }
+  return result + value.slice(originalCursor);
 }
 
 export function redactAdapterTranscript(text: string): string {
@@ -501,7 +588,9 @@ const hermesAdapter: ExecutionAdapter = {
     if (request.readOnly) {
       const result = hermesReadOnlyBlockedResult();
       const artifactRoot = artifactRepositoryRoot(request);
-      await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text: `${result.summary}\n` });
+      const text = `${result.summary}\n`;
+      await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.rawLogArtifactPath, text });
+      await writeProjectTextFile({ repositoryRoot: artifactRoot, artifactPath: request.redactedLogArtifactPath, text });
       await persistExecutionResult(request, result);
       return result;
     }
@@ -1324,9 +1413,7 @@ async function spawnWithInput(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      windowsHide: true,
-      detached: supportsIsolatedProcessGroup(),
-      stdio: ["pipe", "pipe", "pipe"]
+      ...adapterSpawnOptions({ stdio: ["pipe", "pipe", "pipe"] })
     });
     const output = new BoundedOutputCapture();
     let settled = false;
@@ -1411,8 +1498,12 @@ async function spawnWithInput(
         // A normal leader exit is not a safe completion boundary when a
         // descendant remains. Kill the entire group before settling so no late
         // write can race repository reconciliation or artifact publication.
-        quiescenceProven = false;
-        await terminateProcessTree(child.pid).catch(() => false);
+        if (process.platform === "win32") {
+          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
+        } else {
+          quiescenceProven = false;
+          await terminateProcessTree(child.pid).catch(() => false);
+        }
       } else {
         quiescenceProven = true;
       }
@@ -1435,12 +1526,10 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      windowsHide: true,
-      detached: supportsIsolatedProcessGroup(),
+      ...adapterSpawnOptions({ stdio: ["ignore", "pipe", "pipe"] }),
       // Grok consumes the prompt from --prompt-file. `ignore` is deliberate:
       // Legion neither writes a prompt to stdin nor leaves a pipe for a child
       // to mistake for an interactive session.
-      stdio: ["ignore", "pipe", "pipe"]
     });
     const output = new BoundedOutputCapture();
     let settled = false;
@@ -1505,6 +1594,10 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
         requestTermination(125);
       }
     });
+    // Wait for stream end AFTER data handlers so streams are in flowing mode
+    // before we listen for 'end'. On Windows, listening for 'end' before a
+    // 'data' handler puts the stream in flowing mode can cause 'end' to fire
+    // with zero data events delivered.
     const stdoutEnded = waitForOutputStreamEnd(child.stdout);
     const stderrEnded = waitForOutputStreamEnd(child.stderr);
     child.on("error", (error) => {
@@ -1520,8 +1613,12 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
         // A normal leader exit is not a safe completion boundary when a
         // descendant remains. Kill the entire group before settling so no late
         // write can race repository reconciliation or artifact publication.
-        quiescenceProven = false;
-        await terminateProcessTree(child.pid).catch(() => false);
+        if (process.platform === "win32") {
+          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
+        } else {
+          quiescenceProven = false;
+          await terminateProcessTree(child.pid).catch(() => false);
+        }
       } else {
         quiescenceProven = true;
       }
@@ -1539,11 +1636,36 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
   });
 }
 
+type AdapterSpawnStdio = ["pipe" | "ignore", "pipe", "pipe"];
+
+export function adapterSpawnOptions<const T extends AdapterSpawnStdio>(input: {
+  readonly platform?: NodeJS.Platform;
+  readonly stdio: T;
+}): {
+  readonly windowsHide: true;
+  readonly detached: boolean;
+  readonly stdio: T;
+} {
+  const platform = input.platform ?? process.platform;
+  const containmentAvailable = platform === process.platform
+    ? supportsIsolatedProcessGroup()
+    : supportsIsolatedProcessGroupForPlatform(platform);
+  return {
+    windowsHide: true,
+    detached: platform !== "win32" && containmentAvailable,
+    stdio: input.stdio
+  };
+}
+
+function supportsIsolatedProcessGroupForPlatform(platform: NodeJS.Platform): boolean {
+  return platform !== "android";
+}
+
 function supportsIsolatedProcessGroup(): boolean {
   if (adapterProcessContainmentOverride !== undefined) return adapterProcessContainmentOverride;
   // POSIX uses detached sessions/process groups. Windows uses taskkill /t in
   // terminateProcessTree, which provides the equivalent child-tree boundary.
-  return process.platform !== "android";
+  return supportsIsolatedProcessGroupForPlatform(process.platform);
 }
 
 function processStillExists(pid: number): boolean {
@@ -1564,8 +1686,107 @@ function processGroupStillExists(pid: number): boolean {
   }
 }
 
+interface WindowsProcessRow {
+  readonly parentProcessId: number;
+  readonly processId: number;
+}
+
+type ProcessExistsProbe = (pid: number) => boolean;
+type WindowsDescendantEnumerator = (pid: number) => readonly number[];
+
+function parseWindowsProcessRows(output: string): readonly WindowsProcessRow[] {
+  const rows: WindowsProcessRow[] = [];
+  for (const line of output.split(/\r?\n/u)) {
+    const fields = line
+      .split(",")
+      .map((field) => field.trim().replace(/^"|"$/gu, ""));
+    const numericFields = fields.filter((field) => /^\d+$/u.test(field));
+    if (numericFields.length < 2) continue;
+    const parentProcessId = Number(numericFields[numericFields.length - 2]);
+    const processId = Number(numericFields[numericFields.length - 1]);
+    if (!Number.isSafeInteger(parentProcessId) || !Number.isSafeInteger(processId)) continue;
+    rows.push({ parentProcessId, processId });
+  }
+  return rows;
+}
+
+function windowsProcessRows(): readonly WindowsProcessRow[] {
+  try {
+    const output = execFileSync(
+      "wmic",
+      ["process", "get", "ParentProcessId,ProcessId", "/format:csv"],
+      { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }
+    );
+    return parseWindowsProcessRows(String(output));
+  } catch (wmicError) {
+    try {
+      const output = execFileSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Get-CimInstance -ClassName Win32_Process | Select-Object ParentProcessId,ProcessId | ConvertTo-Csv -NoTypeInformation"
+        ],
+        { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }
+      );
+      return parseWindowsProcessRows(String(output));
+    } catch {
+      throw wmicError;
+    }
+  }
+}
+
+function enumerateWindowsDescendantPids(pid: number): readonly number[] {
+  const childrenByParent = new Map<number, number[]>();
+  for (const row of windowsProcessRows()) {
+    const children = childrenByParent.get(row.parentProcessId) ?? [];
+    children.push(row.processId);
+    childrenByParent.set(row.parentProcessId, children);
+  }
+
+  const descendants: number[] = [];
+  const pending = [pid];
+  const seen = new Set([pid]);
+  while (pending.length > 0) {
+    const parent = pending.shift();
+    if (parent === undefined) continue;
+    for (const child of childrenByParent.get(parent) ?? []) {
+      if (seen.has(child)) continue;
+      seen.add(child);
+      descendants.push(child);
+      pending.push(child);
+    }
+  }
+  return descendants;
+}
+
+export function processTreeStillExistsForPlatform(
+  pid: number,
+  platform: NodeJS.Platform,
+  probes: {
+    readonly windowsDescendantPids?: WindowsDescendantEnumerator;
+    readonly processStillExists?: ProcessExistsProbe;
+    readonly processGroupStillExists?: ProcessExistsProbe;
+  } = {}
+): boolean {
+  const processExists = probes.processStillExists ?? processStillExists;
+  if (platform !== "win32") {
+    return (probes.processGroupStillExists ?? processGroupStillExists)(pid);
+  }
+  if (processExists(pid)) return true;
+  try {
+    return (probes.windowsDescendantPids ?? enumerateWindowsDescendantPids)(pid)
+      .some((descendantPid) => processExists(descendantPid));
+  } catch {
+    // A failed process-table query cannot prove the tree is gone. Keep the
+    // process non-quiescent so the caller takes the fail-closed teardown path.
+    return true;
+  }
+}
+
 function processTreeStillExists(pid: number): boolean {
-  return process.platform === "win32" ? processStillExists(pid) : processGroupStillExists(pid);
+  return processTreeStillExistsForPlatform(pid, process.platform);
 }
 
 async function waitForQuiescence(check: () => boolean, timeoutMs: number): Promise<void> {
