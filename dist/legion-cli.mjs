@@ -68847,6 +68847,23 @@ function snapshotSourceHashes(snapshot) {
   }
   return sourceHashes;
 }
+function attachCoverageSourceHashes(snapshot, hashes) {
+  for (const coverage of snapshot.coverage) {
+    const sha2564 = hashes.get(coverage.path);
+    if (sha2564 === void 0) continue;
+    Object.defineProperty(coverage, "sha256", { value: sha2564, enumerable: false, configurable: true });
+  }
+}
+async function inventoryHashesForSnapshot(repositoryRoot, snapshot) {
+  const mapArtifactPath = `${path54.posix.dirname(snapshot.sqlite.path)}/map.json`;
+  const absolutePath = path54.join(repositoryRoot, ...mapArtifactPath.split("/"));
+  try {
+    await access2(absolutePath);
+  } catch {
+    return /* @__PURE__ */ new Map();
+  }
+  return expectedSourceHashes(repositoryRoot, snapshot.sqlite.path, snapshot);
+}
 function testMetadataEvidence(sourceHashes, sourcePath, note) {
   const path59 = codeIndexSourcePathSchema.parse(sourcePath);
   const sha2564 = sourceHashes.get(path59);
@@ -70210,6 +70227,7 @@ function unexecutedRecord(input) {
 }
 async function runBrownfieldSpecialists(input) {
   const snapshot = validateSnapshot(input.snapshot);
+  attachCoverageSourceHashes(snapshot, await inventoryHashesForSnapshot(input.repositoryRoot, snapshot));
   const assessmentId = assessmentIdSchema.parse(input.assessmentId);
   const effort = assessmentEffortSchema.parse(input.effort);
   const timeoutMs = input.timeoutMs ?? DEFAULT_SPECIALIST_TIMEOUT_MS;

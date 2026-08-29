@@ -30,7 +30,7 @@ import {
 } from "@legion/protocol";
 import { resolveProjectArtifactPath, stableProtocolJson } from "@legion/artifacts";
 
-import type { BrownfieldSignals } from "./brownfield-signals.js";
+import { expectedSourceHashes, type BrownfieldSignals } from "./brownfield-signals.js";
 import {
   adapterForKind,
   MAX_ADAPTER_OUTPUT_BYTES,
@@ -381,6 +381,31 @@ function snapshotSourceHashes(snapshot: CodeIndexSnapshot): ReadonlyMap<string, 
     sourceHashes.set(fact.path, fact.sourceSha256);
   }
   return sourceHashes;
+}
+
+function attachCoverageSourceHashes(
+  snapshot: CodeIndexSnapshot,
+  hashes: ReadonlyMap<string, CodeIndexSha256>
+): void {
+  for (const coverage of snapshot.coverage as readonly SnapshotCoverageWithSourceHash[]) {
+    const sha256 = hashes.get(coverage.path);
+    if (sha256 === undefined) continue;
+    Object.defineProperty(coverage, "sha256", { value: sha256, enumerable: false, configurable: true });
+  }
+}
+
+async function inventoryHashesForSnapshot(
+  repositoryRoot: string,
+  snapshot: CodeIndexSnapshot
+): Promise<ReadonlyMap<string, CodeIndexSha256>> {
+  const mapArtifactPath = `${path.posix.dirname(snapshot.sqlite.path)}/map.json`;
+  const absolutePath = path.join(repositoryRoot, ...mapArtifactPath.split("/"));
+  try {
+    await access(absolutePath);
+  } catch {
+    return new Map();
+  }
+  return expectedSourceHashes(repositoryRoot, snapshot.sqlite.path, snapshot);
 }
 
 function testMetadataEvidence(sourceHashes: ReadonlyMap<string, CodeIndexSha256>, sourcePath: string, note: string): AssessmentEvidenceRef {
@@ -2027,6 +2052,7 @@ export async function runBrownfieldSpecialists(input: {
   readonly execute?: BrownfieldSpecialistExecutor;
 }): Promise<BrownfieldSpecialistsResult> {
   const snapshot = validateSnapshot(input.snapshot);
+  attachCoverageSourceHashes(snapshot, await inventoryHashesForSnapshot(input.repositoryRoot, snapshot));
   const assessmentId = assessmentIdSchema.parse(input.assessmentId);
   const effort = assessmentEffortSchema.parse(input.effort);
   const timeoutMs = input.timeoutMs ?? DEFAULT_SPECIALIST_TIMEOUT_MS;

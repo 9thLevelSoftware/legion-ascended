@@ -513,7 +513,7 @@ async function readBoundedMapDocument(absolutePath: string): Promise<Record<stri
  * carries the complete path/hash inventory; its fingerprint binds that inventory
  * to this structural snapshot before source evidence is emitted.
  */
-async function expectedSourceHashes(
+export async function expectedSourceHashes(
   repositoryRoot: string,
   sqliteArtifactPath: ArtifactPath,
   snapshot: CodeIndexSnapshot

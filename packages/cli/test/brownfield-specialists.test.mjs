@@ -22,6 +22,7 @@ import {
 import * as specialistModule from "../dist/workflow/brownfield-specialists.js";
 import * as adapterModule from "../dist/workflow/executor/adapters.js";
 import { selectExecutionAdapterKind } from "../dist/workflow/executor/adapters.js";
+import { fingerprintSourceFiles } from "../dist/workflow/codebase-map.js";
 import { directoryLinkType, requireDirSymlink } from "../../../tests/helpers/symlink-capability.mjs";
 
 const execFile = (file, args) => new Promise((resolve, reject) => {
@@ -592,6 +593,82 @@ test("binds source evidence and test metadata to hashes from coverage-only entri
     }),
     effort: 2
   }), /source.*hash|digest/iu);
+});
+
+test("binds coverage-only hashes from the sibling map.json inventory", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-specialist-map-inventory-"));
+  try {
+    const sourcePath = "src/coverage-only.ts";
+    const testPath = "test/coverage-only.test.ts";
+    const mapFiles = [
+      { path: sourcePath, sha256: SOURCE_SHA, sizeBytes: 1, lineCount: 1, symbols: [], headings: [], summary: "source" },
+      { path: testPath, sha256: TEST_SHA, sizeBytes: 1, lineCount: 1, symbols: [], headings: [], summary: "test" }
+    ].sort((left, right) => left.path.localeCompare(right.path));
+    const sourceFingerprint = fingerprintSourceFiles(mapFiles);
+    const snapshot = codeIndexSnapshotSchema.parse({
+      ...snapshotFixture(),
+      sourceFingerprint,
+      coverage: [
+        { path: sourcePath, status: "parsed", language: "typescript" },
+        { path: testPath, status: "parsed", language: "typescript" }
+      ].sort((left, right) => left.path.localeCompare(right.path)),
+      symbols: [],
+      imports: [],
+      exports: []
+    });
+    const sqliteAbsolute = path.join(repositoryRoot, ...SQLITE_PATH.split("/"));
+    await mkdir(path.dirname(sqliteAbsolute), { recursive: true });
+    await writeFile(sqliteAbsolute, "sqlite-fixture\n", "utf8");
+    await writeFile(path.join(path.dirname(sqliteAbsolute), "map.json"), JSON.stringify({
+      schemaVersion: 1,
+      kind: "codebase_map",
+      generatedAt: snapshot.generatedAt,
+      scope: snapshot.scope,
+      sourceFingerprint,
+      sourceFileCount: mapFiles.length,
+      files: mapFiles
+    }), "utf8");
+    const signals = {
+      ...emptySignalsFixture(),
+      summary: {
+        ...emptySignalsFixture().summary,
+        sourceFiles: 2,
+        coverageFiles: 2,
+        testFiles: 1,
+        highRiskSignals: 1
+      },
+      testFiles: [testPath],
+      architectureSignals: [{
+        code: "coverage-only-source",
+        severity: "moderate",
+        statement: "Coverage-only source evidence is valid.",
+        evidence: [{ kind: "source-file", path: sourcePath, sha256: SOURCE_SHA, note: "coverage-only source" }]
+      }]
+    };
+    assert.throws(() => buildBrownfieldExcerptPacks({
+      ...input({ snapshot, signals }),
+      effort: 2
+    }), /source path without a snapshot source hash/iu);
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot, snapshot, signals }),
+      effort: 2,
+      execute: async () => ({
+        status: "succeeded",
+        summary: "ok",
+        filesChanged: [],
+        commandsRun: [],
+        findings: []
+      })
+    });
+    assert.ok(result.executionRecords.some((record) => record.evidence.some((entry) =>
+      entry.kind === "source-file" && entry.path === sourcePath && entry.sha256 === SOURCE_SHA
+    )));
+    assert.ok(result.executionRecords.filter((record) => record.specialist.name === "tests").every((record) =>
+      record.evidence.some((entry) => entry.kind === "source-file" && entry.path === testPath && entry.sha256 === TEST_SHA)
+    ));
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
 });
 
 test("drains a timed-out callback before the next specialist and before returning", async () => {
