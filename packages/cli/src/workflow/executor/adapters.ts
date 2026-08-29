@@ -1508,16 +1508,17 @@ async function spawnWithInput(
       if (settled || terminationPending) return;
       if (!supportsIsolatedProcessGroup()) {
         quiescenceProven = false;
+      } else if (child.pid !== undefined && process.platform === "win32") {
+        // Always take the Windows teardown path. processTreeStillExists fail-closes
+        // when WMI/PowerShell time out, which would otherwise skip a finished
+        // leader into a multi-second blocked result.
+        quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
       } else if (child.pid !== undefined && processTreeStillExists(child.pid)) {
         // A normal leader exit is not a safe completion boundary when a
         // descendant remains. Kill the entire group before settling so no late
         // write can race repository reconciliation or artifact publication.
-        if (process.platform === "win32") {
-          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
-        } else {
-          quiescenceProven = false;
-          await terminateProcessTree(child.pid).catch(() => false);
-        }
+        quiescenceProven = false;
+        await terminateProcessTree(child.pid).catch(() => false);
       } else {
         quiescenceProven = true;
       }
@@ -1623,16 +1624,17 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
       if (settled || terminationPending) return;
       if (!supportsIsolatedProcessGroup()) {
         quiescenceProven = false;
+      } else if (child.pid !== undefined && process.platform === "win32") {
+        // Always take the Windows teardown path. processTreeStillExists fail-closes
+        // when WMI/PowerShell time out, which would otherwise skip a finished
+        // leader into a multi-second blocked result.
+        quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
       } else if (child.pid !== undefined && processTreeStillExists(child.pid)) {
         // A normal leader exit is not a safe completion boundary when a
         // descendant remains. Kill the entire group before settling so no late
         // write can race repository reconciliation or artifact publication.
-        if (process.platform === "win32") {
-          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
-        } else {
-          quiescenceProven = false;
-          await terminateProcessTree(child.pid).catch(() => false);
-        }
+        quiescenceProven = false;
+        await terminateProcessTree(child.pid).catch(() => false);
       } else {
         quiescenceProven = true;
       }
@@ -1888,15 +1890,22 @@ export function windowsTaskkillPidsForTests(
 
 async function terminateWindowsProcessTree(pid: number): Promise<boolean> {
   let descendantPids: readonly number[] = [];
+  let enumerated = false;
   try {
     // Enumerate before killing the leader so a dead leader cannot make its
     // descendants unreachable to the process-table probe.
     descendantPids = enumerateWindowsDescendantPids(pid);
+    enumerated = true;
   } catch {
-    // Still kill the leader, then let the fail-closed quiescence probe report
-    // that the tree could not be proven gone.
+    // Still kill the leader. A failed process-table probe must not enter the
+    // fail-closed quiescence loop: that re-runs the same timed-out WMI/PowerShell
+    // query every poll and turns a finished Windows child into a 5s+ "blocked".
   }
   await taskkillWindowsPids(pid, descendantPids);
+  if (!enumerated) {
+    await waitForQuiescence(() => processStillExists(pid), PROCESS_QUIESCENCE_TIMEOUT_MS);
+    return !processStillExists(pid);
+  }
   return processQuiescenceProven(pid);
 }
 

@@ -41317,13 +41317,11 @@ async function spawnWithInput(command, args2, input, cwd, timeoutMs, executorLab
       if (settled || terminationPending) return;
       if (!supportsIsolatedProcessGroup()) {
         quiescenceProven = false;
+      } else if (child.pid !== void 0 && process.platform === "win32") {
+        quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
       } else if (child.pid !== void 0 && processTreeStillExists(child.pid)) {
-        if (process.platform === "win32") {
-          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
-        } else {
-          quiescenceProven = false;
-          await terminateProcessTree(child.pid).catch(() => false);
-        }
+        quiescenceProven = false;
+        await terminateProcessTree(child.pid).catch(() => false);
       } else {
         quiescenceProven = true;
       }
@@ -41417,13 +41415,11 @@ async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
       if (settled || terminationPending) return;
       if (!supportsIsolatedProcessGroup()) {
         quiescenceProven = false;
+      } else if (child.pid !== void 0 && process.platform === "win32") {
+        quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
       } else if (child.pid !== void 0 && processTreeStillExists(child.pid)) {
-        if (process.platform === "win32") {
-          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
-        } else {
-          quiescenceProven = false;
-          await terminateProcessTree(child.pid).catch(() => false);
-        }
+        quiescenceProven = false;
+        await terminateProcessTree(child.pid).catch(() => false);
       } else {
         quiescenceProven = true;
       }
@@ -41591,11 +41587,17 @@ async function taskkillWindowsPids(pid, descendantPids, taskkill = spawnWindowsT
 }
 async function terminateWindowsProcessTree(pid) {
   let descendantPids = [];
+  let enumerated = false;
   try {
     descendantPids = enumerateWindowsDescendantPids(pid);
+    enumerated = true;
   } catch {
   }
   await taskkillWindowsPids(pid, descendantPids);
+  if (!enumerated) {
+    await waitForQuiescence(() => processStillExists(pid), PROCESS_QUIESCENCE_TIMEOUT_MS);
+    return !processStillExists(pid);
+  }
   return processQuiescenceProven(pid);
 }
 async function terminateProcessTree(pid) {
