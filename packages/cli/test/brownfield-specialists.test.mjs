@@ -92,6 +92,22 @@ function snapshotFixture({ sourcePath = SOURCE_PATH, testPath } = {}) {
   });
 }
 
+function coverageOnlySnapshotFixture() {
+  const sourcePath = "src/coverage-only.ts";
+  const testPath = "test/coverage-only.test.ts";
+  const snapshot = {
+    ...snapshotFixture(),
+    coverage: [
+      { path: sourcePath, status: "parsed", language: "typescript", sha256: SOURCE_SHA },
+      { path: testPath, status: "parsed", language: "typescript", sha256: TEST_SHA }
+    ],
+    symbols: [],
+    imports: [],
+    exports: []
+  };
+  return { snapshot, sourcePath, testPath };
+}
+
 function signalsFixture({ sourcePath = SOURCE_PATH } = {}) {
   const sourceEvidence = { ...SOURCE_EVIDENCE, path: sourcePath };
   return {
@@ -530,6 +546,51 @@ test("rejects source evidence whose digest does not match the structural snapsho
         evidence: [{ ...SOURCE_EVIDENCE, sha256: wrongSha256 }, FACT_EVIDENCE]
       }]
     }
+  }), /source.*hash|digest/iu);
+});
+
+test("binds source evidence and test metadata to hashes from coverage-only entries", () => {
+  const { snapshot, sourcePath, testPath } = coverageOnlySnapshotFixture();
+  const signals = {
+    ...emptySignalsFixture(),
+    summary: {
+      ...emptySignalsFixture().summary,
+      sourceFiles: 2,
+      coverageFiles: 2,
+      testFiles: 1,
+      highRiskSignals: 1
+    },
+    testFiles: [testPath],
+    architectureSignals: [{
+      code: "coverage-only-source",
+      severity: "moderate",
+      statement: "Coverage-only source evidence is valid.",
+      evidence: [{ kind: "source-file", path: sourcePath, sha256: SOURCE_SHA, note: "coverage-only source" }]
+    }]
+  };
+  const packs = buildBrownfieldExcerptPacks({ ...input({ snapshot, signals }), effort: 2 });
+  assert.ok(packs.length > 0);
+  assert.ok(packs.some((pack) => pack.evidence.some((entry) =>
+    entry.kind === "source-file" && entry.path === sourcePath && entry.sha256 === SOURCE_SHA
+  )));
+  const testPacks = packs.filter((pack) => pack.specialist.name === "tests");
+  assert.ok(testPacks.length > 0);
+  assert.ok(testPacks.every((pack) => pack.evidence.some((entry) =>
+    entry.kind === "source-file" && entry.path === testPath && entry.sha256 === TEST_SHA
+  )));
+
+  assert.throws(() => buildBrownfieldExcerptPacks({
+    ...input({
+      snapshot,
+      signals: {
+        ...signals,
+        architectureSignals: [{
+          ...signals.architectureSignals[0],
+          evidence: [{ ...signals.architectureSignals[0].evidence[0], sha256: "e".repeat(64) }]
+        }]
+      }
+    }),
+    effort: 2
   }), /source.*hash|digest/iu);
 });
 

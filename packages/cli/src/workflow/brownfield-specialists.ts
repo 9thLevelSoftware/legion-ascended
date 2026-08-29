@@ -353,8 +353,26 @@ function supportedTestLink(snapshot: CodeIndexSnapshot, link: BrownfieldSignals[
   return coverageStatus(snapshot, link.testPath) === "parsed" && coverageStatus(snapshot, link.sourcePath) === "parsed";
 }
 
-function snapshotSourceHashes(snapshot: CodeIndexSnapshot): ReadonlyMap<string, CodeIndexSha256> {
+type SnapshotCoverageWithSourceHash = CodeIndexSnapshot["coverage"][number] & {
+  readonly sha256?: CodeIndexSha256;
+};
+
+function snapshotCoverageSourceHashes(snapshot: CodeIndexSnapshot): ReadonlyMap<string, CodeIndexSha256> {
   const sourceHashes = new Map<string, CodeIndexSha256>();
+  for (const coverage of snapshot.coverage as readonly SnapshotCoverageWithSourceHash[]) {
+    if (coverage.sha256 === undefined) continue;
+    const sourceSha256 = codeIndexSha256Schema.parse(coverage.sha256);
+    const previous = sourceHashes.get(coverage.path);
+    if (previous !== undefined && previous !== sourceSha256) {
+      throw new Error(`Snapshot coverage has inconsistent source hashes for ${coverage.path}.`);
+    }
+    sourceHashes.set(coverage.path, sourceSha256);
+  }
+  return sourceHashes;
+}
+
+function snapshotSourceHashes(snapshot: CodeIndexSnapshot): ReadonlyMap<string, CodeIndexSha256> {
+  const sourceHashes = new Map(snapshotCoverageSourceHashes(snapshot));
   for (const fact of [...snapshot.symbols, ...snapshot.imports, ...snapshot.exports]) {
     const previous = sourceHashes.get(fact.path);
     if (previous !== undefined && previous !== fact.sourceSha256) {
@@ -404,8 +422,27 @@ function excerptFrom(input: {
 }
 
 function validateSnapshot(snapshotInput: CodeIndexSnapshot): CodeIndexSnapshot {
-  const snapshot = codeIndexSnapshotSchema.parse(snapshotInput);
+  // Some snapshot producers attach the source hash inventory to coverage
+  // entries even though the v1 structural schema predates that field. Preserve
+  // those hashes across schema validation so coverage-only files remain bound.
+  const coverageSourceHashes = snapshotCoverageSourceHashes(snapshotInput);
+  const schemaInput = coverageSourceHashes.size === 0
+    ? snapshotInput
+    : {
+        ...snapshotInput,
+        coverage: snapshotInput.coverage.map((coverage) => {
+          const { sha256: _sourceSha256, ...schemaCoverage } = coverage as SnapshotCoverageWithSourceHash;
+          return schemaCoverage;
+        })
+      };
+  const snapshot = codeIndexSnapshotSchema.parse(schemaInput);
   if (snapshot.profile !== "structural") throw new Error("Brownfield specialists require a structural CodeIndexSnapshot.");
+  for (const coverage of snapshot.coverage as readonly SnapshotCoverageWithSourceHash[]) {
+    const sourceSha256 = coverageSourceHashes.get(coverage.path);
+    if (sourceSha256 !== undefined) {
+      Object.defineProperty(coverage, "sha256", { value: sourceSha256, enumerable: false });
+    }
+  }
   return snapshot;
 }
 
