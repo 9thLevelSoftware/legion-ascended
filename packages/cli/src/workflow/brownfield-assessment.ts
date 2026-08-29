@@ -1017,12 +1017,6 @@ async function acquirePublishLock(
       if (lockStat !== undefined && (lockStat.isSymbolicLink() || !lockStat.isDirectory())) {
         throw new Error(`Brownfield assessment publication lock is unsafe: ${lockPath}`);
       }
-      const finalStat = parent.descriptor === undefined
-        ? await lstatIfPresent(finalPath)
-        : await lstatIfPresent(descriptorChildPath(parent.descriptor, finalName));
-      if (finalStat !== undefined) {
-        throw errorWithCode("EEXIST", `Brownfield assessment bundle already exists: ${finalPath}`);
-      }
       let stale: StaleLockObservation | undefined;
       if (parent.descriptor === undefined) {
         stale = await lockIsStale(lockPath);
@@ -1045,6 +1039,12 @@ async function acquirePublishLock(
       if (stale !== undefined) {
         await quarantineStaleLock(parent, lockName, lockPath, stale);
         continue;
+      }
+      const finalStat = parent.descriptor === undefined
+        ? await lstatIfPresent(finalPath)
+        : await lstatIfPresent(descriptorChildPath(parent.descriptor, finalName));
+      if (finalStat !== undefined) {
+        throw errorWithCode("EEXIST", `Brownfield assessment bundle already exists: ${finalPath}`);
       }
       await delay(1);
     }
@@ -1790,14 +1790,29 @@ async function writeUpdatedBundle(input: {
   readonly paths: BrownfieldAssessmentPaths;
   readonly state: BrownfieldAssessment;
   readonly expectedCurrentPhase: BrownfieldAssessment["phase"];
+  readonly signals?: unknown;
+  readonly findings?: unknown;
+  readonly assumptions?: unknown;
+  readonly synthesis?: unknown;
+  readonly review?: unknown;
 }): Promise<void> {
   const contentByFile: Readonly<Record<BundleFileName, string>> = {
     "state.json": stableProtocolJson(input.state),
-    "signals.json": stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.signals)),
-    "assumptions.json": stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.assumptions)),
-    "findings.json": stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.findings)),
-    "synthesis.json": stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.synthesis)),
-    "review.json": stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.review))
+    "signals.json": input.signals === undefined
+      ? stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.signals))
+      : stableProtocolJson(input.signals),
+    "assumptions.json": input.assumptions === undefined
+      ? stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.assumptions))
+      : stableProtocolJson(input.assumptions),
+    "findings.json": input.findings === undefined
+      ? stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.findings))
+      : stableProtocolJson(input.findings),
+    "synthesis.json": input.synthesis === undefined
+      ? stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.synthesis))
+      : stableProtocolJson(input.synthesis),
+    "review.json": input.review === undefined
+      ? stableProtocolJson(await readBundleJson(input.repositoryRoot, input.paths.review))
+      : stableProtocolJson(input.review)
   };
   const parentArtifactPath = artifactPathSchema.parse(ASSESSMENT_ROOT);
   const parent = await openBundleDirectory(input.repositoryRoot, parentArtifactPath, false);
@@ -1966,7 +1981,7 @@ const UPDATE_PHASES = {
   signals_complete: "signals",
   specialists_complete: "specialists",
   synthesis_complete: "synthesis",
-  review_complete: "review"
+  review_complete: "complete"
 } as const;
 
 const ASSESSMENT_PHASE_ORDER: Readonly<Record<BrownfieldAssessment["phase"], number>> = {
@@ -1991,6 +2006,11 @@ export async function updateBrownfieldAssessmentState(input: {
   readonly repositoryRoot: string;
   readonly assessmentId: string;
   readonly phase: "signals_complete" | "specialists_complete" | "synthesis_complete" | "review_complete";
+  readonly signals?: unknown;
+  readonly findings?: unknown;
+  readonly assumptions?: unknown;
+  readonly synthesis?: unknown;
+  readonly review?: unknown;
 }): Promise<void> {
   const nextPhase = UPDATE_PHASES[input.phase];
   if (nextPhase === undefined) throw new Error(`Invalid brownfield assessment phase transition: ${String(input.phase)}.`);
@@ -2017,7 +2037,12 @@ export async function updateBrownfieldAssessmentState(input: {
     repositoryRoot: input.repositoryRoot,
     paths: loaded.paths,
     state: nextState,
-    expectedCurrentPhase: currentPhase
+    expectedCurrentPhase: currentPhase,
+    ...(input.signals === undefined ? {} : { signals: input.signals }),
+    ...(input.findings === undefined ? {} : { findings: input.findings }),
+    ...(input.assumptions === undefined ? {} : { assumptions: input.assumptions }),
+    ...(input.synthesis === undefined ? {} : { synthesis: input.synthesis }),
+    ...(input.review === undefined ? {} : { review: input.review })
   });
   const verified = await readBrownfieldAssessment({
     repositoryRoot: input.repositoryRoot,

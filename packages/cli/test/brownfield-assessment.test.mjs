@@ -326,6 +326,72 @@ test("concurrent creators publish one complete bundle without overwriting state"
   }
 });
 
+test("persists a complete phase after all assessment stages finish", async () => {
+  const fixture = await writeMapFixture();
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    for (const phase of ["signals_complete", "specialists_complete", "synthesis_complete"]) {
+      await updateBrownfieldAssessmentState({
+        repositoryRoot: fixture.repositoryRoot,
+        assessmentId: created.assessmentId,
+        phase
+      });
+    }
+    await updateBrownfieldAssessmentState({
+      repositoryRoot: fixture.repositoryRoot,
+      assessmentId: created.assessmentId,
+      phase: "review_complete"
+    });
+    const loaded = await readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId });
+    assert.equal(loaded.state.phase, "complete");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("persists provided stage artifacts during a phase update", async () => {
+  const fixture = await writeMapFixture();
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    const signals = [{ path: "src/app.ts", note: "fixture signal" }];
+    await updateBrownfieldAssessmentState({
+      repositoryRoot: fixture.repositoryRoot,
+      assessmentId: created.assessmentId,
+      phase: "signals_complete",
+      signals
+    });
+    const signalsPath = path.join(fixture.repositoryRoot, ...created.paths.signals.split("/"));
+    assert.deepEqual(JSON.parse(await readFile(signalsPath, "utf8")), signals);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("reclaims a stale publication lock even when the final bundle exists", async () => {
+  const fixture = await writeMapFixture();
+  try {
+    const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
+    const bundlePath = path.join(fixture.repositoryRoot, ...created.paths.root.split("/"));
+    const parentPath = path.dirname(bundlePath);
+    const lockPath = path.join(parentPath, `.${path.basename(bundlePath)}.publish-lock`);
+    await mkdir(lockPath, { mode: 0o700 });
+    await writeFile(path.join(lockPath, "owner.json"), JSON.stringify({ pid: 99999999, acquiredAt: 0, token: "stale" }), "utf8");
+    const staleTime = new Date(Date.now() - 120_000);
+    await utimes(lockPath, staleTime, staleTime);
+
+    await updateBrownfieldAssessmentState({
+      repositoryRoot: fixture.repositoryRoot,
+      assessmentId: created.assessmentId,
+      phase: "signals_complete"
+    });
+    const loaded = await readBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, assessmentId: created.assessmentId });
+    assert.equal(loaded.state.phase, "signals");
+    assert.deepEqual(await readdir(parentPath), [path.basename(bundlePath)]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("does not publish a replacement staging directory", async () => {
   const fixture = await writeMapFixture();
   let children = [];
