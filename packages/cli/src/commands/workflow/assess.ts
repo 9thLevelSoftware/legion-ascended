@@ -152,7 +152,11 @@ export async function handleAssessWorkflow(context: CliContext): Promise<CliResu
     if (state.phase === "setup") {
       signals = await collectBrownfieldSignals({
         repositoryRoot: context.repositoryRoot,
-        snapshot: discovery.record.snapshot,
+  if (resume !== undefined && discovery.record.snapshot.snapshotId !== loaded.state.snapshotId) {
+    return usageError(
+      `Resumed assessment was bound to snapshot ${loaded.state.snapshotId}, but the current structural map is ${discovery.record.snapshot.snapshotId}. Run \"legion assess\" (without --resume) to start a fresh assessment, or restore the previous map.`
+    );
+  }
         sqlitePath: discovery.record.semanticSqliteArtifactPath
       });
       await updateBrownfieldAssessmentState({
