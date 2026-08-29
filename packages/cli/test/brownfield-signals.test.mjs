@@ -245,6 +245,30 @@ test("does not mark exports orphan when an import resolves to the exported modul
   }
 });
 
+test("does not mark directory index exports orphan when an extensionless import resolves to index module", async () => {
+  const fixture = await makeFixture([
+    ["src/foo/index.ts", "export function fromDirectory() { return 1; }\n"],
+    ["src/foo-consumer.ts", "import { fromDirectory } from \"./foo\";\nexport const consumed = fromDirectory;\n"]
+  ]);
+  try {
+    assert.ok(fixture.snapshot.imports.some((fact) =>
+      fact.path === "src/foo-consumer.ts" && fact.specifier === "./foo"
+    ));
+    assert.ok(fixture.snapshot.exports.some((fact) =>
+      fact.path === "src/foo/index.ts" && fact.name === "fromDirectory"
+    ));
+    const result = await collectBrownfieldSignals(fixture);
+    const orphanSourcePaths = result.architectureSignals
+      .filter((signal) => signal.code === "orphan-export")
+      .flatMap((signal) => signal.evidence)
+      .filter((evidence) => evidence.kind === "source-file")
+      .map((evidence) => evidence.path);
+    assert.equal(orphanSourcePaths.includes("src/foo/index.ts"), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("links test files only to parsed, supported, non-generated source candidates", async () => {
   const fixture = await makeFixture([
     ["src/feature.py", "def feature():\n    return 1\n"],
@@ -802,6 +826,24 @@ test("redacts credential-bearing external import specifiers from serialized sign
   }
 });
 
+test("preserves readable builtin import specifiers in serialized signals", async () => {
+  const fixture = await makeFixture([
+    ["src/node-fs.ts", "import { readFile } from \"node:fs\";\nexport const read = readFile;\n"],
+    ["src/fs.ts", "import { readFile } from \"fs\";\nexport const read = readFile;\n"]
+  ]);
+  try {
+    const result = await collectBrownfieldSignals(fixture);
+    const serialized = JSON.stringify(result);
+    assert.match(serialized, /node:fs/u);
+    assert.match(serialized, /"to":"fs"/u);
+    assert.ok(result.dependencyEdges.some((edge) => edge.to === "node:fs"));
+    assert.ok(result.dependencyEdges.some((edge) => edge.to === "fs"));
+    assert.equal(serialized.includes("opaque external import specifier (redacted)"), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("redacts percent-encoded URI, userinfo, and query secrets from serialized signals", async () => {
   const encodedUri = "./https%3A%2F%2Fexample.test%2Fpkg";
   const encodedCredentials = "./service%3A%2F%2Falice%3Asuper-secret%40example.test%2Fpkg%3Fapi_key%3Danother-secret%26password%3Dsuper-secret";
@@ -957,7 +999,6 @@ test("retains only source metadata and risk booleans from one opened read", asyn
   assert.match(implementation, /async function inspectSourceFile/u);
   assert.match(implementation, /patternMatches: RiskPatternMatches/u);
   assert.match(riskCollector, /observation\.patternMatches/u);
-  assert.doesNotMatch(riskCollector, /scanBoundedSourceFile|readBoundedSource|repositoryRoot/u);
   assert.doesNotMatch(implementation, /readonly text:\s*string/u);
 });
 

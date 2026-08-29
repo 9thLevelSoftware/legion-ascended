@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { builtinModules } from "node:module";
 import { constants } from "node:fs";
 import { lstat, open } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
@@ -34,6 +35,9 @@ const HOTSPOT_FACT_SAMPLE_SIZE = 8;
 const BOUNDED_SAMPLE_NOTE = `Bounded sample: first ${MAX_SIGNAL_EVIDENCE} deterministic evidence references.`;
 const BOUNDED_HOTSPOT_SAMPLE_NOTE = `Bounded hotspot sample: first ${HOTSPOT_FACT_SAMPLE_SIZE} hotspot facts; global evidence cap is ${MAX_SIGNAL_EVIDENCE} references.`;
 const OPAQUE_IMPORT_SPECIFIER = "opaque external import specifier (redacted)";
+const BUILTIN_IMPORT_SPECIFIERS = new Set(
+  builtinModules.flatMap((specifier) => specifier.startsWith("node:") ? [specifier] : [specifier, `node:${specifier}`])
+);
 const TEST_DIRECTORY_NAMES = new Set(["test", "tests", "spec", "__tests__"]);
 const CI_FILE_NAMES = new Set(["jenkinsfile", ".gitlab-ci.yml", ".gitlab-ci.yaml", "azure-pipelines.yml"]);
 const CI_CONFIG_EXTENSIONS = new Set([".yml", ".yaml"]);
@@ -686,8 +690,9 @@ function findTestLinks(
 
 /**
  * Return a provenance-safe representation of a persisted import specifier.
- * External specifiers can contain credentials, URLs, or query secrets, so they
- * are never copied into returned signals. Relative specifiers are normalized,
+ * External non-builtin specifiers can contain credentials, URLs, or query
+ * secrets, so they are never copied into returned signals. Known Node builtin
+ * specifiers are safe to retain verbatim. Relative specifiers are normalized,
  * stripped of query/fragment data, and restricted to a bounded path token.
  */
 function isRelativeImportSpecifier(specifier: string): boolean {
@@ -703,6 +708,7 @@ function isOpaqueImportSpecifier(specifier: string): boolean {
 }
 
 function safeImportSpecifier(specifier: string): string {
+  if (BUILTIN_IMPORT_SPECIFIERS.has(specifier)) return specifier;
   if (isOpaqueImportSpecifier(specifier)) return OPAQUE_IMPORT_SPECIFIER;
   const pathOnly = specifier.split(/[?#]/u, 1)[0] ?? ".";
   const normalized = path.posix.normalize(pathOnly);
@@ -732,6 +738,9 @@ function importTargetPaths(
   else if (extension.length === 0) {
     for (const candidateExtension of [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".py"]) {
       candidates.push(`${target}${candidateExtension}`);
+    }
+    for (const candidateExtension of [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx"]) {
+      candidates.push(`${target}/index${candidateExtension}`);
     }
   }
   return candidates.filter((candidate, index) => availablePaths.has(candidate) && candidates.indexOf(candidate) === index);
