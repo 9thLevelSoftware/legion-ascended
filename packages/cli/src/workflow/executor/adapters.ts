@@ -210,6 +210,23 @@ function coalesceRedactionSpans(spans: readonly RedactionSpan[]): RedactionSpan[
       continue;
     }
     if (span.end > previous.end) {
+      if (span.priority < previous.priority) {
+        coalesced[coalesced.length - 1] = {
+          start: previous.start,
+          end: span.end,
+          replacement: span.replacement,
+          priority: span.priority
+        };
+      } else if (span.priority > previous.priority) {
+        coalesced[coalesced.length - 1] = { ...previous, end: previous.end };
+        coalesced.push({
+          start: previous.end,
+          end: span.end,
+          replacement: span.replacement,
+          priority: span.priority
+        });
+      }
+    }
       coalesced[coalesced.length - 1] = {
         start: previous.start,
         end: span.end,
