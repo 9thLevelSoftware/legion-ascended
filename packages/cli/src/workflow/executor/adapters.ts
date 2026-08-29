@@ -1254,6 +1254,23 @@ class BoundedOutputCapture {
   }
 }
 
+function waitForOutputStreamEnd(stream: NodeJS.ReadableStream): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    // On Windows, ChildProcess `close` can be observed before queued pipe data
+    // has reached the stream's `data` listeners. The `end` event is the point
+    // at which a flowing readable has delivered all buffered data. Stream errors
+    // are also terminal for capture and must not leave the child promise open.
+    stream.once("end", finish);
+    stream.once("error", finish);
+  });
+}
+
 async function readBoundedText(filePath: string): Promise<{ readonly text: string; readonly outputLimitExceeded: boolean }> {
   let handle;
   try {
@@ -1312,6 +1329,8 @@ async function spawnWithInput(
       stdio: ["pipe", "pipe", "pipe"]
     });
     const output = new BoundedOutputCapture();
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     let settled = false;
     let timedOut = false;
     let outputLimitExceeded = false;
@@ -1396,10 +1415,13 @@ async function spawnWithInput(
       settle(exitCode);
     };
     child.on("close", (code) => {
-      // Windows reports taskkill termination with a null exit code. Keep the
-      // adapter contract stable by preserving the synthetic timeout code.
-      const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
-      void settleAfterQuiescence(exitCode);
+      void Promise.all([stdoutEnded, stderrEnded]).then(() => {
+        // Windows can report ChildProcess `close` before queued pipe data has
+        // reached the stream listeners. Wait for both readables to end before
+        // exposing the bounded capture to the adapter result.
+        const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+        return settleAfterQuiescence(exitCode);
+      });
     });
     child.stdin.end(input);
   });
@@ -1417,6 +1439,8 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
       stdio: ["ignore", "pipe", "pipe"]
     });
     const output = new BoundedOutputCapture();
+    const stdoutEnded = waitForOutputStreamEnd(child.stdout);
+    const stderrEnded = waitForOutputStreamEnd(child.stderr);
     let settled = false;
     let timedOut = false;
     let outputLimitExceeded = false;
@@ -1500,10 +1524,13 @@ async function spawnWithoutInput(command: string, args: readonly string[], cwd: 
       settle(exitCode);
     };
     child.on("close", (code) => {
-      // Windows reports taskkill termination with a null exit code. Keep the
-      // adapter contract stable by preserving the synthetic timeout code.
-      const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
-      void settleAfterQuiescence(exitCode);
+      void Promise.all([stdoutEnded, stderrEnded]).then(() => {
+        // Windows can report ChildProcess `close` before queued pipe data has
+        // reached the stream listeners. Wait for both readables to end before
+        // exposing the bounded capture to the adapter result.
+        const exitCode = timedOut ? 124 : outputLimitExceeded ? 125 : code ?? 1;
+        return settleAfterQuiescence(exitCode);
+      });
     });
   });
 }
