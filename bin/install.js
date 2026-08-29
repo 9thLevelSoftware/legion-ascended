@@ -2541,16 +2541,25 @@ function packageManagerExecutable(name) {
   return process.platform === 'win32' ? `${name}.cmd` : name;
 }
 
-function spawnPackageManager(name, args, options) {
+function packageManagerSpawnConfig(name, args, options) {
   const executable = packageManagerExecutable(name);
   if (process.platform === 'win32') {
-    return spawnSync(executable, args, {
-      ...options,
-      shell: false,
-      windowsHide: true,
-    });
+    return {
+      executable,
+      args,
+      options: {
+        ...options,
+        shell: false,
+        windowsHide: true,
+      },
+    };
   }
-  return spawnSync(executable, args, options);
+  return { executable, args, options };
+}
+
+function spawnPackageManager(name, args, options) {
+  const config = packageManagerSpawnConfig(name, args, options);
+  return spawnSync(config.executable, config.args, config.options);
 }
 
 function runPackageManager(name, args, description) {
@@ -2746,7 +2755,9 @@ module.exports = {
   commandDetected,
   main,
   packageManagerExecutable,
-  samePath
+  packageManagerSpawnConfig,
+  samePath,
+  spawnPackageManager
 };
 
 

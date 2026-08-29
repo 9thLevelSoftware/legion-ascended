@@ -11,7 +11,7 @@ import { createRequire } from "node:module";
 import { selectPackReport } from "../scripts/check-package-contents.mjs";
 
 const require = createRequire(import.meta.url);
-const { packageManagerExecutable } = require("../bin/install.js");
+const { packageManagerExecutable, packageManagerSpawnConfig } = require("../bin/install.js");
 
 const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
@@ -32,6 +32,20 @@ test("installer selects npm.cmd for Windows package-manager spawns", () => {
   withPlatform("win32", () => {
     assert.equal(packageManagerExecutable("npm"), "npm.cmd");
     assert.equal(packageManagerExecutable("npx"), "npx.cmd");
+  });
+});
+
+test("Windows package-manager spawn config disables shell execution", () => {
+  const args = ["--version"];
+  const options = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+  withPlatform("win32", () => {
+    const config = packageManagerSpawnConfig("npm", args, options);
+    assert.equal(config.executable, "npm.cmd");
+    assert.deepEqual(config.args, args);
+    assert.equal(config.options.shell, false);
+    assert.equal(config.options.windowsHide, true);
+    assert.equal(config.options.encoding, "utf8");
+    assert.deepEqual(config.options.stdio, ["ignore", "pipe", "pipe"]);
   });
 });
 
