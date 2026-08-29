@@ -50,6 +50,7 @@ const BOUNDED_READ_CHUNK_BYTES = 64 * 1024;
 const PROCESS_TERM_GRACE_MS = 250;
 const PROCESS_QUIESCENCE_TIMEOUT_MS = 5_000;
 const PROCESS_QUIESCENCE_POLL_MS = 25;
+const WINDOWS_PROCESS_TABLE_TIMEOUT_MS = 2_000;
 
 let adapterProcessContainmentOverride: boolean | undefined;
 
@@ -1693,6 +1694,18 @@ interface WindowsProcessRow {
 
 type ProcessExistsProbe = (pid: number) => boolean;
 type WindowsDescendantEnumerator = (pid: number) => readonly number[];
+interface WindowsProcessProbeOptions {
+  readonly encoding: "utf8";
+  readonly windowsHide: true;
+  readonly stdio: ["ignore", "pipe", "ignore"];
+  readonly timeout: number;
+}
+type WindowsProcessProbe = (
+  command: string,
+  args: readonly string[],
+  options: WindowsProcessProbeOptions
+) => string | Buffer;
+type WindowsTaskkillProbe = (args: readonly string[]) => Promise<void>;
 
 function parseWindowsProcessRows(output: string): readonly WindowsProcessRow[] {
   const rows: WindowsProcessRow[] = [];
@@ -1710,17 +1723,30 @@ function parseWindowsProcessRows(output: string): readonly WindowsProcessRow[] {
   return rows;
 }
 
-function windowsProcessRows(): readonly WindowsProcessRow[] {
+function runWindowsProcessProbe(
+  command: string,
+  args: readonly string[],
+  options: WindowsProcessProbeOptions
+): string | Buffer {
+  return execFileSync(command, args, options);
+}
+
+function windowsProcessRows(probe: WindowsProcessProbe = runWindowsProcessProbe): readonly WindowsProcessRow[] {
   try {
-    const output = execFileSync(
+    const output = probe(
       "wmic",
       ["process", "get", "ParentProcessId,ProcessId", "/format:csv"],
-      { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }
+      {
+        encoding: "utf8",
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: WINDOWS_PROCESS_TABLE_TIMEOUT_MS
+      }
     );
     return parseWindowsProcessRows(String(output));
   } catch (wmicError) {
     try {
-      const output = execFileSync(
+      const output = probe(
         "powershell.exe",
         [
           "-NoProfile",
@@ -1728,13 +1754,23 @@ function windowsProcessRows(): readonly WindowsProcessRow[] {
           "-Command",
           "Get-CimInstance -ClassName Win32_Process | Select-Object ParentProcessId,ProcessId | ConvertTo-Csv -NoTypeInformation"
         ],
-        { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }
+        {
+          encoding: "utf8",
+          windowsHide: true,
+          stdio: ["ignore", "pipe", "ignore"],
+          timeout: WINDOWS_PROCESS_TABLE_TIMEOUT_MS
+        }
       );
       return parseWindowsProcessRows(String(output));
     } catch {
       throw wmicError;
     }
   }
+}
+
+/** Test-only seam for verifying bounded Windows process-table probes. */
+export function windowsProcessRowsForTests(probe: WindowsProcessProbe): readonly WindowsProcessRow[] {
+  return windowsProcessRows(probe);
 }
 
 function enumerateWindowsDescendantPids(pid: number): readonly number[] {
@@ -1804,21 +1840,58 @@ async function processQuiescenceProven(pid: number | undefined): Promise<boolean
   return !stillExists();
 }
 
+function spawnWindowsTaskkill(args: readonly string[]): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const killer = spawn("taskkill", args, {
+      windowsHide: true,
+      stdio: "ignore"
+    });
+    killer.on("error", () => resolve());
+    killer.on("close", () => resolve());
+  });
+}
+
+async function taskkillWindowsPids(
+  pid: number,
+  descendantPids: readonly number[],
+  taskkill: WindowsTaskkillProbe = spawnWindowsTaskkill
+): Promise<void> {
+  const seen = new Set<number>();
+  for (const targetPid of [pid, ...descendantPids]) {
+    if (seen.has(targetPid)) continue;
+    seen.add(targetPid);
+    await taskkill(["/pid", String(targetPid), "/t", "/f"]);
+  }
+}
+
+/** Test-only seam for verifying individual Windows descendant termination. */
+export function windowsTaskkillPidsForTests(
+  pid: number,
+  descendantPids: readonly number[],
+  taskkill: WindowsTaskkillProbe
+): Promise<void> {
+  return taskkillWindowsPids(pid, descendantPids, taskkill);
+}
+
+async function terminateWindowsProcessTree(pid: number): Promise<boolean> {
+  let descendantPids: readonly number[] = [];
+  try {
+    // Enumerate before killing the leader so a dead leader cannot make its
+    // descendants unreachable to the process-table probe.
+    descendantPids = enumerateWindowsDescendantPids(pid);
+  } catch {
+    // Still kill the leader, then let the fail-closed quiescence probe report
+    // that the tree could not be proven gone.
+  }
+  await taskkillWindowsPids(pid, descendantPids);
+  return processQuiescenceProven(pid);
+}
+
 async function terminateProcessTree(pid: number | undefined): Promise<boolean> {
   if (pid === undefined) return true;
   if (!supportsIsolatedProcessGroup()) return false;
   if (process.platform === "win32") {
-    // Fixed executable and fixed argv: no shell interpolation or user-provided
-    // process-kill command is involved. `/t` covers the Windows child tree.
-    await new Promise<void>((resolve) => {
-      const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
-        windowsHide: true,
-        stdio: "ignore"
-      });
-      killer.on("error", () => resolve());
-      killer.on("close", () => resolve());
-    });
-    return processQuiescenceProven(pid);
+    return terminateWindowsProcessTree(pid);
   }
   try {
     process.kill(-pid, "SIGTERM");
