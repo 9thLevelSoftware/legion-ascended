@@ -47,6 +47,7 @@ export const STRUCTURAL_RUNTIME_PACKAGE_PATHS = Object.freeze([
  */
 export const POST_V8_COMMAND_PATHS = Object.freeze([
   "commands/approve.md",
+  "commands/assess.md",
   "commands/attest.md",
   "commands/release.md"
 ]);
