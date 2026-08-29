@@ -6,12 +6,34 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
+import { createRequire } from "node:module";
 
 import { selectPackReport } from "../scripts/check-package-contents.mjs";
+
+const require = createRequire(import.meta.url);
+const { packageManagerExecutable } = require("../bin/install.js");
 
 const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
 const GROK_FIXTURE_ROOT = path.join(ROOT, "tests", "fixtures", "grok");
+
+function withPlatform(platform, run) {
+  const original = process.platform;
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  try {
+    return run();
+  } finally {
+    Object.defineProperty(process, "platform", { value: original, configurable: true });
+  }
+}
+
+test("installer selects npm.cmd for Windows package-manager spawns", () => {
+  assert.equal(packageManagerExecutable("npm"), "npm");
+  withPlatform("win32", () => {
+    assert.equal(packageManagerExecutable("npm"), "npm.cmd");
+    assert.equal(packageManagerExecutable("npx"), "npx.cmd");
+  });
+});
 
 const STRUCTURAL_RUNTIME_ASSETS = [
   "dist/web-tree-sitter.wasm",
@@ -159,7 +181,7 @@ test("published package installs production dependencies and executes a fake Gro
       npm_config_audit: "false",
       npm_config_fund: "false"
     };
-    await execFileAsync("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", "--prefer-offline"], {
+    await execFileAsync(packageManagerExecutable("npm"), ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", "--prefer-offline"], {
       cwd: packageRoot,
       env: npmEnv,
       encoding: "utf8",

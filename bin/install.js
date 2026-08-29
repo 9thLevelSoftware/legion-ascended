@@ -303,8 +303,20 @@ function commandExists(commandName) {
   return result.status === 0;
 }
 
+function windowsCommandPath(commandName) {
+  const result = spawnSync('where.exe', [commandName], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true
+  });
+  if (result.error || result.status !== 0) return null;
+  return String(result.stdout || '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) || null;
+}
+
 function grokVersionDetected(commandName) {
-  const result = spawnSync(commandName, ['--version'], {
+  const executable = process.platform === 'win32' ? windowsCommandPath(commandName) : commandName;
+  if (!executable) return false;
+  const result = spawnSync(executable, ['--version'], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
@@ -2529,20 +2541,14 @@ function packageManagerExecutable(name) {
   return process.platform === 'win32' ? `${name}.cmd` : name;
 }
 
-function quoteWindowsCommandArg(value) {
-  const text = String(value);
-  if (/^[A-Za-z0-9_@%+.,:/=-]+$/.test(text)) return text;
-  return `"${text.replace(/(["^&|<>])/g, '^$1')}"`;
-}
-
 function spawnPackageManager(name, args, options) {
   const executable = packageManagerExecutable(name);
   if (process.platform === 'win32') {
-    return spawnSync(
-      [executable, ...args].map(quoteWindowsCommandArg).join(' '),
-      [],
-      { ...options, shell: true }
-    );
+    return spawnSync(executable, args, {
+      ...options,
+      shell: false,
+      windowsHide: true,
+    });
   }
   return spawnSync(executable, args, options);
 }
@@ -2562,9 +2568,23 @@ function runPackageManager(name, args, description) {
   }
 }
 
+function canonicalPath(value) {
+  const resolved = path.resolve(value);
+  if (process.platform === 'win32') {
+    try {
+      const real = typeof fs.realpathSync.native === 'function'
+        ? fs.realpathSync.native(resolved)
+        : fs.realpathSync(resolved);
+      return normalizePath(real).replace(/\/$/, '').toLowerCase();
+    } catch {
+      // Fall back to the normalized absolute path when the target is absent.
+    }
+  }
+  return normalizePath(resolved).replace(/\/$/, '').toLowerCase();
+}
+
 function samePath(left, right) {
-  const normalize = (value) => normalizePath(path.resolve(value)).replace(/\/$/, '').toLowerCase();
-  return normalize(left) === normalize(right);
+  return canonicalPath(left) === canonicalPath(right);
 }
 
 function isGlobalPackageInvocation(packageName) {
@@ -2723,7 +2743,10 @@ if (require.main === module) {
 }
 
 module.exports = {
-  main
+  commandDetected,
+  main,
+  packageManagerExecutable,
+  samePath
 };
 
 
