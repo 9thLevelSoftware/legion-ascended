@@ -445,7 +445,7 @@ test("does not publish a replacement staging directory", async () => {
               return;
             }
           } catch {
-            // The staging directory can appear before its files exist; keep polling.
+            // readdir throws only when the candidate is already published or momentarily unreadable; keep polling.
           }
           await new Promise((resolve) => setImmediate(resolve));
         }
