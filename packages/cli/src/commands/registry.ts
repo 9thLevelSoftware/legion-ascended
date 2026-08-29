@@ -7,6 +7,7 @@ export const WORKFLOW_COMMANDS: readonly CommandHelpEntry[] = Object.freeze([
   { name: "start", summary: "Initialize a project and route to the first plan." },
   { name: "explore", summary: "Create a design discovery artifact before start or planning." },
   { name: "map", summary: "Generate, refresh, check, or query codebase context." },
+  { name: "assess", summary: "Run a read-only brownfield assessment of an existing repository." },
   { name: "plan", summary: "Plan a phase or change into typed task contracts." },
   { name: "build", summary: "Execute approved task contracts through a runtime driver." },
   { name: "approve", summary: "Record a human decision about the change's delta specs." },

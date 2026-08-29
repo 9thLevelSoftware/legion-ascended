@@ -1052,6 +1052,12 @@ test("workflow executor auto-selection does not nest a claude run inside Claude 
   }
 });
 
+test("legion assess --help names the command", async () => {
+  const result = await runCliCapture(["assess", "--help"]);
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /legion assess\b/);
+});
+
 test("core workflow commands expose command-specific help", async () => {
   const cases = [
     ["start", /legion start --name <name>/],
