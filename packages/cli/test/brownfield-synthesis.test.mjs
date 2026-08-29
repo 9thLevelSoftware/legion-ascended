@@ -17,7 +17,8 @@ import {
 } from "../dist/workflow/brownfield-assessment.js";
 import {
   synthesizeBrownfieldDesign,
-  synthesizeBrownfieldAssessment
+  synthesizeBrownfieldAssessment,
+  renderBrownfieldReport
 } from "../dist/workflow/brownfield-synthesis.js";
 
 const HASH = "a".repeat(64);
@@ -352,6 +353,28 @@ test("recognizes executes as a behavioral claim", () => {
   });
 
   assert.ok(design.behavioralProofGaps.some((entry) => /Behavioral claim 'Command boundary'/u.test(entry)));
+});
+
+test("collapses repeated structural signals of the same code into one finding class", () => {
+  const architectureSignals = Array.from({ length: 12 }, (_entry, index) => ({
+    code: "documentation-metadata",
+    severity: "informational",
+    statement: `Documentation file docs/note-${index}.md is present as bounded metadata; presence is not product-intent or behavioral proof.`,
+    evidence: [sourceEvidence(`docs/note-${index}.md`)]
+  }));
+  const design = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals, summary: { ...signals().summary, unsupportedSignals: 0 } }),
+    specialists: specialists()
+  });
+  const collapsed = design.prioritizedFindings.filter((finding) => finding.title === "Structural signal: documentation-metadata");
+  assert.equal(collapsed.length, 1);
+  assert.match(collapsed[0].statement, /12 documentation-metadata signals/);
+  assert.equal(design.prioritizedFindings.length < 12, true);
+  const report = renderBrownfieldReport(design);
+  assert.match(report, /## Executive summary/);
+  assert.match(report, /## Current architecture/);
+  assert.match(report, /## Findings/);
+  assert.doesNotMatch(report, /Findings: 12;/);
 });
 
 test("deduplicates unique text using the unbounded value", () => {

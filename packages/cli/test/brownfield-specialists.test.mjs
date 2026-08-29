@@ -1853,3 +1853,21 @@ test("bounds the Codex last-message file before parsing and persistence", async 
     await rm(repositoryRoot, { recursive: true, force: true });
   }
 });
+
+test("does not fail in-process specialists because of a large ignored .git pack object", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-git-pack-"));
+  try {
+    const packDir = path.join(repositoryRoot, ".git", "objects", "pack");
+    await mkdir(packDir, { recursive: true });
+    await writeFile(path.join(packDir, "pack-fixture.pack"), Buffer.alloc(17 * 1024 * 1024));
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: executeFinding
+    });
+    assert.equal(result.ok, true, result.diagnostics.join("\n"));
+    assert.equal(result.diagnostics.some((entry) => /bounded restoration limit/iu.test(entry)), false);
+    assert.ok(result.findings.length > 0);
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});

@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Legion | Ascended 9.4.0</title>
-    <meta name="description" content="Legion Ascended 9.4.0 is a guided execution layer with Grok Build, Semantic Map v2, deterministic provenance, human review, and ship-readiness gates.">
+    <title>Legion | Ascended 9.4.1</title>
+    <meta name="description" content="Legion Ascended 9.4.1 is a guided execution layer with readable maps, brownfield reports, Grok Build, Semantic Map v2, deterministic provenance, human review, and ship-readiness gates.">
     <link rel="icon" type="image/svg+xml" href="./assets/legion-ascended-mark.svg">
     <link rel="preload" href="./assets/legion-ascended-mark.svg" as="image">
     <link rel="preload" href="./assets/tithe-sigil.svg" as="image">
@@ -57,7 +57,7 @@
         <p class="ascended-flame">Ascended</p>
         <p class="tagline">"My Name Is Legion, For We Are Many"</p>
         <p class="sub-tagline">A guided execution layer for AI-assisted software work. One Legion command surface.</p>
-        <p class="release-pill" data-release-version>v9.4.0 &middot; Grok Build &amp; Semantic Map v2</p>
+        <p class="release-pill" data-release-version>v9.4.1 &middot; Readable maps &amp; brownfield reports</p>
       </header>
 
       <div class="divider"><div class="divider-line"></div></div>
@@ -83,7 +83,7 @@
       <section class="reveal-section" id="grok-build" aria-labelledby="grok-build-title">
         <h2 id="grok-build-title">Grok Build, Bound Precisely</h2>
         <p class="intro-text">
-          <strong>Grok Build is a first-class Legion target</strong> in 9.4.0: Legion manages its
+          <strong>Grok Build is a first-class Legion target</strong>: Legion manages its
           native skill install, bounded detection, headless executor, and packed-install smoke.
           That is a Legion support claim, not a claim of stable upstream parity. The verified
           upstream CLI is <code>grok 1.0.10 (5992780042ca) [alpha]</code>, so the alpha caveat remains.
@@ -161,12 +161,13 @@
       </section>
 
       <section class="semantic-map-section reveal-section" id="semantic-map" aria-labelledby="semantic-map-title">
-        <div class="map-kicker">Release 9.4.0 &middot; Grok Build &amp; deterministic provenance</div>
+        <div class="map-kicker">Release 9.4.1 &middot; Readable maps, graphs, and brownfield reports</div>
         <h2 id="semantic-map-title">Semantic Map v2</h2>
         <p class="intro-text">
           Give the human reviewer a stable codebase index before the work begins. Semantic Map v2
           keeps the legacy inventory files, then adds a hash-pinned structural snapshot and a local
-          FTS5 accelerator for precise retrieval.
+          FTS5 accelerator. <code>codebase.md</code> is now a module index, import/export reference
+          graph, and directory tree rather than a first-content file dump.
         </p>
         <div class="map-profile-grid">
           <article class="map-profile-card">
@@ -243,8 +244,8 @@
             <tr><td>legion attest</td><td>Record that a named human asserts specific hash-pinned files are this change's evidence.</td></tr>
             <tr><td>legion release</td><td>Record how the change's release is observed and taken back.</td></tr>
             <tr><td>legion explore</td><td>Create read-only design discovery and handoff notes.</td></tr>
-            <tr><td>legion map</td><td>Refresh the structural or legacy inventory profile, check freshness, query deterministic facts, and explain one structural fact with provenance.</td></tr>
-            <tr><td>legion assess</td><td>Run a read-only brownfield assessment that produces evidence-bound audit reports.</td></tr>
+            <tr><td>legion map</td><td>Refresh a readable module map, reference graph, and directory tree, plus the structural index; check freshness; query facts; explain one structural fact with provenance.</td></tr>
+            <tr><td>legion assess</td><td>Run a read-only brownfield assessment and print an evidence-bound report. Finding counts are not the audit.</td></tr>
             <tr><td>legion quick</td><td>Create a one-task ad-hoc change for the normal build/review loop.</td></tr>
             <tr><td>legion advise</td><td>Produce read-only advisory guidance.</td></tr>
             <tr><td>legion polish</td><td>Create scoped polish work that still goes through build and review.</td></tr>
@@ -274,7 +275,7 @@
         <div class="workflow-visual">
           <div class="workflow-step optional"><span class="step-cmd">legion explore</span><span class="step-desc">Research, constraints, approaches, handoff notes</span></div>
           <div class="workflow-arrow">&darr;</div>
-          <div class="workflow-step optional"><span class="step-cmd">legion map</span><span class="step-desc">Semantic v2 provenance, v1 inventory, search, and freshness checks</span></div>
+          <div class="workflow-step optional"><span class="step-cmd">legion map</span><span class="step-desc">Readable module map, reference graph, tree, Semantic v2 provenance, and freshness checks</span></div>
           <div class="workflow-arrow">&darr;</div>
           <div class="workflow-step"><span class="step-cmd">legion start</span><span class="step-desc">Project truth record</span></div>
           <div class="workflow-arrow">&darr;</div>

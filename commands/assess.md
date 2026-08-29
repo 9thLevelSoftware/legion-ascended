@@ -13,3 +13,6 @@ files, manifests, or runtime configuration.
 Run `legion map --refresh --profile structural` first when no fresh structural
 map is available. Use `--resume <assessment-id>` to continue a persisted
 assessment from its current phase.
+
+When the CLI returns JSON, show `report` verbatim. Never reduce an assessment
+to signal, finding, or file counts. Those counts are not the audit.

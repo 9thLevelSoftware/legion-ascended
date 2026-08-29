@@ -31,6 +31,7 @@ import {
 import { resolveProjectArtifactPath, stableProtocolJson } from "@legion/artifacts";
 
 import { conservativeTestToSourceLinks, expectedSourceHashes, type BrownfieldSignals } from "./brownfield-signals.js";
+import { shouldTraverseAuthoredDirectory } from "./authored-source.js";
 import {
   adapterForKind,
   MAX_ADAPTER_OUTPUT_BYTES,
@@ -1484,6 +1485,7 @@ async function snapshotRepository(root: string, options: RepositorySnapshotOptio
       const relativePath = relativeRoot.length === 0 ? child.name : `${relativeRoot}/${child.name}`;
       const stat = await lstat(absolutePath);
       if (stat.isDirectory()) {
+        if (!shouldTraverseAuthoredDirectory(child.name)) continue;
         addEntry(relativePath, { kind: "directory", digest: "", mode: repositoryMode(stat.mode) });
         await visit(absolutePath, relativePath);
         continue;

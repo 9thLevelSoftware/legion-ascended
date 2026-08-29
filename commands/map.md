@@ -6,7 +6,7 @@ allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
 <objective>
-Create and maintain Legion's canonical codebase documentation and retrieval index. Produce the architecture document this command's analysis is for, and let the CLI own the file dataset underneath it. `legion map --refresh` defaults to `--profile structural`: it preserves the v1 `codebase.md`, `index.jsonl`, `symbols.json`, `search.md` and `map.json` artifacts and adds a hash-pinned `semantic-index.json` plus `semantic-index.sqlite` under the reported run directory. `--profile inventory` writes only the v1 artifacts. The architecture analysis is written separately, because the two are different documents that have historically been confused for each other.
+Create and maintain Legion's canonical codebase documentation and retrieval index. Produce the architecture document this command's analysis is for, and let the CLI own the file dataset underneath it. `legion map --refresh` defaults to `--profile structural`: it writes a human-readable `codebase.md` (module index, import/export reference graph, and directory tree) plus `index.jsonl`, `symbols.json`, `search.md` and `map.json`, then adds a hash-pinned `semantic-index.json` plus `semantic-index.sqlite` under the reported run directory. `--profile inventory` writes only the v1 artifacts. The architecture analysis is written separately, because the two are different documents that have historically been confused for each other. When the CLI returns JSON, show `preview` verbatim; never reduce a map to a file count.
 </objective>
 
 <execution_context>
@@ -54,7 +54,7 @@ coverage map, and the ranked risk hotspots. The verb's v1 artifact is a file inv
 so rendering either payload would replace an architecture document with a histogram.
 
 **Write the analysis to its own file — never over the CLI's artifact set.** The
-`codebase.md` is a generated file inventory. Inventory checks and fallback
+`codebase.md` is the generated human map (modules, reference graph, tree). Inventory checks and fallback
 queries read `map.json`; structural checks, queries, and why reads consume the
 validated `semantic-index.json` and its hash-matched SQLite materialization only
 after discovery validates the bound v1 `map.json`. Overwriting any of these with

@@ -15,7 +15,10 @@ are only wrappers around the same `legion <command>` language.
 ## Brownfield Assessment
 
 `legion assess` performs a read-only brownfield assessment of an existing repository.
-It produces evidence-bound audit reports without modifying source files or runtime configuration.
+It produces an evidence-bound report (architecture, findings, assumptions, and a
+prioritized plan) without modifying source files or runtime configuration. The CLI
+prints that report; `--json` includes it as `report`. Do not treat finding counts as
+the audit.
 
 ## What It Does
 
@@ -119,7 +122,8 @@ packaging first. Claude Desktop is not Claude Code; the `claude` target above is
 ## Semantic Map v2
 
 The `map` command gives the workflow a deterministic, inspectable view of a repository before a human
-plans or reviews a change. Release `9.4.0` ships Semantic Map v2 and the first-class Grok Build
+plans or reviews a change. Release `9.4.1` ships readable map and assessment
+reports on top of Semantic Map v2 and the first-class Grok Build
 install target and executor in the npm package, including the
 published Tree-sitter WASM grammars used by the structural profile. It requires Node.js `>=24 <26`.
 
@@ -140,10 +144,10 @@ npx legion-ascended map --refresh --profile structural
 `legion map --refresh` defaults to the `structural` profile. Both profiles preserve the legacy v1
 file-inventory artifacts under `.legion/project/workflow/map/<runId>/`:
 
-- `codebase.md` — human-readable file inventory
+- `codebase.md` — human-readable map: module index, import/export reference graph, and directory tree
 - `index.jsonl` — one v1 file record per line
-- `symbols.json` — v1 symbol listing
-- `search.md` — v1 search-oriented rendering
+- `symbols.json` — symbol listing (structural exports/symbols when available)
+- `search.md` — search-oriented rendering
 - `map.json` — the v1 machine-readable map and its source fingerprint
 
 A structural refresh adds two Semantic Map v2 artifacts in that same run directory:
