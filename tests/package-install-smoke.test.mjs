@@ -28,7 +28,10 @@ function withPlatform(platform, run) {
 }
 
 test("installer selects npm.cmd for Windows package-manager spawns", () => {
-  assert.equal(packageManagerExecutable("npm"), "npm");
+  withPlatform("linux", () => {
+    assert.equal(packageManagerExecutable("npm"), "npm");
+    assert.equal(packageManagerExecutable("npx"), "npx");
+  });
   withPlatform("win32", () => {
     assert.equal(packageManagerExecutable("npm"), "npm.cmd");
     assert.equal(packageManagerExecutable("npx"), "npx.cmd");
@@ -272,7 +275,7 @@ test("published package installs production dependencies and executes a fake Gro
     const executions = records.filter((record) => record.args[0] === "--prompt-file");
     assert.equal(executions.length, 3);
     for (const record of executions) {
-      assert.equal(record.cwd, canonicalProject);
+      assert.equal(await realpath(record.cwd), canonicalProject);
       assert.equal(record.stdinLength, 0);
       assert.equal(record.xaiApiKeyPresent, false);
       assert.deepEqual(record.args.slice(-4), ["--output-format", "json", "--permission-mode", "bypassPermissions"]);
