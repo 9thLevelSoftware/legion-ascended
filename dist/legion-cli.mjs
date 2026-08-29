@@ -41127,19 +41127,13 @@ function codexInvocation(args2) {
   if (process.platform !== "win32") {
     return { command: "codex", args: args2 };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "codex", ...args2]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("codex", args2) };
 }
 function claudeInvocation(args2) {
   if (process.platform !== "win32") {
     return { command: "claude", args: args2 };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "claude", ...args2]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("claude", args2) };
 }
 function fakeSummary(request) {
   if (request.mode === "review") return `Fake review passed for ${request.task.id}.`;

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile as execFileCallback, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { watch as watchDirectory } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -392,14 +391,31 @@ test("reclaims a stale publication lock even when the final bundle exists", asyn
   }
 });
 
-test("does not publish a replacement staging directory", async () => {
+function formatObservedError(error) {
+  if (error === undefined) return "";
+  return error instanceof Error ? error.message : String(error);
+}
+
+function signalChild(child, signal) {
+  try {
+    child.kill(signal);
+  } catch {
+    // The child may have already exited between the poll and the signal.
+  }
+}
+
+test("does not publish a replacement staging directory", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("requires POSIX SIGSTOP to pause publishers mid-stage");
+    return;
+  }
   const fixture = await writeMapFixture();
-  let children = [];
-  let watcher;
+  const children = [];
   try {
     const created = await createBrownfieldAssessment({ repositoryRoot: fixture.repositoryRoot, effort: 1, snapshot: fixture.record });
     const bundlePath = path.join(fixture.repositoryRoot, ...created.paths.root.split("/"));
     const parentPath = path.dirname(bundlePath);
+    const bundleName = path.basename(bundlePath);
     await rm(bundlePath, { recursive: true, force: true });
 
     const replacementTemplate = path.join(parentPath, ".replacement-stage-template");
@@ -408,75 +424,79 @@ test("does not publish a replacement staging directory", async () => {
       await writeFile(path.join(replacementTemplate, fileName), fileName === "state.json" ? "replacement-stage\n" : "[]\n", "utf8");
     }
 
-    let stagePath;
-    let swapped = false;
-    let swapError;
-    const observingCandidates = new Set();
-    let pauseResolve;
-    const pauseReady = new Promise((resolve) => {
-      pauseResolve = resolve;
-    });
-    watcher = watchDirectory(parentPath, (_eventType, entryName) => {
-      if (stagePath !== undefined || entryName === null) return;
-      const candidate = String(entryName);
-      if (!candidate.startsWith(`.${path.basename(bundlePath)}.`) || !candidate.endsWith(".staging") ||
-        observingCandidates.has(candidate)) return;
-      observingCandidates.add(candidate);
-      const candidatePath = path.join(parentPath, candidate);
-      void (async () => {
-        for (let attempt = 0; attempt < 1_000 && stagePath === undefined; attempt += 1) {
-          try {
-            const stageEntries = await readdir(candidatePath);
-            if (stageEntries.length === 6 && children.length > 0) {
-              stagePath = candidatePath;
-              for (const child of children) child.kill("SIGSTOP");
-              await new Promise((resolve) => setTimeout(resolve, 10));
-              try {
-                await rename(candidatePath, `${candidatePath}.hidden`);
-                await cp(replacementTemplate, candidatePath, { recursive: true });
-                swapped = true;
-              } catch (error) {
-                swapError = error;
-              } finally {
-                watcher?.close();
-                for (const child of children) child.kill("SIGCONT");
-                pauseResolve();
-              }
-              return;
-            }
-          } catch {
-            // readdir throws only when the candidate is already published or momentarily unreadable; keep polling.
-          }
-          await new Promise((resolve) => setImmediate(resolve));
-        }
-      })().catch(() => undefined);
-    });
-
     const childResults = Array.from({ length: 16 }, () => runAssessmentChild(
       fixture.repositoryRoot,
       fixture.record,
       (processHandle) => children.push(processHandle)
     ));
-    await Promise.race([pauseReady, Promise.all(childResults)]);
-    assert.ok(stagePath !== undefined, "did not observe a complete staging directory");
-    await pauseReady;
-    assert.equal(swapError, undefined);
-    assert.equal(swapped, true);
+
+    const stagePrefix = `.${bundleName}.`;
+    const deadline = Date.now() + 8_000;
+    let stagePath;
+    let swapped = false;
+    let lastError;
+    const failedCandidates = new Set();
+
+    while (Date.now() < deadline && !swapped) {
+      let entries;
+      try {
+        entries = await readdir(parentPath);
+      } catch (error) {
+        lastError = error;
+        await new Promise((resolve) => setImmediate(resolve));
+        continue;
+      }
+      for (const entry of entries) {
+        if (!entry.startsWith(stagePrefix) || !entry.endsWith(".staging") || failedCandidates.has(entry)) continue;
+        const candidatePath = path.join(parentPath, entry);
+        let stageEntries;
+        try {
+          stageEntries = await readdir(candidatePath);
+        } catch (error) {
+          lastError = error;
+          continue;
+        }
+        if (stageEntries.length !== 6) continue;
+        stagePath = candidatePath;
+        for (const child of children) signalChild(child, "SIGSTOP");
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        for (const child of children) signalChild(child, "SIGSTOP");
+        try {
+          await rename(candidatePath, `${candidatePath}.hidden`);
+          await cp(replacementTemplate, candidatePath, { recursive: true });
+          swapped = true;
+          break;
+        } catch (error) {
+          lastError = error;
+          failedCandidates.add(entry);
+          for (const child of children) signalChild(child, "SIGCONT");
+        }
+      }
+      if (!swapped) await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    assert.ok(
+      stagePath !== undefined,
+      `did not observe a complete staging directory${lastError === undefined ? "" : `: ${formatObservedError(lastError)}`}`
+    );
+    assert.equal(swapped, true, lastError === undefined ? "swap did not complete" : formatObservedError(lastError));
+
+    for (const child of children) signalChild(child, "SIGCONT");
     await Promise.all(childResults);
 
     const entries = await readdir(parentPath);
-    if (entries.includes(path.basename(bundlePath))) {
+    if (entries.includes(bundleName)) {
       assert.notEqual(await readFile(path.join(bundlePath, "state.json"), "utf8"), "replacement-stage\n");
     }
   } finally {
-    watcher?.close();
     for (const child of children) {
-      child.kill("SIGCONT");
-      child.kill("SIGKILL");
+      signalChild(child, "SIGCONT");
+      signalChild(child, "SIGKILL");
     }
     await fixture.cleanup();
   }
 });
+
 test("recovers a stale publication lock owned by a dead process", async () => {
   const fixture = await writeMapFixture();
   try {

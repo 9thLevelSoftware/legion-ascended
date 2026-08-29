@@ -1270,20 +1270,14 @@ function codexInvocation(args: readonly string[]): { readonly command: string; r
   if (process.platform !== "win32") {
     return { command: "codex", args };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "codex", ...args]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("codex", args) };
 }
 
 function claudeInvocation(args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
   if (process.platform !== "win32") {
     return { command: "claude", args };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "claude", ...args]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("claude", args) };
 }
 
 function fakeSummary(request: ExecutionRequest): string {
