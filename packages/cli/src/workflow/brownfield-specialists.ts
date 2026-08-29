@@ -30,7 +30,7 @@ import {
 } from "@legion/protocol";
 import { resolveProjectArtifactPath, stableProtocolJson } from "@legion/artifacts";
 
-import { expectedSourceHashes, type BrownfieldSignals } from "./brownfield-signals.js";
+import { conservativeTestToSourceLinks, expectedSourceHashes, type BrownfieldSignals } from "./brownfield-signals.js";
 import {
   adapterForKind,
   MAX_ADAPTER_OUTPUT_BYTES,
@@ -349,8 +349,23 @@ function coverageStatus(snapshot: CodeIndexSnapshot, sourcePath: string): string
   return snapshot.coverage.find((entry) => entry.path === sourcePath)?.status;
 }
 
-function supportedTestLink(snapshot: CodeIndexSnapshot, link: BrownfieldSignals["testToSourceLinks"][number]): boolean {
-  return coverageStatus(snapshot, link.testPath) === "parsed" && coverageStatus(snapshot, link.sourcePath) === "parsed";
+function conservativeLinkKeySet(
+  snapshot: CodeIndexSnapshot,
+  testFiles: BrownfieldSignals["testFiles"]
+): ReadonlySet<string> {
+  return new Set(
+    conservativeTestToSourceLinks(testFiles, snapshot.coverage).map((link) => `${link.testPath}\u0000${link.sourcePath}`)
+  );
+}
+
+function supportedTestLink(
+  snapshot: CodeIndexSnapshot,
+  link: BrownfieldSignals["testToSourceLinks"][number],
+  conservativeLinks: ReadonlySet<string>
+): boolean {
+  return coverageStatus(snapshot, link.testPath) === "parsed" &&
+    coverageStatus(snapshot, link.sourcePath) === "parsed" &&
+    conservativeLinks.has(`${link.testPath}\u0000${link.sourcePath}`);
 }
 
 type SnapshotCoverageWithSourceHash = CodeIndexSnapshot["coverage"][number] & {
@@ -482,8 +497,8 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
   readonly commandResults: readonly AssessmentEvidenceRef[];
   readonly support: EvidenceSupport;
 } {
-  const summary = assessmentSignalSummarySchema.parse(input.signals.summary);
   const coveredPaths = new Set(snapshot.coverage.map((entry) => entry.path));
+  const conservativeLinks = conservativeLinkKeySet(snapshot, input.signals.testFiles);
   const factIds = new Set<string>([
     ...snapshot.symbols.map((entry): string => entry.id),
     ...snapshot.imports.map((entry): string => entry.id),
@@ -532,14 +547,24 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
   for (const [index, edge] of input.signals.dependencyEdges.entries()) {
     codeIndexSourcePathSchema.parse(edge.from);
     if (!coveredPaths.has(edge.from) || typeof edge.to !== "string") throw new Error(`Dependency edge ${index} is outside snapshot coverage.`);
-    register(edge.evidence, `Dependency edge ${index}`);
+    const edgeEvidence = assessmentEvidenceRefSchema.parse(edge.evidence);
+    if (edgeEvidence.kind !== "structural-fact") {
+      throw new Error(`Dependency edge ${index} must cite a structural import fact.`);
+    }
+    const importFact = snapshot.imports.find((entry) => String(entry.id) === String(edgeEvidence.factId));
+    if (importFact === undefined || importFact.path !== edge.from) {
+      throw new Error(`Dependency edge ${index} does not identify an import belonging to ${edge.from}.`);
+    }
+    register(edgeEvidence, `Dependency edge ${index}`);
   }
+  let acceptedTestLinks = 0;
   for (const [index, link] of input.signals.testToSourceLinks.entries()) {
     codeIndexSourcePathSchema.parse(link.testPath);
     codeIndexSourcePathSchema.parse(link.sourcePath);
     if (!coveredPaths.has(link.testPath) || !coveredPaths.has(link.sourcePath)) throw new Error(`Test link ${index} is outside snapshot coverage.`);
     if (typeof link.reason !== "string") throw new Error(`Test link ${index} has invalid reason.`);
-    if (supportedTestLink(snapshot, link)) {
+    if (supportedTestLink(snapshot, link, conservativeLinks)) {
+      acceptedTestLinks += 1;
       const refs = [
         testMetadataEvidence(sourceHashes, link.testPath, `Bounded test inventory metadata for ${link.testPath}; link is retained only for parsed supported coverage.`),
         testMetadataEvidence(sourceHashes, link.sourcePath, `Bounded source target metadata for ${link.sourcePath}; linked from parsed supported test ${link.testPath}.`)
@@ -564,6 +589,19 @@ function validateSignals(input: PackInput, snapshot: CodeIndexSnapshot): {
     commandResults.push(sanitized);
     commandEvidence.add(evidenceKey(sanitized));
   }
+
+  const summary = assessmentSignalSummarySchema.parse({
+    sourceFiles: snapshot.coverage.length,
+    coverageFiles: snapshot.coverage.length,
+    symbols: snapshot.symbols.length,
+    imports: snapshot.imports.length,
+    exports: snapshot.exports.length,
+    testFiles: input.signals.testFiles.length,
+    testToSourceLinks: acceptedTestLinks,
+    dependencyEdges: input.signals.dependencyEdges.length,
+    highRiskSignals: input.signals.riskSignals.filter((signal) => signal.severity === "critical" || signal.severity === "major").length,
+    unsupportedSignals: input.signals.architectureSignals.filter((signal) => signal.code === "unsupported-file").length
+  });
 
   return {
     summary,
@@ -664,7 +702,7 @@ function buildExcerpts(input: PackInput, specialist: BrownfieldSpecialistSpec, v
     [...input.signals.testToSourceLinks],
     (left, right) => compareStrings(left.testPath, right.testPath) || compareStrings(left.sourcePath, right.sourcePath)
   )) {
-    if (!supportedTestLink(input.snapshot, link)) continue;
+    if (!supportedTestLink(input.snapshot, link, conservativeLinkKeySet(input.snapshot, input.signals.testFiles))) continue;
     const evidence = validated.evidence.filter((entry) =>
       (entry.kind === "source-file" || entry.kind === "user-input") &&
       (entry.path === link.testPath || entry.path === link.sourcePath)
@@ -684,18 +722,46 @@ function buildExcerpts(input: PackInput, specialist: BrownfieldSpecialistSpec, v
   );
 }
 
-function boundedPrompt(prompt: string): string {
-  if (prompt.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(prompt, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS) return prompt;
-  const maxPrefixLength = Math.max(0, MAX_SPECIALIST_PROMPT_CHARS - BOUNDED_PROMPT_NOTE.length);
-  let low = 0;
-  let high = Math.min(prompt.length, maxPrefixLength);
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    const candidate = `${prompt.slice(0, middle)}${BOUNDED_PROMPT_NOTE}`;
-    if (candidate.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(candidate, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS) low = middle;
-    else high = middle - 1;
-  }
-  return `${prompt.slice(0, low)}${BOUNDED_PROMPT_NOTE}`;
+const SPECIALIST_OUTPUT_CONTRACT = "Return one JSON object with only `findings` and `assumptions` arrays.";
+
+function promptFitsLimit(prompt: string): boolean {
+  return prompt.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(prompt, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS;
+}
+
+function serializePackExcerpts(excerpts: readonly BrownfieldExcerpt[]): readonly Record<string, unknown>[] {
+  return excerpts.map((excerpt) => ({
+    kind: excerpt.kind,
+    path: excerpt.path,
+    ...(excerpt.sha256 === undefined ? {} : { sha256: excerpt.sha256 }),
+    factIds: [...excerpt.factIds],
+    evidence: uniqueEvidence(excerpt.evidence),
+    text: boundedText(excerpt.text, MAX_EXCERPT_CHARS)
+  }));
+}
+
+function composeSpecialistPrompt(input: {
+  readonly specialist: BrownfieldSpecialistSpec;
+  readonly snapshot: CodeIndexSnapshot;
+  readonly summary: AssessmentSignalSummary;
+  readonly excerpts: readonly BrownfieldExcerpt[];
+  readonly evidence: readonly AssessmentEvidenceRef[];
+  readonly truncation: BrownfieldPackTruncation;
+}): string {
+  const packMarker = input.truncation.bounded
+    ? `${BOUNDED_PACK_NOTE} excerpts_omitted=${input.truncation.excerptsOmitted} evidence_omitted=${input.truncation.evidenceOmitted}`
+    : "[BOUNDED_PACK_COMPLETE]";
+  return [
+    `You are the ${input.specialist.name} assessor for a brownfield repository.`,
+    packMarker,
+    BROWNFIELD_SPECIALIST_SAFETY_CONTRACT,
+    `Specialist pass: ${input.specialist.pass}. Focus: ${input.specialist.focus}.`,
+    `Snapshot ID: ${input.snapshot.snapshotId}. Scope: ${input.snapshot.scope}.`,
+    `Signal summary: ${JSON.stringify(input.summary)}.`,
+    "Only the following bounded evidence pack is supplied; do not infer beyond it.",
+    `Evidence references (bounded and deduplicated): ${JSON.stringify(uniqueEvidence(input.evidence))}.`,
+    `Excerpts (bounded and deduplicated): ${JSON.stringify(serializePackExcerpts(input.excerpts))}.`,
+    SPECIALIST_OUTPUT_CONTRACT
+  ].join("\n");
 }
 
 function packPrompt(input: {
@@ -706,32 +772,34 @@ function packPrompt(input: {
   readonly evidence: readonly AssessmentEvidenceRef[];
   readonly truncation: BrownfieldPackTruncation;
 }): { readonly prompt: string; readonly promptTruncated: boolean } {
-  const evidence = uniqueEvidence(input.evidence);
-  const excerpts = input.excerpts.map((excerpt) => ({
-    kind: excerpt.kind,
-    path: excerpt.path,
-    ...(excerpt.sha256 === undefined ? {} : { sha256: excerpt.sha256 }),
-    factIds: [...excerpt.factIds],
-    evidence: uniqueEvidence(excerpt.evidence),
-    text: boundedText(excerpt.text, MAX_EXCERPT_CHARS)
-  }));
-  const packMarker = input.truncation.bounded
-    ? `${BOUNDED_PACK_NOTE} excerpts_omitted=${input.truncation.excerptsOmitted} evidence_omitted=${input.truncation.evidenceOmitted}`
-    : "[BOUNDED_PACK_COMPLETE]";
-  const prompt = [
-    `You are the ${input.specialist.name} assessor for a brownfield repository.`,
-    packMarker,
-    BROWNFIELD_SPECIALIST_SAFETY_CONTRACT,
-    `Specialist pass: ${input.specialist.pass}. Focus: ${input.specialist.focus}.`,
-    `Snapshot ID: ${input.snapshot.snapshotId}. Scope: ${input.snapshot.scope}.`,
-    `Signal summary: ${JSON.stringify(input.summary)}.`,
-    "Only the following bounded evidence pack is supplied; do not infer beyond it.",
-    `Evidence references (bounded and deduplicated): ${JSON.stringify(evidence)}.`,
-    `Excerpts (bounded and deduplicated): ${JSON.stringify(excerpts)}.`,
-    "Return one JSON object with only `findings` and `assumptions` arrays."
-  ].join("\n");
-  const bounded = boundedPrompt(prompt);
-  return { prompt: bounded, promptTruncated: bounded !== prompt };
+  let evidence = uniqueEvidence(input.evidence);
+  let excerpts = excerptsForPack(input.excerpts, evidence);
+  let prompt = composeSpecialistPrompt({ ...input, excerpts, evidence });
+  while (!promptFitsLimit(prompt) && (excerpts.length > 0 || evidence.length > 0)) {
+    if (excerpts.length > 0) excerpts = excerpts.slice(0, -1);
+    else evidence = evidence.slice(0, -1);
+    excerpts = excerptsForPack(excerpts, evidence);
+    prompt = composeSpecialistPrompt({
+      ...input,
+      excerpts,
+      evidence,
+      truncation: {
+        ...input.truncation,
+        bounded: true,
+        excerptsIncluded: excerpts.length,
+        excerptsOmitted: Math.max(input.truncation.excerptsTotal - excerpts.length, 0),
+        evidenceIncluded: evidence.length,
+        evidenceOmitted: Math.max(input.truncation.evidenceTotal - evidence.length, 0)
+      }
+    });
+  }
+  if (promptFitsLimit(prompt)) return { prompt, promptTruncated: prompt !== composeSpecialistPrompt(input) };
+  const header = composeSpecialistPrompt({ ...input, excerpts: [], evidence: [] })
+    .replace(new RegExp(`\\n${SPECIALIST_OUTPUT_CONTRACT}$`, "u"), "");
+  return {
+    prompt: `${header}\n${BOUNDED_PROMPT_NOTE}\n${SPECIALIST_OUTPUT_CONTRACT}`,
+    promptTruncated: true
+  };
 }
 
 function excerptsForPack(
@@ -773,7 +841,11 @@ export function buildBrownfieldExcerptPacks(input: PackInput): readonly Brownfie
       ...allExcerpts.flatMap((excerpt) => excerpt.evidence),
       ...validated.commandResults
     ]);
-    const evidence = allEvidence.slice(0, MAX_EVIDENCE_PER_PACK);
+    const retainedEvidence = uniqueEvidence([
+      ...limitedExcerpts.flatMap((excerpt) => excerpt.evidence),
+      ...validated.commandResults
+    ]);
+    const evidence = retainedEvidence.slice(0, MAX_EVIDENCE_PER_PACK);
     const excerpts = excerptsForPack(limitedExcerpts, evidence);
     const baseTruncation: BrownfieldPackTruncation = {
       bounded: allExcerpts.length > MAX_EXCERPTS_PER_PACK || allEvidence.length > MAX_EVIDENCE_PER_PACK,
@@ -1804,6 +1876,10 @@ async function runReadOnlyInProcessCallback(input: {
           restoreError.code = "READ_ONLY_RESTORE_FAILED";
           throw restoreError;
         }
+        void callbackPromise.then(
+          () => restoreRepositoryFromBaseline(input.repositoryRoot, before).catch(() => undefined),
+          () => restoreRepositoryFromBaseline(input.repositoryRoot, before).catch(() => undefined)
+        );
         const drainError = timeoutError(input.timeoutMs) as Error & { code?: string };
         drainError.code = "SPECIALIST_TIMEOUT_DRAIN";
         throw drainError;

@@ -67947,7 +67947,7 @@ import { constants } from "node:fs";
 import { lstat as lstat7, open as open5 } from "node:fs/promises";
 import path53 from "node:path";
 var MAX_BOUNDED_SOURCE_BYTES = 256 * 1024;
-var MAX_BOUNDED_MAP_BYTES = 16 * 1024 * 1024;
+var MAX_BOUNDED_MAP_BYTES = 64 * 1024 * 1024;
 var MAX_SIGNAL_EVIDENCE = 64;
 var HOTSPOT_FACT_SAMPLE_SIZE = 8;
 var BOUNDED_SAMPLE_NOTE = `Bounded sample: first ${MAX_SIGNAL_EVIDENCE} deterministic evidence references.`;
@@ -68403,6 +68403,9 @@ async function expectedSourceHashes(repositoryRoot, sqliteArtifactPath, snapshot
     }
   }
   return result;
+}
+function conservativeTestToSourceLinks(testFiles, coverage) {
+  return findTestLinks(testFiles, coverage);
 }
 function findTestLinks(testFiles, coverage) {
   const sourceCandidatesByBasename = /* @__PURE__ */ new Map();
@@ -68887,8 +68890,13 @@ function primaryEvidence(evidence) {
 function coverageStatus(snapshot, sourcePath) {
   return snapshot.coverage.find((entry) => entry.path === sourcePath)?.status;
 }
-function supportedTestLink(snapshot, link2) {
-  return coverageStatus(snapshot, link2.testPath) === "parsed" && coverageStatus(snapshot, link2.sourcePath) === "parsed";
+function conservativeLinkKeySet(snapshot, testFiles) {
+  return new Set(
+    conservativeTestToSourceLinks(testFiles, snapshot.coverage).map((link2) => `${link2.testPath}\0${link2.sourcePath}`)
+  );
+}
+function supportedTestLink(snapshot, link2, conservativeLinks) {
+  return coverageStatus(snapshot, link2.testPath) === "parsed" && coverageStatus(snapshot, link2.sourcePath) === "parsed" && conservativeLinks.has(`${link2.testPath}\0${link2.sourcePath}`);
 }
 function snapshotCoverageSourceHashes(snapshot) {
   const sourceHashes = /* @__PURE__ */ new Map();
@@ -68985,8 +68993,8 @@ function validateSnapshot(snapshotInput) {
   return snapshot;
 }
 function validateSignals(input, snapshot) {
-  const summary = assessmentSignalSummarySchema.parse(input.signals.summary);
   const coveredPaths = new Set(snapshot.coverage.map((entry) => entry.path));
+  const conservativeLinks = conservativeLinkKeySet(snapshot, input.signals.testFiles);
   const factIds = /* @__PURE__ */ new Set([
     ...snapshot.symbols.map((entry) => entry.id),
     ...snapshot.imports.map((entry) => entry.id),
@@ -69032,14 +69040,24 @@ function validateSignals(input, snapshot) {
   for (const [index, edge] of input.signals.dependencyEdges.entries()) {
     codeIndexSourcePathSchema.parse(edge.from);
     if (!coveredPaths.has(edge.from) || typeof edge.to !== "string") throw new Error(`Dependency edge ${index} is outside snapshot coverage.`);
-    register(edge.evidence, `Dependency edge ${index}`);
+    const edgeEvidence = assessmentEvidenceRefSchema.parse(edge.evidence);
+    if (edgeEvidence.kind !== "structural-fact") {
+      throw new Error(`Dependency edge ${index} must cite a structural import fact.`);
+    }
+    const importFact = snapshot.imports.find((entry) => String(entry.id) === String(edgeEvidence.factId));
+    if (importFact === void 0 || importFact.path !== edge.from) {
+      throw new Error(`Dependency edge ${index} does not identify an import belonging to ${edge.from}.`);
+    }
+    register(edgeEvidence, `Dependency edge ${index}`);
   }
+  let acceptedTestLinks = 0;
   for (const [index, link2] of input.signals.testToSourceLinks.entries()) {
     codeIndexSourcePathSchema.parse(link2.testPath);
     codeIndexSourcePathSchema.parse(link2.sourcePath);
     if (!coveredPaths.has(link2.testPath) || !coveredPaths.has(link2.sourcePath)) throw new Error(`Test link ${index} is outside snapshot coverage.`);
     if (typeof link2.reason !== "string") throw new Error(`Test link ${index} has invalid reason.`);
-    if (supportedTestLink(snapshot, link2)) {
+    if (supportedTestLink(snapshot, link2, conservativeLinks)) {
+      acceptedTestLinks += 1;
       const refs = [
         testMetadataEvidence(sourceHashes, link2.testPath, `Bounded test inventory metadata for ${link2.testPath}; link is retained only for parsed supported coverage.`),
         testMetadataEvidence(sourceHashes, link2.sourcePath, `Bounded source target metadata for ${link2.sourcePath}; linked from parsed supported test ${link2.testPath}.`)
@@ -69063,6 +69081,18 @@ function validateSignals(input, snapshot) {
     commandResults.push(sanitized);
     commandEvidence.add(evidenceKey(sanitized));
   }
+  const summary = assessmentSignalSummarySchema.parse({
+    sourceFiles: snapshot.coverage.length,
+    coverageFiles: snapshot.coverage.length,
+    symbols: snapshot.symbols.length,
+    imports: snapshot.imports.length,
+    exports: snapshot.exports.length,
+    testFiles: input.signals.testFiles.length,
+    testToSourceLinks: acceptedTestLinks,
+    dependencyEdges: input.signals.dependencyEdges.length,
+    highRiskSignals: input.signals.riskSignals.filter((signal) => signal.severity === "critical" || signal.severity === "major").length,
+    unsupportedSignals: input.signals.architectureSignals.filter((signal) => signal.code === "unsupported-file").length
+  });
   return {
     summary,
     evidence: uniqueEvidence([...signalEvidence2, ...metadataEvidence]),
@@ -69148,7 +69178,7 @@ function buildExcerpts(input, specialist, validated) {
     [...input.signals.testToSourceLinks],
     (left, right) => compareStrings10(left.testPath, right.testPath) || compareStrings10(left.sourcePath, right.sourcePath)
   )) {
-    if (!supportedTestLink(input.snapshot, link2)) continue;
+    if (!supportedTestLink(input.snapshot, link2, conservativeLinkKeySet(input.snapshot, input.signals.testFiles))) continue;
     const evidence = validated.evidence.filter(
       (entry) => (entry.kind === "source-file" || entry.kind === "user-input") && (entry.path === link2.testPath || entry.path === link2.sourcePath)
     );
@@ -69165,22 +69195,12 @@ function buildExcerpts(input, specialist, validated) {
     (left, right) => compareStrings10(left.kind, right.kind) || compareStrings10(left.path, right.path) || compareStrings10(left.text, right.text) || compareStrings10(JSON.stringify(left.evidence), JSON.stringify(right.evidence))
   );
 }
-function boundedPrompt(prompt) {
-  if (prompt.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(prompt, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS) return prompt;
-  const maxPrefixLength = Math.max(0, MAX_SPECIALIST_PROMPT_CHARS - BOUNDED_PROMPT_NOTE.length);
-  let low = 0;
-  let high = Math.min(prompt.length, maxPrefixLength);
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    const candidate = `${prompt.slice(0, middle)}${BOUNDED_PROMPT_NOTE}`;
-    if (candidate.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(candidate, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS) low = middle;
-    else high = middle - 1;
-  }
-  return `${prompt.slice(0, low)}${BOUNDED_PROMPT_NOTE}`;
+var SPECIALIST_OUTPUT_CONTRACT = "Return one JSON object with only `findings` and `assumptions` arrays.";
+function promptFitsLimit(prompt) {
+  return prompt.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(prompt, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS;
 }
-function packPrompt(input) {
-  const evidence = uniqueEvidence(input.evidence);
-  const excerpts = input.excerpts.map((excerpt) => ({
+function serializePackExcerpts(excerpts) {
+  return excerpts.map((excerpt) => ({
     kind: excerpt.kind,
     path: excerpt.path,
     ...excerpt.sha256 === void 0 ? {} : { sha256: excerpt.sha256 },
@@ -69188,8 +69208,10 @@ function packPrompt(input) {
     evidence: uniqueEvidence(excerpt.evidence),
     text: boundedText(excerpt.text, MAX_EXCERPT_CHARS)
   }));
+}
+function composeSpecialistPrompt(input) {
   const packMarker = input.truncation.bounded ? `${BOUNDED_PACK_NOTE} excerpts_omitted=${input.truncation.excerptsOmitted} evidence_omitted=${input.truncation.evidenceOmitted}` : "[BOUNDED_PACK_COMPLETE]";
-  const prompt = [
+  return [
     `You are the ${input.specialist.name} assessor for a brownfield repository.`,
     packMarker,
     BROWNFIELD_SPECIALIST_SAFETY_CONTRACT,
@@ -69197,12 +69219,41 @@ function packPrompt(input) {
     `Snapshot ID: ${input.snapshot.snapshotId}. Scope: ${input.snapshot.scope}.`,
     `Signal summary: ${JSON.stringify(input.summary)}.`,
     "Only the following bounded evidence pack is supplied; do not infer beyond it.",
-    `Evidence references (bounded and deduplicated): ${JSON.stringify(evidence)}.`,
-    `Excerpts (bounded and deduplicated): ${JSON.stringify(excerpts)}.`,
-    "Return one JSON object with only `findings` and `assumptions` arrays."
+    `Evidence references (bounded and deduplicated): ${JSON.stringify(uniqueEvidence(input.evidence))}.`,
+    `Excerpts (bounded and deduplicated): ${JSON.stringify(serializePackExcerpts(input.excerpts))}.`,
+    SPECIALIST_OUTPUT_CONTRACT
   ].join("\n");
-  const bounded = boundedPrompt(prompt);
-  return { prompt: bounded, promptTruncated: bounded !== prompt };
+}
+function packPrompt(input) {
+  let evidence = uniqueEvidence(input.evidence);
+  let excerpts = excerptsForPack(input.excerpts, evidence);
+  let prompt = composeSpecialistPrompt({ ...input, excerpts, evidence });
+  while (!promptFitsLimit(prompt) && (excerpts.length > 0 || evidence.length > 0)) {
+    if (excerpts.length > 0) excerpts = excerpts.slice(0, -1);
+    else evidence = evidence.slice(0, -1);
+    excerpts = excerptsForPack(excerpts, evidence);
+    prompt = composeSpecialistPrompt({
+      ...input,
+      excerpts,
+      evidence,
+      truncation: {
+        ...input.truncation,
+        bounded: true,
+        excerptsIncluded: excerpts.length,
+        excerptsOmitted: Math.max(input.truncation.excerptsTotal - excerpts.length, 0),
+        evidenceIncluded: evidence.length,
+        evidenceOmitted: Math.max(input.truncation.evidenceTotal - evidence.length, 0)
+      }
+    });
+  }
+  if (promptFitsLimit(prompt)) return { prompt, promptTruncated: prompt !== composeSpecialistPrompt(input) };
+  const header = composeSpecialistPrompt({ ...input, excerpts: [], evidence: [] }).replace(new RegExp(`\\n${SPECIALIST_OUTPUT_CONTRACT}$`, "u"), "");
+  return {
+    prompt: `${header}
+${BOUNDED_PROMPT_NOTE}
+${SPECIALIST_OUTPUT_CONTRACT}`,
+    promptTruncated: true
+  };
 }
 function excerptsForPack(excerpts, evidence) {
   const included = new Set(evidence.map(evidenceKey));
@@ -69232,7 +69283,11 @@ function buildBrownfieldExcerptPacks(input) {
       ...allExcerpts.flatMap((excerpt) => excerpt.evidence),
       ...validated.commandResults
     ]);
-    const evidence = allEvidence.slice(0, MAX_EVIDENCE_PER_PACK);
+    const retainedEvidence = uniqueEvidence([
+      ...limitedExcerpts.flatMap((excerpt) => excerpt.evidence),
+      ...validated.commandResults
+    ]);
+    const evidence = retainedEvidence.slice(0, MAX_EVIDENCE_PER_PACK);
     const excerpts = excerptsForPack(limitedExcerpts, evidence);
     const baseTruncation = {
       bounded: allExcerpts.length > MAX_EXCERPTS_PER_PACK || allEvidence.length > MAX_EVIDENCE_PER_PACK,
@@ -70108,6 +70163,10 @@ async function runReadOnlyInProcessCallback(input) {
           restoreError.code = "READ_ONLY_RESTORE_FAILED";
           throw restoreError;
         }
+        void callbackPromise.then(
+          () => restoreRepositoryFromBaseline(input.repositoryRoot, before).catch(() => void 0),
+          () => restoreRepositoryFromBaseline(input.repositoryRoot, before).catch(() => void 0)
+        );
         const drainError = timeoutError(input.timeoutMs);
         drainError.code = "SPECIALIST_TIMEOUT_DRAIN";
         throw drainError;

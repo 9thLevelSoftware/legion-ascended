@@ -29,7 +29,10 @@ import {
 } from "./authored-source.js";
 
 const MAX_BOUNDED_SOURCE_BYTES = 256 * 1024;
-const MAX_BOUNDED_MAP_BYTES = 16 * 1024 * 1024;
+// Structural maps may contain up to 100,000 coverage entries. Sixteen
+// mebibytes is too small for that inventory once paths, hashes, and JSON
+// overhead are counted; keep a hard cap that still bounds memory.
+const MAX_BOUNDED_MAP_BYTES = 64 * 1024 * 1024;
 const MAX_SIGNAL_EVIDENCE = 64;
 const HOTSPOT_FACT_SAMPLE_SIZE = 8;
 const BOUNDED_SAMPLE_NOTE = `Bounded sample: first ${MAX_SIGNAL_EVIDENCE} deterministic evidence references.`;
@@ -611,6 +614,13 @@ export async function expectedSourceHashes(
     }
   }
   return result;
+}
+
+export function conservativeTestToSourceLinks(
+  testFiles: readonly CodeIndexSourcePath[],
+  coverage: readonly CodeIndexSnapshot["coverage"][number][]
+): BrownfieldSignals["testToSourceLinks"] {
+  return findTestLinks(testFiles, coverage);
 }
 
 function findTestLinks(
