@@ -4,6 +4,3 @@ secret:
   ignored-paths:
     - "packages/cli/test/brownfield-signals.test.mjs"
     - "packages/cli/test/brownfield-specialists.test.mjs"
-  ignored-detectors:
-    - "basic-auth-string"
-    - "ftp-credentials"
