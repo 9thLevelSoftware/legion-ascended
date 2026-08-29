@@ -54,6 +54,23 @@ function finding({
   return { id, specialist, title, statement, severity, confidence, evidence, assumptions, recommendation };
 }
 
+function assumption({
+  id,
+  statement = "An owner decision is required.",
+  confidence = "unknown",
+  blocking = true,
+  evidence = [sourceEvidence()]
+}) {
+  return {
+    id,
+    statement,
+    confidence,
+    blocking,
+    resolution: "Provide bounded owner input.",
+    evidence
+  };
+}
+
 function signals(overrides = {}) {
   return {
     summary: {
@@ -257,6 +274,100 @@ test("generates an assumption and rewrites a dangling finding reference", () => 
   assert.equal(generated.blocking, true);
   assert.equal(generated.confidence, "unknown");
   assert.match(generated.statement, new RegExp(`unresolved assumption ${missingAssumptionId}`));
+});
+
+test("retains every assumption referenced by findings regardless of confidence or blocking", () => {
+  const assumptions = [
+    assumption({ id: "asm_aaaaaaaaaaaaaaaaaaaaaaaa", statement: "High confidence owner input.", confidence: "high", blocking: false }),
+    assumption({ id: "asm_bbbbbbbbbbbbbbbbbbbbbbbb", statement: "Medium confidence owner input.", confidence: "medium", blocking: false }),
+    assumption({ id: "asm_cccccccccccccccccccccccc", statement: "Low confidence owner input.", confidence: "low", blocking: false })
+  ];
+  const design = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals: [], summary: { ...signals().summary, unsupportedSignals: 0 } }),
+    assumptions,
+    specialists: specialists({ findings: [finding({
+      id: "af_aaaaaaaaaaaaaaaaaaaaaaaa",
+      assumptions: assumptions.map((entry) => entry.id)
+    })] })
+  });
+
+  assert.deepEqual(
+    design.assumptionsRequiringInput.map((entry) => entry.id).sort(),
+    assumptions.map((entry) => entry.id).sort()
+  );
+});
+
+test("regenerates colliding assumption IDs until all retained IDs are unique", () => {
+  const repeated = assumption({ id: "asm_aaaaaaaaaaaaaaaaaaaaaaaa", statement: "Repeated assumption." });
+  const design = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals: [], summary: { ...signals().summary, unsupportedSignals: 0 } }),
+    assumptions: [repeated, repeated, repeated]
+  });
+  const ids = design.assumptionsRequiringInput.map((entry) => entry.id);
+
+  assert.equal(ids.length, 3);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test("caps finding assumptions while reserving generated blocking assumptions", () => {
+  const ids = Array.from({ length: 32 }, (_, index) => `asm_${index.toString(16).padStart(24, "0")}`);
+  const assumptions = ids.map((id, index) => assumption({
+    id,
+    statement: `Owner input ${index}.`,
+    confidence: index === ids.length - 1 ? "low" : "high",
+    blocking: false
+  }));
+  const design = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals: [], summary: { ...signals().summary, unsupportedSignals: 0 } }),
+    assumptions,
+    specialists: specialists({ findings: [finding({
+      id: "af_bbbbbbbbbbbbbbbbbbbbbbbb",
+      severity: "critical",
+      confidence: "low",
+      assumptions: ids
+    })] })
+  });
+  const result = design.prioritizedFindings[0];
+
+  assert.ok(result);
+  assert.equal(result.assumptions.length, 32);
+  assert.ok(result.assumptions.some((id) => !ids.includes(id)));
+  assert.ok(!result.assumptions.includes(ids[ids.length - 1]));
+});
+
+test("recognizes executes as a behavioral claim", () => {
+  const design = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals: [], testFiles: [], testToSourceLinks: [], summary: {
+      ...signals().summary,
+      testFiles: 0,
+      testToSourceLinks: 0,
+      unsupportedSignals: 0
+    } }),
+    specialists: specialists({ findings: [finding({
+      id: "af_cccccccccccccccccccccccc",
+      title: "Command boundary",
+      statement: "The adapter executes the command.",
+      recommendation: "Inspect the adapter."
+    })] })
+  });
+
+  assert.ok(design.behavioralProofGaps.some((entry) => /Behavioral claim 'Command boundary'/u.test(entry)));
+});
+
+test("deduplicates unique text using the unbounded value", () => {
+  const prefix = "x".repeat(5_000);
+  const design = synthesizeBrownfieldDesign({
+    signals: signals({ architectureSignals: [], testFiles: [], testToSourceLinks: [], summary: {
+      ...signals().summary,
+      testFiles: 0,
+      testToSourceLinks: 0,
+      unsupportedSignals: 0
+    } }),
+    specialists: specialists(),
+    unrunCommands: [`${prefix}A`, `${prefix}B`]
+  });
+
+  assert.equal(design.behavioralProofGaps.filter((entry) => entry.startsWith("Unrun command:")).length, 2);
 });
 
 test("updates assessment state only through monotonic, provenance-checked phase transitions", async () => {

@@ -80,6 +80,7 @@ const MAX_IMPROVEMENTS = 2_000;
 const MAX_GAPS = 256;
 const MAX_QUESTIONS = 256;
 const MAX_STRING_CHARS = 4_000;
+const MAX_FINDING_ASSUMPTIONS = 32;
 const SYNTHESIS_EVIDENCE_PATH = ".legion/project/assessment/synthesis-input.json";
 
 const SEVERITY_ORDER: Readonly<Record<AssessmentSeverity, number>> = {
@@ -298,7 +299,7 @@ function normalizeFinding(value: unknown, sourceOrder: number): FindingCandidate
     severity,
     confidence,
     evidence: retainedEvidence,
-    assumptions: [...new Set(assumptions)],
+    assumptions: [...new Set(assumptions)].slice(0, MAX_FINDING_ASSUMPTIONS),
     recommendation
   });
   if (!parsed.success) return undefined;
@@ -386,7 +387,11 @@ function addAssumption(
   const existing = accumulator.byKey.get(key);
   if (existing !== undefined && options.deduplicate === true) return existing.id;
   let id: string = assumption.id;
-  if (accumulator.ids.has(id)) id = `asm_${hash24(`${seed}\u0000${key}`)}`;
+  let collision = 0;
+  while (accumulator.ids.has(id)) {
+    collision += 1;
+    id = `asm_${hash24(`${seed}\u0000${key}\u0000${collision}`)}`;
+  }
   const retained = assessmentAssumptionSchema.parse({ ...assumption, id: assessmentAssumptionIdSchema.parse(id) });
   if (existing === undefined) accumulator.byKey.set(key, retained);
   accumulator.ids.add(id);
@@ -473,7 +478,7 @@ function addGeneratedAssumption(accumulator: AssumptionAccumulator, assumption: 
 }
 
 function isBehavioralClaim(finding: AssessmentFinding): boolean {
-  return /\b(runtime|behavior|behaviour|execute|executed|execution|integration|coverage|tested|test suite|works safely|production)\b/iu.test(
+  return /\b(runtime|behavior|behaviour|execute(?:s|d)?|execution|integration|coverage|tested|test suite|works safely|production)\b/iu.test(
     `${finding.title} ${finding.statement} ${finding.recommendation}`
   );
 }
@@ -484,7 +489,7 @@ function hasBehaviorEvidence(finding: AssessmentFinding): boolean {
 
 function collectUniqueText(accumulator: Map<string, string>, value: string): void {
   const bounded = boundedText(value, MAX_STRING_CHARS);
-  const key = normalizedText(bounded);
+  const key = normalizedText(value);
   const existing = accumulator.get(key);
   // Keep the lexicographically first original spelling so output is
   // deterministic regardless of input order.
@@ -505,6 +510,36 @@ function criticalInputAssumption(finding: AssessmentFinding): AssessmentAssumpti
     resolution: "Confirm the critical finding with an explicit command-result, test-result, or repository-owner decision.",
     evidence: finding.evidence
   });
+}
+
+function assumptionIsBlocking(accumulator: AssumptionAccumulator, id: string): boolean {
+  return accumulator.values.some((assumption) => assumption.id === id && assumption.blocking);
+}
+
+function capFindingAssumptions(
+  assumptions: readonly string[],
+  generatedBlockingIds: ReadonlySet<string>,
+  accumulator: AssumptionAccumulator
+): string[] {
+  const unique = [...new Set(assumptions)];
+  if (unique.length <= MAX_FINDING_ASSUMPTIONS) return unique;
+
+  const reserved = unique.filter((id) => generatedBlockingIds.has(id));
+  const candidates = unique.filter((id) => !generatedBlockingIds.has(id));
+  const blocking = candidates.filter((id) => assumptionIsBlocking(accumulator, id));
+  const nonBlocking = candidates
+    .filter((id) => !assumptionIsBlocking(accumulator, id))
+    .sort((left, right) => {
+      const leftAssumption = accumulator.values.find((assumption) => assumption.id === left);
+      const rightAssumption = accumulator.values.find((assumption) => assumption.id === right);
+      return (CONFIDENCE_ORDER[leftAssumption?.confidence ?? "unknown"] - CONFIDENCE_ORDER[rightAssumption?.confidence ?? "unknown"]) ||
+        compareStrings(left, right);
+    });
+  const available = Math.max(0, MAX_FINDING_ASSUMPTIONS - reserved.length);
+  const retainedBlocking = blocking.slice(0, available);
+  const retainedNonBlocking = nonBlocking.slice(0, Math.max(0, available - retainedBlocking.length));
+  const retained = new Set([...reserved, ...retainedBlocking, ...retainedNonBlocking]);
+  return unique.filter((id) => retained.has(id));
 }
 
 function dissentAssumption(title: string, findings: readonly AssessmentFinding[]): AssessmentAssumption {
@@ -661,6 +696,7 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     criticalIds.set(finding.id, addGeneratedAssumption(accumulator, criticalInputAssumption(finding)));
   }
 
+  const generatedBlockingIds = new Set([...dissentIds.values(), ...criticalIds.values()]);
   const finalFindings = findingsWithResolvedAssumptions.map((finding) => {
     const added: string[] = [];
     const dissentId = dissentIds.get(normalizedText(finding.title));
@@ -669,7 +705,7 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     if (criticalId !== undefined) added.push(criticalId);
     return assessmentFindingSchema.parse({
       ...finding,
-      assumptions: [...new Set([...finding.assumptions, ...added])]
+      assumptions: capFindingAssumptions([...finding.assumptions, ...added], generatedBlockingIds, accumulator)
     });
   });
 
@@ -695,11 +731,6 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
   for (const area of input.unsupportedAreas ?? []) {
     collectUniqueText(gapCollector, `Unsupported area: ${area}`);
   }
-  if ((input.commandResults ?? []).length > 0) {
-    // Command-result evidence was supplied at the synthesis boundary but
-    // the specialist output did not reference it. This is not a gap — it
-    // is recorded as available behavioral evidence below.
-  }
   for (const diagnostic of specialistDiagnostics) {
     collectUniqueText(gapCollector, `Unresolved specialist output: ${diagnostic}`);
   }
@@ -719,10 +750,18 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
   }
   const behavioralProofGaps = finalizeBoundedSet(gapCollector, MAX_GAPS);
 
+  const referencedAssumptionIds = new Set(finalFindings.flatMap((finding) => finding.assumptions));
+  const requiringInputCandidates = accumulator.values
+    .filter((assumption) => assumption.confidence === "unknown" || assumption.blocking || referencedAssumptionIds.has(assumption.id));
+  const referencedAssumptions = requiringInputCandidates.filter((assumption) => referencedAssumptionIds.has(assumption.id));
+  const unreferencedAssumptions = requiringInputCandidates.filter((assumption) => !referencedAssumptionIds.has(assumption.id));
+  const retainedAssumptionIds = new Set([
+    ...referencedAssumptions,
+    ...unreferencedAssumptions.slice(0, Math.max(0, MAX_ASSUMPTIONS - referencedAssumptions.length))
+  ].map((assumption) => assumption.id));
   const assumptionsRequiringInput = accumulator.values
-    .filter((assumption) => assumption.confidence === "unknown" || assumption.blocking)
-    .sort((left, right) => compareStrings(left.id, right.id))
-    .slice(0, MAX_ASSUMPTIONS);
+    .filter((assumption) => retainedAssumptionIds.has(assumption.id))
+    .sort((left, right) => compareStrings(left.id, right.id));
 
   const questionCollector = new Map<string, string>();
   for (const question of input.openQuestions ?? []) collectUniqueText(questionCollector, question);
