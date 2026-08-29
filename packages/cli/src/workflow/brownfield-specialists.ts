@@ -390,7 +390,21 @@ function attachCoverageSourceHashes(
   for (const coverage of snapshot.coverage as readonly SnapshotCoverageWithSourceHash[]) {
     const sha256 = hashes.get(coverage.path);
     if (sha256 === undefined) continue;
+function attachCoverageSourceHashes(
+  snapshot: CodeIndexSnapshot,
+  hashes: ReadonlyMap<string, CodeIndexSha256>
+): void {
+  for (const coverage of snapshot.coverage as readonly SnapshotCoverageWithSourceHash[]) {
+    const existing = (coverage as SnapshotCoverageWithSourceHash).sha256;
+    const sha256 = hashes.get(coverage.path);
+    if (sha256 === undefined) continue;
+    if (existing !== undefined && existing !== sha256) {
+      throw new Error(`Snapshot source hash mismatch for ${coverage.path}: pre-attached ${existing} vs inventory ${sha256}.`);
+    }
+    if (existing !== undefined) continue;
     Object.defineProperty(coverage, "sha256", { value: sha256, enumerable: false, configurable: true });
+  }
+}
   }
 }
 
