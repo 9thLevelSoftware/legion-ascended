@@ -40,8 +40,8 @@ test("Windows package-manager spawn config disables shell execution", () => {
   const options = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
   withPlatform("win32", () => {
     const config = packageManagerSpawnConfig("npm", args, options);
-    assert.equal(config.executable, "npm.cmd");
-    assert.deepEqual(config.args, args);
+    assert.equal(config.executable, "cmd.exe");
+    assert.deepEqual(config.args, ["/d", "/s", "/c", "npm.cmd", ...args]);
     assert.equal(config.options.shell, false);
     assert.equal(config.options.windowsHide, true);
     assert.equal(config.options.encoding, "utf8");
@@ -195,13 +195,14 @@ test("published package installs production dependencies and executes a fake Gro
       npm_config_audit: "false",
       npm_config_fund: "false"
     };
-    await execFileAsync(packageManagerExecutable("npm"), ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", "--prefer-offline"], {
+    const npmInstallConfig = packageManagerSpawnConfig("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", "--prefer-offline"], {
       cwd: packageRoot,
       env: npmEnv,
       encoding: "utf8",
       timeout: 180_000,
       maxBuffer: 20 * 1024 * 1024
     });
+    await execFileAsync(npmInstallConfig.executable, npmInstallConfig.args, npmInstallConfig.options);
     const help = await runPackedCli(packedBin, packageRoot, npmEnv, ["--help"]);
     assert.match(help.stdout, /legion <command>/);
 

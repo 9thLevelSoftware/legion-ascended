@@ -359,6 +359,9 @@ test("Grok detection honors Windows PATHEXT entries returned by where.exe", asyn
       const whereExe = path.join(binDir, "where.exe");
       await writeFile(whereExe, `#!/bin/sh\nprintf '%s\\n' ${JSON.stringify(grokCmd)}\n`, "utf8");
       await chmod(whereExe, 0o755);
+      const cmdExe = path.join(binDir, "cmd.exe");
+      await writeFile(cmdExe, "#!/bin/sh\nshift 3\ncommand=$1\nshift\nexec \"$command\" \"$@\"\n", "utf8");
+      await chmod(cmdExe, 0o755);
     }
 
     const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";

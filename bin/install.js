@@ -313,16 +313,36 @@ function windowsCommandPath(commandName) {
   return String(result.stdout || '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) || null;
 }
 
+function windowsCommandSpawnConfig(command, args, options) {
+  return {
+    executable: 'cmd.exe',
+    args: ['/d', '/s', '/c', command, ...args],
+    options: {
+      ...options,
+      shell: false,
+      windowsHide: true
+    }
+  };
+}
+
+function spawnWindowsCommand(command, args, options) {
+  const config = windowsCommandSpawnConfig(command, args, options);
+  return spawnSync(config.executable, config.args, config.options);
+}
+
 function grokVersionDetected(commandName) {
   const executable = process.platform === 'win32' ? windowsCommandPath(commandName) : commandName;
   if (!executable) return false;
-  const result = spawnSync(executable, ['--version'], {
+  const options = {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
     timeout: 3000,
     maxBuffer: 64 * 1024
-  });
+  };
+  const result = process.platform === 'win32'
+    ? spawnWindowsCommand(executable, ['--version'], options)
+    : spawnSync(executable, ['--version'], options);
   if (result.error || result.status !== 0) return false;
   const output = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
   return /^grok(?:\s+build)?\s+v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?(?:\s|$)/i.test(output);
@@ -2544,20 +2564,15 @@ function packageManagerExecutable(name) {
 function packageManagerSpawnConfig(name, args, options) {
   const executable = packageManagerExecutable(name);
   if (process.platform === 'win32') {
-    return {
-      executable,
-      args,
-      options: {
-        ...options,
-        shell: false,
-        windowsHide: true,
-      },
-    };
+    return windowsCommandSpawnConfig(executable, args, options);
   }
   return { executable, args, options };
 }
 
 function spawnPackageManager(name, args, options) {
+  if (process.platform === 'win32') {
+    return spawnWindowsCommand(packageManagerExecutable(name), args, options);
+  }
   const config = packageManagerSpawnConfig(name, args, options);
   return spawnSync(config.executable, config.args, config.options);
 }
