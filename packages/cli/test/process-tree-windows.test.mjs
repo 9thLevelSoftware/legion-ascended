@@ -20,8 +20,8 @@ test("bounds Windows process-table probes and fails closed when both probes time
   }), (error) => error === timeoutError);
 
   assert.deepEqual(calls, [
-    { command: "wmic", timeout: 2_000 },
-    { command: "powershell.exe", timeout: 2_000 }
+    { command: "powershell.exe", timeout: 8_000 },
+    { command: "wmic", timeout: 8_000 }
   ]);
   assert.equal(processTreeStillExistsForPlatform(111, "win32", {
     processStillExists: () => false,

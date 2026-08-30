@@ -40195,7 +40195,7 @@ var BOUNDED_READ_CHUNK_BYTES = 64 * 1024;
 var PROCESS_TERM_GRACE_MS = 250;
 var PROCESS_QUIESCENCE_TIMEOUT_MS = 5e3;
 var PROCESS_QUIESCENCE_POLL_MS = 25;
-var WINDOWS_PROCESS_TABLE_TIMEOUT_MS = 2e3;
+var WINDOWS_PROCESS_TABLE_TIMEOUT_MS = 8e3;
 var adapterProcessContainmentOverride;
 function isAsciiAlpha(character) {
   return character !== void 0 && (character >= "a" && character <= "z" || character >= "A" && character <= "Z");
@@ -41484,8 +41484,13 @@ function runWindowsProcessProbe(command, args2, options) {
 function windowsProcessRows(probe = runWindowsProcessProbe) {
   try {
     const output = probe(
-      "wmic",
-      ["process", "get", "ParentProcessId,ProcessId", "/format:csv"],
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Get-CimInstance -ClassName Win32_Process | Select-Object ParentProcessId,ProcessId | ConvertTo-Csv -NoTypeInformation"
+      ],
       {
         encoding: "utf8",
         windowsHide: true,
@@ -41494,16 +41499,11 @@ function windowsProcessRows(probe = runWindowsProcessProbe) {
       }
     );
     return parseWindowsProcessRows(String(output));
-  } catch (wmicError) {
+  } catch (powershellError) {
     try {
       const output = probe(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          "Get-CimInstance -ClassName Win32_Process | Select-Object ParentProcessId,ProcessId | ConvertTo-Csv -NoTypeInformation"
-        ],
+        "wmic",
+        ["process", "get", "ParentProcessId,ProcessId", "/format:csv"],
         {
           encoding: "utf8",
           windowsHide: true,
@@ -41513,7 +41513,7 @@ function windowsProcessRows(probe = runWindowsProcessProbe) {
       );
       return parseWindowsProcessRows(String(output));
     } catch {
-      throw wmicError;
+      throw powershellError;
     }
   }
 }
@@ -41594,10 +41594,7 @@ async function terminateWindowsProcessTree(pid) {
   } catch {
   }
   await taskkillWindowsPids(pid, descendantPids);
-  if (!enumerated) {
-    await waitForQuiescence(() => processStillExists(pid), PROCESS_QUIESCENCE_TIMEOUT_MS);
-    return !processStillExists(pid);
-  }
+  if (!enumerated) return false;
   return processQuiescenceProven(pid);
 }
 async function terminateProcessTree(pid) {
@@ -47703,11 +47700,20 @@ function renderCodebaseDocuments(input) {
       "## Modules",
       "",
       modules.split("\n\n").slice(0, 12).join("\n\n"),
-      ...graph.length === 0 ? [] : ["", "## Reference graph", "", graph.split("\n").slice(0, 36).join("\n")],
+      ...graph.length === 0 ? [] : ["", "## Reference graph", "", previewReferenceGraph(graph)],
       "",
       "Static structure is not behavioral proof. Full tree, remaining modules, and search index are in the map run directory."
     ].join("\n")
   };
+}
+function previewReferenceGraph(graph) {
+  const sections = graph.split(/(?=^### )/mu).filter((section) => section.length > 0);
+  return sections.map((section) => {
+    const lines = section.replace(/\n$/u, "").split("\n");
+    if (lines.length <= 12) return lines.join("\n");
+    return `${lines.slice(0, 12).join("\n")}
+\u2026 truncated`;
+  }).join("\n\n");
 }
 function renderPathTree(paths) {
   const root = { children: /* @__PURE__ */ new Map(), files: [] };
@@ -69053,6 +69059,7 @@ var MAX_READ_ONLY_SNAPSHOT_ENTRIES = 5e4;
 var MAX_READ_ONLY_SNAPSHOT_FILE_BYTES = 16 * 1024 * 1024;
 var MAX_READ_ONLY_SNAPSHOT_BYTES = 128 * 1024 * 1024;
 var MAX_READ_ONLY_SYMLINK_BYTES = 64 * 1024;
+var MAX_IGNORED_DIRECTORY_METADATA_ENTRIES = 2e4;
 var cleanupAdapterArtifacts = (root) => rm10(root, { recursive: true, force: true });
 var MAX_REDACTION_DECODE_LENGTH2 = 64 * 1024;
 var ROSTER = [
@@ -69491,12 +69498,18 @@ function composeSpecialistPrompt(input) {
 }
 function packPrompt(input) {
   let evidence = uniqueEvidence(input.evidence);
-  let excerpts = excerptsForPack(input.excerpts, evidence);
+  let excerptCap = input.excerpts.length;
+  let excerpts = excerptsForPack(input.excerpts.slice(0, excerptCap), evidence);
   let prompt = composeSpecialistPrompt({ ...input, excerpts, evidence });
-  while (!promptFitsLimit(prompt) && (excerpts.length > 0 || evidence.length > 0)) {
-    if (excerpts.length > 0) excerpts = excerpts.slice(0, -1);
-    else evidence = evidence.slice(0, -1);
-    excerpts = excerptsForPack(excerpts, evidence);
+  while (!promptFitsLimit(prompt) && (excerptCap > 0 || evidence.length > 0)) {
+    const excerptBytes = Buffer.byteLength(JSON.stringify(serializePackExcerpts(excerpts)), "utf8");
+    const evidenceBytes = Buffer.byteLength(JSON.stringify(evidence), "utf8");
+    if (evidence.length > 0 && (excerptCap === 0 || evidenceBytes >= excerptBytes)) {
+      evidence = evidence.slice(0, -1);
+    } else {
+      excerptCap -= 1;
+    }
+    excerpts = excerptsForPack(input.excerpts.slice(0, excerptCap), evidence);
     prompt = composeSpecialistPrompt({
       ...input,
       excerpts,
@@ -70068,6 +70081,28 @@ function repositoryAbsolutePath(root, relativePath) {
 function repositoryMode(mode) {
   return mode & 4095;
 }
+async function ignoredDirectoryMetadataDigest(absolutePath) {
+  const hash2 = createHash29("sha256");
+  let count = 0;
+  const queue = [absolutePath];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === void 0) continue;
+    const children = (await readdir22(current, { withFileTypes: true })).sort((left, right) => compareStrings11(left.name, right.name));
+    for (const child of children) {
+      count += 1;
+      const childPath = path55.join(current, child.name);
+      const childStat = await lstat8(childPath);
+      const kind = childStat.isSymbolicLink() ? "symlink" : childStat.isDirectory() ? "directory" : childStat.isFile() ? "file" : "other";
+      if (count <= MAX_IGNORED_DIRECTORY_METADATA_ENTRIES) {
+        hash2.update(`${child.name}\0${kind}\0${childStat.size}\0${repositoryMode(childStat.mode)}
+`);
+      }
+      if (childStat.isDirectory() && !childStat.isSymbolicLink()) queue.push(childPath);
+    }
+  }
+  return `${count}:${hash2.digest("hex")}`;
+}
 async function snapshotRepository(root, options = {}) {
   const entries = /* @__PURE__ */ new Map();
   let rootStat;
@@ -70095,7 +70130,14 @@ async function snapshotRepository(root, options = {}) {
       const relativePath = relativeRoot.length === 0 ? child.name : `${relativeRoot}/${child.name}`;
       const stat11 = await lstat8(absolutePath);
       if (stat11.isDirectory()) {
-        if (!shouldTraverseAuthoredDirectory(child.name)) continue;
+        if (!shouldTraverseAuthoredDirectory(child.name)) {
+          addEntry(relativePath, {
+            kind: "directory",
+            digest: await ignoredDirectoryMetadataDigest(absolutePath),
+            mode: repositoryMode(stat11.mode)
+          });
+          continue;
+        }
         addEntry(relativePath, { kind: "directory", digest: "", mode: repositoryMode(stat11.mode) });
         await visit(absolutePath, relativePath);
         continue;
@@ -70283,7 +70325,10 @@ async function clearRepositoryRoot(root) {
     return;
   }
   const children = (await readdir22(absoluteRoot, { withFileTypes: true })).sort((left, right) => compareStrings11(left.name, right.name));
-  for (const child of children) await removeRepositoryEntry(root, child.name);
+  for (const child of children) {
+    if (!shouldTraverseAuthoredDirectory(child.name)) continue;
+    await removeRepositoryEntry(root, child.name);
+  }
 }
 async function prepareRepositoryTreeForRestore(root) {
   const absoluteRoot = repositoryAbsolutePath(root, "");
@@ -70429,10 +70474,6 @@ async function runReadOnlyInProcessCallback(input) {
           restoreError.code = "READ_ONLY_RESTORE_FAILED";
           throw restoreError;
         }
-        void callbackPromise.then(
-          () => restoreRepositoryFromBaseline(input.repositoryRoot, before).catch(() => void 0),
-          () => restoreRepositoryFromBaseline(input.repositoryRoot, before).catch(() => void 0)
-        );
         const drainError = timeoutError(input.timeoutMs);
         drainError.code = "SPECIALIST_TIMEOUT_DRAIN";
         throw drainError;
@@ -70936,7 +70977,7 @@ function deterministicSignalFinding(input) {
 }
 function signalFindings(signals) {
   return [
-    ...aggregateSignalFindings(signals.architectureSignals, "architecture"),
+    ...aggregateSignalFindings(signals.architectureSignals, () => "architecture"),
     ...aggregateSignalFindings(signals.riskSignals, (signal) => /credential|secret|security|input|supply-chain/iu.test(signal.code) ? "security" : "code")
   ];
 }
@@ -70949,7 +70990,7 @@ function aggregateSignalFindings(signals, specialistFor) {
   }
   return [...groups.entries()].map(([code, group]) => {
     const worst = group.reduce((current, candidate) => SEVERITY_ORDER[candidate.severity] < SEVERITY_ORDER[current.severity] ? candidate : current);
-    const specialist = typeof specialistFor === "function" ? specialistFor(worst) : specialistFor;
+    const specialist = specialistFor(worst);
     const evidence = uniqueEvidence2(group.flatMap((signal) => signal.evidence ?? []));
     const statement = group.length === 1 ? worst.statement : `${group.length} ${code} signals. Examples: ${group.slice(0, 5).map((signal) => signal.statement).join(" ")}`;
     return deterministicSignalFinding({
@@ -71366,7 +71407,7 @@ function renderBrownfieldReport(design) {
     `Recommendation: ${finding.recommendation}`,
     finding.evidence.length === 0 ? "" : `Evidence: ${finding.evidence.slice(0, 6).map((reference) => reference.path).join(", ")}`,
     ""
-  ].filter((line) => line.length > 0 || line === "").join("\n"));
+  ].join("\n"));
   const assumptions = design.assumptionsRequiringInput.slice(0, 20).map((assumption) => `- [${assumption.blocking ? "blocking" : "open"}/${assumption.confidence}] ${assumption.statement}`);
   const plan = design.improvementPlan.slice(0, 20).map((item) => `- ${item.priority} ${item.objective}`);
   return [

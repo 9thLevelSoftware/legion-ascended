@@ -99,11 +99,20 @@ export function renderCodebaseDocuments(input: {
       "## Modules",
       "",
       modules.split("\n\n").slice(0, 12).join("\n\n"),
-      ...(graph.length === 0 ? [] : ["", "## Reference graph", "", graph.split("\n").slice(0, 36).join("\n")]),
+      ...(graph.length === 0 ? [] : ["", "## Reference graph", "", previewReferenceGraph(graph)]),
       "",
       "Static structure is not behavioral proof. Full tree, remaining modules, and search index are in the map run directory."
     ].join("\n")
   };
+}
+
+function previewReferenceGraph(graph: string): string {
+  const sections = graph.split(/(?=^### )/mu).filter((section) => section.length > 0);
+  return sections.map((section) => {
+    const lines = section.replace(/\n$/u, "").split("\n");
+    if (lines.length <= 12) return lines.join("\n");
+    return `${lines.slice(0, 12).join("\n")}\n… truncated`;
+  }).join("\n\n");
 }
 
 export function renderPathTree(paths: readonly string[]): string {

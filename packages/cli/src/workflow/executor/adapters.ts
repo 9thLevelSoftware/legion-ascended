@@ -50,7 +50,7 @@ const BOUNDED_READ_CHUNK_BYTES = 64 * 1024;
 const PROCESS_TERM_GRACE_MS = 250;
 const PROCESS_QUIESCENCE_TIMEOUT_MS = 5_000;
 const PROCESS_QUIESCENCE_POLL_MS = 25;
-const WINDOWS_PROCESS_TABLE_TIMEOUT_MS = 2_000;
+const WINDOWS_PROCESS_TABLE_TIMEOUT_MS = 8_000;
 
 let adapterProcessContainmentOverride: boolean | undefined;
 
@@ -1749,8 +1749,13 @@ function runWindowsProcessProbe(
 function windowsProcessRows(probe: WindowsProcessProbe = runWindowsProcessProbe): readonly WindowsProcessRow[] {
   try {
     const output = probe(
-      "wmic",
-      ["process", "get", "ParentProcessId,ProcessId", "/format:csv"],
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Get-CimInstance -ClassName Win32_Process | Select-Object ParentProcessId,ProcessId | ConvertTo-Csv -NoTypeInformation"
+      ],
       {
         encoding: "utf8",
         windowsHide: true,
@@ -1759,16 +1764,11 @@ function windowsProcessRows(probe: WindowsProcessProbe = runWindowsProcessProbe)
       }
     );
     return parseWindowsProcessRows(String(output));
-  } catch (wmicError) {
+  } catch (powershellError) {
     try {
       const output = probe(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          "Get-CimInstance -ClassName Win32_Process | Select-Object ParentProcessId,ProcessId | ConvertTo-Csv -NoTypeInformation"
-        ],
+        "wmic",
+        ["process", "get", "ParentProcessId,ProcessId", "/format:csv"],
         {
           encoding: "utf8",
           windowsHide: true,
@@ -1778,7 +1778,7 @@ function windowsProcessRows(probe: WindowsProcessProbe = runWindowsProcessProbe)
       );
       return parseWindowsProcessRows(String(output));
     } catch {
-      throw wmicError;
+      throw powershellError;
     }
   }
 }
@@ -1902,10 +1902,7 @@ async function terminateWindowsProcessTree(pid: number): Promise<boolean> {
     // query every poll and turns a finished Windows child into a 5s+ "blocked".
   }
   await taskkillWindowsPids(pid, descendantPids);
-  if (!enumerated) {
-    await waitForQuiescence(() => processStillExists(pid), PROCESS_QUIESCENCE_TIMEOUT_MS);
-    return !processStillExists(pid);
-  }
+  if (!enumerated) return false;
   return processQuiescenceProven(pid);
 }
 
