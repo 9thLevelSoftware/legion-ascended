@@ -30,6 +30,7 @@ import {
 import { findCodeIndexFact, queryCodeIndexStore, writeCodeIndexStore, type CodeIndexSearchHit } from "@legion/index-store";
 
 import { buildStructuralCodeIndex, type CodeIndexSnapshotDraft } from "./code-index.js";
+import { renderCodebaseDocuments, type MapRenderIndex } from "./codebase-map-render.js";
 import { writeProjectTextFile } from "./executor/result.js";
 import { guidanceArtifactPath, latestGuidanceRuns, type GuidanceRunDocument, type GuidanceRunPaths } from "./guidance-run.js";
 import { isFullMapAuthoredFile, shouldTraverseAuthoredDirectory } from "./authored-source.js";
@@ -70,6 +71,7 @@ export interface CodebaseMapArtifacts {
   readonly symbolsArtifactPath: ArtifactPath;
   readonly searchArtifactPath: ArtifactPath;
   readonly mapArtifactPath: ArtifactPath;
+  readonly preview: string;
 }
 
 export interface CodebaseMapQueryMatch {
@@ -159,6 +161,7 @@ export async function refreshCodebaseMap(input: {
   readonly paths: GuidanceRunPaths;
   readonly scope: string;
   readonly files: readonly CodebaseMapFile[];
+  readonly snapshot?: CodeIndexSnapshotDraft | MapRenderIndex;
 }): Promise<CodebaseMapArtifacts> {
   const { scope, files } = input;
   const map: CodebaseMapDocument = {
@@ -178,11 +181,15 @@ export async function refreshCodebaseMap(input: {
   const mapArtifactPath = guidanceArtifactPath(input.paths, "map.json");
   const mapText = stableProtocolJson(map);
   const mapRunId = structuralMapRunId(input.paths.runId);
+  const documents = renderCodebaseDocuments({
+    map,
+    ...(input.snapshot === undefined ? {} : { snapshot: input.snapshot })
+  });
 
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
     artifactPath: codebaseArtifactPath,
-    text: renderCodebaseMarkdown(map)
+    text: documents.codebaseMarkdown
   });
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
@@ -196,13 +203,13 @@ export async function refreshCodebaseMap(input: {
       schemaVersion: 1,
       kind: "codebase_symbols",
       generatedAt: map.generatedAt,
-      symbols: files.flatMap((file) => file.symbols.map((symbol) => ({ symbol, path: file.path })))
+      symbols: documents.symbolRecords
     })
   });
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
     artifactPath: searchArtifactPath,
-    text: renderSearchMarkdown(map)
+    text: documents.searchMarkdown
   });
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
@@ -218,7 +225,8 @@ export async function refreshCodebaseMap(input: {
     indexArtifactPath,
     symbolsArtifactPath,
     searchArtifactPath,
-    mapArtifactPath
+    mapArtifactPath,
+    preview: documents.preview
   };
 }
 
@@ -1087,51 +1095,6 @@ export function fingerprintSourceFiles(files: readonly CodebaseMapFile[]): strin
 
 function fingerprintFiles(files: readonly CodebaseMapFile[]): string {
   return sha256(Buffer.from(files.map((file) => `${file.path}\0${file.sha256}`).join("\n"), "utf8"));
-}
-
-function renderCodebaseMarkdown(map: CodebaseMapDocument): string {
-  const byExtension = new Map<string, number>();
-  for (const file of map.files) {
-    const extension = path.extname(file.path).toLowerCase() || "(none)";
-    byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
-  }
-  const extensionRows = [...byExtension.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .map(([extension, count]) => `- ${extension}: ${count}`);
-  return [
-    "# Codebase Map",
-    "",
-    `Generated: ${map.generatedAt}`,
-    `Scope: ${map.scope}`,
-    `Source fingerprint: ${map.sourceFingerprint}`,
-    `Source files: ${map.sourceFileCount}`,
-    "",
-    "## File Types",
-    "",
-    ...extensionRows,
-    "",
-    "## Files",
-    "",
-    ...map.files.slice(0, 200).map((file) => `- ${file.path} (${file.lineCount} lines): ${file.summary}`),
-    ""
-  ].join("\n");
-}
-
-function renderSearchMarkdown(map: CodebaseMapDocument): string {
-  return [
-    "# Codebase Search Index",
-    "",
-    "Use `legion map --query <text>` to search this deterministic index.",
-    "",
-    ...map.files.map((file) => [
-      `## ${file.path}`,
-      "",
-      file.summary,
-      file.symbols.length > 0 ? `Symbols: ${file.symbols.join(", ")}` : "Symbols: none",
-      ""
-    ].join("\n")),
-    ""
-  ].join("\n");
 }
 
 /** The terms a query reduces to; empty means nothing was searched for. */

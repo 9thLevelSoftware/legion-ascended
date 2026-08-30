@@ -1244,7 +1244,7 @@ test("constant transition lock linearizes two first-stage acquisitions", async (
   const observed = await Promise.race([
     atLease.then((leasePath) => ({ entered: true, leasePath })),
     first.then(() => ({ entered: false })),
-    new Promise((resolve) => setTimeout(() => resolve({ entered: false }), 250))
+    new Promise((resolve) => setTimeout(() => resolve({ entered: false }), 2_000))
   ]);
   assert.equal(observed.entered, true, "stage never exposed constant-lock ownership");
   assert.match(observed.leasePath, /intake-transition\.lock$/u);

@@ -369,7 +369,8 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       repositoryRoot: context.repositoryRoot,
       paths,
       scope: source.scope,
-      files: source.files
+      files: source.files,
+      ...(semantic === undefined ? {} : { snapshot: semantic.snapshot })
     });
     const parserDiagnostics = semantic?.parserDiagnostics ?? [];
     const structuralSummary = semantic === undefined
@@ -428,6 +429,7 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       mapArtifactSha256: artifacts.mapArtifactSha256,
       sourceFingerprint: artifacts.map.sourceFingerprint,
       sourceFileCount: artifacts.map.sourceFileCount,
+      preview: artifacts.preview,
       ...(semantic === undefined
         ? {}
         : {
@@ -448,6 +450,8 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       `Artifact: ${artifacts.codebaseArtifactPath}`,
       ...(semantic === undefined ? [] : [`Semantic index: ${semantic.semanticIndexArtifactPath}`]),
       ...(structuralSummary === undefined ? [] : renderStructuralMapSummary(structuralSummary)),
+      "",
+      artifacts.preview,
       renderNextAction(action)
     ].join("\n");
     return status === "completed" ? success(payload, human) : failure(payload, human);

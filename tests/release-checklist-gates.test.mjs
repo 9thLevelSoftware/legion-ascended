@@ -23,7 +23,7 @@ function runChecklist() {
     return JSON.parse(
       execFileSync(
         process.execPath,
-        ["scripts/release/release-checklist.mjs", "--release-version", "9.4.0", "--repository-root", "."],
+        ["scripts/release/release-checklist.mjs", "--release-version", "9.4.1", "--repository-root", "."],
         { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
       )
     );

@@ -22,6 +22,16 @@ test("windows cmd spawn args keep grok flags in one /c string", () => {
   assert.equal(args.length, 4);
   assert.match(args[3] ?? "", /^grok --prompt-file /);
   assert.match(args[3] ?? "", /--cwd /);
+
+  const claudeArgs = windowsCmdSpawnArgs("claude", ["--output-format", "json"]);
+  assert.deepEqual(claudeArgs.slice(0, 3), ["/d", "/s", "/c"]);
+  assert.equal(claudeArgs.length, 4);
+  assert.match(claudeArgs[3] ?? "", /^claude --output-format json$/);
+
+  const codexArgs = windowsCmdSpawnArgs("codex", ["--output-last-message", "C:\\tmp\\last.txt"]);
+  assert.deepEqual(codexArgs.slice(0, 3), ["/d", "/s", "/c"]);
+  assert.equal(codexArgs.length, 4);
+  assert.match(codexArgs[3] ?? "", /^codex --output-last-message /);
 });
 
 test("keeps piped Windows adapter children attached while preserving containment policy", () => {

@@ -319,12 +319,25 @@ function hugeCodexLastMessageShimSource() {
 
 async function withExecutableShim(name, source, callback) {
   const shimRoot = await mkdtemp(path.join(tmpdir(), `legion-${name}-shim-`));
-  const shimPath = path.join(shimRoot, name);
-  await writeFile(shimPath, source, "utf8");
-  await chmod(shimPath, 0o755);
   const previousPath = process.env.PATH;
-  process.env.PATH = `${shimRoot}${path.delimiter}${previousPath ?? ""}`;
   try {
+    if (process.platform === "win32") {
+      // cmd.exe /c looks up `name.cmd`. A shebang file named `name` is invisible
+      // to Windows, so the fixture JSON lives in a Node impl and a batch launcher
+      // forwards argv the same way the workflow UX shims do.
+      const implName = `${name}-impl.cjs`;
+      await writeFile(path.join(shimRoot, implName), source.replace(/^#!.*(?:\r\n|\n|\r)/u, ""), "utf8");
+      await writeFile(
+        path.join(shimRoot, `${name}.cmd`),
+        `@echo off\r\n"${process.execPath}" "%~dp0${implName}" %*\r\n`,
+        "utf8"
+      );
+    } else {
+      const shimPath = path.join(shimRoot, name);
+      await writeFile(shimPath, source, "utf8");
+      await chmod(shimPath, 0o755);
+    }
+    process.env.PATH = `${shimRoot}${path.delimiter}${previousPath ?? ""}`;
     return await callback();
   } finally {
     if (previousPath === undefined) delete process.env.PATH;
@@ -1568,7 +1581,11 @@ test("restores root and nested directory modes after an in-process callback chmo
   }
 });
 
-test("kills a descendant in the POSIX process group before returning from timeout", async () => {
+test("kills a descendant in the POSIX process group before returning from timeout", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("POSIX process-group signals are not available on Windows");
+    return;
+  }
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-descendant-"));
   const previousTimeout = process.env.LEGION_CLAUDE_EXEC_TIMEOUT_MS;
   process.env.LEGION_CLAUDE_EXEC_TIMEOUT_MS = "150";
@@ -1588,7 +1605,11 @@ test("kills a descendant in the POSIX process group before returning from timeou
   }
 });
 
-test("terminates a surviving descendant after a normal leader exit before returning", async () => {
+test("terminates a surviving descendant after a normal leader exit before returning", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("POSIX process-group signals are not available on Windows");
+    return;
+  }
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-normal-exit-descendant-"));
   try {
     await withExecutableShim("claude", claudeNormalExitDescendantShimSource(), async () => {
@@ -1828,6 +1849,24 @@ test("bounds the Codex last-message file before parsing and persistence", async 
       assert.ok(result.findings.some((finding) => finding.id === "codex-executor-output-limit"));
       assert.ok(Buffer.byteLength(result.rawOutput ?? "", "utf8") <= adapterModule.MAX_ADAPTER_OUTPUT_BYTES);
     });
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("does not fail in-process specialists because of a large ignored .git pack object", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-git-pack-"));
+  try {
+    const packDir = path.join(repositoryRoot, ".git", "objects", "pack");
+    await mkdir(packDir, { recursive: true });
+    await writeFile(path.join(packDir, "pack-fixture.pack"), Buffer.alloc(17 * 1024 * 1024));
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: executeFinding
+    });
+    assert.equal(result.ok, true, result.diagnostics.join("\n"));
+    assert.equal(result.diagnostics.some((entry) => /bounded restoration limit/iu.test(entry)), false);
+    assert.ok(result.findings.length > 0);
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }

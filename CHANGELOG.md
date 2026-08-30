@@ -2,6 +2,22 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.4.1] - GA-pending
+
+### Fixed
+- `legion map` now writes a human-readable module index, import/export reference
+  graph, and directory tree in `codebase.md` instead of first-content inventory
+  dumps. CLI and `--json` output include that preview.
+- `legion assess` prints a brownfield report (architecture, findings, assumptions,
+  and plan) and collapses repeated structural signals into issue classes instead
+  of emitting one finding per file.
+- In-process assessment specialists skip ignored directories such as `.git`, so
+  large Git pack objects no longer abort the audit.
+
+### Changed
+- README, command help, slash-command ghost text, and the product site describe
+  the readable map and assessment report surfaces.
+
 ## [9.4.0] - GA-pending
 
 ### Added

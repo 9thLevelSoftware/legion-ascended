@@ -28,7 +28,7 @@ import {
   runBrownfieldSpecialists,
   type BrownfieldSpecialistsResult
 } from "../../workflow/brownfield-specialists.js";
-import { synthesizeBrownfieldDesign, type BrownfieldDesign } from "../../workflow/brownfield-synthesis.js";
+import { synthesizeBrownfieldDesign, renderBrownfieldReport, type BrownfieldDesign } from "../../workflow/brownfield-synthesis.js";
 import { discoverLatestStructuralCodeIndex } from "../../workflow/codebase-map.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 
@@ -381,6 +381,7 @@ function completedAssessment(
   design: BrownfieldDesign | undefined
 ): CliResult {
   const serializedPaths = bundlePaths(paths);
+  const report = design === undefined ? undefined : renderBrownfieldReport(design);
   const payload = {
     ok: true,
     status: "completed",
@@ -396,7 +397,8 @@ function completedAssessment(
     ...(design === undefined ? {} : {
       findingCount: design.prioritizedFindings.length,
       assumptionCount: design.assumptionsRequiringInput.length,
-      behavioralProofGapCount: design.behavioralProofGaps.length
+      behavioralProofGapCount: design.behavioralProofGaps.length,
+      report
     }),
     ...(specialists === undefined ? {} : {
       specialistsOk: specialists.ok,
@@ -410,7 +412,7 @@ function completedAssessment(
     [
       `Brownfield assessment complete: ${assessmentId}.`,
       `Bundle: ${paths.root}`,
-      ...(design === undefined ? [] : [`Findings: ${design.prioritizedFindings.length}; assumptions requiring input: ${design.assumptionsRequiringInput.length}.`]),
+      ...(report === undefined ? [] : ["", report]),
       renderNextAction(ASSESS_REVIEW_NEXT_ACTION)
     ].join("\n")
   );

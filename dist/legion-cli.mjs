@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path58 from "node:path";
+import path59 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -1071,10 +1071,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path59) {
-  if (!path59)
+function getElementAtPath(obj, path60) {
+  if (!path60)
     return obj;
-  return path59.reduce((acc, key) => acc?.[key], obj);
+  return path60.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -1483,11 +1483,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path59, issues) {
+function prefixIssues(path60, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path59);
+    iss.path.unshift(path60);
     return iss;
   });
 }
@@ -1634,16 +1634,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path59 = []) => {
+  const processError = (error52, path60 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path59, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path60, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path59, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path60, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path59, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path60, ...issue2.path]);
       } else {
-        const fullpath = [...path59, ...issue2.path];
+        const fullpath = [...path60, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -1670,17 +1670,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path59 = []) => {
+  const processError = (error52, path60 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path59, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path60, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path59, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path60, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path59, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path60, ...issue2.path]);
       } else {
-        const fullpath = [...path59, ...issue2.path];
+        const fullpath = [...path60, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -1712,8 +1712,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path59 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path59) {
+  const path60 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path60) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -14405,13 +14405,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path59 = ref.slice(1).split("/").filter(Boolean);
-  if (path59.length === 0) {
+  const path60 = ref.slice(1).split("/").filter(Boolean);
+  if (path60.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path59[0] === defsKey) {
-    const key = path59[1];
+  if (path60[0] === defsKey) {
+    const key = path60[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -15096,11 +15096,11 @@ function findProtocolMigrationPath(input) {
         continue;
       if (visited.has(migration.toVersion))
         continue;
-      const path59 = [...next.path, migration];
+      const path60 = [...next.path, migration];
       if (migration.toVersion === toVersion)
-        return path59;
+        return path60;
       visited.add(migration.toVersion);
-      queue.push({ version: migration.toVersion, path: path59 });
+      queue.push({ version: migration.toVersion, path: path60 });
     }
     next = queue.shift();
   }
@@ -18577,17 +18577,17 @@ function applyMigrations(input, options) {
   const initial = assertVersionedRecord(input);
   const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
   assertSupportedVersion(targetVersion, options.registry, "targetVersion");
-  const path59 = findProtocolMigrationPath({
+  const path60 = findProtocolMigrationPath({
     fromVersion: initial.schemaVersion,
     toVersion: targetVersion,
     migrations: options.registry.migrations
   });
-  if (path59 === null) {
+  if (path60 === null) {
     throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
   }
   let record2 = cloneVersionedRecord(initial);
   const appliedMigrations = [];
-  for (const descriptor of path59) {
+  for (const descriptor of path60) {
     const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
     if (!migration) {
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
@@ -19650,10 +19650,10 @@ function collectScope(taskContract) {
 
 // packages/core/dist/dispatch/blocker.js
 var DISPATCH_BLOCKER_REPORTER = "fresh-context-dispatcher";
-function renderPath(path59) {
-  if (path59.length === 0)
+function renderPath(path60) {
+  if (path60.length === 0)
     return "<root>";
-  return path59.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
+  return path60.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
 }
 function renderIssueReason(issue2) {
   return `code=${issue2.code} path=${renderPath(issue2.path)} :: ${issue2.message}`;
@@ -20378,15 +20378,15 @@ function parseSettings(value) {
   if (result.success)
     return { ok: true, findings: [] };
   const findings = result.error.issues.map((issue2) => {
-    const path59 = issue2.path.join(".");
+    const path60 = issue2.path.join(".");
     if (issue2.code === "unrecognized_keys") {
-      const keys = issue2.keys.map((key) => path59.length === 0 ? key : `${path59}.${key}`);
+      const keys = issue2.keys.map((key) => path60.length === 0 ? key : `${path60}.${key}`);
       return {
-        path: path59,
+        path: path60,
         message: `Unknown setting${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}.`
       };
     }
-    return { path: path59, message: path59.length === 0 ? issue2.message : `${path59}: ${issue2.message}` };
+    return { path: path60, message: path60.length === 0 ? issue2.message : `${path60}: ${issue2.message}` };
   });
   return { ok: false, findings };
 }
@@ -27211,14 +27211,14 @@ function hashContent(content) {
   const hash2 = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash2}`);
 }
-function mediaTypeForArtifactPath(path59) {
-  if (path59.endsWith(".json"))
+function mediaTypeForArtifactPath(path60) {
+  if (path60.endsWith(".json"))
     return "application/json";
-  if (path59.endsWith(".yaml") || path59.endsWith(".yml"))
+  if (path60.endsWith(".yaml") || path60.endsWith(".yml"))
     return "application/yaml";
-  if (path59.endsWith(".md"))
+  if (path60.endsWith(".md"))
     return "text/markdown";
-  if (path59.endsWith(".txt"))
+  if (path60.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -27261,16 +27261,16 @@ function jsonParseLocation(error51, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path59, issues) {
+function schemaDiagnostics(path60, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path59 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path60 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path59
+      path: path60
     });
   });
 }
@@ -28443,7 +28443,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path59 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path60 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -28457,7 +28457,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path59
+        path: path60
       }))
     };
   }
@@ -29592,7 +29592,7 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path59) {
+function parseBaseGitSha(input, path60) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -29600,18 +29600,18 @@ function parseBaseGitSha(input, path59) {
     return failure4("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path59
+      path: path60
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path59) {
+function assertExpectedRevision(value, path60) {
   if (!Number.isInteger(value) || value < 0) {
     return failure4("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path59
+        path: path60
       })
     ]);
   }
@@ -29929,7 +29929,7 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path59) {
+function parseBaseGitSha2(input, path60) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -29937,18 +29937,18 @@ function parseBaseGitSha2(input, path59) {
     return failure5("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path59
+      path: path60
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path59) {
+function assertExpectedRevision2(value, path60) {
   if (!Number.isInteger(value) || value < 0) {
     return failure5("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path59
+        path: path60
       })
     ]);
   }
@@ -30317,13 +30317,13 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path59) {
+function parseRequirementId2(input, path60) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path59
+      path: path60
     })));
   }
   return parsed.data;
@@ -30339,24 +30339,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path59) {
+function parseBaseGitSha3(input, path60) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path59
+      path: path60
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path59) {
+function parseOwners(input, path60) {
   if (input.length === 0) {
     return failure6("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path59
+        path: path60
       })
     ]);
   }
@@ -30368,7 +30368,7 @@ function parseOwners(input, path59) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path59
+        path: path60
       })));
       continue;
     }
@@ -30656,7 +30656,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path59) {
+function conflictDiagnostics(deltas, path60) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -30665,7 +30665,7 @@ function conflictDiagnostics(deltas, path59) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path59
+        path: path60
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -31749,18 +31749,18 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path59) {
+function parseOracleId2(input, path60) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path59
+      path: path60
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path59) {
+function parseBaseGitSha4(input, path60) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -31768,7 +31768,7 @@ function parseBaseGitSha4(input, path59) {
     return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path59
+      path: path60
     })));
   }
   return parsed.data;
@@ -32034,13 +32034,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path59) {
+function assertExpectedRevision3(value, path60) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path59
+        path: path60
       })
     ]);
   }
@@ -32317,13 +32317,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path59) {
+function assertExpectedRevision4(value, path60) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path59
+        path: path60
       })
     ]);
   }
@@ -32604,13 +32604,13 @@ function parseBaseGitSha7(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision5(value, path59) {
+function assertExpectedRevision5(value, path60) {
   if (!Number.isInteger(value) || value < 0) {
     return failure10("invalid", [
       approvalDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path59
+        path: path60
       })
     ]);
   }
@@ -33334,8 +33334,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path59) {
-  return nodeId("artifact", path59);
+function artifactNodeId(path60) {
+  return nodeId("artifact", path60);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -33371,8 +33371,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path59) {
-  const fileName = path59.split("/").at(-1);
+function oracleIdFromPath(path60) {
+  const fileName = path60.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -33487,13 +33487,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path59 = [];
+  const path60 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path59.indexOf(node);
+      const cycleStartIndex = path60.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path59.length; index++) {
-          const cyclicNode = path59[index];
+        for (let index = cycleStartIndex; index < path60.length; index++) {
+          const cyclicNode = path60[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -33503,11 +33503,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path59.push(node);
+    path60.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path59.pop();
+    path60.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -33535,10 +33535,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path59 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path60 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path59,
+        path: path60,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -34195,13 +34195,13 @@ function parseChangeId12(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path59) {
+function parseArchivedAt(input, path60) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path59
+      path: path60
     })));
   }
   return parsed.data;
@@ -34230,7 +34230,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path59) {
+function archiveHashDiagnostics(record2, path60) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -34238,11 +34238,11 @@ function archiveHashDiagnostics(record2, path59) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path59
+      path: path60
     })
   ];
 }
-async function assertWorktreeTarget(input, path59) {
+async function assertWorktreeTarget(input, path60) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -34256,7 +34256,7 @@ async function assertWorktreeTarget(input, path59) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path59
+        path: path60
       })
     ]);
   } catch (error51) {
@@ -34264,7 +34264,7 @@ async function assertWorktreeTarget(input, path59) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error51 instanceof Error ? error51.message : String(error51),
-        path: path59
+        path: path60
       })
     ]);
   }
@@ -34343,11 +34343,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path59 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path59 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path59)) : remaining;
+    const path60 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path60 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path60)) : remaining;
     return {
-      path: path59,
+      path: path60,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -34410,9 +34410,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path59, document) {
+function validatePlannedDocument(path60, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path59,
+    artifactPath: path60,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -34423,7 +34423,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path59, document]) => [path59, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path60, document]) => [path60, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -34447,17 +34447,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path59 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path59)) {
+      const path60 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path60)) {
         return failure14("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path59}.`,
-            path: path59
+            message: `Archive add target already exists: ${path60}.`,
+            path: path60
           })
         ]);
       }
-      plannedDocs.set(path59, {
+      plannedDocs.set(path60, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -34470,7 +34470,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path59);
+      touchedPaths.add(path60);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -34655,8 +34655,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path59 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path59);
+  const path60 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path60);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -34900,10 +34900,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path59 = archivePath(changeId);
+  const path60 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path59,
+    artifactPath: path60,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -34915,22 +34915,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path59
+        path: path60
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path59);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path60);
   if (hashDiagnostics.length > 0)
     return failure14("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path59,
+    artifactPath: path60,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path59,
+      path: path60,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -35094,20 +35094,20 @@ function invalidPathDiagnostic(input, error51) {
     path: diagnosticPath(input)
   });
 }
-function artifactTooLargeDiagnostic(path59, byteLength) {
+function artifactTooLargeDiagnostic(path60, byteLength) {
   return diagnosticForPath({
     code: "artifact_too_large",
     message: `Code index artifact exceeds the 256 MiB maximum (${byteLength} bytes).`,
-    path: path59
+    path: path60
   });
 }
 function preserveDiagnosticPaths(input, diagnostics) {
-  const path59 = diagnosticPath(input);
+  const path60 = diagnosticPath(input);
   return diagnostics.map((diagnostic4) => ({
     ...diagnostic4,
     source: {
       ...diagnostic4.source,
-      path: path59
+      path: path60
     }
   }));
 }
@@ -38382,7 +38382,7 @@ function isStableDefaultBranch(branch) {
 
 // packages/cli/src/workflow/intake/driver.ts
 import { lstat as lstat5, readFile as readFile21, readdir as readdir15, writeFile as writeFile9 } from "node:fs/promises";
-import path38 from "node:path";
+import path39 from "node:path";
 
 // packages/cli/src/workflow/authored-source.ts
 import path25 from "node:path";
@@ -39764,8 +39764,8 @@ function declaredSurfacePaths(answers) {
     if (draft.priority === "wont") continue;
     for (const criterion of draft.criteria) {
       if (criterion.surfaceKind.trim().length === 0) continue;
-      for (const path59 of parsePathList(criterion.surfacePins)) {
-        declared.push({ requirementIndex: draft.index, criterionIndex: criterion.index, path: path59 });
+      for (const path60 of parsePathList(criterion.surfacePins)) {
+        declared.push({ requirementIndex: draft.index, criterionIndex: criterion.index, path: path60 });
       }
     }
   }
@@ -41127,19 +41127,13 @@ function codexInvocation(args2) {
   if (process.platform !== "win32") {
     return { command: "codex", args: args2 };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "codex", ...args2]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("codex", args2) };
 }
 function claudeInvocation(args2) {
   if (process.platform !== "win32") {
     return { command: "claude", args: args2 };
   }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "claude", ...args2]
-  };
+  return { command: "cmd.exe", args: windowsCmdSpawnArgs("claude", args2) };
 }
 function fakeSummary(request) {
   if (request.mode === "review") return `Fake review passed for ${request.task.id}.`;
@@ -41323,13 +41317,11 @@ async function spawnWithInput(command, args2, input, cwd, timeoutMs, executorLab
       if (settled || terminationPending) return;
       if (!supportsIsolatedProcessGroup()) {
         quiescenceProven = false;
+      } else if (child.pid !== void 0 && process.platform === "win32") {
+        quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
       } else if (child.pid !== void 0 && processTreeStillExists(child.pid)) {
-        if (process.platform === "win32") {
-          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
-        } else {
-          quiescenceProven = false;
-          await terminateProcessTree(child.pid).catch(() => false);
-        }
+        quiescenceProven = false;
+        await terminateProcessTree(child.pid).catch(() => false);
       } else {
         quiescenceProven = true;
       }
@@ -41423,13 +41415,11 @@ async function spawnWithoutInput(command, args2, cwd, timeoutMs) {
       if (settled || terminationPending) return;
       if (!supportsIsolatedProcessGroup()) {
         quiescenceProven = false;
+      } else if (child.pid !== void 0 && process.platform === "win32") {
+        quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
       } else if (child.pid !== void 0 && processTreeStillExists(child.pid)) {
-        if (process.platform === "win32") {
-          quiescenceProven = await terminateProcessTree(child.pid).catch(() => false);
-        } else {
-          quiescenceProven = false;
-          await terminateProcessTree(child.pid).catch(() => false);
-        }
+        quiescenceProven = false;
+        await terminateProcessTree(child.pid).catch(() => false);
       } else {
         quiescenceProven = true;
       }
@@ -41597,11 +41587,17 @@ async function taskkillWindowsPids(pid, descendantPids, taskkill = spawnWindowsT
 }
 async function terminateWindowsProcessTree(pid) {
   let descendantPids = [];
+  let enumerated = false;
   try {
     descendantPids = enumerateWindowsDescendantPids(pid);
+    enumerated = true;
   } catch {
   }
   await taskkillWindowsPids(pid, descendantPids);
+  if (!enumerated) {
+    await waitForQuiescence(() => processStillExists(pid), PROCESS_QUIESCENCE_TIMEOUT_MS);
+    return !processStillExists(pid);
+  }
   return processQuiescenceProven(pid);
 }
 async function terminateProcessTree(pid) {
@@ -42748,13 +42744,13 @@ async function loadExploration(repositoryRoot, runId) {
 // packages/cli/src/workflow/intake/lifecycle.ts
 import { createHash as createHash23, randomUUID as randomUUID3 } from "node:crypto";
 import { link, lstat as lstat4, open as open3, readFile as readFile20, readdir as readdir14, realpath as realpath5, rename as rename5, rm as rm7, rmdir as rmdir2, writeFile as writeFile8 } from "node:fs/promises";
-import path37 from "node:path";
+import path38 from "node:path";
 
 // packages/cli/src/workflow/codebase-map.ts
 import { createHash as createHash22 } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat as lstat3, readFile as readFile18, readdir as readdir12, realpath as realpath4, stat as stat7 } from "node:fs/promises";
-import path35 from "node:path";
+import path36 from "node:path";
 
 // packages/index-store/dist/index.js
 import { DatabaseSync as DatabaseSync2 } from "node:sqlite";
@@ -44510,11 +44506,11 @@ async function Module2(moduleArg = {}) {
   }, "quit_");
   var _scriptName = import.meta.url;
   var scriptDirectory = "";
-  function locateFile(path59) {
+  function locateFile(path60) {
     if (Module["locateFile"]) {
-      return Module["locateFile"](path59, scriptDirectory);
+      return Module["locateFile"](path60, scriptDirectory);
     }
-    return scriptDirectory + path59;
+    return scriptDirectory + path60;
   }
   __name(locateFile, "locateFile");
   var readAsync, readBinary;
@@ -47641,12 +47637,295 @@ async function buildStructuralCodeIndex(input) {
   return validateDraft(draft);
 }
 
+// packages/cli/src/workflow/codebase-map-render.ts
+import path35 from "node:path";
+var MAX_MODULE_FILES = 160;
+var MAX_GRAPH_EDGES = 160;
+var MAX_FAN_ROWS = 24;
+var MAX_SEARCH_SYMBOLS_PER_FILE = 40;
+var SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py"]);
+var KIND_ABBREV = {
+  function: "fn",
+  method: "fn",
+  class: "cl",
+  interface: "iface",
+  type: "type",
+  variable: "var",
+  constant: "const",
+  enum: "enum",
+  module: "mod"
+};
+function renderCodebaseDocuments(input) {
+  const paths = input.map.files.map((file2) => file2.path);
+  const tree = renderPathTree(paths);
+  const modules = input.snapshot === void 0 ? renderInventoryModules(input.map.files) : renderStructuralModules(input.snapshot);
+  const graph = input.snapshot === void 0 ? "" : renderReferenceGraph(input.snapshot, paths);
+  const codebaseMarkdown = [
+    "# Codebase Map",
+    "",
+    `Generated: ${input.map.generatedAt}`,
+    `Scope: ${input.map.scope}`,
+    `Source fingerprint: ${input.map.sourceFingerprint}`,
+    `Source files: ${input.map.sourceFileCount}`,
+    "",
+    "This document is a deterministic map, index, and reference graph for LLM and human navigation.",
+    "Static structure is not behavioral proof.",
+    "",
+    "## Modules",
+    "",
+    modules,
+    ...graph.length === 0 ? [] : ["", "## Reference graph", "", graph],
+    "",
+    "## File types",
+    "",
+    ...renderExtensionCounts(input.map.files),
+    "",
+    "## Tree",
+    "",
+    "```",
+    tree,
+    "```",
+    ""
+  ].join("\n");
+  const searchMarkdown = input.snapshot === void 0 ? renderInventorySearch(input.map) : renderStructuralSearch(input.map, input.snapshot);
+  const symbolRecords = input.snapshot === void 0 ? input.map.files.flatMap((file2) => file2.symbols.map((symbol2) => ({ symbol: symbol2, path: file2.path }))) : structuralSymbolRecords(input.snapshot);
+  return {
+    codebaseMarkdown,
+    searchMarkdown,
+    symbolRecords,
+    preview: [
+      `# Codebase Map`,
+      "",
+      `Generated: ${input.map.generatedAt}`,
+      `Scope: ${input.map.scope}`,
+      `Source files: ${input.map.sourceFileCount}`,
+      "",
+      "## Modules",
+      "",
+      modules.split("\n\n").slice(0, 12).join("\n\n"),
+      ...graph.length === 0 ? [] : ["", "## Reference graph", "", graph.split("\n").slice(0, 36).join("\n")],
+      "",
+      "Static structure is not behavioral proof. Full tree, remaining modules, and search index are in the map run directory."
+    ].join("\n")
+  };
+}
+function renderPathTree(paths) {
+  const root = { children: /* @__PURE__ */ new Map(), files: [] };
+  for (const filePath of [...paths].sort(compareStrings9)) {
+    const parts2 = filePath.split("/").filter((part) => part.length > 0);
+    if (parts2.length === 0) continue;
+    let node = root;
+    for (const directory of parts2.slice(0, -1)) {
+      let child = node.children.get(directory);
+      if (child === void 0) {
+        child = { children: /* @__PURE__ */ new Map(), files: [] };
+        node.children.set(directory, child);
+      }
+      node = child;
+    }
+    node.files.push(parts2[parts2.length - 1] ?? filePath);
+  }
+  const lines = ["."];
+  writeTree(root, "", lines);
+  return lines.join("\n");
+}
+function writeTree(node, prefix, lines) {
+  const directories = [...node.children.keys()].sort(compareStrings9);
+  const files = [...node.files].sort(compareStrings9);
+  const entries = [
+    ...directories.map((name2) => ({ kind: "dir", name: name2 })),
+    ...files.map((name2) => ({ kind: "file", name: name2 }))
+  ];
+  for (const [index, entry] of entries.entries()) {
+    const last = index === entries.length - 1;
+    const branch = last ? "\u2514\u2500\u2500 " : "\u251C\u2500\u2500 ";
+    const nextPrefix = `${prefix}${last ? "    " : "\u2502   "}`;
+    if (entry.kind === "file") {
+      lines.push(`${prefix}${branch}${entry.name}`);
+      continue;
+    }
+    lines.push(`${prefix}${branch}${entry.name}/`);
+    const child = node.children.get(entry.name);
+    if (child !== void 0) writeTree(child, nextPrefix, lines);
+  }
+}
+function renderStructuralModules(snapshot) {
+  const byPath = /* @__PURE__ */ new Map();
+  const ensure = (filePath) => {
+    const current = byPath.get(filePath);
+    if (current !== void 0) return current;
+    const created = { exports: [], imports: [] };
+    byPath.set(filePath, created);
+    return created;
+  };
+  for (const item of snapshot.exports ?? []) {
+    ensure(item.path).exports.push(`${abbrevKind(item.kind)} ${item.name}`);
+  }
+  for (const item of snapshot.imports ?? []) {
+    ensure(item.path).imports.push(item.specifier);
+  }
+  const ranked = [...byPath.entries()].filter(([filePath, entry]) => SOURCE_EXTENSIONS.has(path35.extname(filePath)) && (entry.exports.length > 0 || entry.imports.length > 0)).sort((left, right) => right[1].exports.length - left[1].exports.length || compareStrings9(left[0], right[0]));
+  const selected = ranked.slice(0, MAX_MODULE_FILES);
+  const lines = selected.map(([filePath, entry]) => {
+    const exportLines = uniqueSorted(entry.exports).slice(0, 24).map((value) => `  ${value}`);
+    const importLine = uniqueSorted(entry.imports).slice(0, 12);
+    return [
+      filePath,
+      ...exportLines,
+      ...importLine.length === 0 ? [] : [`  import ${importLine.join(", ")}`]
+    ].join("\n");
+  });
+  if (ranked.length > selected.length) {
+    lines.push(`\u2026 ${ranked.length - selected.length} more modules`);
+  }
+  return lines.length === 0 ? "_No exported modules were extracted._" : lines.join("\n\n");
+}
+function renderInventoryModules(files) {
+  const lines = files.filter((file2) => file2.symbols.length > 0).slice(0, MAX_MODULE_FILES).map((file2) => `${file2.path}
+  ${file2.symbols.slice(0, 12).join(", ")}`);
+  return lines.length === 0 ? "_No module symbols were extracted from inventory heuristics._" : lines.join("\n\n");
+}
+function renderReferenceGraph(snapshot, paths) {
+  const known = new Set(paths);
+  for (const item of snapshot.coverage ?? []) known.add(item.path);
+  for (const item of snapshot.exports ?? []) known.add(item.path);
+  for (const item of snapshot.imports ?? []) known.add(item.path);
+  const fanIn = /* @__PURE__ */ new Map();
+  const fanOut = /* @__PURE__ */ new Map();
+  const edges = [];
+  for (const item of snapshot.imports ?? []) {
+    const target = resolveImportTarget(item.path, item.specifier, known);
+    bump(fanOut, item.path);
+    bump(fanIn, target);
+    edges.push(`${item.path} -> ${target}`);
+  }
+  const uniqueEdges = uniqueSorted(edges).slice(0, MAX_GRAPH_EDGES);
+  const topFanIn = topCounts(fanIn);
+  const topFanOut = topCounts(fanOut);
+  return [
+    "### Highest fan-in",
+    "",
+    ...topFanIn.map(([name2, count]) => `- ${name2} (${count})`),
+    ...topFanIn.length === 0 ? ["_None_"] : [],
+    "",
+    "### Highest fan-out",
+    "",
+    ...topFanOut.map(([name2, count]) => `- ${name2} (${count})`),
+    ...topFanOut.length === 0 ? ["_None_"] : [],
+    "",
+    "```",
+    ...uniqueEdges,
+    ...edges.length > uniqueEdges.length ? [`\u2026 ${edges.length - uniqueEdges.length} more edges`] : [],
+    "```"
+  ].join("\n");
+}
+function resolveImportTarget(fromPath, specifier, known) {
+  if (!specifier.startsWith(".")) return specifier;
+  const directory = path35.posix.dirname(fromPath);
+  const normalized = path35.posix.normalize(path35.posix.join(directory, specifier));
+  const withoutExt = normalized.replace(/\.(?:js|mjs|cjs|jsx|ts|tsx)$/u, "");
+  const candidates = [
+    normalized,
+    withoutExt,
+    `${withoutExt}.ts`,
+    `${withoutExt}.tsx`,
+    `${withoutExt}.js`,
+    `${withoutExt}.mjs`,
+    `${withoutExt}.cjs`,
+    `${withoutExt}.py`,
+    `${withoutExt}/index.ts`,
+    `${withoutExt}/index.js`,
+    `${withoutExt}/index.py`
+  ];
+  return candidates.find((candidate) => known.has(candidate)) ?? normalized;
+}
+function renderStructuralSearch(map2, snapshot) {
+  const symbolsByPath = /* @__PURE__ */ new Map();
+  for (const item of snapshot.exports ?? []) {
+    const list = symbolsByPath.get(item.path) ?? [];
+    list.push(`${abbrevKind(item.kind)} ${item.name}`);
+    symbolsByPath.set(item.path, list);
+  }
+  for (const item of snapshot.symbols ?? []) {
+    if (item.exported === true) continue;
+    const list = symbolsByPath.get(item.path) ?? [];
+    if (list.length >= MAX_SEARCH_SYMBOLS_PER_FILE) continue;
+    list.push(`${abbrevKind(item.kind)} ${item.name}`);
+    symbolsByPath.set(item.path, list);
+  }
+  return [
+    "# Codebase Search Index",
+    "",
+    "Use `legion map --query <text>` to search the structural index.",
+    "",
+    ...map2.files.flatMap((file2) => {
+      const symbols = uniqueSorted(symbolsByPath.get(file2.path) ?? file2.symbols);
+      return [
+        `## ${file2.path}`,
+        "",
+        symbols.length > 0 ? `Symbols: ${symbols.join(", ")}` : "Symbols: none",
+        ""
+      ];
+    })
+  ].join("\n");
+}
+function renderInventorySearch(map2) {
+  return [
+    "# Codebase Search Index",
+    "",
+    "Use `legion map --query <text>` to search this deterministic index.",
+    "",
+    ...map2.files.flatMap((file2) => [
+      `## ${file2.path}`,
+      "",
+      file2.symbols.length > 0 ? `Symbols: ${file2.symbols.join(", ")}` : "Symbols: none",
+      ""
+    ])
+  ].join("\n");
+}
+function structuralSymbolRecords(snapshot) {
+  const records = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = (symbol2, filePath) => {
+    const key = `${filePath}\0${symbol2}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    records.push({ symbol: symbol2, path: filePath });
+  };
+  for (const item of snapshot.exports ?? []) add(item.name, item.path);
+  for (const item of snapshot.symbols ?? []) add(item.name, item.path);
+  return records.sort((left, right) => compareStrings9(left.path, right.path) || compareStrings9(left.symbol, right.symbol));
+}
+function renderExtensionCounts(files) {
+  const byExtension = /* @__PURE__ */ new Map();
+  for (const file2 of files) {
+    const extension = path35.extname(file2.path).toLowerCase() || "(none)";
+    byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
+  }
+  return [...byExtension.entries()].sort((left, right) => right[1] - left[1] || compareStrings9(left[0], right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
+}
+function abbrevKind(kind) {
+  return KIND_ABBREV[kind] ?? kind;
+}
+function uniqueSorted(values) {
+  return [...new Set(values)].sort(compareStrings9);
+}
+function bump(counts, key) {
+  counts.set(key, (counts.get(key) ?? 0) + 1);
+}
+function topCounts(counts) {
+  return [...counts.entries()].sort((left, right) => right[1] - left[1] || compareStrings9(left[0], right[0])).slice(0, MAX_FAN_ROWS);
+}
+function compareStrings9(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 // packages/cli/src/workflow/codebase-map.ts
 async function assertMapWorkflowArtifactRootSafe(repositoryRoot) {
   const repositoryRealPath = await realpath4(repositoryRoot);
-  let current = path35.resolve(repositoryRoot);
+  let current = path36.resolve(repositoryRoot);
   for (const component of [".legion", "project", "workflow", "map"]) {
-    current = path35.join(current, component);
+    current = path36.join(current, component);
     let componentStat;
     try {
       componentStat = await lstat3(current);
@@ -47659,14 +47938,14 @@ async function assertMapWorkflowArtifactRootSafe(repositoryRoot) {
       componentRealPath = await realpath4(current);
     } catch (error51) {
       throw new Error(
-        `Workflow map artifact root must stay inside the repository; existing component ${path35.relative(repositoryRoot, current)} cannot be resolved.`,
+        `Workflow map artifact root must stay inside the repository; existing component ${path36.relative(repositoryRoot, current)} cannot be resolved.`,
         { cause: error51 }
       );
     }
-    const relative = path35.relative(repositoryRealPath, componentRealPath);
-    if (relative === ".." || relative.startsWith(`..${path35.sep}`) || path35.isAbsolute(relative)) {
+    const relative = path36.relative(repositoryRealPath, componentRealPath);
+    if (relative === ".." || relative.startsWith(`..${path36.sep}`) || path36.isAbsolute(relative)) {
       throw new Error(
-        `Workflow map artifact root must stay inside the repository; existing component ${path35.relative(repositoryRoot, current)} resolves outside the repository.`
+        `Workflow map artifact root must stay inside the repository; existing component ${path36.relative(repositoryRoot, current)} resolves outside the repository.`
       );
     }
     if (!componentStat.isDirectory() && !componentStat.isSymbolicLink()) return;
@@ -47700,10 +47979,14 @@ async function refreshCodebaseMap(input) {
   const mapArtifactPath = guidanceArtifactPath(input.paths, "map.json");
   const mapText = stableProtocolJson(map2);
   const mapRunId = structuralMapRunId(input.paths.runId);
+  const documents = renderCodebaseDocuments({
+    map: map2,
+    ...input.snapshot === void 0 ? {} : { snapshot: input.snapshot }
+  });
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
     artifactPath: codebaseArtifactPath,
-    text: renderCodebaseMarkdown(map2)
+    text: documents.codebaseMarkdown
   });
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
@@ -47718,13 +48001,13 @@ async function refreshCodebaseMap(input) {
       schemaVersion: 1,
       kind: "codebase_symbols",
       generatedAt: map2.generatedAt,
-      symbols: files.flatMap((file2) => file2.symbols.map((symbol2) => ({ symbol: symbol2, path: file2.path })))
+      symbols: documents.symbolRecords
     })
   });
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
     artifactPath: searchArtifactPath,
-    text: renderSearchMarkdown(map2)
+    text: documents.searchMarkdown
   });
   await writeProjectTextFile({
     repositoryRoot: input.repositoryRoot,
@@ -47739,7 +48022,8 @@ async function refreshCodebaseMap(input) {
     indexArtifactPath,
     symbolsArtifactPath,
     searchArtifactPath,
-    mapArtifactPath
+    mapArtifactPath,
+    preview: documents.preview
   };
 }
 function deriveStructuralMapSummary(input) {
@@ -47778,7 +48062,7 @@ async function refreshStructuralCodeIndex(input) {
   });
   const semanticIndexArtifactPath = guidanceArtifactPath(input.paths, "semantic-index.json");
   const semanticSqliteArtifactPath = guidanceArtifactPath(input.paths, "semantic-index.sqlite");
-  const databasePath = path35.join(input.repositoryRoot, ...semanticSqliteArtifactPath.split("/"));
+  const databasePath = path36.join(input.repositoryRoot, ...semanticSqliteArtifactPath.split("/"));
   const store = writeCodeIndexStore({
     databasePath,
     snapshot: {
@@ -47985,12 +48269,12 @@ async function discoverLatestStructuralCodeIndex(repositoryRoot) {
   };
 }
 function queryStructuralCodeIndex(input) {
-  const databasePath = path35.join(input.repositoryRoot, ...input.record.semanticSqliteArtifactPath.split("/"));
+  const databasePath = path36.join(input.repositoryRoot, ...input.record.semanticSqliteArtifactPath.split("/"));
   return queryCodeIndexStore({ databasePath, query: input.query, limit: input.limit ?? 10 });
 }
 function findStructuralCodeIndexFact(input) {
   const factId = codeIndexFactIdSchema.parse(input.id);
-  const databasePath = path35.join(input.repositoryRoot, ...input.record.semanticSqliteArtifactPath.split("/"));
+  const databasePath = path36.join(input.repositoryRoot, ...input.record.semanticSqliteArtifactPath.split("/"));
   return findCodeIndexFact({ databasePath, id: factId });
 }
 function structuralCandidateDiagnostic(runId, code, message) {
@@ -48000,7 +48284,7 @@ function formatArtifactDiagnostics(diagnostics) {
   return diagnostics.map((diagnostic4) => `${diagnostic4.code}: ${diagnostic4.message}`).join("; ");
 }
 async function latestStructuralMapRun(repositoryRoot) {
-  const workflowRoot = path35.join(repositoryRoot, ".legion", "project", "workflow", "map");
+  const workflowRoot = path36.join(repositoryRoot, ".legion", "project", "workflow", "map");
   let entries;
   try {
     entries = await readdir12(workflowRoot, { withFileTypes: true });
@@ -48011,7 +48295,7 @@ async function latestStructuralMapRun(repositoryRoot) {
   const candidates = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const runRoot = path35.join(workflowRoot, entry.name);
+    const runRoot = path36.join(workflowRoot, entry.name);
     let hasStructuralArtifacts = false;
     try {
       const artifacts = await readdir12(runRoot, { withFileTypes: true });
@@ -48022,7 +48306,7 @@ async function latestStructuralMapRun(repositoryRoot) {
     }
     let value;
     try {
-      value = JSON.parse(await readFile18(path35.join(runRoot, "workflow-run.json"), "utf8"));
+      value = JSON.parse(await readFile18(path36.join(runRoot, "workflow-run.json"), "utf8"));
     } catch (error51) {
       if (!hasStructuralArtifacts) continue;
       candidates.push({
@@ -48310,25 +48594,25 @@ function queryCodebaseMap(map2, query, limit = 10) {
 async function normalizeScope(repositoryRoot, scope) {
   const repositoryRealPath = await realpath4(repositoryRoot);
   const isRepositoryScope = scope === void 0 || scope.trim().length === 0 || scope.trim() === ".";
-  const absolute = isRepositoryScope ? repositoryRoot : path35.resolve(repositoryRoot, scope);
-  const relative = path35.relative(repositoryRoot, absolute).replace(/\\/g, "/");
-  if (relative.startsWith("../") || path35.isAbsolute(relative)) {
+  const absolute = isRepositoryScope ? repositoryRoot : path36.resolve(repositoryRoot, scope);
+  const relative = path36.relative(repositoryRoot, absolute).replace(/\\/g, "/");
+  if (relative.startsWith("../") || path36.isAbsolute(relative)) {
     throw new Error(`Map scope must stay inside the repository: ${scope ?? "."}`);
   }
   const scopeRealPath = await realpath4(absolute);
-  const realRelative = path35.relative(repositoryRealPath, scopeRealPath);
-  if (realRelative === ".." || realRelative.startsWith(`..${path35.sep}`) || path35.isAbsolute(realRelative)) {
+  const realRelative = path36.relative(repositoryRealPath, scopeRealPath);
+  if (realRelative === ".." || realRelative.startsWith(`..${path36.sep}`) || path36.isAbsolute(realRelative)) {
     throw new Error(`Map scope must stay inside the repository: ${scope ?? "."}`);
   }
   return relative.length === 0 ? "." : relative;
 }
 async function collectSourceFiles(repositoryRoot, scope) {
-  const root = scope === "." ? repositoryRoot : path35.join(repositoryRoot, ...scope.split("/"));
+  const root = scope === "." ? repositoryRoot : path36.join(repositoryRoot, ...scope.split("/"));
   const rootStat = await stat7(root);
   const candidates = rootStat.isFile() ? [root] : await walk(root);
   const files = [];
   for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
-    const relative = path35.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
+    const relative = path36.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
     if (!isFullMapAuthoredFile(relative)) continue;
     const fileStat = await stat7(absolutePath);
     if (!fileStat.isFile()) continue;
@@ -48355,7 +48639,7 @@ async function walk(root) {
   const files = [];
   const entries = await readdir12(root, { withFileTypes: true });
   for (const entry of entries) {
-    const absolute = path35.join(root, entry.name);
+    const absolute = path36.join(root, entry.name);
     if (entry.isDirectory()) {
       if (!shouldTraverseAuthoredDirectory(entry.name)) continue;
       files.push(...await walk(absolute));
@@ -48399,47 +48683,6 @@ function fingerprintSourceFiles(files) {
 }
 function fingerprintFiles(files) {
   return sha256(Buffer.from(files.map((file2) => `${file2.path}\0${file2.sha256}`).join("\n"), "utf8"));
-}
-function renderCodebaseMarkdown(map2) {
-  const byExtension = /* @__PURE__ */ new Map();
-  for (const file2 of map2.files) {
-    const extension = path35.extname(file2.path).toLowerCase() || "(none)";
-    byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
-  }
-  const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
-  return [
-    "# Codebase Map",
-    "",
-    `Generated: ${map2.generatedAt}`,
-    `Scope: ${map2.scope}`,
-    `Source fingerprint: ${map2.sourceFingerprint}`,
-    `Source files: ${map2.sourceFileCount}`,
-    "",
-    "## File Types",
-    "",
-    ...extensionRows,
-    "",
-    "## Files",
-    "",
-    ...map2.files.slice(0, 200).map((file2) => `- ${file2.path} (${file2.lineCount} lines): ${file2.summary}`),
-    ""
-  ].join("\n");
-}
-function renderSearchMarkdown(map2) {
-  return [
-    "# Codebase Search Index",
-    "",
-    "Use `legion map --query <text>` to search this deterministic index.",
-    "",
-    ...map2.files.map((file2) => [
-      `## ${file2.path}`,
-      "",
-      file2.summary,
-      file2.symbols.length > 0 ? `Symbols: ${file2.symbols.join(", ")}` : "Symbols: none",
-      ""
-    ].join("\n")),
-    ""
-  ].join("\n");
 }
 function queryTerms(value) {
   return tokenize2(value);
@@ -48543,11 +48786,11 @@ function ageInDays(generatedAt, now) {
 
 // packages/cli/src/workflow/intake/session.ts
 import { mkdir as mkdir12, readFile as readFile19, readdir as readdir13, rename as rename4, rm as rm6, rmdir, stat as stat8, writeFile as writeFile7 } from "node:fs/promises";
-import path36 from "node:path";
+import path37 from "node:path";
 var INTAKE_ROOT = ".legion/project/intake";
 var SESSION_FILE = "session.json";
 function intakeSessionDirectory(repositoryRoot, sessionId) {
-  return path36.join(repositoryRoot, ".legion", "project", "intake", sessionId);
+  return path37.join(repositoryRoot, ".legion", "project", "intake", sessionId);
 }
 function intakeSessionArtifactPath(sessionId) {
   return `${INTAKE_ROOT}/${sessionId}/${SESSION_FILE}`;
@@ -48556,7 +48799,7 @@ function isNodeErrorCode3(error51, code) {
   return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === code);
 }
 function sessionFilePath(repositoryRoot, sessionId) {
-  return path36.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
+  return path37.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
 }
 function nowTimestamp2() {
   return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
@@ -48743,9 +48986,9 @@ async function claimSessionDirectory(repositoryRoot, sessionId, beforeMutation) 
     repositoryRoot,
     artifactPath: intakeSessionArtifactPath(sessionId)
   });
-  const sessionDirectory = path36.dirname(resolved.absolutePath);
+  const sessionDirectory = path37.dirname(resolved.absolutePath);
   await beforeMutation?.();
-  await mkdir12(path36.dirname(sessionDirectory), { recursive: true });
+  await mkdir12(path37.dirname(sessionDirectory), { recursive: true });
   try {
     await beforeMutation?.();
     await mkdir12(sessionDirectory, { recursive: false });
@@ -48785,7 +49028,7 @@ async function rollbackSessionCreation(repositoryRoot, sessionId, beforeMutation
   }
 }
 async function listSessions(repositoryRoot) {
-  const root = path36.join(repositoryRoot, ".legion", "project", "intake");
+  const root = path37.join(repositoryRoot, ".legion", "project", "intake");
   let entries;
   try {
     entries = await readdir13(root, { withFileTypes: true });
@@ -48842,9 +49085,9 @@ async function repositoryFiles(root) {
     const entries = await readdir14(directory, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory() && !shouldTraverseAuthoredDirectory(entry.name)) continue;
-      const absolute = path37.join(directory, entry.name);
+      const absolute = path38.join(directory, entry.name);
       if (entry.isDirectory()) await visit(absolute);
-      else if (entry.isFile()) files.push(path37.relative(root, absolute).replace(/\\/gu, "/"));
+      else if (entry.isFile()) files.push(path38.relative(root, absolute).replace(/\\/gu, "/"));
     }
   }
   await visit(root);
@@ -49099,12 +49342,12 @@ async function writeDraftExclusive(repositoryRoot, draft, lease, beforePublish, 
   return artifactPath;
 }
 async function removeDraftPublishTemps(finalPath, lease) {
-  const directory = path37.dirname(finalPath);
-  const prefix = `${path37.basename(finalPath)}.`;
+  const directory = path38.dirname(finalPath);
+  const prefix = `${path38.basename(finalPath)}.`;
   for (const name2 of await readdir14(directory)) {
     if (name2.startsWith(prefix) && name2.endsWith(".tmp")) {
       await assertTransitionLeaseOwned(lease);
-      await rm7(path37.join(directory, name2), { force: true }).catch(() => void 0);
+      await rm7(path38.join(directory, name2), { force: true }).catch(() => void 0);
     }
   }
 }
@@ -49373,20 +49616,20 @@ async function replayDraft(repositoryRoot, draft) {
   return { ok: true, previewSession: session };
 }
 async function stageIntakeDraft(input) {
-  const absoluteSource = path37.resolve(input.repositoryRoot, input.draftFile);
-  const relativeSource = path37.relative(input.repositoryRoot, absoluteSource);
-  if (relativeSource.startsWith("..") || path37.isAbsolute(relativeSource)) {
+  const absoluteSource = path38.resolve(input.repositoryRoot, input.draftFile);
+  const relativeSource = path38.relative(input.repositoryRoot, absoluteSource);
+  if (relativeSource.startsWith("..") || path38.isAbsolute(relativeSource)) {
     return { diagnostics: [{ code: "draft_path_outside_repository", message: "The intake draft file must stay inside the repository." }], ok: false };
   }
   let json2;
   try {
     if ((await lstat4(absoluteSource)).isSymbolicLink()) throw new Error("The intake draft file cannot be a symbolic link.");
     const [rootRealPath, sourceRealPath] = await Promise.all([
-      realpath5(path37.resolve(input.repositoryRoot)),
+      realpath5(path38.resolve(input.repositoryRoot)),
       realpath5(absoluteSource)
     ]);
-    const contained = path37.relative(rootRealPath, sourceRealPath);
-    if (contained.startsWith("..") || path37.isAbsolute(contained)) {
+    const contained = path38.relative(rootRealPath, sourceRealPath);
+    if (contained.startsWith("..") || path38.isAbsolute(contained)) {
       throw new Error("The intake draft file escapes the repository through a symbolic-link ancestor.");
     }
     json2 = JSON.parse(await readFile20(sourceRealPath, "utf8"));
@@ -49632,12 +49875,12 @@ async function evidenceMatches(repositoryRoot, evidence) {
   }
   if (evidence.kind === "repository-file") {
     try {
-      const absolute = path37.resolve(repositoryRoot, evidence.artifact.path);
-      const relative = path37.relative(path37.resolve(repositoryRoot), absolute);
-      if (relative.startsWith("..") || path37.isAbsolute(relative) || (await lstat4(absolute)).isSymbolicLink()) return false;
-      const [rootRealPath, evidenceRealPath] = await Promise.all([realpath5(path37.resolve(repositoryRoot)), realpath5(absolute)]);
-      const contained = path37.relative(rootRealPath, evidenceRealPath);
-      if (contained.startsWith("..") || path37.isAbsolute(contained)) return false;
+      const absolute = path38.resolve(repositoryRoot, evidence.artifact.path);
+      const relative = path38.relative(path38.resolve(repositoryRoot), absolute);
+      if (relative.startsWith("..") || path38.isAbsolute(relative) || (await lstat4(absolute)).isSymbolicLink()) return false;
+      const [rootRealPath, evidenceRealPath] = await Promise.all([realpath5(path38.resolve(repositoryRoot)), realpath5(absolute)]);
+      const contained = path38.relative(rootRealPath, evidenceRealPath);
+      if (contained.startsWith("..") || path38.isAbsolute(contained)) return false;
       return sha2562(await readFile20(evidenceRealPath)) === evidence.artifact.sha256;
     } catch {
       return false;
@@ -49712,8 +49955,8 @@ function parsePublishedLeaseClaim(input) {
   const createdAt = utcTimestampSchema.safeParse(record2["createdAt"]);
   const expiresAt = utcTimestampSchema.safeParse(record2["expiresAt"]);
   if (!createdAt.success || !expiresAt.success) throw new Error("malformed lease");
-  const filename = path37.basename(input.claimPath);
-  const prefix = `${path37.basename(input.journalPath)}.lock.`;
+  const filename = path38.basename(input.claimPath);
+  const prefix = `${path38.basename(input.journalPath)}.lock.`;
   if (!filename.startsWith(prefix)) throw new Error("malformed lease");
   const suffix = filename.slice(prefix.length);
   const filenameClaim = /^(\d{8,})\.([^.]+)\.json$/u.exec(suffix);
@@ -49740,12 +49983,12 @@ function parsePublishedLeaseClaim(input) {
   };
 }
 async function leaseClaims(journalAbsolutePath) {
-  const directory = path37.dirname(journalAbsolutePath);
-  const prefix = `${path37.basename(journalAbsolutePath)}.lock.`;
+  const directory = path38.dirname(journalAbsolutePath);
+  const prefix = `${path38.basename(journalAbsolutePath)}.lock.`;
   const claims = [];
   for (const name2 of await readdir14(directory)) {
     if (!name2.startsWith(prefix) || !name2.endsWith(".json")) continue;
-    const claimPath = path37.join(directory, name2);
+    const claimPath = path38.join(directory, name2);
     try {
       claims.push(parsePublishedLeaseClaim({
         bytes: await readFile20(claimPath, "utf8"),
@@ -49840,7 +50083,7 @@ async function acquireDraftAcceptanceLease(repositoryRoot, draftId) {
       throw error51;
     }
   }
-  const legacyGlobal = path37.join(path37.dirname(resolved.absolutePath), `${INTAKE_TRANSITION_KEY}.json`);
+  const legacyGlobal = path38.join(path38.dirname(resolved.absolutePath), `${INTAKE_TRANSITION_KEY}.json`);
   const legacyGlobalClaims = await leaseClaims(legacyGlobal);
   if (legacyGlobalClaims.some((claim) => claim.expiresAt > Date.now())) throw transitionBusyError();
   for (; ; ) {
@@ -49910,9 +50153,9 @@ async function releaseDraftAcceptanceLease(lease, beforeRemove, beforeRename) {
     if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
   }
   try {
-    const transactionsDirectory = path37.dirname(lease.path);
+    const transactionsDirectory = path38.dirname(lease.path);
     await rmdir2(transactionsDirectory);
-    let ancestor = path37.dirname(transactionsDirectory);
+    let ancestor = path38.dirname(transactionsDirectory);
     for (let index = 0; index < 3; index += 1) {
       try {
         await rmdir2(ancestor);
@@ -49920,7 +50163,7 @@ async function releaseDraftAcceptanceLease(lease, beforeRemove, beforeRename) {
         if (error51 && typeof error51 === "object" && "code" in error51 && ["ENOENT", "ENOTEMPTY", "EEXIST"].includes(String(error51.code))) break;
         throw error51;
       }
-      ancestor = path37.dirname(ancestor);
+      ancestor = path38.dirname(ancestor);
     }
   } catch (error51) {
     if (!(error51 && typeof error51 === "object" && "code" in error51 && ["ENOENT", "ENOTEMPTY", "EEXIST"].includes(String(error51.code)))) throw error51;
@@ -49996,7 +50239,7 @@ async function assertCommittedSessionDirectoryShape(sessionDirectoryPath, sessio
   const directoryInfo = await lstat4(sessionDirectoryPath);
   if (!directoryInfo.isDirectory()) throw new Error("committed session parent is not a regular directory");
   const entries = await readdir14(sessionDirectoryPath, { withFileTypes: true });
-  if (entries.length !== 1 || entries[0]?.name !== path37.basename(sessionPath) || !entries[0].isFile()) {
+  if (entries.length !== 1 || entries[0]?.name !== path38.basename(sessionPath) || !entries[0].isFile()) {
     throw new Error("committed session directory contains unexpected state");
   }
   const sessionInfo = await lstat4(sessionPath);
@@ -50049,7 +50292,7 @@ async function acceptanceTransactionsDirectory(repositoryRoot) {
     repositoryRoot,
     artifactPath: ".legion/project/intake/transactions/.acceptance-scan"
   });
-  return path37.dirname(sentinel.absolutePath);
+  return path38.dirname(sentinel.absolutePath);
 }
 async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
   await assertTransitionLeaseOwned(lease);
@@ -50075,7 +50318,7 @@ async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
     const ownership = legacyAcceptanceOwnershipName(entry.name);
     if (ownership !== void 0) {
-      const artifactPath = path37.join(transactions, entry.name);
+      const artifactPath = path38.join(transactions, entry.name);
       try {
         if (!entry.isFile()) throw new Error("ownership artifact is not a regular file");
         const info2 = await lstat4(artifactPath);
@@ -50089,14 +50332,14 @@ async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
           const claim = parsePublishedLeaseClaim({
             bytes: raw.toString("utf8"),
             claimPath: artifactPath,
-            journalPath: path37.join(transactions, ownership.journalName)
+            journalPath: path38.join(transactions, ownership.journalName)
           });
           if (claim.expiresAt > Date.now()) throw new Error("published lease still has a live owner");
         }
         ownershipArtifacts.push({
           kind: ownership.kind,
           artifactPath,
-          journalPath: path37.join(transactions, ownership.journalName),
+          journalPath: path38.join(transactions, ownership.journalName),
           raw,
           mtimeMs: info2.mtimeMs
         });
@@ -50156,7 +50399,7 @@ async function scanAcceptanceRecoveryCandidates(repositoryRoot, lease) {
         repositoryRoot,
         artifactPath: intakeSessionArtifactPath(journal.sessionId)
       });
-      const reservationPath = path37.dirname(resolvedSession.absolutePath);
+      const reservationPath = path38.dirname(resolvedSession.absolutePath);
       if (draft.status === "draft") {
         const reservation = await inspectOpenAcceptanceReservation({
           repositoryRoot,
@@ -50267,7 +50510,7 @@ async function assertAcceptanceRecoveryCandidateUnchanged(repositoryRoot, candid
       if (candidate.reservationState === "empty") {
         if (entries.length !== 0) throw new Error("acceptance reservation changed during recovery");
       } else {
-        if (candidate.sessionArtifactPath === void 0 || candidate.sessionRaw === void 0 || entries.length !== 1 || !entries[0].isFile() || path37.join(candidate.reservationPath, entries[0].name) !== candidate.sessionArtifactPath || !(await readFile20(candidate.sessionArtifactPath)).equals(candidate.sessionRaw)) {
+        if (candidate.sessionArtifactPath === void 0 || candidate.sessionRaw === void 0 || entries.length !== 1 || !entries[0].isFile() || path38.join(candidate.reservationPath, entries[0].name) !== candidate.sessionArtifactPath || !(await readFile20(candidate.sessionArtifactPath)).equals(candidate.sessionRaw)) {
           throw new Error("journaled session publication changed during recovery");
         }
       }
@@ -50321,7 +50564,7 @@ async function reconcilePendingAcceptanceJournals(repositoryRoot, lease, hooks =
       const message = error51 instanceof Error ? error51.message : String(error51);
       return {
         ok: false,
-        diagnostics: [pendingAcceptanceBlocked(`Acceptance ownership artifact ${path37.basename(artifact.artifactPath)} changed before recovery: ${message}`)]
+        diagnostics: [pendingAcceptanceBlocked(`Acceptance ownership artifact ${path38.basename(artifact.artifactPath)} changed before recovery: ${message}`)]
       };
     }
   }
@@ -50441,14 +50684,14 @@ async function recoverIntakeLifecycleArtifactsWithLease(repositoryRoot, recovery
       }
     } catch {
     }
-    const drafts = path37.join(repositoryRoot, ".legion", "project", "intake", "drafts");
+    const drafts = path38.join(repositoryRoot, ".legion", "project", "intake", "drafts");
     try {
       const names = await readdir14(drafts);
       for (const name2 of names) {
         const match = /^(itd_[a-z0-9-]+\.json)\.[^.]+\.tmp$/u.exec(name2);
         if (match === null || !names.includes(match[1])) continue;
         await assertTransitionLeaseOwned(recoveryLease);
-        await rm7(path37.join(drafts, name2), { force: true });
+        await rm7(path38.join(drafts, name2), { force: true });
       }
     } catch (error51) {
       if (!(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")) throw error51;
@@ -51028,7 +51271,7 @@ async function writePreflight(repositoryRoot, state, lease, hooks = {}) {
   }
 }
 async function inspectActiveDraftCandidates(repositoryRoot) {
-  const directory = path37.join(repositoryRoot, ".legion", "project", "intake", "drafts");
+  const directory = path38.join(repositoryRoot, ".legion", "project", "intake", "drafts");
   let entries;
   try {
     entries = await readdir14(directory, { withFileTypes: true });
@@ -51561,13 +51804,13 @@ async function boundedReviewBounds(repositoryRoot) {
     for (const entry of entries) {
       if (entry.isDirectory() && AUTHORED_IGNORED_DIRECTORIES.has(entry.name.toLowerCase())) continue;
       if (entry.name.startsWith(".") && entry.name !== ".github") continue;
-      const absolute = path38.join(directory, entry.name);
+      const absolute = path39.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolute, depth + 1);
         continue;
       }
       if (!entry.isFile()) continue;
-      const relative = path38.relative(repositoryRoot, absolute).replace(/\\/gu, "/");
+      const relative = path39.relative(repositoryRoot, absolute).replace(/\\/gu, "/");
       const basename = entry.name.toLowerCase();
       const segments = relative.toLowerCase().split("/");
       let priority;
@@ -52255,7 +52498,7 @@ async function handleBatchIntake(context) {
   if (filePath === void 0) return usageError("Provide a file as --intake <file>.");
   let parsed;
   try {
-    const absolute = path38.isAbsolute(filePath) ? filePath : path38.resolve(context.repositoryRoot, filePath);
+    const absolute = path39.isAbsolute(filePath) ? filePath : path39.resolve(context.repositoryRoot, filePath);
     parsed = JSON.parse(await readFile21(absolute, "utf8"));
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
@@ -52559,7 +52802,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     resolvedQuestions: resolvedOpenQuestions(session),
     createdAt
   });
-  const roadmapPath = path38.join(context.repositoryRoot, ROADMAP_FILE);
+  const roadmapPath = path39.join(context.repositoryRoot, ROADMAP_FILE);
   const roadmap = renderRoadmap({
     projectName: name2,
     answers: session.answers,
@@ -52891,7 +53134,7 @@ ${rendered}` : "Project initialization failed.";
 
 // packages/cli/src/workflow/traceability-check.ts
 import { readdir as readdir16 } from "node:fs/promises";
-import path39 from "node:path";
+import path40 from "node:path";
 var CHANGES_ROOT = ".legion/project/changes";
 var CURRENT_SPECS_ROOT = ".legion/project/specs";
 function taskgraphArtifactPath(changeId) {
@@ -52916,7 +53159,7 @@ async function guarded(artifactPath, code, read) {
 }
 async function changeIds(repositoryRoot) {
   return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
-    const entries = await readdir16(path39.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
+    const entries = await readdir16(path40.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   });
 }
@@ -53186,11 +53429,11 @@ function renderTraceabilityLine(traceability) {
 
 // packages/cli/src/workflow/state.ts
 import { readdir as readdir18 } from "node:fs/promises";
-import path43 from "node:path";
+import path44 from "node:path";
 
 // packages/cli/src/workflow/context.ts
 import { readdir as readdir17, stat as stat9 } from "node:fs/promises";
-import path40 from "node:path";
+import path41 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -53216,7 +53459,7 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path40.join(repositoryRoot, ".legion");
+  const legionRoot = path41.join(repositoryRoot, ".legion");
   if (!await pathExists6(legionRoot)) return [];
   const entries = await readdir17(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name2) => name2 !== "project" && name2 !== "var" && name2 !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name2)).sort();
@@ -53225,8 +53468,8 @@ async function detectPreInitCollision2(repositoryRoot) {
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path40.join(legionRoot, "project");
-  const manifestPath = path40.join(projectRoot, "project.json");
+  const projectRoot = path41.join(legionRoot, "project");
+  const manifestPath = path41.join(projectRoot, "project.json");
   if (await pathExists6(projectRoot) && !await pathExists6(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -53286,7 +53529,7 @@ function latestEvidenceEntries(entries) {
 
 // packages/cli/src/workflow/run-artifacts.ts
 import { createHash as createHash24 } from "node:crypto";
-import path41 from "node:path";
+import path42 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -53338,11 +53581,11 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path41.join(repositoryRoot, ...artifactPath.split("/"));
+  return path42.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/workflow/evidence-sources.ts
-import path42 from "node:path";
+import path43 from "node:path";
 function asObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
@@ -53413,7 +53656,7 @@ function subchecksClean(checks, blocksSubcheck) {
   return { clean: true, reason: "" };
 }
 function shippedRoot(repositoryRoot) {
-  return path42.isAbsolute(repositoryRoot) ? repositoryRoot : path42.resolve(repositoryRoot);
+  return path43.isAbsolute(repositoryRoot) ? repositoryRoot : path43.resolve(repositoryRoot);
 }
 function sameTree(declared, repositoryRoot) {
   const fold = (value) => value.replace(/[\\/]+/g, "/").replace(/\/+$/, "").replace(/^([A-Za-z]):/, (_match, drive) => `${drive.toLowerCase()}:`);
@@ -56356,7 +56599,7 @@ function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function listWorkflowChanges(repositoryRoot) {
-  const changesRoot = path43.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path44.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
     entries = await readdir18(changesRoot, { withFileTypes: true });
@@ -56412,7 +56655,7 @@ async function findLatestWorkflowChangeId(repositoryRoot) {
   const listed = await listWorkflowChanges(repositoryRoot);
   if (!listed.ok) return listed;
   const latest = listed.changes.at(-1);
-  if (latest === void 0) return noWorkflowChange(path43.join(repositoryRoot, ".legion", "project", "changes"));
+  if (latest === void 0) return noWorkflowChange(path44.join(repositoryRoot, ".legion", "project", "changes"));
   return { ok: true, changeId: latest.changeId };
 }
 async function isChangeComplete(input) {
@@ -56736,7 +56979,7 @@ function buildOracleArtifactInputs(options) {
 
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile22 } from "node:fs/promises";
-import path44 from "node:path";
+import path45 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -56784,13 +57027,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path44.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path44.join(context.repositoryRoot, "ROADMAP.md")
+    path45.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path45.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path44.isAbsolute(roadmapPath) ? roadmapPath : path44.resolve(repositoryRoot, roadmapPath);
+  return path45.isAbsolute(roadmapPath) ? roadmapPath : path45.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -56809,7 +57052,7 @@ function phaseChangeIdPrefix(phaseNumber) {
 
 // packages/cli/src/workflow/retro-index.ts
 import { readFile as readFile23 } from "node:fs/promises";
-import path45 from "node:path";
+import path46 from "node:path";
 var STAGED_ENTRY_FILE = "retro-entry.json";
 var RETRO_INDEX_ARTIFACT_PATH = ".legion/project/workflow/retro/retro-index.json";
 var EMPTY_INDEX = Object.freeze({
@@ -56832,7 +57075,7 @@ function isRetroIndexEntry(value) {
   return typeof entry["id"] === "string" && typeof entry["createdAt"] === "string" && typeof entry["artifactPath"] === "string" && typeof entry["summary"] === "string" && (entry["scopedChangeIds"] === void 0 || Array.isArray(entry["scopedChangeIds"]) && entry["scopedChangeIds"].every((id) => typeof id === "string")) && (entry["scopeLabel"] === void 0 || typeof entry["scopeLabel"] === "string") && Array.isArray(entry["actions"]) && entry["actions"].every(isRetroAction);
 }
 async function readRetroIndex(repositoryRoot) {
-  const indexPath = path45.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
+  const indexPath = path46.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
   try {
     const parsed = JSON.parse(await readFile23(indexPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null) return EMPTY_INDEX;
@@ -57367,7 +57610,7 @@ import { readFile as readFile25 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
 import { readdir as readdir19, readFile as readFile24 } from "node:fs/promises";
-import path46 from "node:path";
+import path47 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -57531,7 +57774,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path46.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path47.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir19(workflowRoot, { withFileTypes: true });
@@ -57540,7 +57783,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
       throw error51;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path46.join(workflowRoot, entry.name, "workflow-run.json") : path46.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path47.join(workflowRoot, entry.name, "workflow-run.json") : path47.join(workflowRoot, entry.name);
       let text = "";
       try {
         text = await readFile24(absolutePath, "utf8");
@@ -57559,7 +57802,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path46.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path47.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const text = await readFile24(indexPath, "utf8");
     return ["```json", truncate4(text.trim(), 4e3), "```"].join("\n");
@@ -57577,7 +57820,7 @@ function truncate4(text, maxLength) {
 import { spawn as spawn2 } from "node:child_process";
 import { createHash as createHash25 } from "node:crypto";
 import { existsSync as existsSync5 } from "node:fs";
-import path47 from "node:path";
+import path48 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
@@ -57586,7 +57829,7 @@ var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args2) {
   if (command !== "legion") return { command, args: args2 };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path47.join(sourceRoot, ...LEGION_BIN.split("/"));
+  const binPath = path48.join(sourceRoot, ...LEGION_BIN.split("/"));
   if (!existsSync5(binPath)) return { command, args: args2 };
   return { command: process.execPath, args: [binPath, ...args2] };
 }
@@ -57704,7 +57947,7 @@ function createVerificationRunner(options) {
 // packages/cli/src/workflow/executor/worker-bundles.ts
 import { createHash as createHash26 } from "node:crypto";
 import { readFileSync as readFileSync3 } from "node:fs";
-import path48 from "node:path";
+import path49 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
 var BUNDLE_INDEX = "bundles/index.json";
 var WorkerBundleIntegrityError = class extends Error {
@@ -57720,7 +57963,7 @@ function sha256Hex5(value) {
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path48.join(root, ...BUNDLE_INDEX.split("/"));
+  const indexPath = path49.join(root, ...BUNDLE_INDEX.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(readFileSync3(indexPath, "utf8"));
@@ -57747,7 +57990,7 @@ function loadWorkerBundles(sourceRoot) {
       );
     }
     {
-      const promptPath = path48.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      const promptPath = path49.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
         promptBody = readFileSync3(promptPath, "utf8");
@@ -57810,14 +58053,14 @@ async function loadOracleFacts(input) {
   return oracles;
 }
 async function loadReleaseFact(input) {
-  const path59 = releaseArtifactPath(input.changeId);
+  const path60 = releaseArtifactPath(input.changeId);
   const read = await absentOnFailure(
     () => readRelease({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
   );
-  if (read === void 0) return { kind: "unreadable", path: path59 };
+  if (read === void 0) return { kind: "unreadable", path: path60 };
   if (read.ok) return { kind: "document", document: read.document };
   if (read.status === "not_found") return { kind: "absent" };
-  return { kind: "unreadable", path: path59 };
+  return { kind: "unreadable", path: path60 };
 }
 function releaseArtifactPath(changeId) {
   try {
@@ -58828,11 +59071,11 @@ async function loadReaffirmedPins(input) {
   }
   if (approvals.length === 0) return () => false;
   const evaluatedAt = currentUtcTimestamp();
-  return (path59, sha2564) => approvals.some(
+  return (path60, sha2564) => approvals.some(
     (approval) => isLiveSurfaceReaffirmation({
       approval,
       changeId: input.changeId,
-      path: path59,
+      path: path60,
       currentSha256: sha2564,
       evaluatedAt
     })
@@ -63838,7 +64081,7 @@ function blockedRelease(diagnostics, action, extras = {}) {
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
 import { readFile as readFile26 } from "node:fs/promises";
-import path50 from "node:path";
+import path51 from "node:path";
 
 // packages/cli/src/workflow/ad-hoc-taskgraph.ts
 function narrowedToPolicy(derived, policy) {
@@ -64125,7 +64368,7 @@ function commandParts(parts2) {
 
 // packages/cli/src/commands/workflow/record.ts
 import { mkdir as mkdir13, writeFile as writeFile10 } from "node:fs/promises";
-import path49 from "node:path";
+import path50 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -64443,7 +64686,7 @@ async function runLearnWorkflow(context) {
   );
 }
 async function readLessonIndex(repositoryRoot) {
-  const indexPath = path50.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path51.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const parsed = JSON.parse(await readFile26(indexPath, "utf8"));
     if (parsed.kind === "lesson_index" && Array.isArray(parsed.lessons)) return parsed;
@@ -64574,7 +64817,7 @@ function renderLessonLine(record2) {
 
 // packages/cli/src/commands/workflow/contextual.ts
 import { readFile as readFile27, rm as rm8 } from "node:fs/promises";
-import path51 from "node:path";
+import path52 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
 var CONFIDENCE_VALUES = /* @__PURE__ */ new Set(["researched", "inferred", "assumed"]);
@@ -65062,7 +65305,8 @@ async function mapRefresh(context, scope, profile) {
       repositoryRoot: context.repositoryRoot,
       paths,
       scope: source.scope,
-      files: source.files
+      files: source.files,
+      ...semantic === void 0 ? {} : { snapshot: semantic.snapshot }
     });
     const parserDiagnostics2 = semantic?.parserDiagnostics ?? [];
     const structuralSummary = semantic === void 0 ? void 0 : deriveStructuralMapSummary({
@@ -65115,6 +65359,7 @@ async function mapRefresh(context, scope, profile) {
       mapArtifactSha256: artifacts.mapArtifactSha256,
       sourceFingerprint: artifacts.map.sourceFingerprint,
       sourceFileCount: artifacts.map.sourceFileCount,
+      preview: artifacts.preview,
       ...semantic === void 0 ? {} : {
         semanticIndexArtifactPath: semantic.semanticIndexArtifactPath,
         semanticSqliteArtifactPath: semantic.semanticSqliteArtifactPath,
@@ -65131,6 +65376,8 @@ async function mapRefresh(context, scope, profile) {
       `Artifact: ${artifacts.codebaseArtifactPath}`,
       ...semantic === void 0 ? [] : [`Semantic index: ${semantic.semanticIndexArtifactPath}`],
       ...structuralSummary === void 0 ? [] : renderStructuralMapSummary(structuralSummary),
+      "",
+      artifacts.preview,
       renderNextAction(action)
     ].join("\n");
     return status2 === "completed" ? success2(payload, human) : failure(payload, human);
@@ -65141,7 +65388,7 @@ async function mapRefresh(context, scope, profile) {
   }
 }
 async function discardMapRun(repositoryRoot, paths) {
-  await rm8(path51.join(repositoryRoot, ...paths.artifactRoot.split("/")), {
+  await rm8(path52.join(repositoryRoot, ...paths.artifactRoot.split("/")), {
     recursive: true,
     force: true,
     maxRetries: 10,
@@ -65621,7 +65868,7 @@ async function runRetroWorkflow(context) {
   });
   if ("exitCode" in executed) return executed;
   if (dryRun) {
-    await rm8(path51.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
+    await rm8(path52.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
       recursive: true,
       force: true,
       maxRetries: 10,
@@ -65909,7 +66156,7 @@ function optionalStringInput(context, key) {
   return value.trim();
 }
 async function readMilestoneIndex(repositoryRoot) {
-  const indexPath = path51.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const indexPath = path52.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
   try {
     const parsed = JSON.parse(await readFile27(indexPath, "utf8"));
     if (parsed.kind === "milestone_index" && Array.isArray(parsed.milestones)) return parsed;
@@ -66119,7 +66366,7 @@ function milestoneProgressPayload(state) {
 }
 async function saveStagedRetro(context, runId) {
   const runArtifactPath2 = artifactPathSchema.parse(`.legion/project/workflow/retro/${runId}/workflow-run.json`);
-  const runPath = path51.join(context.repositoryRoot, ...runArtifactPath2.split("/"));
+  const runPath = path52.join(context.repositoryRoot, ...runArtifactPath2.split("/"));
   let run2;
   try {
     run2 = JSON.parse(await readFile27(runPath, "utf8"));
@@ -66142,7 +66389,7 @@ async function saveStagedRetro(context, runId) {
   }
   let entry;
   try {
-    entry = JSON.parse(await readFile27(path51.join(context.repositoryRoot, ...entryPath.split("/")), "utf8"));
+    entry = JSON.parse(await readFile27(path52.join(context.repositoryRoot, ...entryPath.split("/")), "utf8"));
   } catch (error51) {
     return usageError(
       `legion retro --save ${runId} could not read ${entryPath}: ${error51 instanceof Error ? error51.message : String(error51)}`
@@ -66242,13 +66489,13 @@ function renderDerivedMetrics(metrics) {
 
 // packages/cli/src/commands/workflow/assess.ts
 import { readFile as readFile29 } from "node:fs/promises";
-import path55 from "node:path";
+import path56 from "node:path";
 
 // packages/cli/src/workflow/brownfield-assessment.ts
 import { createHash as createHash27, randomUUID as randomUUID4 } from "node:crypto";
 import { constants as fsConstants2 } from "node:fs";
 import { access, lstat as lstat6, mkdir as mkdir14, open as open4, readdir as readdir21, realpath as realpath6, rename as rename6, rm as rm9 } from "node:fs/promises";
-import path52 from "node:path";
+import path53 from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 var ASSESSMENT_ROOT = ".legion/project/assessment";
 var SAFE_REPOSITORY_ROOT = "repository";
@@ -66273,6 +66520,9 @@ var NOFOLLOW_FLAG = typeof fsConstants2.O_NOFOLLOW === "number" ? fsConstants2.O
 var DIRECTORY_FLAG = typeof fsConstants2.O_DIRECTORY === "number" ? fsConstants2.O_DIRECTORY : 0;
 var NONBLOCK_FLAG = typeof fsConstants2.O_NONBLOCK === "number" ? fsConstants2.O_NONBLOCK : 0;
 var DESCRIPTOR_PATH_ROOT = process.platform === "linux" ? "/proc/self/fd" : void 0;
+var ASSESSMENT_PRE_PUBLISH_HOLD_FILE_ENV = "LEGION_ASSESSMENT_PRE_PUBLISH_HOLD_FILE";
+var PRE_PUBLISH_HOLD_TIMEOUT_MS = 15e3;
+var PRE_PUBLISH_HOLD_POLL_MS = 10;
 function isNodeErrorCode5(error51, code) {
   return typeof error51 === "object" && error51 !== null && "code" in error51 && error51.code === code;
 }
@@ -66286,7 +66536,7 @@ function descriptorPath(descriptor) {
   return `${DESCRIPTOR_PATH_ROOT}/${descriptor.fd}`;
 }
 function descriptorChildPath(parent, child) {
-  return path52.join(descriptorPath(parent), child);
+  return path53.join(descriptorPath(parent), child);
 }
 var descriptorTraversalAvailable;
 async function canUseDescriptorTraversal() {
@@ -66304,7 +66554,7 @@ async function canUseDescriptorTraversal() {
   return descriptorTraversalAvailable;
 }
 async function assertStableAbsolutePath(absolutePath, displayPath, allowMissingFinal = true) {
-  const expectedParent = path52.dirname(absolutePath);
+  const expectedParent = path53.dirname(absolutePath);
   let parentRealPath;
   try {
     parentRealPath = await realpath6(expectedParent);
@@ -66467,21 +66717,21 @@ function assertAssessmentArtifactPath(artifactPath) {
 async function resolveSafeBundlePath(repositoryRoot, artifactPath) {
   assertAssessmentArtifactPath(artifactPath);
   const resolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath });
-  const repositoryRealPath = path52.resolve(resolved.repositoryRoot);
+  const repositoryRealPath = path53.resolve(resolved.repositoryRoot);
   const repositoryStat = await lstat6(repositoryRealPath);
   if (repositoryStat.isSymbolicLink() || !repositoryStat.isDirectory()) {
     throw new Error(`Brownfield assessment repository root is not a directory: ${repositoryRoot}`);
   }
-  const assessmentRealPath = path52.join(repositoryRealPath, ".legion", "project", "assessment");
-  const relativeToAssessment = path52.relative(assessmentRealPath, resolved.absolutePath);
-  if (relativeToAssessment === ".." || relativeToAssessment.startsWith(`..${path52.sep}`) || path52.isAbsolute(relativeToAssessment)) {
+  const assessmentRealPath = path53.join(repositoryRealPath, ".legion", "project", "assessment");
+  const relativeToAssessment = path53.relative(assessmentRealPath, resolved.absolutePath);
+  if (relativeToAssessment === ".." || relativeToAssessment.startsWith(`..${path53.sep}`) || path53.isAbsolute(relativeToAssessment)) {
     throw new Error(`Brownfield assessment artifact path escapes ${ASSESSMENT_ROOT}: ${artifactPath}`);
   }
   const components = artifactPath.split("/");
   const componentStats = [];
   let current = repositoryRealPath;
   for (const [index, component] of components.entries()) {
-    current = path52.join(current, component);
+    current = path53.join(current, component);
     let componentStat;
     try {
       componentStat = await lstat6(current);
@@ -66600,7 +66850,7 @@ async function writeLockMetadata(lockPath, lockDescriptor) {
   let hasOperationError = false;
   try {
     if (lockDescriptor === void 0) await assertStableAbsolutePath(lockPath, lockPath, false);
-    descriptor = lockDescriptor === void 0 ? await open4(path52.join(lockPath, PUBLISH_LOCK_METADATA), fsConstants2.O_CREAT | fsConstants2.O_EXCL | fsConstants2.O_WRONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG, 384) : await openRelativeFile(lockDescriptor, PUBLISH_LOCK_METADATA, fsConstants2.O_CREAT | fsConstants2.O_EXCL | fsConstants2.O_WRONLY, 384);
+    descriptor = lockDescriptor === void 0 ? await open4(path53.join(lockPath, PUBLISH_LOCK_METADATA), fsConstants2.O_CREAT | fsConstants2.O_EXCL | fsConstants2.O_WRONLY | NOFOLLOW_FLAG | NONBLOCK_FLAG, 384) : await openRelativeFile(lockDescriptor, PUBLISH_LOCK_METADATA, fsConstants2.O_CREAT | fsConstants2.O_EXCL | fsConstants2.O_WRONLY, 384);
     await descriptor.writeFile(metadata2, "utf8");
     await descriptor.sync();
   } catch (error51) {
@@ -66628,7 +66878,7 @@ async function readLockMetadata(lockPath, lockDescriptor) {
   let operationError;
   let hasOperationError = false;
   try {
-    const metadataPath = path52.join(lockPath, PUBLISH_LOCK_METADATA);
+    const metadataPath = path53.join(lockPath, PUBLISH_LOCK_METADATA);
     const fallbackStat = lockDescriptor === void 0 ? await lstatIfPresent(metadataPath) : void 0;
     if (fallbackStat === void 0 || !fallbackStat.isSymbolicLink() && fallbackStat.isFile()) {
       if (fallbackStat?.isSymbolicLink()) {
@@ -66716,7 +66966,7 @@ async function restoreQuarantinedLock(input) {
 }
 async function removeLockIfOwned(parentDescriptor, lockName, lockPath, expectedIdentity, expectedToken, heldLockDescriptor) {
   const quarantineName = `${lockName}.release-${process.pid}-${randomUUID4()}`;
-  const quarantinePath = path52.join(path52.dirname(lockPath), quarantineName);
+  const quarantinePath = path53.join(path53.dirname(lockPath), quarantineName);
   let lockDescriptor = heldLockDescriptor;
   let ownsLockDescriptor = false;
   let operationError;
@@ -66752,7 +67002,7 @@ async function removeLockIfOwned(parentDescriptor, lockName, lockPath, expectedI
         throw new Error(`Brownfield assessment lock cleanup quarantine already exists: ${quarantineEntryPath}`);
       }
       if (parentDescriptor === void 0) {
-        await assertStableAbsolutePath(path52.dirname(lockPath), path52.dirname(lockPath), false);
+        await assertStableAbsolutePath(path53.dirname(lockPath), path53.dirname(lockPath), false);
         await rename6(lockPath, quarantinePath);
       } else {
         await rename6(
@@ -66838,7 +67088,7 @@ async function releasePublishLock(lock) {
 }
 async function quarantineStaleLock(parent, lockName, lockPath, observed) {
   const quarantineName = `${lockName}.stale-${process.pid}-${randomUUID4()}`;
-  const quarantinePath = path52.join(parent.absolutePath, quarantineName);
+  const quarantinePath = path53.join(parent.absolutePath, quarantineName);
   let lockDescriptor;
   let result = false;
   let operationError;
@@ -66925,7 +67175,7 @@ async function quarantineStaleLock(parent, lockName, lockPath, observed) {
 }
 async function acquirePublishLock(parent, finalPath, finalName) {
   const lockName = `.${finalName}.publish-lock`;
-  const lockPath = path52.join(parent.absolutePath, lockName);
+  const lockPath = path53.join(parent.absolutePath, lockName);
   for (let attempt = 0; attempt < PUBLISH_LOCK_ATTEMPTS; attempt += 1) {
     try {
       if (parent.descriptor === void 0) {
@@ -67023,6 +67273,19 @@ async function acquirePublishLock(parent, finalPath, finalName) {
   }
   throw new Error(`Timed out waiting to publish the brownfield assessment bundle: ${finalPath}`);
 }
+async function waitForOptionalPrePublishHold() {
+  const holdFile = process.env[ASSESSMENT_PRE_PUBLISH_HOLD_FILE_ENV];
+  if (holdFile === void 0 || holdFile.length === 0) return;
+  const deadline = Date.now() + PRE_PUBLISH_HOLD_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      await access(holdFile);
+    } catch {
+      return;
+    }
+    await delay(PRE_PUBLISH_HOLD_POLL_MS);
+  }
+}
 async function writeStagedText(stageDirectory, fileName, text, stageDescriptor) {
   const encodedBytes = Buffer.byteLength(text, "utf8");
   if (encodedBytes > MAX_BUNDLE_FILE_BYTES) {
@@ -67030,7 +67293,7 @@ async function writeStagedText(stageDirectory, fileName, text, stageDescriptor) 
       `Brownfield assessment artifact ${fileName} exceeds the ${MAX_BUNDLE_FILE_BYTES}-byte publication limit (${encodedBytes} bytes).`
     );
   }
-  const stagedPath = path52.join(stageDirectory, fileName);
+  const stagedPath = path53.join(stageDirectory, fileName);
   let stagedHandle;
   let stagedIdentity;
   let completed = false;
@@ -67079,7 +67342,7 @@ function assertOwnedFileIdentity(expected, actual, displayPath) {
 }
 async function revalidateStagedDirectory(input) {
   const { parent, stagedPath, stagedName, stageIdentity, stageDescriptor } = input;
-  if (!samePath(path52.dirname(stagedPath), parent.absolutePath)) {
+  if (!samePath(path53.dirname(stagedPath), parent.absolutePath)) {
     throw new Error(`Brownfield assessment staging path has an unexpected parent: ${stagedPath}`);
   }
   if (stageDescriptor !== void 0) {
@@ -67125,8 +67388,8 @@ async function assertPublishedStagedDirectory(input) {
 async function publishStagedBundle(paths, stagedPath, parent, stageIdentity, stageDescriptor, options = {}) {
   const replaceExisting = options.replaceExisting === true;
   const final = await resolveSafeBundlePath(parent.repositoryRoot, paths.root);
-  const finalName = path52.basename(final.absolutePath);
-  const stagedName = path52.basename(stagedPath);
+  const finalName = path53.basename(final.absolutePath);
+  const stagedName = path53.basename(stagedPath);
   const lock = await acquirePublishLock(parent, final.absolutePath, finalName);
   let previousName;
   let previousPath;
@@ -67153,7 +67416,7 @@ async function publishStagedBundle(paths, stagedPath, parent, stageIdentity, sta
     });
     if (existing !== void 0) {
       previousName = `.${finalName}.${process.pid}.${randomUUID4()}.previous`;
-      previousPath = path52.join(parent.absolutePath, previousName);
+      previousPath = path53.join(parent.absolutePath, previousName);
       if (parent.descriptor === void 0) {
         await assertStableFallbackPath(final, paths.root, false);
         await rename6(final.absolutePath, previousPath);
@@ -67231,7 +67494,7 @@ async function openValidatedBundleFile(repositoryRoot, artifactPath) {
       if (expectedFileStat === void 0) {
         throw new Error(`Brownfield assessment artifact is missing: ${artifactPath}`);
       }
-      descriptor2 = await openRelativeFile(parent.descriptor, path52.basename(artifactPath), fsConstants2.O_RDONLY);
+      descriptor2 = await openRelativeFile(parent.descriptor, path53.basename(artifactPath), fsConstants2.O_RDONLY);
       const openedStat = await descriptor2.stat();
       if (!openedStat.isFile()) throw new Error(`Brownfield assessment artifact is not a regular file: ${artifactPath}`);
       assertSameFileIdentity(expectedFileStat, openedStat, artifactPath);
@@ -67611,8 +67874,8 @@ async function writeInitialBundle(input) {
     "synthesis.json": placeholder,
     "review.json": placeholder
   };
-  const stageName = `.${path52.basename(input.paths.root)}.${process.pid}.${randomUUID4()}.staging`;
-  const stagedPath = path52.join(parent.absolutePath, stageName);
+  const stageName = `.${path53.basename(input.paths.root)}.${process.pid}.${randomUUID4()}.staging`;
+  const stagedPath = path53.join(parent.absolutePath, stageName);
   let stageDirectory;
   let stageDescriptor;
   let stageIdentity;
@@ -67659,6 +67922,7 @@ async function writeInitialBundle(input) {
       await writeStagedText(stagedPath, fileName, contentByFile[fileName], stageDirectory.descriptor);
     }
     await syncBundleDirectory(stageDirectory);
+    await waitForOptionalPrePublishHold();
     await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity, stageDescriptor);
     staged = false;
   } catch (error51) {
@@ -67691,8 +67955,8 @@ async function writeUpdatedBundle(input) {
   };
   const parentArtifactPath = artifactPathSchema.parse(ASSESSMENT_ROOT);
   const parent = await openBundleDirectory(input.repositoryRoot, parentArtifactPath, false);
-  const stageName = `.${path52.basename(input.paths.root)}.${process.pid}.${randomUUID4()}.staging`;
-  const stagedPath = path52.join(parent.absolutePath, stageName);
+  const stageName = `.${path53.basename(input.paths.root)}.${process.pid}.${randomUUID4()}.staging`;
+  const stagedPath = path53.join(parent.absolutePath, stageName);
   let stageDirectory;
   let stageDescriptor;
   let stageIdentity;
@@ -67747,6 +68011,7 @@ async function writeUpdatedBundle(input) {
         throw new Error(`Brownfield assessment phase has already been advanced by a concurrent updater to "${existingPhase}". The requested transition from "${input.expectedCurrentPhase}" to "${input.state.phase}" is no longer valid.`);
       }
     };
+    await waitForOptionalPrePublishHold();
     await publishStagedBundle(input.paths, stagedPath, parent, stageIdentity, stageDescriptor, { replaceExisting: true, validateBeforePublish: validatePhaseUnderLock });
     staged = false;
   } catch (error51) {
@@ -67945,9 +68210,9 @@ import { createHash as createHash28 } from "node:crypto";
 import { builtinModules } from "node:module";
 import { constants } from "node:fs";
 import { lstat as lstat7, open as open5 } from "node:fs/promises";
-import path53 from "node:path";
+import path54 from "node:path";
 var MAX_BOUNDED_SOURCE_BYTES = 256 * 1024;
-var MAX_BOUNDED_MAP_BYTES = 16 * 1024 * 1024;
+var MAX_BOUNDED_MAP_BYTES = 64 * 1024 * 1024;
 var MAX_SIGNAL_EVIDENCE = 64;
 var HOTSPOT_FACT_SAMPLE_SIZE = 8;
 var BOUNDED_SAMPLE_NOTE = `Bounded sample: first ${MAX_SIGNAL_EVIDENCE} deterministic evidence references.`;
@@ -67991,7 +68256,7 @@ var BINARY_EXTENSIONS = /* @__PURE__ */ new Set([
 var GENERATED_DIRECTORY_NAMES = /* @__PURE__ */ new Set(["build", "dist", "generated", "gen", "out", "target", "__generated__"]);
 var NOFOLLOW_FLAG2 = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
 var READ_ONLY_ARTIFACT_FLAGS = constants.O_RDONLY | NOFOLLOW_FLAG2;
-function compareStrings9(left, right) {
+function compareStrings10(left, right) {
   if (left < right) return -1;
   if (left > right) return 1;
   return 0;
@@ -68019,7 +68284,7 @@ function structuralFactEvidence(sqliteArtifactPath, sqliteSha256, fact, note) {
 function testNamingConventions(sourcePath) {
   const parts2 = sourcePath.split("/");
   const basename = parts2.at(-1) ?? sourcePath;
-  const extension = path53.posix.extname(basename);
+  const extension = path54.posix.extname(basename);
   const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
   const conventions = [];
   if (parts2.slice(0, -1).some((part) => TEST_DIRECTORY_NAMES.has(part.toLowerCase()))) {
@@ -68041,14 +68306,14 @@ function testNamingConventions(sourcePath) {
 }
 function isTestFile(sourcePath) {
   if (testNamingConventions(sourcePath).length > 0) return true;
-  const basename = path53.posix.basename(sourcePath);
-  const extension = path53.posix.extname(basename);
+  const basename = path54.posix.basename(sourcePath);
+  const extension = path54.posix.extname(basename);
   const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
   return /(?:^|[._-])(test|spec)(?:$|[._-])/iu.test(stem);
 }
 function sourceStem(sourcePath) {
-  const basename = path53.posix.basename(sourcePath);
-  const extension = path53.posix.extname(basename);
+  const basename = path54.posix.basename(sourcePath);
+  const extension = path54.posix.extname(basename);
   const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
   return stem.replace(/(?:[._-])(test|spec)$/iu, "").replace(/(?:Tests?|Spec)$/u, "").replace(/^(?:Tests?|Spec)(?=[A-Z])/u, "").replace(/^test[._-]/iu, "");
 }
@@ -68056,12 +68321,12 @@ function sourceBasename(sourcePath) {
   return sourceStem(sourcePath).toLowerCase();
 }
 function sourceExtension(sourcePath) {
-  return path53.posix.extname(sourcePath).toLowerCase();
+  return path54.posix.extname(sourcePath).toLowerCase();
 }
 function isGeneratedPath(sourcePath) {
   const parts2 = sourcePath.toLowerCase().split("/");
-  const basename = path53.posix.basename(sourcePath).toLowerCase();
-  const extension = path53.posix.extname(basename);
+  const basename = path54.posix.basename(sourcePath).toLowerCase();
+  const extension = path54.posix.extname(basename);
   const stem = extension.length === 0 ? basename : basename.slice(0, -extension.length);
   return parts2.slice(0, -1).some((part) => GENERATED_DIRECTORY_NAMES.has(part)) || /(?:^|[._-])(?:generated|gen)(?:$|[._-])/u.test(stem);
 }
@@ -68073,7 +68338,7 @@ function topLevelRoot(sourcePath) {
 }
 function isManifestOrCi(sourcePath) {
   const normalizedPath = sourcePath.toLowerCase();
-  const basename = path53.posix.basename(sourcePath).toLowerCase();
+  const basename = path54.posix.basename(sourcePath).toLowerCase();
   const isCiConfig = normalizedPath.startsWith("ci/") && !AUTHORED_SOURCE_EXTENSIONS.has(sourceExtension(sourcePath));
   const isCircleCiConfig = normalizedPath.startsWith(".circleci/") && CI_CONFIG_EXTENSIONS.has(sourceExtension(sourcePath));
   const isTravisConfig = normalizedPath === ".travis.yml" || normalizedPath === ".travis.yaml";
@@ -68083,7 +68348,7 @@ function isBinaryPath(sourcePath) {
   return BINARY_EXTENSIONS.has(sourceExtension(sourcePath));
 }
 function isDocumentation(sourcePath) {
-  const extension = path53.posix.extname(sourcePath).toLowerCase();
+  const extension = path54.posix.extname(sourcePath).toLowerCase();
   return extension === ".md" || extension === ".mdx" || sourcePath.toLowerCase().includes("/docs/") || sourcePath.toLowerCase().startsWith("docs/");
 }
 function isEligibleTestInventoryPath(sourcePath) {
@@ -68103,7 +68368,7 @@ function addSignal(target, code, severity, statement, evidence, boundedSample = 
 function sortSignals(signals) {
   return sorted(
     signals,
-    (left, right) => compareStrings9(left.code, right.code) || compareStrings9(left.statement, right.statement) || compareStrings9(JSON.stringify(left.evidence), JSON.stringify(right.evidence))
+    (left, right) => compareStrings10(left.code, right.code) || compareStrings10(left.statement, right.statement) || compareStrings10(JSON.stringify(left.evidence), JSON.stringify(right.evidence))
   );
 }
 async function openValidatedArtifact(absolutePath, label) {
@@ -68139,18 +68404,18 @@ async function openValidatedArtifact(absolutePath, label) {
 }
 async function openValidatedSourceFile(repositoryRoot, sourcePath) {
   const validatedSourcePath = codeIndexSourcePathSchema.parse(sourcePath);
-  const root = path53.resolve(repositoryRoot);
-  const absolutePath = path53.resolve(root, ...validatedSourcePath.split("/"));
+  const root = path54.resolve(repositoryRoot);
+  const absolutePath = path54.resolve(root, ...validatedSourcePath.split("/"));
   const comparisonRoot = process.platform === "win32" ? root.toLowerCase() : root;
   const comparisonPath = process.platform === "win32" ? absolutePath.toLowerCase() : absolutePath;
-  const relativePath = path53.relative(comparisonRoot, comparisonPath);
-  if (relativePath === "" || relativePath.startsWith("..") || path53.isAbsolute(relativePath)) {
+  const relativePath = path54.relative(comparisonRoot, comparisonPath);
+  if (relativePath === "" || relativePath.startsWith("..") || path54.isAbsolute(relativePath)) {
     throw new Error(`Snapshot source path ${validatedSourcePath} escapes the repository root.`);
   }
   const components = validatedSourcePath.split("/");
   let parentPath = root;
   for (const component of components.slice(0, -1)) {
-    parentPath = path53.join(parentPath, component);
+    parentPath = path54.join(parentPath, component);
     let parentStat;
     try {
       parentStat = await lstat7(parentPath);
@@ -68199,9 +68464,9 @@ async function openValidatedSourceFile(repositoryRoot, sourcePath) {
   }
 }
 async function artifactPathForSqlite(repositoryRoot, sqlitePath, expected, expectedSha256) {
-  const root = path53.resolve(repositoryRoot);
-  const absolute = path53.resolve(root, sqlitePath);
-  const relative = path53.relative(root, absolute).split(path53.sep).join("/");
+  const root = path54.resolve(repositoryRoot);
+  const absolute = path54.resolve(root, sqlitePath);
+  const relative = path54.relative(root, absolute).split(path54.sep).join("/");
   const parsed = artifactPathSchema.parse(relative);
   if (parsed !== expected) {
     throw new Error(`SQLite path ${sqlitePath} does not match the validated snapshot path ${expected}.`);
@@ -68324,7 +68589,7 @@ async function readBoundedMapDocument(absolutePath) {
   }
 }
 async function expectedSourceHashes(repositoryRoot, sqliteArtifactPath, snapshot) {
-  const mapArtifactPath = artifactPathSchema.parse(`${path53.posix.dirname(sqliteArtifactPath)}/map.json`);
+  const mapArtifactPath = artifactPathSchema.parse(`${path54.posix.dirname(sqliteArtifactPath)}/map.json`);
   const mapResolved = await resolveProjectArtifactPath({ repositoryRoot, artifactPath: mapArtifactPath });
   const mapDocument = await readBoundedMapDocument(mapResolved.absolutePath);
   if (mapDocument["schemaVersion"] !== 1 || mapDocument["kind"] !== "codebase_map") {
@@ -68404,6 +68669,9 @@ async function expectedSourceHashes(repositoryRoot, sqliteArtifactPath, snapshot
   }
   return result;
 }
+function conservativeTestToSourceLinks(testFiles, coverage) {
+  return findTestLinks(testFiles, coverage);
+}
 function findTestLinks(testFiles, coverage) {
   const sourceCandidatesByBasename = /* @__PURE__ */ new Map();
   const sourceCandidatesByBasenameAndExtension = /* @__PURE__ */ new Map();
@@ -68418,7 +68686,7 @@ function findTestLinks(testFiles, coverage) {
     if (isTestFile(entry.path) || !isEligibleSourceForTestNeighbor(entry)) continue;
     const basename = sourceBasename(entry.path);
     const extension = sourceExtension(entry.path);
-    const directory = path53.posix.dirname(entry.path);
+    const directory = path54.posix.dirname(entry.path);
     addCandidate(sourceCandidatesByBasename, basename, entry.path);
     addCandidate(sourceCandidatesByBasenameAndExtension, candidateKey(basename, extension), entry.path);
     addCandidate(sourceCandidatesByBasenameExtensionAndDirectory, candidateKey(basename, extension, directory), entry.path);
@@ -68428,18 +68696,18 @@ function findTestLinks(testFiles, coverage) {
     sourceCandidatesByBasenameAndExtension,
     sourceCandidatesByBasenameExtensionAndDirectory
   ]) {
-    for (const candidates of index.values()) candidates.sort(compareStrings9);
+    for (const candidates of index.values()) candidates.sort(compareStrings10);
   }
   const testFileSet = new Set(testFiles);
   const eligibleTestPaths = new Set(
     coverage.filter((entry) => testFileSet.has(entry.path) && isEligibleSourceForTestNeighbor(entry)).map((entry) => entry.path)
   );
   const links = [];
-  for (const testPath of sorted(testFiles, compareStrings9)) {
+  for (const testPath of sorted(testFiles, compareStrings10)) {
     if (!eligibleTestPaths.has(testPath)) continue;
     const testStem = sourceBasename(testPath);
     const testExtension = sourceExtension(testPath);
-    const testDirectory = path53.posix.dirname(testPath);
+    const testDirectory = path54.posix.dirname(testPath);
     const candidates = sourceCandidatesByBasename.get(testStem);
     if (candidates === void 0 || candidates.length === 0) continue;
     let sourcePath;
@@ -68479,7 +68747,7 @@ function safeImportSpecifier(specifier) {
   if (BUILTIN_IMPORT_SPECIFIERS.has(specifier)) return specifier;
   if (isOpaqueImportSpecifier(specifier)) return OPAQUE_IMPORT_SPECIFIER;
   const pathOnly = specifier.split(/[?#]/u, 1)[0] ?? ".";
-  const normalized = path53.posix.normalize(pathOnly);
+  const normalized = path54.posix.normalize(pathOnly);
   const relative = normalized === "." || normalized === ".." || normalized.startsWith("../") ? normalized : `./${normalized}`;
   const safe = relative.replace(/[^A-Za-z0-9._/-]/gu, "_").slice(0, 256);
   return safe.length > 0 ? safe : "./_";
@@ -68487,7 +68755,7 @@ function safeImportSpecifier(specifier) {
 function importTargetPaths(fact, availablePaths) {
   const specifier = fact.specifier;
   if (!isRelativeImportSpecifier(specifier)) return [];
-  const target = path53.posix.normalize(path53.posix.join(path53.posix.dirname(fact.path), specifier));
+  const target = path54.posix.normalize(path54.posix.join(path54.posix.dirname(fact.path), specifier));
   const candidates = [target];
   const extension = sourceExtension(target);
   if (extension === ".js") candidates.push(`${target.slice(0, -extension.length)}.ts`, `${target.slice(0, -extension.length)}.tsx`);
@@ -68528,7 +68796,7 @@ function collectArchitectureSignals(input) {
     sourceFacts.set(fact.path, facts);
   }
   const sqliteSha256 = snapshot.sqlite.sha256;
-  for (const [sourcePath, facts] of [...sourceFacts.entries()].sort(([left], [right]) => compareStrings9(left, right))) {
+  for (const [sourcePath, facts] of [...sourceFacts.entries()].sort(([left], [right]) => compareStrings10(left, right))) {
     if (facts.length < 2) continue;
     const observation = sourceObservationFor(observations, sourcePath);
     addSignal(
@@ -68547,7 +68815,7 @@ function collectArchitectureSignals(input) {
     facts.push(fact);
     importsBySpecifier.set(fact.specifier, facts);
   }
-  for (const [specifier, facts] of [...importsBySpecifier.entries()].sort(([left], [right]) => compareStrings9(left, right))) {
+  for (const [specifier, facts] of [...importsBySpecifier.entries()].sort(([left], [right]) => compareStrings10(left, right))) {
     if (facts.length < 2) continue;
     const observationsForFacts = facts.slice(0, HOTSPOT_FACT_SAMPLE_SIZE).map((fact) => sourceEvidence(
       sourceObservationFor(observations, fact.path),
@@ -68582,15 +68850,15 @@ function collectArchitectureSignals(input) {
     paths.push(coverage.path);
     modulesByBasename.set(basename, paths);
   }
-  for (const [basename, paths] of [...modulesByBasename.entries()].sort(([left], [right]) => compareStrings9(left, right))) {
-    const uniqueRoots = new Set(paths.map((sourcePath) => path53.posix.dirname(sourcePath)));
+  for (const [basename, paths] of [...modulesByBasename.entries()].sort(([left], [right]) => compareStrings10(left, right))) {
+    const uniqueRoots = new Set(paths.map((sourcePath) => path54.posix.dirname(sourcePath)));
     if (paths.length < 2 || uniqueRoots.size < 2) continue;
     addSignal(
       signals,
       "duplicate-module-basename",
       "moderate",
       `Module basename ${JSON.stringify(basename)} occurs across ${uniqueRoots.size} repository roots; path identity must remain explicit.`,
-      sorted(paths, compareStrings9).map((sourcePath) => sourceEvidence(
+      sorted(paths, compareStrings10).map((sourcePath) => sourceEvidence(
         sourceObservationFor(observations, sourcePath),
         "Source file participating in duplicate module basename heuristic."
       ))
@@ -68619,7 +68887,7 @@ function collectArchitectureSignals(input) {
   for (const fact of snapshot.imports) {
     if (fact.specifier !== ".." && !fact.specifier.startsWith("../")) continue;
     const sourceRoot = topLevelRoot(fact.path);
-    const lexicalTarget = path53.posix.normalize(path53.posix.join(path53.posix.dirname(fact.path), fact.specifier));
+    const lexicalTarget = path54.posix.normalize(path54.posix.join(path54.posix.dirname(fact.path), fact.specifier));
     const targetRoot = topLevelRoot(lexicalTarget);
     if (sourceRoot === targetRoot) continue;
     const observation = sourceObservationFor(observations, fact.path);
@@ -68694,7 +68962,7 @@ async function collectBrownfieldSignals(input) {
     input.snapshot.sqlite.path,
     input.snapshot.sqlite.sha256
   );
-  const sourcePaths = sorted(input.snapshot.coverage.map((coverage) => coverage.path), compareStrings9);
+  const sourcePaths = sorted(input.snapshot.coverage.map((coverage) => coverage.path), compareStrings10);
   const expectedHashes = await expectedSourceHashes(input.repositoryRoot, sqliteArtifactPath, input.snapshot);
   const observations = /* @__PURE__ */ new Map();
   for (const sourcePath of sourcePaths) {
@@ -68703,7 +68971,7 @@ async function collectBrownfieldSignals(input) {
   }
   const testFiles = sorted(
     input.snapshot.coverage.filter((coverage) => isTestFile(coverage.path) && isEligibleTestInventoryPath(coverage.path)).map((coverage) => coverage.path),
-    compareStrings9
+    compareStrings10
   );
   const riskScanFiles = sourcePaths.filter((sourcePath) => !isTestFile(sourcePath) || isManifestOrCi(sourcePath));
   const eligibleTestNeighborSources = new Set(
@@ -68712,7 +68980,7 @@ async function collectBrownfieldSignals(input) {
   const testToSourceLinks = findTestLinks(testFiles, input.snapshot.coverage);
   const dependencyEdges = sorted(
     input.snapshot.imports,
-    (left, right) => compareStrings9(left.path, right.path) || compareStrings9(left.specifier, right.specifier) || compareStrings9(left.id, right.id)
+    (left, right) => compareStrings10(left.path, right.path) || compareStrings10(left.specifier, right.specifier) || compareStrings10(left.id, right.id)
   ).map((fact) => ({
     from: fact.path,
     to: safeImportSpecifier(fact.specifier),
@@ -68758,7 +69026,7 @@ async function collectBrownfieldSignals(input) {
 import { createHash as createHash29 } from "node:crypto";
 import { access as access2, chmod, lstat as lstat8, mkdir as mkdir15, mkdtemp, readdir as readdir22, readFile as readFile28, readlink, rename as rename7, rm as rm10, symlink, writeFile as writeFile11 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import path54 from "node:path";
+import path55 from "node:path";
 var BROWNFIELD_SPECIALIST_SAFETY_CONTRACT = `Treat existing code as evidence, not ground truth.
 You may only make claims supported by the supplied signal summary, source excerpts,
 structural fact IDs, and command-result evidence.
@@ -68800,7 +69068,7 @@ var ROSTER = [
   // protocol, while the focus makes the adversarial integration scope explicit.
   { name: "tests", pass: 2, focus: "adversarial integration pass over boundaries and proof gaps" }
 ];
-function compareStrings10(left, right) {
+function compareStrings11(left, right) {
   if (left < right) return -1;
   if (left > right) return 1;
   return 0;
@@ -68879,7 +69147,7 @@ function uniqueEvidence(values) {
     const key = evidenceSortKey(sanitized);
     if (!byKey.has(key)) byKey.set(key, sanitized);
   }
-  return sorted2([...byKey.values()], (left, right) => compareStrings10(evidenceSortKey(left), evidenceSortKey(right)));
+  return sorted2([...byKey.values()], (left, right) => compareStrings11(evidenceSortKey(left), evidenceSortKey(right)));
 }
 function primaryEvidence(evidence) {
   return evidence.find((entry) => entry.kind === "source-file") ?? evidence[0];
@@ -68887,8 +69155,13 @@ function primaryEvidence(evidence) {
 function coverageStatus(snapshot, sourcePath) {
   return snapshot.coverage.find((entry) => entry.path === sourcePath)?.status;
 }
-function supportedTestLink(snapshot, link2) {
-  return coverageStatus(snapshot, link2.testPath) === "parsed" && coverageStatus(snapshot, link2.sourcePath) === "parsed";
+function conservativeLinkKeySet(snapshot, testFiles) {
+  return new Set(
+    conservativeTestToSourceLinks(testFiles, snapshot.coverage).map((link2) => `${link2.testPath}\0${link2.sourcePath}`)
+  );
+}
+function supportedTestLink(snapshot, link2, conservativeLinks) {
+  return coverageStatus(snapshot, link2.testPath) === "parsed" && coverageStatus(snapshot, link2.sourcePath) === "parsed" && conservativeLinks.has(`${link2.testPath}\0${link2.sourcePath}`);
 }
 function snapshotCoverageSourceHashes(snapshot) {
   const sourceHashes = /* @__PURE__ */ new Map();
@@ -68927,8 +69200,8 @@ function attachCoverageSourceHashes(snapshot, hashes) {
   }
 }
 async function inventoryHashesForSnapshot(repositoryRoot, snapshot) {
-  const mapArtifactPath = `${path54.posix.dirname(snapshot.sqlite.path)}/map.json`;
-  const absolutePath = path54.join(repositoryRoot, ...mapArtifactPath.split("/"));
+  const mapArtifactPath = `${path55.posix.dirname(snapshot.sqlite.path)}/map.json`;
+  const absolutePath = path55.join(repositoryRoot, ...mapArtifactPath.split("/"));
   try {
     await access2(absolutePath);
   } catch {
@@ -68937,12 +69210,12 @@ async function inventoryHashesForSnapshot(repositoryRoot, snapshot) {
   return expectedSourceHashes(repositoryRoot, snapshot.sqlite.path, snapshot);
 }
 function testMetadataEvidence(sourceHashes, sourcePath, note) {
-  const path59 = codeIndexSourcePathSchema.parse(sourcePath);
-  const sha2564 = sourceHashes.get(path59);
-  if (sha2564 === void 0) throw new Error(`Snapshot has no source hash for test metadata path ${path59}.`);
+  const path60 = codeIndexSourcePathSchema.parse(sourcePath);
+  const sha2564 = sourceHashes.get(path60);
+  if (sha2564 === void 0) throw new Error(`Snapshot has no source hash for test metadata path ${path60}.`);
   return assessmentEvidenceRefSchema.parse({
     kind: "source-file",
-    path: path59,
+    path: path60,
     sha256: sha2564,
     note: boundedText(note, 512)
   });
@@ -68953,7 +69226,7 @@ function excerptFrom(input) {
   const evidence = allEvidence.slice(0, MAX_EVIDENCE_PER_EXCERPT);
   const primary = primaryEvidence(evidence);
   if (primary === void 0) throw new Error("Brownfield specialist excerpt has no evidence.");
-  const factIds = evidence.filter((entry) => entry.kind === "structural-fact").map((entry) => entry.factId).sort(compareStrings10);
+  const factIds = evidence.filter((entry) => entry.kind === "structural-fact").map((entry) => entry.factId).sort(compareStrings11);
   const primarySha256 = "sha256" in primary ? primary.sha256 : void 0;
   const textLimit = evidenceWasBounded ? MAX_EXCERPT_CHARS - BOUNDED_EVIDENCE_NOTE.length : MAX_EXCERPT_CHARS;
   return {
@@ -68985,8 +69258,8 @@ function validateSnapshot(snapshotInput) {
   return snapshot;
 }
 function validateSignals(input, snapshot) {
-  const summary = assessmentSignalSummarySchema.parse(input.signals.summary);
   const coveredPaths = new Set(snapshot.coverage.map((entry) => entry.path));
+  const conservativeLinks = conservativeLinkKeySet(snapshot, input.signals.testFiles);
   const factIds = /* @__PURE__ */ new Set([
     ...snapshot.symbols.map((entry) => entry.id),
     ...snapshot.imports.map((entry) => entry.id),
@@ -69032,14 +69305,24 @@ function validateSignals(input, snapshot) {
   for (const [index, edge] of input.signals.dependencyEdges.entries()) {
     codeIndexSourcePathSchema.parse(edge.from);
     if (!coveredPaths.has(edge.from) || typeof edge.to !== "string") throw new Error(`Dependency edge ${index} is outside snapshot coverage.`);
-    register(edge.evidence, `Dependency edge ${index}`);
+    const edgeEvidence = assessmentEvidenceRefSchema.parse(edge.evidence);
+    if (edgeEvidence.kind !== "structural-fact") {
+      throw new Error(`Dependency edge ${index} must cite a structural import fact.`);
+    }
+    const importFact = snapshot.imports.find((entry) => String(entry.id) === String(edgeEvidence.factId));
+    if (importFact === void 0 || importFact.path !== edge.from) {
+      throw new Error(`Dependency edge ${index} does not identify an import belonging to ${edge.from}.`);
+    }
+    register(edgeEvidence, `Dependency edge ${index}`);
   }
+  let acceptedTestLinks = 0;
   for (const [index, link2] of input.signals.testToSourceLinks.entries()) {
     codeIndexSourcePathSchema.parse(link2.testPath);
     codeIndexSourcePathSchema.parse(link2.sourcePath);
     if (!coveredPaths.has(link2.testPath) || !coveredPaths.has(link2.sourcePath)) throw new Error(`Test link ${index} is outside snapshot coverage.`);
     if (typeof link2.reason !== "string") throw new Error(`Test link ${index} has invalid reason.`);
-    if (supportedTestLink(snapshot, link2)) {
+    if (supportedTestLink(snapshot, link2, conservativeLinks)) {
+      acceptedTestLinks += 1;
       const refs = [
         testMetadataEvidence(sourceHashes, link2.testPath, `Bounded test inventory metadata for ${link2.testPath}; link is retained only for parsed supported coverage.`),
         testMetadataEvidence(sourceHashes, link2.sourcePath, `Bounded source target metadata for ${link2.sourcePath}; linked from parsed supported test ${link2.testPath}.`)
@@ -69063,6 +69346,18 @@ function validateSignals(input, snapshot) {
     commandResults.push(sanitized);
     commandEvidence.add(evidenceKey(sanitized));
   }
+  const summary = assessmentSignalSummarySchema.parse({
+    sourceFiles: snapshot.coverage.length,
+    coverageFiles: snapshot.coverage.length,
+    symbols: snapshot.symbols.length,
+    imports: snapshot.imports.length,
+    exports: snapshot.exports.length,
+    testFiles: input.signals.testFiles.length,
+    testToSourceLinks: acceptedTestLinks,
+    dependencyEdges: input.signals.dependencyEdges.length,
+    highRiskSignals: input.signals.riskSignals.filter((signal) => signal.severity === "critical" || signal.severity === "major").length,
+    unsupportedSignals: input.signals.architectureSignals.filter((signal) => signal.code === "unsupported-file").length
+  });
   return {
     summary,
     evidence: uniqueEvidence([...signalEvidence2, ...metadataEvidence]),
@@ -69104,7 +69399,7 @@ function buildExcerpts(input, specialist, validated) {
   };
   for (const signal of sorted2(
     [...input.signals.architectureSignals],
-    (left, right) => compareStrings10(left.code, right.code) || compareStrings10(left.statement, right.statement)
+    (left, right) => compareStrings11(left.code, right.code) || compareStrings11(left.statement, right.statement)
   )) {
     add(excerptFrom({
       kind: "architecture-signal",
@@ -69114,7 +69409,7 @@ function buildExcerpts(input, specialist, validated) {
   }
   for (const signal of sorted2(
     [...input.signals.riskSignals],
-    (left, right) => compareStrings10(left.code, right.code) || compareStrings10(left.statement, right.statement)
+    (left, right) => compareStrings11(left.code, right.code) || compareStrings11(left.statement, right.statement)
   )) {
     add(excerptFrom({
       kind: "risk-signal",
@@ -69124,7 +69419,7 @@ function buildExcerpts(input, specialist, validated) {
   }
   for (const edge of sorted2(
     [...input.signals.dependencyEdges],
-    (left, right) => compareStrings10(left.from, right.from) || compareStrings10(left.to, right.to)
+    (left, right) => compareStrings11(left.from, right.from) || compareStrings11(left.to, right.to)
   )) {
     add(excerptFrom({
       kind: "dependency-edge",
@@ -69132,7 +69427,7 @@ function buildExcerpts(input, specialist, validated) {
       evidence: [edge.evidence]
     }));
   }
-  for (const testPath of sorted2([...input.signals.testFiles], compareStrings10)) {
+  for (const testPath of sorted2([...input.signals.testFiles], compareStrings11)) {
     const evidence = validated.evidence.filter(
       (entry) => (entry.kind === "source-file" || entry.kind === "user-input") && entry.path === testPath
     );
@@ -69146,9 +69441,9 @@ function buildExcerpts(input, specialist, validated) {
   }
   for (const link2 of sorted2(
     [...input.signals.testToSourceLinks],
-    (left, right) => compareStrings10(left.testPath, right.testPath) || compareStrings10(left.sourcePath, right.sourcePath)
+    (left, right) => compareStrings11(left.testPath, right.testPath) || compareStrings11(left.sourcePath, right.sourcePath)
   )) {
-    if (!supportedTestLink(input.snapshot, link2)) continue;
+    if (!supportedTestLink(input.snapshot, link2, conservativeLinkKeySet(input.snapshot, input.signals.testFiles))) continue;
     const evidence = validated.evidence.filter(
       (entry) => (entry.kind === "source-file" || entry.kind === "user-input") && (entry.path === link2.testPath || entry.path === link2.sourcePath)
     );
@@ -69162,25 +69457,15 @@ function buildExcerpts(input, specialist, validated) {
   }
   return sorted2(
     excerpts,
-    (left, right) => compareStrings10(left.kind, right.kind) || compareStrings10(left.path, right.path) || compareStrings10(left.text, right.text) || compareStrings10(JSON.stringify(left.evidence), JSON.stringify(right.evidence))
+    (left, right) => compareStrings11(left.kind, right.kind) || compareStrings11(left.path, right.path) || compareStrings11(left.text, right.text) || compareStrings11(JSON.stringify(left.evidence), JSON.stringify(right.evidence))
   );
 }
-function boundedPrompt(prompt) {
-  if (prompt.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(prompt, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS) return prompt;
-  const maxPrefixLength = Math.max(0, MAX_SPECIALIST_PROMPT_CHARS - BOUNDED_PROMPT_NOTE.length);
-  let low = 0;
-  let high = Math.min(prompt.length, maxPrefixLength);
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    const candidate = `${prompt.slice(0, middle)}${BOUNDED_PROMPT_NOTE}`;
-    if (candidate.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(candidate, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS) low = middle;
-    else high = middle - 1;
-  }
-  return `${prompt.slice(0, low)}${BOUNDED_PROMPT_NOTE}`;
+var SPECIALIST_OUTPUT_CONTRACT = "Return one JSON object with only `findings` and `assumptions` arrays.";
+function promptFitsLimit(prompt) {
+  return prompt.length <= MAX_SPECIALIST_PROMPT_CHARS && Buffer.byteLength(prompt, "utf8") <= MAX_SPECIALIST_PROMPT_CHARS;
 }
-function packPrompt(input) {
-  const evidence = uniqueEvidence(input.evidence);
-  const excerpts = input.excerpts.map((excerpt) => ({
+function serializePackExcerpts(excerpts) {
+  return excerpts.map((excerpt) => ({
     kind: excerpt.kind,
     path: excerpt.path,
     ...excerpt.sha256 === void 0 ? {} : { sha256: excerpt.sha256 },
@@ -69188,8 +69473,10 @@ function packPrompt(input) {
     evidence: uniqueEvidence(excerpt.evidence),
     text: boundedText(excerpt.text, MAX_EXCERPT_CHARS)
   }));
+}
+function composeSpecialistPrompt(input) {
   const packMarker = input.truncation.bounded ? `${BOUNDED_PACK_NOTE} excerpts_omitted=${input.truncation.excerptsOmitted} evidence_omitted=${input.truncation.evidenceOmitted}` : "[BOUNDED_PACK_COMPLETE]";
-  const prompt = [
+  return [
     `You are the ${input.specialist.name} assessor for a brownfield repository.`,
     packMarker,
     BROWNFIELD_SPECIALIST_SAFETY_CONTRACT,
@@ -69197,19 +69484,48 @@ function packPrompt(input) {
     `Snapshot ID: ${input.snapshot.snapshotId}. Scope: ${input.snapshot.scope}.`,
     `Signal summary: ${JSON.stringify(input.summary)}.`,
     "Only the following bounded evidence pack is supplied; do not infer beyond it.",
-    `Evidence references (bounded and deduplicated): ${JSON.stringify(evidence)}.`,
-    `Excerpts (bounded and deduplicated): ${JSON.stringify(excerpts)}.`,
-    "Return one JSON object with only `findings` and `assumptions` arrays."
+    `Evidence references (bounded and deduplicated): ${JSON.stringify(uniqueEvidence(input.evidence))}.`,
+    `Excerpts (bounded and deduplicated): ${JSON.stringify(serializePackExcerpts(input.excerpts))}.`,
+    SPECIALIST_OUTPUT_CONTRACT
   ].join("\n");
-  const bounded = boundedPrompt(prompt);
-  return { prompt: bounded, promptTruncated: bounded !== prompt };
+}
+function packPrompt(input) {
+  let evidence = uniqueEvidence(input.evidence);
+  let excerpts = excerptsForPack(input.excerpts, evidence);
+  let prompt = composeSpecialistPrompt({ ...input, excerpts, evidence });
+  while (!promptFitsLimit(prompt) && (excerpts.length > 0 || evidence.length > 0)) {
+    if (excerpts.length > 0) excerpts = excerpts.slice(0, -1);
+    else evidence = evidence.slice(0, -1);
+    excerpts = excerptsForPack(excerpts, evidence);
+    prompt = composeSpecialistPrompt({
+      ...input,
+      excerpts,
+      evidence,
+      truncation: {
+        ...input.truncation,
+        bounded: true,
+        excerptsIncluded: excerpts.length,
+        excerptsOmitted: Math.max(input.truncation.excerptsTotal - excerpts.length, 0),
+        evidenceIncluded: evidence.length,
+        evidenceOmitted: Math.max(input.truncation.evidenceTotal - evidence.length, 0)
+      }
+    });
+  }
+  if (promptFitsLimit(prompt)) return { prompt, promptTruncated: prompt !== composeSpecialistPrompt(input) };
+  const header = composeSpecialistPrompt({ ...input, excerpts: [], evidence: [] }).replace(new RegExp(`\\n${SPECIALIST_OUTPUT_CONTRACT}$`, "u"), "");
+  return {
+    prompt: `${header}
+${BOUNDED_PROMPT_NOTE}
+${SPECIALIST_OUTPUT_CONTRACT}`,
+    promptTruncated: true
+  };
 }
 function excerptsForPack(excerpts, evidence) {
   const included = new Set(evidence.map(evidenceKey));
   return excerpts.flatMap((excerpt) => {
     const retainedEvidence = excerpt.evidence.filter((reference) => included.has(evidenceKey(reference)));
     if (retainedEvidence.length === 0) return [];
-    const retainedFactIds = retainedEvidence.filter((reference) => reference.kind === "structural-fact").map((reference) => reference.factId).sort(compareStrings10);
+    const retainedFactIds = retainedEvidence.filter((reference) => reference.kind === "structural-fact").map((reference) => reference.factId).sort(compareStrings11);
     const evidenceWasDropped = retainedEvidence.length !== excerpt.evidence.length;
     return [{
       ...excerpt,
@@ -69232,7 +69548,11 @@ function buildBrownfieldExcerptPacks(input) {
       ...allExcerpts.flatMap((excerpt) => excerpt.evidence),
       ...validated.commandResults
     ]);
-    const evidence = allEvidence.slice(0, MAX_EVIDENCE_PER_PACK);
+    const retainedEvidence = uniqueEvidence([
+      ...limitedExcerpts.flatMap((excerpt) => excerpt.evidence),
+      ...validated.commandResults
+    ]);
+    const evidence = retainedEvidence.slice(0, MAX_EVIDENCE_PER_PACK);
     const excerpts = excerptsForPack(limitedExcerpts, evidence);
     const baseTruncation = {
       bounded: allExcerpts.length > MAX_EXCERPTS_PER_PACK || allEvidence.length > MAX_EVIDENCE_PER_PACK,
@@ -69472,7 +69792,7 @@ function syntheticFailureEvidenceReference(assessmentId, specialist) {
 function fallbackEvidence(pack, snapshot, assessmentId) {
   const synthetic = syntheticFailureEvidenceReference(assessmentId, pack.specialist);
   if (pack.evidence.length > 0) return [...pack.evidence.slice(0, 1), synthetic];
-  const fact = [...snapshot.symbols, ...snapshot.imports, ...snapshot.exports].sort((left, right) => compareStrings10(left.id, right.id))[0];
+  const fact = [...snapshot.symbols, ...snapshot.imports, ...snapshot.exports].sort((left, right) => compareStrings11(left.id, right.id))[0];
   if (fact === void 0) return [synthetic];
   return [
     assessmentEvidenceRefSchema.parse({
@@ -69563,7 +69883,7 @@ function cleanupFailureResult(error51) {
   };
 }
 function assertNoRepositorySymlinks(snapshot) {
-  const symlinks = [...snapshot.entries()].filter(([, entry]) => entry.kind === "symlink").map(([relativePath]) => relativePath.length === 0 ? "repository root" : relativePath).sort(compareStrings10);
+  const symlinks = [...snapshot.entries()].filter(([, entry]) => entry.kind === "symlink").map(([relativePath]) => relativePath.length === 0 ? "repository root" : relativePath).sort(compareStrings11);
   if (symlinks.length === 0) return;
   const error51 = new Error(
     `Specialist execution is blocked because the repository contains symlinked paths: ${symlinks.slice(0, 8).join(", ")}${symlinks.length > 8 ? `, and ${symlinks.length - 8} more` : ""}.`
@@ -69582,7 +69902,7 @@ function externalAdapterContainmentError(executor) {
   return error51;
 }
 async function runWithExistingAdapter(input) {
-  const adapterArtifactRoot = await mkdtemp(path54.join(tmpdir(), "legion-brownfield-adapter-"));
+  const adapterArtifactRoot = await mkdtemp(path55.join(tmpdir(), "legion-brownfield-adapter-"));
   let adapterResult;
   let executionFailure;
   let repositoryBaseline;
@@ -69737,10 +70057,10 @@ function cloneAndFreeze(value) {
 }
 function repositoryAbsolutePath(root, relativePath) {
   if (relativePath.includes("\0")) throw new Error("In-process specialist repository path contains a NUL byte.");
-  const absoluteRoot = path54.resolve(root);
-  const absolutePath = relativePath.length === 0 ? absoluteRoot : path54.resolve(absoluteRoot, ...relativePath.split("/"));
-  const relative = path54.relative(absoluteRoot, absolutePath);
-  if (path54.isAbsolute(relative) || relative === ".." || relative.startsWith(`..${path54.sep}`)) {
+  const absoluteRoot = path55.resolve(root);
+  const absolutePath = relativePath.length === 0 ? absoluteRoot : path55.resolve(absoluteRoot, ...relativePath.split("/"));
+  const relative = path55.relative(absoluteRoot, absolutePath);
+  if (path55.isAbsolute(relative) || relative === ".." || relative.startsWith(`..${path55.sep}`)) {
     throw new Error(`In-process specialist repository path escapes the repository root: ${relativePath}.`);
   }
   return absolutePath;
@@ -69769,12 +70089,13 @@ async function snapshotRepository(root, options = {}) {
   };
   addEntry("", { kind: "directory", digest: "", mode: repositoryMode(rootStat.mode) });
   const visit = async (absoluteRoot, relativeRoot) => {
-    const children = (await readdir22(absoluteRoot, { withFileTypes: true })).sort((left, right) => compareStrings10(left.name, right.name));
+    const children = (await readdir22(absoluteRoot, { withFileTypes: true })).sort((left, right) => compareStrings11(left.name, right.name));
     for (const child of children) {
-      const absolutePath = path54.join(absoluteRoot, child.name);
+      const absolutePath = path55.join(absoluteRoot, child.name);
       const relativePath = relativeRoot.length === 0 ? child.name : `${relativeRoot}/${child.name}`;
       const stat11 = await lstat8(absolutePath);
       if (stat11.isDirectory()) {
+        if (!shouldTraverseAuthoredDirectory(child.name)) continue;
         addEntry(relativePath, { kind: "directory", digest: "", mode: repositoryMode(stat11.mode) });
         await visit(absolutePath, relativePath);
         continue;
@@ -69855,7 +70176,7 @@ function repositoryChangeLabel(action, relativePath) {
 }
 function changedRepositoryPaths(before, after) {
   const changed = [];
-  const paths = [.../* @__PURE__ */ new Set([...before.keys(), ...after.keys()])].sort(compareStrings10);
+  const paths = [.../* @__PURE__ */ new Set([...before.keys(), ...after.keys()])].sort(compareStrings11);
   for (const relativePath of paths) {
     const previous = before.get(relativePath);
     const current = after.get(relativePath);
@@ -69873,7 +70194,7 @@ function mutationDiagnostic(changed) {
   );
 }
 function addedSymlinkPaths(before, after) {
-  return [...after.entries()].filter(([relativePath, entry]) => entry.kind === "symlink" && before.get(relativePath) === void 0).map(([relativePath]) => repositoryChangeLabel("added", relativePath)).sort(compareStrings10);
+  return [...after.entries()].filter(([relativePath, entry]) => entry.kind === "symlink" && before.get(relativePath) === void 0).map(([relativePath]) => repositoryChangeLabel("added", relativePath)).sort(compareStrings11);
 }
 async function removeRepositoryEntry(root, relativePath) {
   if (relativePath.length === 0) throw new Error("Refusing to remove the in-process specialist repository root.");
@@ -69921,8 +70242,8 @@ async function restoreFile(root, relativePath, entry) {
   const parentRelative = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/")) : "";
   const parent = await ensureRepositoryDirectory(root, parentRelative);
   const absolutePath = repositoryAbsolutePath(root, relativePath);
-  const temporaryRoot = await mkdtemp(path54.join(parent, ".legion-read-only-restore-"));
-  const temporaryPath = path54.join(temporaryRoot, "entry");
+  const temporaryRoot = await mkdtemp(path55.join(parent, ".legion-read-only-restore-"));
+  const temporaryPath = path55.join(temporaryRoot, "entry");
   try {
     await writeFile11(temporaryPath, entry.bytes, { mode: entry.mode });
     await chmod(temporaryPath, entry.mode);
@@ -69937,8 +70258,8 @@ async function restoreSymlink(root, relativePath, entry) {
   const parentRelative = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/")) : "";
   const parent = await ensureRepositoryDirectory(root, parentRelative);
   const absolutePath = repositoryAbsolutePath(root, relativePath);
-  const temporaryRoot = await mkdtemp(path54.join(parent, ".legion-read-only-restore-"));
-  const temporaryPath = path54.join(temporaryRoot, "entry");
+  const temporaryRoot = await mkdtemp(path55.join(parent, ".legion-read-only-restore-"));
+  const temporaryPath = path55.join(temporaryRoot, "entry");
   try {
     await symlink(entry.linkTarget, temporaryPath);
     await rename7(temporaryPath, absolutePath);
@@ -69961,7 +70282,7 @@ async function clearRepositoryRoot(root) {
     await mkdir15(absoluteRoot, { mode: 448 });
     return;
   }
-  const children = (await readdir22(absoluteRoot, { withFileTypes: true })).sort((left, right) => compareStrings10(left.name, right.name));
+  const children = (await readdir22(absoluteRoot, { withFileTypes: true })).sort((left, right) => compareStrings11(left.name, right.name));
   for (const child of children) await removeRepositoryEntry(root, child.name);
 }
 async function prepareRepositoryTreeForRestore(root) {
@@ -69987,10 +70308,10 @@ async function prepareRepositoryTreeForRestore(root) {
     }
     visited += 1;
     await chmod(current, 448);
-    const children = (await readdir22(current, { withFileTypes: true })).sort((left, right) => compareStrings10(left.name, right.name));
+    const children = (await readdir22(current, { withFileTypes: true })).sort((left, right) => compareStrings11(left.name, right.name));
     for (const child of children) {
       if (!child.isDirectory() || child.isSymbolicLink()) continue;
-      const childPath = path54.join(current, child.name);
+      const childPath = path55.join(current, child.name);
       await chmod(childPath, 448);
       queue.push(childPath);
     }
@@ -70002,7 +70323,7 @@ async function restoreRepositoryFromBaseline(root, before) {
   }
   await prepareRepositoryTreeForRestore(root);
   await clearRepositoryRoot(root);
-  const pathsToRestore = [...before.keys()].sort((left, right) => repositoryPathDepth(left) - repositoryPathDepth(right) || compareStrings10(left, right));
+  const pathsToRestore = [...before.keys()].sort((left, right) => repositoryPathDepth(left) - repositoryPathDepth(right) || compareStrings11(left, right));
   for (const relativePath of pathsToRestore) {
     const previous = before.get(relativePath);
     if (previous === void 0) continue;
@@ -70044,7 +70365,7 @@ async function restoreRepository(root, before, after) {
       throw new Error(`Cannot safely restore non-regular repository entry ${relativePath.length === 0 ? "repository root" : relativePath}.`);
     }
   }
-  const pathsToRestore = [...before.keys()].sort((left, right) => repositoryPathDepth(left) - repositoryPathDepth(right) || compareStrings10(left, right));
+  const pathsToRestore = [...before.keys()].sort((left, right) => repositoryPathDepth(left) - repositoryPathDepth(right) || compareStrings11(left, right));
   for (const relativePath of pathsToRestore) {
     const previous = before.get(relativePath);
     const current = after.get(relativePath);
@@ -70058,7 +70379,7 @@ async function restoreRepository(root, before, after) {
     const previous = before.get(relativePath);
     const current = after.get(relativePath);
     return current !== void 0 && (previous === void 0 || previous.kind !== current.kind);
-  }).sort((left, right) => repositoryPathDepth(right) - repositoryPathDepth(left) || compareStrings10(left, right));
+  }).sort((left, right) => repositoryPathDepth(right) - repositoryPathDepth(left) || compareStrings11(left, right));
   for (const relativePath of pathsToRemove) await removeRepositoryEntry(root, relativePath);
   for (const relativePath of pathsToRestore) {
     const previous = before.get(relativePath);
@@ -70108,6 +70429,10 @@ async function runReadOnlyInProcessCallback(input) {
           restoreError.code = "READ_ONLY_RESTORE_FAILED";
           throw restoreError;
         }
+        void callbackPromise.then(
+          () => restoreRepositoryFromBaseline(input.repositoryRoot, before).catch(() => void 0),
+          () => restoreRepositoryFromBaseline(input.repositoryRoot, before).catch(() => void 0)
+        );
         const drainError = timeoutError(input.timeoutMs);
         drainError.code = "SPECIALIST_TIMEOUT_DRAIN";
         throw drainError;
@@ -70457,7 +70782,7 @@ var EMPTY_SUMMARY = {
   highRiskSignals: 0,
   unsupportedSignals: 0
 };
-function compareStrings11(left, right) {
+function compareStrings12(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function normalizedText(value) {
@@ -70512,9 +70837,9 @@ function normalizeEvidence(values) {
     const sanitized = assessmentEvidenceRefSchema.parse({ ...candidate, note: boundedText2(candidate.note, 512) });
     const key = evidenceIdentity(sanitized);
     const existing = byIdentity.get(key);
-    if (existing === void 0 || compareStrings11(sanitized.note, existing.note) < 0) byIdentity.set(key, sanitized);
+    if (existing === void 0 || compareStrings12(sanitized.note, existing.note) < 0) byIdentity.set(key, sanitized);
   }
-  return [...byIdentity.values()].sort((left, right) => compareStrings11(evidenceSortKey2(left), evidenceSortKey2(right)));
+  return [...byIdentity.values()].sort((left, right) => compareStrings12(evidenceSortKey2(left), evidenceSortKey2(right)));
 }
 function fallbackEvidence2(note) {
   return assessmentEvidenceRefSchema.parse({
@@ -70534,8 +70859,8 @@ function findingSemanticKey(finding) {
     severity: finding.severity,
     confidence: finding.confidence,
     recommendation: normalizedText(finding.recommendation),
-    evidence: [...finding.evidence].map(evidenceIdentity).sort(compareStrings11),
-    assumptions: [...finding.assumptions].sort(compareStrings11)
+    evidence: [...finding.evidence].map(evidenceIdentity).sort(compareStrings12),
+    assumptions: [...finding.assumptions].sort(compareStrings12)
   });
 }
 function findingTieKey(finding) {
@@ -70546,16 +70871,16 @@ function findingTieKey(finding) {
   ].join("\0");
 }
 function sourcePathKey(finding) {
-  const sourcePaths = finding.evidence.filter((reference) => reference.kind === "source-file").map((reference) => reference.path).sort(compareStrings11);
-  const paths = (sourcePaths.length > 0 ? sourcePaths : finding.evidence.map((reference) => reference.path)).sort(compareStrings11);
+  const sourcePaths = finding.evidence.filter((reference) => reference.kind === "source-file").map((reference) => reference.path).sort(compareStrings12);
+  const paths = (sourcePaths.length > 0 ? sourcePaths : finding.evidence.map((reference) => reference.path)).sort(compareStrings12);
   return paths[0] ?? "~";
 }
 function factIdKey(finding) {
-  const factIds = finding.evidence.filter((reference) => reference.kind === "structural-fact").map((reference) => reference.factId).sort(compareStrings11);
+  const factIds = finding.evidence.filter((reference) => reference.kind === "structural-fact").map((reference) => reference.factId).sort(compareStrings12);
   return factIds[0] ?? "~";
 }
 function findingRank(left, right) {
-  return SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity] || CONFIDENCE_ORDER[left.confidence] - CONFIDENCE_ORDER[right.confidence] || right.evidence.length - left.evidence.length || compareStrings11(sourcePathKey(left), sourcePathKey(right)) || compareStrings11(factIdKey(left), factIdKey(right)) || compareStrings11(findingTieKey(left), findingTieKey(right));
+  return SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity] || CONFIDENCE_ORDER[left.confidence] - CONFIDENCE_ORDER[right.confidence] || right.evidence.length - left.evidence.length || compareStrings12(sourcePathKey(left), sourcePathKey(right)) || compareStrings12(factIdKey(left), factIdKey(right)) || compareStrings12(findingTieKey(left), findingTieKey(right));
 }
 function deterministicFindingId(input) {
   return `af_${hash24(JSON.stringify({
@@ -70563,7 +70888,7 @@ function deterministicFindingId(input) {
     title: normalizedText(input.title),
     statement: normalizedText(input.statement),
     severity: input.severity,
-    evidence: input.evidence.map(evidenceIdentity).sort(compareStrings11)
+    evidence: input.evidence.map(evidenceIdentity).sort(compareStrings12)
   }))}`;
 }
 function normalizeFinding(value, sourceOrder) {
@@ -70610,15 +70935,43 @@ function deterministicSignalFinding(input) {
   });
 }
 function signalFindings(signals) {
-  const architecture = signals.architectureSignals.map((signal) => deterministicSignalFinding({
-    ...signal,
-    specialist: "architecture"
-  }));
-  const risks = signals.riskSignals.map((signal) => {
-    const security = /credential|secret|security|input|supply-chain/iu.test(signal.code);
-    return deterministicSignalFinding({ ...signal, specialist: security ? "security" : "code" });
+  return [
+    ...aggregateSignalFindings(signals.architectureSignals, "architecture"),
+    ...aggregateSignalFindings(signals.riskSignals, (signal) => /credential|secret|security|input|supply-chain/iu.test(signal.code) ? "security" : "code")
+  ];
+}
+function aggregateSignalFindings(signals, specialistFor) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const signal of signals) {
+    const current = groups.get(signal.code) ?? [];
+    current.push(signal);
+    groups.set(signal.code, current);
+  }
+  return [...groups.entries()].map(([code, group]) => {
+    const worst = group.reduce((current, candidate) => SEVERITY_ORDER[candidate.severity] < SEVERITY_ORDER[current.severity] ? candidate : current);
+    const specialist = typeof specialistFor === "function" ? specialistFor(worst) : specialistFor;
+    const evidence = uniqueEvidence2(group.flatMap((signal) => signal.evidence ?? []));
+    const statement = group.length === 1 ? worst.statement : `${group.length} ${code} signals. Examples: ${group.slice(0, 5).map((signal) => signal.statement).join(" ")}`;
+    return deterministicSignalFinding({
+      code,
+      statement,
+      severity: worst.severity,
+      evidence,
+      specialist
+    });
   });
-  return [...architecture, ...risks];
+}
+function uniqueEvidence2(evidence) {
+  const seen = /* @__PURE__ */ new Set();
+  const retained = [];
+  for (const reference of evidence) {
+    const key = evidenceIdentity(reference);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    retained.push(reference);
+    if (retained.length >= 64) break;
+  }
+  return retained;
 }
 function normalizeAssumption(value, fallback, seed) {
   if (!isRecord15(value)) return void 0;
@@ -70645,7 +70998,7 @@ function assumptionSemanticKey(assumption) {
     confidence: assumption.confidence,
     blocking: assumption.blocking,
     resolution: normalizedText(assumption.resolution),
-    evidence: assumption.evidence.map(evidenceIdentity).sort(compareStrings11)
+    evidence: assumption.evidence.map(evidenceIdentity).sort(compareStrings12)
   });
 }
 function addAssumption(accumulator, value, fallbackEvidence3, seed, options = {}) {
@@ -70684,14 +71037,14 @@ function normalizeSignals(input) {
   return {
     summary,
     dependencyEdges: Array.isArray(input.dependencyEdges) ? input.dependencyEdges : [],
-    testFiles: Array.isArray(input.testFiles) ? [...input.testFiles].sort(compareStrings11) : [],
+    testFiles: Array.isArray(input.testFiles) ? [...input.testFiles].sort(compareStrings12) : [],
     testToSourceLinks: Array.isArray(input.testToSourceLinks) ? input.testToSourceLinks : [],
     architectureSignals: Array.isArray(input.architectureSignals) ? input.architectureSignals : [],
     riskSignals: Array.isArray(input.riskSignals) ? input.riskSignals : []
   };
 }
 function deduplicateAndRankFindings(values) {
-  const canonical4 = [...values].sort((left, right) => compareStrings11(findingTieKey(left), findingTieKey(right)));
+  const canonical4 = [...values].sort((left, right) => compareStrings12(findingTieKey(left), findingTieKey(right)));
   const unique = /* @__PURE__ */ new Map();
   const usedIds = /* @__PURE__ */ new Set();
   for (const candidate of canonical4) {
@@ -70712,7 +71065,7 @@ function deduplicateAndRankFindings(values) {
 }
 function makeGeneratedAssumption(input) {
   const evidence = normalizeEvidence(input.evidence);
-  const id = `asm_${hash24(`${input.seed}\0${normalizedText(input.statement)}\0${evidence.map(evidenceIdentity).sort(compareStrings11).join("")}`)}`;
+  const id = `asm_${hash24(`${input.seed}\0${normalizedText(input.statement)}\0${evidence.map(evidenceIdentity).sort(compareStrings12).join("")}`)}`;
   return assessmentAssumptionSchema.parse({
     id,
     statement: boundedText2(input.statement, 2e3),
@@ -70737,7 +71090,7 @@ function collectUniqueText(accumulator, value) {
   if (existing === void 0 || bounded < existing) accumulator.set(key, bounded);
 }
 function finalizeBoundedSet(accumulator, limit) {
-  return [...accumulator.entries()].sort(([leftKey], [rightKey]) => compareStrings11(leftKey, rightKey)).slice(0, limit).map(([, value]) => value);
+  return [...accumulator.entries()].sort(([leftKey], [rightKey]) => compareStrings12(leftKey, rightKey)).slice(0, limit).map(([, value]) => value);
 }
 function criticalInputAssumption(finding) {
   return makeGeneratedAssumption({
@@ -70759,7 +71112,7 @@ function capFindingAssumptions(assumptions, generatedBlockingIds, accumulator) {
   const nonBlocking = candidates.filter((id) => !assumptionIsBlocking(accumulator, id)).sort((left, right) => {
     const leftAssumption = accumulator.values.find((assumption) => assumption.id === left);
     const rightAssumption = accumulator.values.find((assumption) => assumption.id === right);
-    return CONFIDENCE_ORDER[leftAssumption?.confidence ?? "unknown"] - CONFIDENCE_ORDER[rightAssumption?.confidence ?? "unknown"] || compareStrings11(left, right);
+    return CONFIDENCE_ORDER[leftAssumption?.confidence ?? "unknown"] - CONFIDENCE_ORDER[rightAssumption?.confidence ?? "unknown"] || compareStrings12(left, right);
   });
   const available = Math.max(0, MAX_FINDING_ASSUMPTIONS - reserved.length);
   const retainedBlocking = blocking.slice(0, available);
@@ -70797,7 +71150,7 @@ function improvementVerification(finding) {
   return ["needs-user-input: provide an executable command-result or test-result verification before implementation."];
 }
 function makeImprovement(finding) {
-  const prerequisites = finding.assumptions.map((id) => `Resolve assumption ${id} before implementation.`).sort(compareStrings11);
+  const prerequisites = finding.assumptions.map((id) => `Resolve assumption ${id} before implementation.`).sort(compareStrings12);
   const objective = boundedText2(`Bounded objective: address ${finding.title}.`, 1e3);
   const rationale = boundedText2(`${finding.statement} Recommendation: ${finding.recommendation}`, 4e3);
   return {
@@ -70812,14 +71165,18 @@ function makeImprovement(finding) {
 }
 function currentArchitectureSummary(signals) {
   const summary = signals.summary;
+  const hotspots = [...signals.architectureSignals].sort((left, right) => SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity] || compareStrings12(left.code, right.code)).slice(0, 8).map((signal) => `${signal.code}: ${signal.statement}`);
+  const hotspotText = hotspots.length === 0 ? "" : ` Observed structural hotspots: ${hotspots.join(" ")}`;
   return boundedText2(
-    `The validated structural view covers ${summary.sourceFiles} source files (${summary.coverageFiles} coverage entries), ${summary.symbols} symbols, ${summary.imports} imports, ${summary.exports} exports, and ${summary.dependencyEdges} persisted dependency edges. It inventories ${summary.testFiles} test files and ${summary.testToSourceLinks} conservative test-to-source links. These are structural observations, not runtime proof.`,
+    `The validated structural view covers ${summary.sourceFiles} source files (${summary.coverageFiles} coverage entries), ${summary.symbols} symbols, ${summary.imports} imports, ${summary.exports} exports, and ${summary.dependencyEdges} persisted dependency edges. It inventories ${summary.testFiles} test files and ${summary.testToSourceLinks} conservative test-to-source links.${hotspotText} These are structural observations, not runtime proof.`,
     MAX_SUMMARY_CHARS
   );
 }
 function executiveSummary(signals, findings, assumptions, gaps) {
+  const top = findings.slice(0, 5).map((finding) => finding.title).join("; ");
+  const topText = top.length === 0 ? "" : ` Leading issues: ${top}.`;
   return boundedText2(
-    `Synthesis produced ${findings.length} prioritized findings from deterministic signals and specialist output, retained ${assumptions.length} assumptions requiring input, and identified ${gaps.length} behavioral-proof gaps. Severity and confidence are ranked deterministically; dissent remains explicit rather than averaged.`,
+    `Assessment of ${signals.summary.sourceFiles} files produced ${findings.length} prioritized issue classes, ${assumptions.length} assumptions requiring input, and ${gaps.length} behavioral-proof gaps.${topText} Severity and confidence are ranked deterministically; dissent remains explicit rather than averaged. Static structure is not runtime proof.`,
     MAX_SUMMARY_CHARS
   );
 }
@@ -70895,7 +71252,7 @@ function synthesizeBrownfieldDesign(input = {}) {
       recommendation: normalizedText(finding.recommendation)
     })));
     if (opinionKeys.size <= 1) continue;
-    const title = group.map((finding) => finding.title).sort(compareStrings11)[0] ?? titleKey;
+    const title = group.map((finding) => finding.title).sort(compareStrings12)[0] ?? titleKey;
     const id = addGeneratedAssumption(accumulator, dissentAssumption(title, group));
     dissentIds.set(titleKey, id);
     dissentQuestionTitles.push(title);
@@ -70965,10 +71322,10 @@ function synthesizeBrownfieldDesign(input = {}) {
     ...referencedAssumptions,
     ...unreferencedAssumptions.slice(0, Math.max(0, MAX_ASSUMPTIONS - referencedAssumptions.length))
   ].map((assumption) => assumption.id));
-  const assumptionsRequiringInput = accumulator.values.filter((assumption) => retainedAssumptionIds.has(assumption.id)).sort((left, right) => compareStrings11(left.id, right.id));
+  const assumptionsRequiringInput = accumulator.values.filter((assumption) => retainedAssumptionIds.has(assumption.id)).sort((left, right) => compareStrings12(left.id, right.id));
   const questionCollector = /* @__PURE__ */ new Map();
   for (const question of input.openQuestions ?? []) collectUniqueText(questionCollector, question);
-  for (const title of dissentQuestionTitles.sort(compareStrings11)) {
+  for (const title of dissentQuestionTitles.sort(compareStrings12)) {
     collectUniqueText(questionCollector, `Which evidence-backed interpretation of '${title}' reflects the intended architecture or behavior?`);
   }
   for (const assumption of assumptionsRequiringInput) {
@@ -70996,10 +71353,60 @@ function synthesizeBrownfieldDesign(input = {}) {
       "Do not modify source files, manifests, or runtime configuration as part of synthesis.",
       "Do not infer runtime behavior, product intent, or test coverage from structural evidence alone.",
       "Do not silently average conflicting specialist findings."
-    ].sort(compareStrings11),
+    ].sort(compareStrings12),
     behavioralProofGaps,
     openQuestions
   };
+}
+function renderBrownfieldReport(design) {
+  const findings = design.prioritizedFindings.slice(0, 25).map((finding) => [
+    `### [${finding.severity}/${finding.confidence}] ${finding.title}`,
+    "",
+    finding.statement,
+    `Recommendation: ${finding.recommendation}`,
+    finding.evidence.length === 0 ? "" : `Evidence: ${finding.evidence.slice(0, 6).map((reference) => reference.path).join(", ")}`,
+    ""
+  ].filter((line) => line.length > 0 || line === "").join("\n"));
+  const assumptions = design.assumptionsRequiringInput.slice(0, 20).map((assumption) => `- [${assumption.blocking ? "blocking" : "open"}/${assumption.confidence}] ${assumption.statement}`);
+  const plan = design.improvementPlan.slice(0, 20).map((item) => `- ${item.priority} ${item.objective}`);
+  return [
+    `# ${design.title}`,
+    "",
+    "## Executive summary",
+    "",
+    design.executiveSummary,
+    "",
+    "## Current architecture",
+    "",
+    design.currentArchitecture,
+    "",
+    "## Strengths",
+    "",
+    ...design.evidenceBackedStrengths.length === 0 ? ["_None recorded._"] : design.evidenceBackedStrengths.map((value) => `- ${value}`),
+    "",
+    "## Findings",
+    "",
+    ...findings.length === 0 ? ["_No prioritized findings._"] : findings,
+    ...design.prioritizedFindings.length > 25 ? [`\u2026 ${design.prioritizedFindings.length - 25} more findings`] : [],
+    "",
+    "## Assumptions requiring input",
+    "",
+    ...assumptions.length === 0 ? ["_None._"] : assumptions,
+    "",
+    "## Behavioral-proof gaps",
+    "",
+    ...design.behavioralProofGaps.length === 0 ? ["_None._"] : design.behavioralProofGaps.slice(0, 20).map((value) => `- ${value}`),
+    "",
+    "## Improvement plan",
+    "",
+    ...plan.length === 0 ? ["_None._"] : plan,
+    "",
+    "## Open questions",
+    "",
+    ...design.openQuestions.length === 0 ? ["_None._"] : design.openQuestions.slice(0, 20).map((value) => `- ${value}`),
+    "",
+    "Static structure is not behavioral proof. Do not treat this report as runtime verification."
+  ].join("\n");
 }
 
 // packages/cli/src/commands/workflow/assess.ts
@@ -71283,7 +71690,7 @@ async function readCompletedDesign(repositoryRoot, synthesisPath) {
   }
 }
 async function readAssessmentArtifact(repositoryRoot, artifactPath) {
-  const absolutePath = path55.join(repositoryRoot, ...artifactPath.split("/"));
+  const absolutePath = path56.join(repositoryRoot, ...artifactPath.split("/"));
   return JSON.parse(await readFile29(absolutePath, "utf8"));
 }
 function bundlePaths(paths) {
@@ -71299,6 +71706,7 @@ function bundlePaths(paths) {
 }
 function completedAssessment(assessmentId, paths, state, specialists, design) {
   const serializedPaths = bundlePaths(paths);
+  const report = design === void 0 ? void 0 : renderBrownfieldReport(design);
   const payload = {
     ok: true,
     status: "completed",
@@ -71314,7 +71722,8 @@ function completedAssessment(assessmentId, paths, state, specialists, design) {
     ...design === void 0 ? {} : {
       findingCount: design.prioritizedFindings.length,
       assumptionCount: design.assumptionsRequiringInput.length,
-      behavioralProofGapCount: design.behavioralProofGaps.length
+      behavioralProofGapCount: design.behavioralProofGaps.length,
+      report
     },
     ...specialists === void 0 ? {} : {
       specialistsOk: specialists.ok,
@@ -71328,7 +71737,7 @@ function completedAssessment(assessmentId, paths, state, specialists, design) {
     [
       `Brownfield assessment complete: ${assessmentId}.`,
       `Bundle: ${paths.root}`,
-      ...design === void 0 ? [] : [`Findings: ${design.prioritizedFindings.length}; assumptions requiring input: ${design.assumptionsRequiringInput.length}.`],
+      ...report === void 0 ? [] : ["", report],
       renderNextAction(ASSESS_REVIEW_NEXT_ACTION)
     ].join("\n")
   );
@@ -71359,16 +71768,16 @@ function errorMessage2(error51) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat10 } from "node:fs/promises";
-import path57 from "node:path";
+import path58 from "node:path";
 
 // packages/cli/src/workflow/settings-check.ts
 import { readFile as readFile30 } from "node:fs/promises";
-import path56 from "node:path";
+import path57 from "node:path";
 var SETTINGS_FILE = "settings.json";
 async function checkSettings(repositoryRoot) {
   let text;
   try {
-    text = await readFile30(path56.join(repositoryRoot, SETTINGS_FILE), "utf8");
+    text = await readFile30(path57.join(repositoryRoot, SETTINGS_FILE), "utf8");
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
       return { status: "absent", path: SETTINGS_FILE, diagnostics: [], warnings: [] };
@@ -71533,7 +71942,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat10(path57.join(root, relativePath));
+    await stat10(path58.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -71797,7 +72206,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path58.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path59.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -71849,8 +72258,8 @@ function stringMapValue(map2, key) {
   const value = map2.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path58.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path58.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path59.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path59.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

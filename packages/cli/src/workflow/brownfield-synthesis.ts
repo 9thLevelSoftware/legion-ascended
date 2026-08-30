@@ -331,15 +331,54 @@ function deterministicSignalFinding(input: {
 }
 
 function signalFindings(signals: NormalizedSignals): AssessmentFinding[] {
-  const architecture = signals.architectureSignals.map((signal) => deterministicSignalFinding({
-    ...signal,
-    specialist: "architecture"
-  }));
-  const risks = signals.riskSignals.map((signal) => {
-    const security = /credential|secret|security|input|supply-chain/iu.test(signal.code);
-    return deterministicSignalFinding({ ...signal, specialist: security ? "security" : "code" });
+  return [
+    ...aggregateSignalFindings(signals.architectureSignals, "architecture"),
+    ...aggregateSignalFindings(signals.riskSignals, (signal) => (
+      /credential|secret|security|input|supply-chain/iu.test(signal.code) ? "security" : "code"
+    ))
+  ];
+}
+
+function aggregateSignalFindings(
+  signals: NormalizedSignals["architectureSignals"] | NormalizedSignals["riskSignals"],
+  specialistFor: AssessmentFinding["specialist"] | ((signal: NormalizedSignals["architectureSignals"][number]) => AssessmentFinding["specialist"])
+): AssessmentFinding[] {
+  const groups = new Map<string, NormalizedSignals["architectureSignals"][number][]>();
+  for (const signal of signals) {
+    const current = groups.get(signal.code) ?? [];
+    current.push(signal);
+    groups.set(signal.code, current);
+  }
+  return [...groups.entries()].map(([code, group]) => {
+    const worst = group.reduce((current, candidate) => (
+      SEVERITY_ORDER[candidate.severity] < SEVERITY_ORDER[current.severity] ? candidate : current
+    ));
+    const specialist = typeof specialistFor === "function" ? specialistFor(worst) : specialistFor;
+    const evidence = uniqueEvidence(group.flatMap((signal) => signal.evidence ?? []));
+    const statement = group.length === 1
+      ? worst.statement
+      : `${group.length} ${code} signals. Examples: ${group.slice(0, 5).map((signal) => signal.statement).join(" ")}`;
+    return deterministicSignalFinding({
+      code,
+      statement,
+      severity: worst.severity,
+      evidence,
+      specialist
+    });
   });
-  return [...architecture, ...risks];
+}
+
+function uniqueEvidence(evidence: readonly AssessmentEvidenceRef[]): AssessmentEvidenceRef[] {
+  const seen = new Set<string>();
+  const retained: AssessmentEvidenceRef[] = [];
+  for (const reference of evidence) {
+    const key = evidenceIdentity(reference);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    retained.push(reference);
+    if (retained.length >= 64) break;
+  }
+  return retained;
 }
 
 function normalizeAssumption(value: unknown, fallback: AssessmentEvidenceRef[], seed: string): AssessmentAssumption | undefined {
@@ -587,15 +626,22 @@ function makeImprovement(finding: AssessmentFinding): BrownfieldImprovementItem 
 
 function currentArchitectureSummary(signals: NormalizedSignals): string {
   const summary = signals.summary;
+  const hotspots = [...signals.architectureSignals]
+    .sort((left, right) => SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity] || compareStrings(left.code, right.code))
+    .slice(0, 8)
+    .map((signal) => `${signal.code}: ${signal.statement}`);
+  const hotspotText = hotspots.length === 0 ? "" : ` Observed structural hotspots: ${hotspots.join(" ")}`;
   return boundedText(
-    `The validated structural view covers ${summary.sourceFiles} source files (${summary.coverageFiles} coverage entries), ${summary.symbols} symbols, ${summary.imports} imports, ${summary.exports} exports, and ${summary.dependencyEdges} persisted dependency edges. It inventories ${summary.testFiles} test files and ${summary.testToSourceLinks} conservative test-to-source links. These are structural observations, not runtime proof.`,
+    `The validated structural view covers ${summary.sourceFiles} source files (${summary.coverageFiles} coverage entries), ${summary.symbols} symbols, ${summary.imports} imports, ${summary.exports} exports, and ${summary.dependencyEdges} persisted dependency edges. It inventories ${summary.testFiles} test files and ${summary.testToSourceLinks} conservative test-to-source links.${hotspotText} These are structural observations, not runtime proof.`,
     MAX_SUMMARY_CHARS
   );
 }
 
 function executiveSummary(signals: NormalizedSignals, findings: readonly AssessmentFinding[], assumptions: readonly AssessmentAssumption[], gaps: readonly string[]): string {
+  const top = findings.slice(0, 5).map((finding) => finding.title).join("; ");
+  const topText = top.length === 0 ? "" : ` Leading issues: ${top}.`;
   return boundedText(
-    `Synthesis produced ${findings.length} prioritized findings from deterministic signals and specialist output, retained ${assumptions.length} assumptions requiring input, and identified ${gaps.length} behavioral-proof gaps. Severity and confidence are ranked deterministically; dissent remains explicit rather than averaged.`,
+    `Assessment of ${signals.summary.sourceFiles} files produced ${findings.length} prioritized issue classes, ${assumptions.length} assumptions requiring input, and ${gaps.length} behavioral-proof gaps.${topText} Severity and confidence are ranked deterministically; dissent remains explicit rather than averaged. Static structure is not runtime proof.`,
     MAX_SUMMARY_CHARS
   );
 }
@@ -805,7 +851,63 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
 export const synthesizeBrownfieldAssessment = synthesizeBrownfieldDesign;
 export const synthesizeBrownfield = synthesizeBrownfieldDesign;
 
-/** Stable JSON serialization for CLI and bundle writers; no Markdown is emitted. */
+/** Stable JSON serialization for CLI and bundle writers. */
 export function serializeBrownfieldDesign(design: BrownfieldDesign): string {
   return stableProtocolJson(design);
+}
+
+/** Human-readable brownfield report comparable to a specialist audit brief. */
+export function renderBrownfieldReport(design: BrownfieldDesign): string {
+  const findings = design.prioritizedFindings.slice(0, 25).map((finding) => [
+    `### [${finding.severity}/${finding.confidence}] ${finding.title}`,
+    "",
+    finding.statement,
+    `Recommendation: ${finding.recommendation}`,
+    finding.evidence.length === 0 ? "" : `Evidence: ${finding.evidence.slice(0, 6).map((reference) => reference.path).join(", ")}`,
+    ""
+  ].filter((line) => line.length > 0 || line === "").join("\n"));
+  const assumptions = design.assumptionsRequiringInput.slice(0, 20).map((assumption) => (
+    `- [${assumption.blocking ? "blocking" : "open"}/${assumption.confidence}] ${assumption.statement}`
+  ));
+  const plan = design.improvementPlan.slice(0, 20).map((item) => (
+    `- ${item.priority} ${item.objective}`
+  ));
+  return [
+    `# ${design.title}`,
+    "",
+    "## Executive summary",
+    "",
+    design.executiveSummary,
+    "",
+    "## Current architecture",
+    "",
+    design.currentArchitecture,
+    "",
+    "## Strengths",
+    "",
+    ...(design.evidenceBackedStrengths.length === 0 ? ["_None recorded._"] : design.evidenceBackedStrengths.map((value) => `- ${value}`)),
+    "",
+    "## Findings",
+    "",
+    ...(findings.length === 0 ? ["_No prioritized findings._"] : findings),
+    ...(design.prioritizedFindings.length > 25 ? [`… ${design.prioritizedFindings.length - 25} more findings`] : []),
+    "",
+    "## Assumptions requiring input",
+    "",
+    ...(assumptions.length === 0 ? ["_None._"] : assumptions),
+    "",
+    "## Behavioral-proof gaps",
+    "",
+    ...(design.behavioralProofGaps.length === 0 ? ["_None._"] : design.behavioralProofGaps.slice(0, 20).map((value) => `- ${value}`)),
+    "",
+    "## Improvement plan",
+    "",
+    ...(plan.length === 0 ? ["_None._"] : plan),
+    "",
+    "## Open questions",
+    "",
+    ...(design.openQuestions.length === 0 ? ["_None._"] : design.openQuestions.slice(0, 20).map((value) => `- ${value}`)),
+    "",
+    "Static structure is not behavioral proof. Do not treat this report as runtime verification."
+  ].join("\n");
 }
