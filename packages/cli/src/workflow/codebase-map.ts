@@ -341,7 +341,7 @@ export async function refreshStructuralCodeIndex(input: {
   const semanticIndexSha256 = codeIndexSha256Schema.parse(sha256(Buffer.from(semanticIndexText, "utf8")));
 
   const parserDiagnostics = draft.coverage.flatMap((coverage) => {
-    if (coverage.status !== "parser-error") return [];
+    if (coverage.status !== "parser-error" && coverage.status !== "partial") return [];
     const diagnostics = coverage.diagnostics ?? ["parser error"];
     return diagnostics.map((message) => `${coverage.path}: ${message}`);
   });
