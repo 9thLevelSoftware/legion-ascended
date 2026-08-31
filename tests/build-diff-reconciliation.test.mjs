@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { directoryLinkType, requireDirSymlink } from "./helpers/symlink-capability.mjs";
+import { requireFileSymlink } from "./helpers/symlink-capability.mjs";
 import {
   diffDelta,
   observeWorkingTreeDiff,
@@ -260,17 +260,16 @@ test("harness line counts are excluded along with harness files", () => {
 
 // --- observation against a real repository --------------------------------
 
-test("an unchanged pre-existing directory symlink is not attributed", async (t) => {
+test("an unchanged pre-existing symlink is not attributed", async (t) => {
   const { root, head } = await tempGitRepo();
   t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
-  if (!requireDirSymlink(t)) return;
+  if (!requireFileSymlink(t)) return;
 
-  const target = path.join(root, "map-run");
+  const target = path.join(root, "map-run.txt");
   const latest = path.join(root, ".legion", "project", "workflow", "map", "latest");
-  await mkdir(target, { recursive: true });
-  await writeFile(path.join(target, "workflow-run.json"), "{}\n", "utf8");
+  await writeFile(target, "map run\n", "utf8");
   await mkdir(path.dirname(latest), { recursive: true });
-  await symlink(target, latest, directoryLinkType());
+  await symlink(target, latest, "file");
 
   const before = observeWorkingTreeDiff({ repositoryRoot: root, baseGitSha: head });
   const after = observeWorkingTreeDiff({ repositoryRoot: root, baseGitSha: head });
