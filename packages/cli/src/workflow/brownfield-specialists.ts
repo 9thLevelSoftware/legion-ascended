@@ -75,6 +75,7 @@ const MAX_READ_ONLY_SNAPSHOT_ENTRIES = 50_000;
 const MAX_READ_ONLY_SNAPSHOT_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_READ_ONLY_SNAPSHOT_BYTES = 128 * 1024 * 1024;
 const MAX_READ_ONLY_SYMLINK_BYTES = 64 * 1024;
+const MAX_IGNORED_DIRECTORY_METADATA_ENTRIES = 20_000;
 
 let cleanupAdapterArtifacts: (root: string) => Promise<void> = (root) => rm(root, { recursive: true, force: true });
 
@@ -774,12 +775,18 @@ function packPrompt(input: {
   readonly truncation: BrownfieldPackTruncation;
 }): { readonly prompt: string; readonly promptTruncated: boolean } {
   let evidence = uniqueEvidence(input.evidence);
-  let excerpts = excerptsForPack(input.excerpts, evidence);
+  let excerptCap = input.excerpts.length;
+  let excerpts = excerptsForPack(input.excerpts.slice(0, excerptCap), evidence);
   let prompt = composeSpecialistPrompt({ ...input, excerpts, evidence });
-  while (!promptFitsLimit(prompt) && (excerpts.length > 0 || evidence.length > 0)) {
-    if (excerpts.length > 0) excerpts = excerpts.slice(0, -1);
-    else evidence = evidence.slice(0, -1);
-    excerpts = excerptsForPack(excerpts, evidence);
+  while (!promptFitsLimit(prompt) && (excerptCap > 0 || evidence.length > 0)) {
+    const excerptBytes = Buffer.byteLength(JSON.stringify(serializePackExcerpts(excerpts)), "utf8");
+    const evidenceBytes = Buffer.byteLength(JSON.stringify(evidence), "utf8");
+    if (evidence.length > 0 && (excerptCap === 0 || evidenceBytes >= excerptBytes)) {
+      evidence = evidence.slice(0, -1);
+    } else {
+      excerptCap -= 1;
+    }
+    excerpts = excerptsForPack(input.excerpts.slice(0, excerptCap), evidence);
     prompt = composeSpecialistPrompt({
       ...input,
       excerpts,
@@ -1455,6 +1462,35 @@ function repositoryMode(mode: number): number {
   return mode & 0o7777;
 }
 
+async function ignoredDirectoryMetadataDigest(absolutePath: string): Promise<string> {
+  const hash = createHash("sha256");
+  let count = 0;
+  const queue = [absolutePath];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === undefined) continue;
+    const children = (await readdir(current, { withFileTypes: true }))
+      .sort((left, right) => compareStrings(left.name, right.name));
+    for (const child of children) {
+      count += 1;
+      const childPath = path.join(current, child.name);
+      const childStat = await lstat(childPath);
+      const kind = childStat.isSymbolicLink()
+        ? "symlink"
+        : childStat.isDirectory()
+          ? "directory"
+          : childStat.isFile()
+            ? "file"
+            : "other";
+      if (count <= MAX_IGNORED_DIRECTORY_METADATA_ENTRIES) {
+        hash.update(`${child.name}\0${kind}\0${childStat.size}\0${repositoryMode(childStat.mode)}\n`);
+      }
+      if (childStat.isDirectory() && !childStat.isSymbolicLink()) queue.push(childPath);
+    }
+  }
+  return `${count}:${hash.digest("hex")}`;
+}
+
 async function snapshotRepository(root: string, options: RepositorySnapshotOptions = {}): Promise<RepositorySnapshot> {
   const entries = new Map<string, RepositoryEntry>();
   let rootStat;
@@ -1485,7 +1521,14 @@ async function snapshotRepository(root: string, options: RepositorySnapshotOptio
       const relativePath = relativeRoot.length === 0 ? child.name : `${relativeRoot}/${child.name}`;
       const stat = await lstat(absolutePath);
       if (stat.isDirectory()) {
-        if (!shouldTraverseAuthoredDirectory(child.name)) continue;
+        if (!shouldTraverseAuthoredDirectory(child.name)) {
+          addEntry(relativePath, {
+            kind: "directory",
+            digest: await ignoredDirectoryMetadataDigest(absolutePath),
+            mode: repositoryMode(stat.mode)
+          });
+          continue;
+        }
         addEntry(relativePath, { kind: "directory", digest: "", mode: repositoryMode(stat.mode) });
         await visit(absolutePath, relativePath);
         continue;
@@ -1694,7 +1737,10 @@ async function clearRepositoryRoot(root: string): Promise<void> {
   }
   const children = (await readdir(absoluteRoot, { withFileTypes: true }))
     .sort((left, right) => compareStrings(left.name, right.name));
-  for (const child of children) await removeRepositoryEntry(root, child.name);
+  for (const child of children) {
+    if (!shouldTraverseAuthoredDirectory(child.name)) continue;
+    await removeRepositoryEntry(root, child.name);
+  }
 }
 
 async function prepareRepositoryTreeForRestore(root: string): Promise<void> {
@@ -1878,10 +1924,6 @@ async function runReadOnlyInProcessCallback(input: {
           restoreError.code = "READ_ONLY_RESTORE_FAILED";
           throw restoreError;
         }
-        void callbackPromise.then(
-          () => restoreRepositoryFromBaseline(input.repositoryRoot, before).catch(() => undefined),
-          () => restoreRepositoryFromBaseline(input.repositoryRoot, before).catch(() => undefined)
-        );
         const drainError = timeoutError(input.timeoutMs) as Error & { code?: string };
         drainError.code = "SPECIALIST_TIMEOUT_DRAIN";
         throw drainError;

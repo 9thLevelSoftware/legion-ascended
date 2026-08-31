@@ -1871,3 +1871,47 @@ test("does not fail in-process specialists because of a large ignored .git pack 
     await rm(repositoryRoot, { recursive: true, force: true });
   }
 });
+
+test("fails closed when an in-process callback mutates an ignored directory", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-git-mutation-"));
+  try {
+    const packDir = path.join(repositoryRoot, ".git", "objects", "pack");
+    await mkdir(packDir, { recursive: true });
+    await writeFile(path.join(packDir, "pack-fixture.pack"), Buffer.alloc(17 * 1024 * 1024));
+    await writeFile(path.join(repositoryRoot, ".git", "HEAD"), "ref: refs/heads/main\n", "utf8");
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      execute: async (request) => {
+        await writeFile(path.join(request.repositoryRoot, ".git", "HEAD"), "ref: refs/heads/pwned\n", "utf8");
+        return executeFinding({ specialist: request.specialist });
+      }
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.executionRecords.every((record) => record.status !== "succeeded"));
+    assert.ok(result.diagnostics.some((entry) => /\.git/u.test(entry)));
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("does not restore a stale baseline after a drain timeout has returned", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "legion-brownfield-stale-restore-"));
+  const userFile = path.join(repositoryRoot, "user-edit.txt");
+  try {
+    const result = await runBrownfieldSpecialists({
+      ...input({ repositoryRoot }),
+      timeoutMs: 50,
+      execute: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1_600));
+        return executeFinding({ specialist: { name: "architecture" } });
+      }
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.executionRecords.every((record) => record.status === "blocked"));
+    await writeFile(userFile, "keep this edit\n", "utf8");
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    assert.equal(await readFile(userFile, "utf8"), "keep this edit\n");
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});

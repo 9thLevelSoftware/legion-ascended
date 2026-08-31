@@ -48,3 +48,39 @@ test("structural map documents expose modules, exports, and a reference graph", 
   assert.doesNotMatch(documents.codebaseMarkdown, /first content:/);
   assert.deepEqual(documents.symbolRecords.map((entry) => entry.symbol).sort(), ["boot", "helper"]);
 });
+
+test("preview keeps each reference-graph section bounded instead of slicing mid-heading", () => {
+  const imports = Array.from({ length: 40 }, (_entry, index) => ({
+    path: `src/mod-${String(index).padStart(2, "0")}.ts`,
+    specifier: "./dep.js"
+  }));
+  const documents = renderCodebaseDocuments({
+    map: {
+      ...MAP,
+      sourceFileCount: 42,
+      files: [
+        ...MAP.files,
+        ...imports.map((item, index) => ({
+          path: item.path,
+          sha256: "e".repeat(64),
+          sizeBytes: 8,
+          lineCount: 1,
+          symbols: [`n${index}`],
+          headings: [],
+          summary: `${item.path} has 1 lines`
+        }))
+      ]
+    },
+    snapshot: {
+      ...SNAPSHOT,
+      coverage: [...SNAPSHOT.coverage, ...imports.map((item) => ({ path: item.path }))],
+      imports: [...SNAPSHOT.imports, ...imports]
+    }
+  });
+  assert.match(documents.preview, /## Reference graph/);
+  assert.match(documents.preview, /### Highest fan-in/);
+  assert.match(documents.preview, /### Highest fan-out/);
+  const fanInIndex = documents.preview.indexOf("### Highest fan-in");
+  const fanOutIndex = documents.preview.indexOf("### Highest fan-out");
+  assert.ok(fanInIndex >= 0 && fanOutIndex > fanInIndex);
+});

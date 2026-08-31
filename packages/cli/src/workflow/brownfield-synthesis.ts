@@ -332,7 +332,7 @@ function deterministicSignalFinding(input: {
 
 function signalFindings(signals: NormalizedSignals): AssessmentFinding[] {
   return [
-    ...aggregateSignalFindings(signals.architectureSignals, "architecture"),
+    ...aggregateSignalFindings(signals.architectureSignals, () => "architecture"),
     ...aggregateSignalFindings(signals.riskSignals, (signal) => (
       /credential|secret|security|input|supply-chain/iu.test(signal.code) ? "security" : "code"
     ))
@@ -341,9 +341,9 @@ function signalFindings(signals: NormalizedSignals): AssessmentFinding[] {
 
 function aggregateSignalFindings(
   signals: NormalizedSignals["architectureSignals"] | NormalizedSignals["riskSignals"],
-  specialistFor: AssessmentFinding["specialist"] | ((signal: NormalizedSignals["architectureSignals"][number]) => AssessmentFinding["specialist"])
+  specialistFor: (signal: NormalizedSignals["architectureSignals"][number] | NormalizedSignals["riskSignals"][number]) => AssessmentFinding["specialist"]
 ): AssessmentFinding[] {
-  const groups = new Map<string, NormalizedSignals["architectureSignals"][number][]>();
+  const groups = new Map<string, Array<NormalizedSignals["architectureSignals"][number] | NormalizedSignals["riskSignals"][number]>>();
   for (const signal of signals) {
     const current = groups.get(signal.code) ?? [];
     current.push(signal);
@@ -353,7 +353,7 @@ function aggregateSignalFindings(
     const worst = group.reduce((current, candidate) => (
       SEVERITY_ORDER[candidate.severity] < SEVERITY_ORDER[current.severity] ? candidate : current
     ));
-    const specialist = typeof specialistFor === "function" ? specialistFor(worst) : specialistFor;
+    const specialist = specialistFor(worst);
     const evidence = uniqueEvidence(group.flatMap((signal) => signal.evidence ?? []));
     const statement = group.length === 1
       ? worst.statement
@@ -865,7 +865,7 @@ export function renderBrownfieldReport(design: BrownfieldDesign): string {
     `Recommendation: ${finding.recommendation}`,
     finding.evidence.length === 0 ? "" : `Evidence: ${finding.evidence.slice(0, 6).map((reference) => reference.path).join(", ")}`,
     ""
-  ].filter((line) => line.length > 0 || line === "").join("\n"));
+  ].join("\n"));
   const assumptions = design.assumptionsRequiringInput.slice(0, 20).map((assumption) => (
     `- [${assumption.blocking ? "blocking" : "open"}/${assumption.confidence}] ${assumption.statement}`
   ));
