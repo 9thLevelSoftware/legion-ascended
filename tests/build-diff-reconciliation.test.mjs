@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import { directoryLinkType, requireDirSymlink } from "./helpers/symlink-capability.mjs";
 import {
   diffDelta,
   observeWorkingTreeDiff,
@@ -258,6 +259,30 @@ test("harness line counts are excluded along with harness files", () => {
 });
 
 // --- observation against a real repository --------------------------------
+
+test("an unchanged pre-existing directory symlink is not attributed", async (t) => {
+  const { root, head } = await tempGitRepo();
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+  if (!requireDirSymlink(t)) return;
+
+  const target = path.join(root, "map-run");
+  const latest = path.join(root, ".legion", "project", "workflow", "map", "latest");
+  await mkdir(target, { recursive: true });
+  await writeFile(path.join(target, "workflow-run.json"), "{}\n", "utf8");
+  await mkdir(path.dirname(latest), { recursive: true });
+  await symlink(target, latest, directoryLinkType());
+
+  const before = observeWorkingTreeDiff({ repositoryRoot: root, baseGitSha: head });
+  const after = observeWorkingTreeDiff({ repositoryRoot: root, baseGitSha: head });
+  assert.equal(before.status, "clean");
+  assert.equal(after.status, "clean");
+  assert.notEqual(
+    before.observation.files.find((file) => file.path.endsWith("/latest"))?.contentSha256,
+    undefined,
+    "the symlink itself must have a stable hash"
+  );
+  assert.deepEqual(diffDelta(before.observation, after.observation).changedFiles, []);
+});
 
 test("observation sees modified, created, and untracked files", async (t) => {
   const { root, head } = await tempGitRepo();

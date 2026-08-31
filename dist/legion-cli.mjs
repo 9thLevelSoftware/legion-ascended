@@ -41625,13 +41625,13 @@ async function terminateProcessTree(pid) {
 // packages/cli/src/workflow/guarded-execution.ts
 import { execFileSync as execFileSync6 } from "node:child_process";
 import { createHash as createHash19 } from "node:crypto";
-import { lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync2, readlinkSync, rmSync as rmSync3, statSync as statSync2, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { lstatSync as lstatSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync2, readlinkSync as readlinkSync2, rmSync as rmSync3, statSync as statSync2, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import path30 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync5 } from "node:child_process";
 import { createHash as createHash18 } from "node:crypto";
-import { readFileSync, rmSync as rmSync2, statSync } from "node:fs";
+import { lstatSync, readFileSync, readlinkSync, rmSync as rmSync2, statSync } from "node:fs";
 import path28 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
@@ -41660,7 +41660,11 @@ function splitLines(value) {
 }
 function hashFileContent(absolutePath) {
   try {
-    if (statSync(absolutePath).size > MAX_HASHED_BYTES) return void 0;
+    const metadata2 = lstatSync(absolutePath);
+    if (metadata2.isSymbolicLink()) {
+      return createHash18("sha256").update(`symlink\0${readlinkSync(absolutePath, "utf8")}`, "utf8").digest("hex");
+    }
+    if (!metadata2.isFile() || metadata2.size > MAX_HASHED_BYTES) return void 0;
     return createHash18("sha256").update(readFileSync(absolutePath)).digest("hex");
   } catch {
     return void 0;
@@ -41846,12 +41850,12 @@ function reconcileTaskDiff(input) {
 }
 
 // packages/cli/src/workflow/project-files.ts
-import { lstatSync, readdirSync } from "node:fs";
+import { lstatSync as lstatSync2, readdirSync } from "node:fs";
 import path29 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
   try {
-    const rootStat = lstatSync(path29.join(repositoryRoot, relativeRoot));
+    const rootStat = lstatSync2(path29.join(repositoryRoot, relativeRoot));
     if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
     }
@@ -41881,7 +41885,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
       if (!entry.isFile()) continue;
       let size;
       try {
-        size = lstatSync(path29.join(repositoryRoot, child)).size;
+        size = lstatSync2(path29.join(repositoryRoot, child)).size;
       } catch {
         size = void 0;
       }
@@ -41940,7 +41944,7 @@ function digestOf(absolute) {
 }
 function readTarget(absolute) {
   try {
-    return readlinkSync(absolute);
+    return readlinkSync2(absolute);
   } catch {
     return void 0;
   }
@@ -42014,7 +42018,7 @@ function classifyAcceptancePath(repositoryRoot, relative, harnessPaths) {
   }
   let stat11;
   try {
-    stat11 = lstatSync2(absolute);
+    stat11 = lstatSync3(absolute);
   } catch (error51) {
     const code = error51.code;
     if (code === "ENOENT" || code === "ENOTDIR") return { kind: "absent" };
