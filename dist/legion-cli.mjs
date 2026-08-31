@@ -27929,6 +27929,8 @@ async function containsOnlyRecognizedWorkflowRecords(workflowRoot) {
   for (const entry of entries) {
     if (isIgnorableLegionRootEntry(entry.name))
       continue;
+    if (entry.name === "latest" && entry.isSymbolicLink())
+      continue;
     if (!entry.isDirectory())
       return false;
     const result = await workflowRecordDirectoryStats(path9.join(workflowRoot, entry.name), entry.name);
@@ -27943,6 +27945,8 @@ async function workflowRecordDirectoryStats(absoluteDirectory, workflow) {
   let recordCount = 0;
   for (const entry of entries) {
     if (isIgnorableLegionRootEntry(entry.name))
+      continue;
+    if (entry.name === "latest" && entry.isSymbolicLink())
       continue;
     const absolutePath = entry.isDirectory() ? path9.join(absoluteDirectory, entry.name, "workflow-run.json") : path9.join(absoluteDirectory, entry.name);
     if (!entry.isDirectory() && (!entry.isFile() || !entry.name.endsWith(".json")))
