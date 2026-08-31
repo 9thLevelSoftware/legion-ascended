@@ -2,6 +2,34 @@
 
 All notable Legion Next governance changes are documented here.
 
+## [9.5.0] - GA-pending
+
+### Added
+- Multi-layer intelligence for `legion map --refresh`: git history analysis
+  (hotspots, ownership, bus factor, co-change pairs), graph ranking (PageRank
+  on dependency graph, token-budget aware), code health scoring (1-10 per file),
+  and architecture overview (top modules by importance).
+- Deterministic brownfield assessment for `legion assess`: works without LLM
+  specialist execution. New signals: test-coverage-gap, orphan-module,
+  circular-dependency, high-fan-in, documentation-gap. Narrative synthesis
+  produces project overview, completion assessment, and recommended next steps.
+- Project context generation: `legion map --refresh` generates
+  `.legion/project/context/AGENTS.md` with deterministic tech-stack, entry-point,
+  architecture, build/test command, and convention detection (<2KB).
+- Artifact management: `latest` symlink for map/assessment runs, auto-cleanup
+  of old runs (retains last 3 per workflow).
+
+### Changed
+- Protocol: added `partial` coverage status for files with recoverable
+  tree-sitter parse errors. Map no longer blocks when <10% of files have
+  parser errors (90% threshold).
+- `extractFile()` now extracts partial symbols from files with parse errors
+  instead of discarding everything.
+
+### Fixed
+- `legion map --refresh` no longer blocks the entire workflow when a small
+  fraction of files have tree-sitter parse errors.
+
 ## [9.4.1] - GA-pending
 
 ### Fixed
