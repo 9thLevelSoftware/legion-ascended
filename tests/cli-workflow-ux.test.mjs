@@ -2412,8 +2412,7 @@ test("legion quick preserves repeated timestamp and slug runs", async () => {
     const files = await readdir(path.join(root, ".legion", "project", "workflow", "quick"));
     assert.deepEqual(files.sort(), [
       "2026-06-22t12-34-56-000z-fix-the-failing-tests",
-      "2026-06-22t12-34-56-000z-fix-the-failing-tests-2",
-      "latest"
+      "2026-06-22t12-34-56-000z-fix-the-failing-tests-2"
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });

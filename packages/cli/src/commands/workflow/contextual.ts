@@ -49,6 +49,8 @@ import {
   renderGuidanceMarkdown,
   runGuidanceExecutor,
   writeGuidanceRun,
+  updateLatestSymlink,
+  cleanupOldRuns,
   type GuidanceRunDocument
 } from "../../workflow/guidance-run.js";
 import { slugFromName } from "../../workflow/input.js";
@@ -440,9 +442,12 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       exports: semantic?.snapshot.exports ?? [],
       coverage: semantic?.snapshot.coverage ?? []
     });
-    const agentsMdPath = ".legion/project/context/AGENTS.md";
-    await mkdir(path.join(context.repositoryRoot, ".legion", "project", "context"), { recursive: true });
-    await writeFile(path.join(context.repositoryRoot, agentsMdPath), projectContext.agentsMd, "utf8");
+    const agentsMdPath = guidanceArtifactPath(paths, "agents.md");
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: agentsMdPath,
+      text: projectContext.agentsMd
+    });
     const parserDiagnostics = semantic?.parserDiagnostics ?? [];
     const structuralSummary = semantic === undefined
       ? undefined
@@ -490,6 +495,8 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       nextAction: action,
       diagnostics
     });
+    await updateLatestSymlink(context.repositoryRoot, paths);
+    await cleanupOldRuns(context.repositoryRoot, paths.workflow);
     const payload = {
       ok: status === "completed",
       status,

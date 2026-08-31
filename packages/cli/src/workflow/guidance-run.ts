@@ -162,14 +162,12 @@ export async function writeGuidanceRun(input: {
     artifactPath: input.paths.workflowRunArtifactPath,
     text: stableProtocolJson(document)
   });
-  await updateLatestSymlink(input.repositoryRoot, input.paths);
-  await cleanupOldRuns(input.repositoryRoot, input.paths.workflow);
   return document;
 }
 
 const MAX_RETAINED_RUNS = 3;
 
-async function updateLatestSymlink(repositoryRoot: string, paths: GuidanceRunPaths): Promise<void> {
+export async function updateLatestSymlink(repositoryRoot: string, paths: GuidanceRunPaths): Promise<void> {
   const workflowRoot = path.join(repositoryRoot, ".legion", "project", "workflow", paths.workflow);
   const latestPath = path.join(workflowRoot, "latest");
   const runDir = path.join(repositoryRoot, ...paths.artifactRoot.split("/"));
@@ -185,7 +183,7 @@ async function updateLatestSymlink(repositoryRoot: string, paths: GuidanceRunPat
   }
 }
 
-async function cleanupOldRuns(repositoryRoot: string, workflow: string): Promise<void> {
+export async function cleanupOldRuns(repositoryRoot: string, workflow: string): Promise<void> {
   const workflowRoot = path.join(repositoryRoot, ".legion", "project", "workflow", workflow);
   let entries;
   try {

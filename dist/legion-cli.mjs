@@ -42396,8 +42396,6 @@ async function writeGuidanceRun(input) {
     artifactPath: input.paths.workflowRunArtifactPath,
     text: stableProtocolJson(document)
   });
-  await updateLatestSymlink(input.repositoryRoot, input.paths);
-  await cleanupOldRuns(input.repositoryRoot, input.paths.workflow);
   return document;
 }
 var MAX_RETAINED_RUNS = 3;
@@ -64956,7 +64954,7 @@ function renderLessonLine(record2) {
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
-import { mkdir as mkdir14, readFile as readFile27, rm as rm9, writeFile as writeFile11 } from "node:fs/promises";
+import { readFile as readFile27, rm as rm9 } from "node:fs/promises";
 import path56 from "node:path";
 
 // packages/cli/src/workflow/code-health.ts
@@ -66339,9 +66337,12 @@ async function mapRefresh(context, scope, profile) {
       exports: semantic?.snapshot.exports ?? [],
       coverage: semantic?.snapshot.coverage ?? []
     });
-    const agentsMdPath = ".legion/project/context/AGENTS.md";
-    await mkdir14(path56.join(context.repositoryRoot, ".legion", "project", "context"), { recursive: true });
-    await writeFile11(path56.join(context.repositoryRoot, agentsMdPath), projectContext.agentsMd, "utf8");
+    const agentsMdPath = guidanceArtifactPath(paths, "agents.md");
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: agentsMdPath,
+      text: projectContext.agentsMd
+    });
     const parserDiagnostics2 = semantic?.parserDiagnostics ?? [];
     const structuralSummary = semantic === void 0 ? void 0 : deriveStructuralMapSummary({
       snapshot: semantic.snapshot,
@@ -66381,6 +66382,8 @@ async function mapRefresh(context, scope, profile) {
       nextAction: action,
       diagnostics
     });
+    await updateLatestSymlink(context.repositoryRoot, paths);
+    await cleanupOldRuns(context.repositoryRoot, paths.workflow);
     const payload = {
       ok: status2 === "completed",
       status: status2,
