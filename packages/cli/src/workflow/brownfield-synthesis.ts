@@ -854,7 +854,7 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     collectUniqueText(gapCollector, `Conservative test-to-source link '${link.testPath}' -> '${link.sourcePath}' is not behavioral proof.`);
   }
   for (const signal of [...signals.architectureSignals, ...signals.riskSignals]) {
-    if (signal.code === "test-coverage-gap" || signal.code === "missing-test-neighbor") {
+    if (signal.code === "test-coverage-gap") {
       collectUniqueText(gapCollector, `${signal.statement} A test-result is required to establish behavioral coverage.`);
     }
   }

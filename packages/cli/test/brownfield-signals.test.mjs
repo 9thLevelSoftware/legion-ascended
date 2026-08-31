@@ -173,7 +173,7 @@ test("collects deterministic architecture, dependency, test, documentation, and 
       "catch-and-ignore",
       "credential-like-string",
       "unbounded-input",
-      "missing-test-neighbor",
+      "test-coverage-gap",
       "verification-evidence-missing"
     ]) {
       assert.ok(riskCodes.has(code), `missing risk signal ${code}`);
@@ -772,7 +772,7 @@ test("fails closed for every map inventory binding mismatch", async () => {
   }
 });
 
-test("does not emit missing-test-neighbor for non-code or generated coverage", async () => {
+test("does not emit test-coverage-gap for non-code or generated coverage", async () => {
   const fixture = await makeFixture([
     ["src/untested.ts", "export const untested = 1;\n"],
     ["generated/output.ts", "export const generated = 1;\n"],
@@ -786,7 +786,7 @@ test("does not emit missing-test-neighbor for non-code or generated coverage", a
   try {
     const result = await collectBrownfieldSignals(fixture);
     const missingTestPaths = result.riskSignals
-      .filter((signal) => signal.code === "missing-test-neighbor")
+      .filter((signal) => signal.code === "test-coverage-gap")
       .flatMap((signal) => signal.evidence)
       .filter((evidence) => evidence.kind === "source-file")
       .map((evidence) => evidence.path);

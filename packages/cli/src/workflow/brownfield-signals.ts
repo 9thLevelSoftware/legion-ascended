@@ -1092,7 +1092,6 @@ async function collectRiskSignals(input: {
       addSignal(signals, "unbounded-input", "major", `Potentially unbounded input access pattern present in ${sourcePath}; runtime validation and limits are not proven by static structure.`, [sourceEvidence(observation, "Bounded source read containing unbounded-input pattern.")]);
     }
     if (eligibleTestNeighborSources.has(sourcePath) && !linkedSources.has(sourcePath)) {
-      addSignal(signals, "missing-test-neighbor", "minor", `No conservative test-to-source neighbor was found for ${sourcePath}; static absence is not proof that no test exists.`, [sourceEvidence(observation, "Source file without a conservative test neighbor link.")]);
       addSignal(signals, "test-coverage-gap", "moderate", `Source file ${sourcePath} has no corresponding test file; test coverage is incomplete.`, [sourceEvidence(observation, "Source file without a conservative corresponding test file.")]);
     }
     if (eligibleTestNeighborSources.has(sourcePath) && !patternMatches.hasDocumentation) {

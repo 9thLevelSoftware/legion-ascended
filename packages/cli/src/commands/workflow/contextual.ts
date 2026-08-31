@@ -1,4 +1,4 @@
-import { readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { listReviewDecisionsForChange, loadProject, readTaskGraph, stableProtocolJson } from "@legion/artifacts";
@@ -440,7 +440,8 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       exports: semantic?.snapshot.exports ?? [],
       coverage: semantic?.snapshot.coverage ?? []
     });
-    const agentsMdPath = "AGENTS.md";
+    const agentsMdPath = ".legion/project/context/AGENTS.md";
+    await mkdir(path.join(context.repositoryRoot, ".legion", "project", "context"), { recursive: true });
     await writeFile(path.join(context.repositoryRoot, agentsMdPath), projectContext.agentsMd, "utf8");
     const parserDiagnostics = semantic?.parserDiagnostics ?? [];
     const structuralSummary = semantic === undefined
