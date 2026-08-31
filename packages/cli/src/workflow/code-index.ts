@@ -852,15 +852,14 @@ async function extractFile(
       parser.setLanguage(loadedLanguage);
       tree = parser.parse(file.text);
       if (tree === null) throw new Error("Tree-sitter returned no syntax tree.");
-      if (tree.rootNode.hasError) {
+      const diagnostics = tree.rootNode.hasError ? parserDiagnostics(tree.rootNode) : [];
+      const facts = collectTreeFacts(tree.rootNode, file, mapping.grammar, offsets);
+      if (diagnostics.length > 0) {
         return {
-          coverage: { ...baseCoverage, status: "parser-error", diagnostics: parserDiagnostics(tree.rootNode) },
-          symbols: [],
-          imports: [],
-          exports: []
+          coverage: { ...baseCoverage, status: "partial", diagnostics },
+          ...facts
         };
       }
-      const facts = collectTreeFacts(tree.rootNode, file, mapping.grammar, offsets);
       return { coverage: { ...baseCoverage, status: "parsed" }, ...facts };
     } finally {
       tree?.delete();

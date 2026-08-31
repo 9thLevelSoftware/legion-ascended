@@ -18,6 +18,21 @@ export interface MapRenderIndex {
   }[];
   readonly imports?: readonly { readonly path: string; readonly specifier: string }[];
   readonly exports?: readonly { readonly path: string; readonly name: string; readonly kind: string }[];
+  readonly rankedModules?: readonly {
+    readonly path: string;
+    readonly rank: number;
+    readonly fanIn: number;
+    readonly fanOut: number;
+    readonly symbols: readonly string[];
+  }[];
+  readonly healthScores?: readonly {
+    readonly path: string;
+    readonly score: number;
+    readonly signals: readonly { readonly code: string; readonly severity: string; readonly message: string }[];
+  }[];
+  readonly gitHotspots?: readonly { readonly path: string; readonly changeCount: number; readonly lastChanged: string }[];
+  readonly gitOwnership?: readonly { readonly path: string; readonly lastAuthor: string; readonly lastChanged: string }[];
+  readonly gitBusFactor?: readonly { readonly directory: string; readonly contributorCount: number; readonly topContributors: readonly string[] }[];
 }
 
 export interface CodebaseMapDocuments {
@@ -66,6 +81,7 @@ export function renderCodebaseDocuments(input: {
     "## Modules",
     "",
     modules,
+    ...renderIntelligenceSections(input.snapshot),
     ...(graph.length === 0 ? [] : ["", "## Reference graph", "", graph]),
     "",
     "## File types",
@@ -197,6 +213,124 @@ function renderInventoryModules(files: readonly CodebaseMapFile[]): string {
     .slice(0, MAX_MODULE_FILES)
     .map((file) => `${file.path}\n  ${file.symbols.slice(0, 12).join(", ")}`);
   return lines.length === 0 ? "_No module symbols were extracted from inventory heuristics._" : lines.join("\n\n");
+}
+
+function renderIntelligenceSections(snapshot: MapRenderIndex | undefined): readonly string[] {
+  if (snapshot === undefined) return [];
+  return [
+    ...renderArchitectureOverview(snapshot),
+    ...renderCodeHealth(snapshot),
+    ...renderDevelopmentHotspots(snapshot),
+    ...renderBusFactor(snapshot)
+  ];
+}
+
+function renderArchitectureOverview(snapshot: MapRenderIndex): readonly string[] {
+  if (snapshot.rankedModules === undefined) return [];
+  const modules = [...snapshot.rankedModules]
+    .sort((left, right) => right.rank - left.rank || compareStrings(left.path, right.path))
+    .slice(0, 10);
+  return [
+    "",
+    "## Architecture Overview",
+    "",
+    "### Top Modules by Importance",
+    "",
+    ...(modules.length === 0
+      ? ["_No ranked modules were provided._"]
+      : modules.map((module) => {
+          const symbols = module.symbols.length === 0 ? "" : ` — ${module.symbols.join(", ")}`;
+          return `- ${module.path} (rank: ${formatNumber(module.rank)}, fan-in: ${module.fanIn}, fan-out: ${module.fanOut})${symbols}`;
+        }))
+  ];
+}
+
+function renderCodeHealth(snapshot: MapRenderIndex): readonly string[] {
+  if (snapshot.healthScores === undefined) return [];
+  const scores = [...snapshot.healthScores];
+  const critical = scores.filter((item) => item.score < 5);
+  const warning = scores.filter((item) => item.score >= 5 && item.score <= 7);
+  const signalCounts = new Map<string, { count: number; severity: string; message: string }>();
+  for (const score of scores) {
+    for (const signal of score.signals) {
+      const current = signalCounts.get(signal.code);
+      if (current === undefined) {
+        signalCounts.set(signal.code, { count: 1, severity: signal.severity, message: signal.message });
+      } else {
+        current.count += 1;
+      }
+    }
+  }
+  const topSignals = [...signalCounts.entries()]
+    .sort(([leftCode, left], [rightCode, right]) => right.count - left.count || compareStrings(leftCode, rightCode))
+    .slice(0, 3);
+  const average = scores.length === 0
+    ? "n/a"
+    : formatNumber(scores.reduce((total, item) => total + item.score, 0) / scores.length);
+  return [
+    "",
+    "## Code Health",
+    "",
+    `- Average health score: ${average}`,
+    "",
+    "### Critical Files (score below 5)",
+    "",
+    ...(critical.length === 0 ? ["_None_"] : critical.map((item) => `- ${item.path} (score: ${formatNumber(item.score)})`)),
+    "",
+    "### Warning Files (score 5-7)",
+    "",
+    ...(warning.length === 0 ? ["_None_"] : warning.map((item) => `- ${item.path} (score: ${formatNumber(item.score)})`)),
+    "",
+    "### Top Health Signals",
+    "",
+    ...(topSignals.length === 0
+      ? ["_None_"]
+      : topSignals.map(([code, signal]) => `- ${code} (${signal.count}) — ${signal.severity}: ${signal.message}`))
+  ];
+}
+
+function renderDevelopmentHotspots(snapshot: MapRenderIndex): readonly string[] {
+  if (snapshot.gitHotspots === undefined) return [];
+  const hotspots = [...snapshot.gitHotspots]
+    .sort((left, right) => right.changeCount - left.changeCount || compareStrings(left.path, right.path))
+    .slice(0, 10);
+  return [
+    "",
+    "## Development Hotspots",
+    "",
+    ...(hotspots.length === 0
+      ? ["_No git history hotspots were found._"]
+      : hotspots.map((item) => `- ${item.path} (${item.changeCount} changes, last: ${item.lastChanged})`))
+  ];
+}
+
+function renderBusFactor(snapshot: MapRenderIndex): readonly string[] {
+  if (snapshot.gitBusFactor === undefined) return [];
+  const risks = [...snapshot.gitBusFactor]
+    .filter((item) => item.contributorCount < 3)
+    .sort((left, right) => left.contributorCount - right.contributorCount || compareStrings(left.directory, right.directory));
+  return [
+    "",
+    "## Bus Factor",
+    "",
+    ...(risks.length === 0
+      ? ["_No directories have fewer than 3 contributors._"]
+      : risks.map((item) => {
+          const contributorLabel = item.contributorCount === 1 ? "contributor" : "contributors";
+          return `- ${displayDirectory(item.directory)} (${item.contributorCount} ${contributorLabel}) — risk: single point of failure`;
+        }))
+  ];
+}
+
+function displayDirectory(directory: string): string {
+  if (directory === ".") return "./";
+  return `${directory}/`;
+}
+
+function formatNumber(value: number): string {
+  if (!Number.isFinite(value)) return String(value);
+  if (Number.isInteger(value)) return String(value);
+  return String(Number(value.toFixed(2)));
 }
 
 function renderReferenceGraph(snapshot: MapRenderIndex, paths: readonly string[]): string {

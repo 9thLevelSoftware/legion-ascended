@@ -451,6 +451,10 @@ type NormalizedSignals = {
   readonly riskSignals: readonly BrownfieldSignals["riskSignals"][number][];
 };
 
+function signalSortKey(signal: NormalizedSignals["architectureSignals"][number]): string {
+  return [signal.code, signal.severity, signal.statement, JSON.stringify(signal.evidence ?? [])].join("\u0000");
+}
+
 function normalizeSignals(input: BrownfieldSignals | null | undefined): NormalizedSignals {
   if (input === null || input === undefined) {
     return {
@@ -465,11 +469,23 @@ function normalizeSignals(input: BrownfieldSignals | null | undefined): Normaliz
   const summary = assessmentSignalSummarySchema.parse(input.summary);
   return {
     summary,
-    dependencyEdges: Array.isArray(input.dependencyEdges) ? input.dependencyEdges : [],
+    dependencyEdges: Array.isArray(input.dependencyEdges)
+      ? [...input.dependencyEdges].sort((left, right) =>
+        compareStrings(left.from, right.from) || compareStrings(left.to, right.to) || compareStrings(JSON.stringify(left.evidence), JSON.stringify(right.evidence))
+      )
+      : [],
     testFiles: Array.isArray(input.testFiles) ? [...input.testFiles].sort(compareStrings) : [],
-    testToSourceLinks: Array.isArray(input.testToSourceLinks) ? input.testToSourceLinks : [],
-    architectureSignals: Array.isArray(input.architectureSignals) ? input.architectureSignals : [],
-    riskSignals: Array.isArray(input.riskSignals) ? input.riskSignals : []
+    testToSourceLinks: Array.isArray(input.testToSourceLinks)
+      ? [...input.testToSourceLinks].sort((left, right) =>
+        compareStrings(left.testPath, right.testPath) || compareStrings(left.sourcePath, right.sourcePath) || compareStrings(left.reason, right.reason)
+      )
+      : [],
+    architectureSignals: Array.isArray(input.architectureSignals)
+      ? [...input.architectureSignals].sort((left, right) => compareStrings(signalSortKey(left), signalSortKey(right)))
+      : [],
+    riskSignals: Array.isArray(input.riskSignals)
+      ? [...input.riskSignals].sort((left, right) => compareStrings(signalSortKey(left), signalSortKey(right)))
+      : []
   };
 }
 
@@ -601,17 +617,52 @@ function improvementPriority(severity: AssessmentSeverity): BrownfieldImprovemen
   }
 }
 
+function signalCodeFromFinding(finding: AssessmentFinding): string | undefined {
+  const prefix = "Structural signal: ";
+  return finding.title.startsWith(prefix) ? finding.title.slice(prefix.length) : undefined;
+}
+
+function improvementObjective(finding: AssessmentFinding): string {
+  switch (signalCodeFromFinding(finding)) {
+    case "test-coverage-gap":
+      return "Add focused tests for every source file named by the test-coverage-gap signal.";
+    case "orphan-module":
+      return "Confirm each orphan module is an intentional entry point, or remove the dead module after owner review.";
+    case "circular-dependency":
+      return "Break the reciprocal import by introducing a stable shared contract or moving the shared implementation.";
+    case "high-fan-in":
+      return "Review the high-fan-in module contract and add compatibility tests before changing its public surface.";
+    case "documentation-gap":
+      return "Add module-level comments or JSDoc for every source file named by the documentation-gap signal.";
+    default:
+      return `Bounded objective: address ${finding.title}.`;
+  }
+}
+
 function improvementVerification(finding: AssessmentFinding): string[] {
   const behavioralEvidence = finding.evidence.find((reference) => reference.kind === "command-result" || reference.kind === "test-result");
   if (behavioralEvidence !== undefined) {
     return [boundedText(`Re-run the recorded verification represented by ${behavioralEvidence.path}.`, 1_000)];
   }
-  return ["needs-user-input: provide an executable command-result or test-result verification before implementation."];
+  switch (signalCodeFromFinding(finding)) {
+    case "test-coverage-gap":
+      return ["Run focused tests for the affected source files and record a test-result evidence reference."];
+    case "orphan-module":
+      return ["Re-run the structural map after confirming the entry point or deleting the module; record the result."];
+    case "circular-dependency":
+      return ["Re-run the dependency graph check and confirm the reciprocal edge is gone."];
+    case "high-fan-in":
+      return ["Run the affected module's compatibility tests and record a test-result evidence reference."];
+    case "documentation-gap":
+      return ["Re-run the documentation scan and confirm the affected files contain module-level comments or JSDoc."];
+    default:
+      return ["needs-user-input: provide an executable command-result or test-result verification before implementation."];
+  }
 }
 
 function makeImprovement(finding: AssessmentFinding): BrownfieldImprovementItem {
   const prerequisites = finding.assumptions.map((id) => `Resolve assumption ${id} before implementation.`).sort(compareStrings);
-  const objective = boundedText(`Bounded objective: address ${finding.title}.`, 1_000);
+  const objective = boundedText(improvementObjective(finding), 1_000);
   const rationale = boundedText(`${finding.statement} Recommendation: ${finding.recommendation}`, 4_000);
   return {
     id: `imp_${hash24(JSON.stringify({ finding: findingSemanticKey(finding), objective, prerequisites }))}`,
@@ -626,22 +677,62 @@ function makeImprovement(finding: AssessmentFinding): BrownfieldImprovementItem 
 
 function currentArchitectureSummary(signals: NormalizedSignals): string {
   const summary = signals.summary;
+  const importingModules = [...new Set(signals.dependencyEdges.map((edge) => edge.from))].sort(compareStrings);
+  const topLevelAreas = [...new Set(importingModules.map((sourcePath) => sourcePath.split("/")[0] ?? sourcePath))].sort(compareStrings);
+  const structureText = importingModules.length === 0
+    ? "No persisted module-to-module import edge was available to describe the dependency structure."
+    : `Persisted dependency evidence connects ${importingModules.length} importing module(s) across ${topLevelAreas.length} top-level area(s).`;
+  const edgeExamples = signals.dependencyEdges
+    .slice(0, 8)
+    .map((edge) => `${edge.from} -> ${edge.to}`)
+    .join("; ");
+  const edgeText = edgeExamples.length === 0 ? "" : ` Example persisted edges: ${edgeExamples}.`;
   const hotspots = [...signals.architectureSignals]
-    .sort((left, right) => SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity] || compareStrings(left.code, right.code))
+    .sort((left, right) => SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity] || compareStrings(left.code, right.code) || compareStrings(left.statement, right.statement))
     .slice(0, 8)
     .map((signal) => `${signal.code}: ${signal.statement}`);
   const hotspotText = hotspots.length === 0 ? "" : ` Observed structural hotspots: ${hotspots.join(" ")}`;
   return boundedText(
-    `The validated structural view covers ${summary.sourceFiles} source files (${summary.coverageFiles} coverage entries), ${summary.symbols} symbols, ${summary.imports} imports, ${summary.exports} exports, and ${summary.dependencyEdges} persisted dependency edges. It inventories ${summary.testFiles} test files and ${summary.testToSourceLinks} conservative test-to-source links.${hotspotText} These are structural observations, not runtime proof.`,
+    `The validated structural view covers ${summary.sourceFiles} source files (${summary.coverageFiles} coverage entries), ${summary.symbols} symbols, ${summary.imports} imports, ${summary.exports} exports, and ${summary.dependencyEdges} persisted dependency edges. It inventories ${summary.testFiles} test files and ${summary.testToSourceLinks} conservative test-to-source links. ${structureText}${edgeText}${hotspotText} These are structural observations, not runtime proof.`,
     MAX_SUMMARY_CHARS
   );
 }
 
+function derivedAssessmentTitle(signals: NormalizedSignals): string {
+  const summary = signals.summary;
+  return `Brownfield assessment — ${summary.sourceFiles} source files, ${summary.dependencyEdges} dependency edges, ${summary.testFiles} test files`;
+}
+
+function deterministicSignalQuestion(signal: NormalizedSignals["architectureSignals"][number]): string | undefined {
+  switch (signal.code) {
+    case "test-coverage-gap":
+      return "Which source files identified by the test-coverage-gap signals must receive behavioral tests before completion?";
+    case "orphan-module":
+      return "Are the orphan modules intentional entry points, or should they be removed after owner review?";
+    case "circular-dependency":
+      return "Which side of each circular dependency should own the shared contract?";
+    case "high-fan-in":
+      return "Which high-fan-in modules are intentional shared contracts, and which need boundary isolation?";
+    case "documentation-gap":
+      return "What public behavior should be documented for the source files identified by the documentation-gap signals?";
+    default:
+      return undefined;
+  }
+}
+
 function executiveSummary(signals: NormalizedSignals, findings: readonly AssessmentFinding[], assumptions: readonly AssessmentAssumption[], gaps: readonly string[]): string {
+  const summary = signals.summary;
+  const signalCount = signals.architectureSignals.length + signals.riskSignals.length;
+  const coverageGaps = [...signals.architectureSignals, ...signals.riskSignals]
+    .filter((signal) => signal.code === "test-coverage-gap")
+    .length;
   const top = findings.slice(0, 5).map((finding) => finding.title).join("; ");
   const topText = top.length === 0 ? "" : ` Leading issues: ${top}.`;
+  const coverageText = coverageGaps === 0
+    ? "No explicit test-coverage-gap signal was emitted."
+    : `${coverageGaps} source file(s) have an explicit test-coverage-gap signal.`;
   return boundedText(
-    `Assessment of ${signals.summary.sourceFiles} files produced ${findings.length} prioritized issue classes, ${assumptions.length} assumptions requiring input, and ${gaps.length} behavioral-proof gaps.${topText} Severity and confidence are ranked deterministically; dissent remains explicit rather than averaged. Static structure is not runtime proof.`,
+    `This deterministic assessment describes a project with ${summary.sourceFiles} source files, ${summary.symbols} extracted symbols, ${summary.exports} exports, and ${summary.dependencyEdges} persisted dependency edges. ${summary.testFiles} test files and ${summary.testToSourceLinks} conservative source links are inventoried; ${coverageText} It produced ${signalCount} structural signal(s), ${findings.length} prioritized issue class(es), ${assumptions.length} assumptions requiring input, and ${gaps.length} behavioral-proof gap(s).${topText} Severity and confidence are ranked deterministically; dissent remains explicit rather than averaged. Static structure is not runtime proof.`,
     MAX_SUMMARY_CHARS
   );
 }
@@ -659,7 +750,8 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
     : specialistResult ?? undefined) as Partial<BrownfieldSpecialistsResult> | undefined;
   const candidates: FindingCandidate[] = [];
   let sourceOrder = 0;
-  for (const finding of signalFindings(signals)) candidates.push({ ...finding, _sourceOrder: sourceOrder++ });
+  const deterministicFindings = signalFindings(signals);
+  for (const finding of deterministicFindings) candidates.push({ ...finding, _sourceOrder: sourceOrder++ });
   for (const finding of [
     ...(input.findings ?? []),
     ...(input.specialistFindings ?? []),
@@ -680,14 +772,12 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
   const specialistFindings = (specialistRecord?.findings ?? []) as readonly AssessmentFinding[];
   const specialistAssumptions = (specialistRecord?.assumptions ?? []) as readonly AssessmentAssumption[];
   const specialistDiagnostics = (specialistRecord?.diagnostics ?? []) as readonly unknown[];
-  if (input.specialists === null || (input.specialists !== undefined && specialistFindings.length === 0 && specialistAssumptions.length === 0)) {
+  if ((input.specialists === null || (input.specialists !== undefined && specialistFindings.length === 0 && specialistAssumptions.length === 0)) && deterministicFindings.length === 0) {
     addGeneratedAssumption(accumulator, makeGeneratedAssumption({
-      seed: input.specialists === null ? "specialists-null" : "specialists-empty",
-      statement: input.specialists === null
-        ? "[needs-user-input] Specialist output was explicitly unavailable; no specialist conclusion can be treated as established."
-        : "[needs-user-input] Specialist output was empty; no specialist conclusion can be treated as established.",
-      resolution: "Run the bounded specialist roster or provide an owner-reviewed specialist result.",
-      evidence: [fallbackEvidence("Explicit null specialist result; specialist execution did not provide output.")]
+      seed: input.specialists === null ? "specialists-null-no-signals" : "specialists-empty-no-signals",
+      statement: "[needs-user-input] No deterministic signal findings were available to replace specialist analysis; owner validation is required.",
+      resolution: "Provide a fresh structural signal snapshot or an owner-reviewed specialist result.",
+      evidence: [fallbackEvidence("Specialist output was unavailable and the deterministic signal set was empty.")]
     }));
   }
 
@@ -763,6 +853,11 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
   for (const link of signals.testToSourceLinks) {
     collectUniqueText(gapCollector, `Conservative test-to-source link '${link.testPath}' -> '${link.sourcePath}' is not behavioral proof.`);
   }
+  for (const signal of [...signals.architectureSignals, ...signals.riskSignals]) {
+    if (signal.code === "test-coverage-gap" || signal.code === "missing-test-neighbor") {
+      collectUniqueText(gapCollector, `${signal.statement} A test-result is required to establish behavioral coverage.`);
+    }
+  }
   if (signals.summary.unsupportedSignals > 0) {
     collectUniqueText(gapCollector, `${signals.summary.unsupportedSignals} unsupported structural area(s) remain without behavioral proof.`);
   }
@@ -814,6 +909,10 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
   for (const title of dissentQuestionTitles.sort(compareStrings)) {
     collectUniqueText(questionCollector, `Which evidence-backed interpretation of '${title}' reflects the intended architecture or behavior?`);
   }
+  for (const signal of [...signals.architectureSignals, ...signals.riskSignals]) {
+    const question = deterministicSignalQuestion(signal);
+    if (question !== undefined) collectUniqueText(questionCollector, question);
+  }
   for (const assumption of assumptionsRequiringInput) {
     collectUniqueText(questionCollector, `Resolve assumption ${assumption.id}: ${assumption.statement}`);
   }
@@ -823,14 +922,29 @@ export function synthesizeBrownfieldDesign(input: BrownfieldSynthesisInput = {})
   const summary = signals.summary;
   const strengthCollector = new Map<string, string>();
   for (const value of input.strengths ?? []) collectUniqueText(strengthCollector, value);
-  if (strengthCollector.size === 0 && summary.sourceFiles > 0) {
+  const suppliedStrengths = (input.strengths ?? []).length > 0;
+  if (!suppliedStrengths && summary.sourceFiles > 0) {
     collectUniqueText(strengthCollector, `A bounded structural snapshot covers ${summary.sourceFiles} source files and ${summary.coverageFiles} coverage entries.`);
   }
-  if (summary.testToSourceLinks > 0) collectUniqueText(strengthCollector, `${summary.testToSourceLinks} conservative test-to-source link(s) are available for follow-up verification.`);
+  if (!suppliedStrengths && summary.exports > 0) {
+    collectUniqueText(strengthCollector, `Structural extraction recorded ${summary.exports} exported symbol(s), making the public module surface available for review.`);
+  }
+  if (!suppliedStrengths && summary.dependencyEdges > 0) {
+    collectUniqueText(strengthCollector, `${summary.dependencyEdges} persisted dependency edge(s) provide a concrete module-relationship inventory.`);
+  }
+  if (!suppliedStrengths && summary.testFiles > 0) {
+    collectUniqueText(strengthCollector, `${summary.testFiles} test file(s) are inventoried for follow-up execution checks.`);
+  }
+  if (summary.testToSourceLinks > 0) {
+    collectUniqueText(strengthCollector, `${summary.testToSourceLinks} conservative test-to-source link(s) connect tests to source files for follow-up verification.`);
+  }
+  if (!suppliedStrengths && summary.unsupportedSignals === 0 && summary.sourceFiles > 0) {
+    collectUniqueText(strengthCollector, "No unsupported-file signal was emitted for the validated structural snapshot.");
+  }
   const strengths = finalizeBoundedSet(strengthCollector, MAX_STRENGTHS);
 
   return {
-    title: boundedText(input.title, MAX_TITLE_CHARS, "Brownfield assessment improvement design"),
+    title: boundedText(input.title, MAX_TITLE_CHARS, derivedAssessmentTitle(signals)),
     executiveSummary: executiveSummary(signals, finalFindings, assumptionsRequiringInput, behavioralProofGaps),
     currentArchitecture: currentArchitectureSummary(signals),
     evidenceBackedStrengths: strengths,
@@ -856,6 +970,40 @@ export function serializeBrownfieldDesign(design: BrownfieldDesign): string {
   return stableProtocolJson(design);
 }
 
+function projectOverview(design: BrownfieldDesign): string {
+  return boundedText(
+    `The project is represented by a bounded structural inventory rather than specialist prose. ${design.executiveSummary} ${design.currentArchitecture}`,
+    MAX_SUMMARY_CHARS * 2
+  );
+}
+
+function completionAssessment(design: BrownfieldDesign): string[] {
+  const completed = design.evidenceBackedStrengths.slice(0, 4);
+  const partial = design.behavioralProofGaps.slice(0, 4);
+  const missing = design.improvementPlan.slice(0, 4).map((item) => `${item.priority} ${item.objective}`);
+  return [
+    "### Done",
+    ...(completed.length === 0 ? ["- No completed structural strengths were recorded."] : completed.map((value) => `- ${value}`)),
+    "",
+    "### Partial",
+    ...(partial.length === 0 ? ["- No explicit behavioral-proof gaps were recorded; runtime behavior is still not inferred from static structure."] : partial.map((value) => `- ${value}`)),
+    "",
+    "### Missing",
+    ...(missing.length === 0 ? ["- No prioritized completion actions were generated from the available evidence."] : missing.map((value) => `- ${value}`)),
+    ...(design.assumptionsRequiringInput.length > 0 ? [`- ${design.assumptionsRequiringInput.length} owner-input assumption(s) remain unresolved.`] : [])
+  ];
+}
+
+function recommendedNextSteps(design: BrownfieldDesign): string[] {
+  return design.improvementPlan.slice(0, 20).map((item) => {
+    const rationale = item.rationale.length === 0 ? "" : ` Rationale: ${boundedText(item.rationale, 600)}`;
+    const prerequisites = item.prerequisites.length === 0 ? "" : ` Prerequisites: ${item.prerequisites.join(" ")}`;
+    const verification = item.verification.length === 0 ? "" : ` Verify: ${item.verification.join(" ")}`;
+    const objective = item.objective.endsWith(".") ? item.objective : `${item.objective}.`;
+    return `- ${item.priority} ${objective}${rationale}${prerequisites}${verification}`;
+  });
+}
+
 /** Human-readable brownfield report comparable to a specialist audit brief. */
 export function renderBrownfieldReport(design: BrownfieldDesign): string {
   const findings = design.prioritizedFindings.slice(0, 25).map((finding) => [
@@ -872,8 +1020,22 @@ export function renderBrownfieldReport(design: BrownfieldDesign): string {
   const plan = design.improvementPlan.slice(0, 20).map((item) => (
     `- ${item.priority} ${item.objective}`
   ));
+  const assessment = completionAssessment(design);
+  const nextSteps = recommendedNextSteps(design);
   return [
     `# ${design.title}`,
+    "",
+    "## Project Overview",
+    "",
+    projectOverview(design),
+    "",
+    "## Completion Assessment",
+    "",
+    ...assessment,
+    "",
+    "## Recommended Next Steps",
+    "",
+    ...(nextSteps.length === 0 ? ["_None._"] : nextSteps),
     "",
     "## Executive summary",
     "",
