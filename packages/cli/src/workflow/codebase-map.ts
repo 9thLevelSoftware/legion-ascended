@@ -162,6 +162,7 @@ export async function refreshCodebaseMap(input: {
   readonly scope: string;
   readonly files: readonly CodebaseMapFile[];
   readonly snapshot?: CodeIndexSnapshotDraft | MapRenderIndex;
+  readonly intelligence?: MapRenderIndex;
 }): Promise<CodebaseMapArtifacts> {
   const { scope, files } = input;
   const map: CodebaseMapDocument = {
@@ -181,9 +182,15 @@ export async function refreshCodebaseMap(input: {
   const mapArtifactPath = guidanceArtifactPath(input.paths, "map.json");
   const mapText = stableProtocolJson(map);
   const mapRunId = structuralMapRunId(input.paths.runId);
+  const renderIndex: MapRenderIndex | undefined = input.snapshot === undefined && input.intelligence === undefined
+    ? undefined
+    : {
+        ...(input.snapshot ?? {}),
+        ...(input.intelligence ?? {})
+      };
   const documents = renderCodebaseDocuments({
     map,
-    ...(input.snapshot === undefined ? {} : { snapshot: input.snapshot })
+    ...(renderIndex === undefined ? {} : { snapshot: renderIndex })
   });
 
   await writeProjectTextFile({
@@ -334,7 +341,7 @@ export async function refreshStructuralCodeIndex(input: {
   const semanticIndexSha256 = codeIndexSha256Schema.parse(sha256(Buffer.from(semanticIndexText, "utf8")));
 
   const parserDiagnostics = draft.coverage.flatMap((coverage) => {
-    if (coverage.status !== "parser-error") return [];
+    if (coverage.status !== "parser-error" && coverage.status !== "partial") return [];
     const diagnostics = coverage.diagnostics ?? ["parser error"];
     return diagnostics.map((message) => `${coverage.path}: ${message}`);
   });

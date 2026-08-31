@@ -1,4 +1,4 @@
-import { readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { listReviewDecisionsForChange, loadProject, readTaskGraph, stableProtocolJson } from "@legion/artifacts";
@@ -29,8 +29,14 @@ import {
   refreshStructuralCodeIndex,
   resolveMapState,
   type MapProfile,
-  type MapState
+  type MapState,
+  type StructuralMapSummary
 } from "../../workflow/codebase-map.js";
+import type { MapRenderIndex } from "../../workflow/codebase-map-render.js";
+import { scoreCodeHealth } from "../../workflow/code-health.js";
+import { analyzeGitHistory } from "../../workflow/git-history.js";
+import { rankModules } from "../../workflow/graph-rank.js";
+import { generateProjectContext } from "../../workflow/project-context.js";
 import { writeProjectTextFile } from "../../workflow/executor/index.js";
 import { parseResultFromText } from "../../workflow/executor/result.js";
 import { explorationResultContract, parseExploration } from "../../workflow/exploration.js";
@@ -43,6 +49,8 @@ import {
   renderGuidanceMarkdown,
   runGuidanceExecutor,
   writeGuidanceRun,
+  updateLatestSymlink,
+  cleanupOldRuns,
   type GuidanceRunDocument
 } from "../../workflow/guidance-run.js";
 import { slugFromName } from "../../workflow/input.js";
@@ -318,6 +326,21 @@ async function handleMapWorkflow(context: CliContext): Promise<CliResult> {
   return mapSummary(context, scope, explicitProfile ?? "inventory");
 }
 
+const MAP_PARSER_ERROR_THRESHOLD = 0.9;
+
+function computeMapCompletionStatus(
+  summary: StructuralMapSummary | undefined,
+  parserDiagnostics: readonly string[]
+): "completed" | "blocked" {
+  if (parserDiagnostics.length === 0) return "completed";
+  if (summary === undefined) return "blocked";
+  const counts = summary.coverageStatusCounts;
+  const parsed = (counts["parsed"] ?? 0) + (counts["partial"] ?? 0);
+  const parseable = parsed + (counts["parser-error"] ?? 0);
+  if (parseable === 0) return "completed";
+  return parsed / parseable >= MAP_PARSER_ERROR_THRESHOLD ? "completed" : "blocked";
+}
+
 async function mapRefresh(context: CliContext, scope: string | undefined, profile: MapProfile): Promise<CliResult> {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
@@ -365,12 +388,65 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
           files: source.sourceFiles
         })
       : undefined;
+    let intelligence: MapRenderIndex | undefined;
+    if (semantic !== undefined) {
+      intelligence = {};
+      try {
+        const gitHistory = await analyzeGitHistory({
+          repositoryRoot: context.repositoryRoot,
+          files: source.files.map((file) => file.path)
+        });
+        intelligence = {
+          ...intelligence,
+          gitHotspots: gitHistory.hotspots,
+          gitOwnership: gitHistory.ownership,
+          gitBusFactor: gitHistory.busFactor
+        };
+      } catch {
+        // Git history is an optional enhancement; structural refresh still proceeds.
+      }
+      try {
+        const graphRank = rankModules({
+          imports: semantic.snapshot.imports,
+          exports: semantic.snapshot.exports,
+          coverage: semantic.snapshot.coverage
+        });
+        intelligence = { ...intelligence, rankedModules: graphRank.ranked };
+      } catch {
+        // Graph ranking is an optional enhancement; structural refresh still proceeds.
+      }
+      try {
+        const healthScores = scoreCodeHealth({
+          files: source.sourceFiles,
+          imports: semantic.snapshot.imports,
+          exports: semantic.snapshot.exports
+        });
+        intelligence = { ...intelligence, healthScores };
+      } catch {
+        // Health scoring is an optional enhancement; structural refresh still proceeds.
+      }
+    }
     const artifacts = await refreshCodebaseMap({
       repositoryRoot: context.repositoryRoot,
       paths,
       scope: source.scope,
       files: source.files,
-      ...(semantic === undefined ? {} : { snapshot: semantic.snapshot })
+      ...(semantic === undefined ? {} : { snapshot: semantic.snapshot }),
+      ...(intelligence === undefined ? {} : { intelligence })
+    });
+    const projectContext = generateProjectContext({
+      repositoryRoot: context.repositoryRoot,
+      scope: source.scope,
+      files: source.files,
+      imports: semantic?.snapshot.imports ?? [],
+      exports: semantic?.snapshot.exports ?? [],
+      coverage: semantic?.snapshot.coverage ?? []
+    });
+    const agentsMdPath = guidanceArtifactPath(paths, "agents.md");
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: agentsMdPath,
+      text: projectContext.agentsMd
     });
     const parserDiagnostics = semantic?.parserDiagnostics ?? [];
     const structuralSummary = semantic === undefined
@@ -380,10 +456,12 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
           semanticIndexArtifactPath: semantic.semanticIndexArtifactPath
         });
     const structuralFields = structuralSummary ?? {};
-    const status = parserDiagnostics.length === 0 ? "completed" : "blocked";
+    const status = computeMapCompletionStatus(structuralSummary, parserDiagnostics);
     const action = status === "completed"
-      ? nextAction("legion plan 1", "Use refreshed map context when planning the next change.")
-      : nextAction("legion map --refresh", "The structural parser reported errors; inspect snapshot coverage diagnostics before relying on this index.");
+      ? parserDiagnostics.length > 0
+        ? nextAction("legion plan 1", `${parserDiagnostics.length} file(s) had parser warnings but coverage is sufficient. Use refreshed map context when planning the next change.`)
+        : nextAction("legion plan 1", "Use refreshed map context when planning the next change.")
+      : nextAction("legion map --refresh", "The structural parser reported errors in too many files; inspect snapshot coverage diagnostics before relying on this index.");
     const diagnostics = parserDiagnostics.map((message) => ({ code: "map_parser_error", message }));
     const outputs = {
       codebaseArtifactPath: artifacts.codebaseArtifactPath,
@@ -396,6 +474,7 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       mapArtifactSha256: artifacts.mapArtifactSha256,
       sourceFingerprint: artifacts.map.sourceFingerprint,
       sourceFileCount: artifacts.map.sourceFileCount,
+      agentsMdPath,
       ...(semantic === undefined
         ? {}
         : {
@@ -416,6 +495,8 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       nextAction: action,
       diagnostics
     });
+    await updateLatestSymlink(context.repositoryRoot, paths);
+    await cleanupOldRuns(context.repositoryRoot, paths.workflow);
     const payload = {
       ok: status === "completed",
       status,
@@ -429,6 +510,7 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
       mapArtifactSha256: artifacts.mapArtifactSha256,
       sourceFingerprint: artifacts.map.sourceFingerprint,
       sourceFileCount: artifacts.map.sourceFileCount,
+      agentsMdPath,
       preview: artifacts.preview,
       ...(semantic === undefined
         ? {}
@@ -445,9 +527,12 @@ async function mapRefresh(context: CliContext, scope: string | undefined, profil
     };
     const human = [
       status === "completed"
-        ? `Codebase map refreshed for ${artifacts.map.sourceFileCount} source files.`
+        ? parserDiagnostics.length > 0
+          ? `Codebase map refreshed for ${artifacts.map.sourceFileCount} source files (${parserDiagnostics.length} parser warning(s)).`
+          : `Codebase map refreshed for ${artifacts.map.sourceFileCount} source files.`
         : `Structural codebase map blocked by ${parserDiagnostics.length} parser diagnostic(s).`,
       `Artifact: ${artifacts.codebaseArtifactPath}`,
+      `Project context: ${agentsMdPath}`,
       ...(semantic === undefined ? [] : [`Semantic index: ${semantic.semanticIndexArtifactPath}`]),
       ...(structuralSummary === undefined ? [] : renderStructuralMapSummary(structuralSummary)),
       "",

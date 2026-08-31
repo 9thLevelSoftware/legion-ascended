@@ -397,12 +397,45 @@ type RiskPatternMatches = {
   readonly catchAndIgnore: boolean;
   readonly credentialLikeString: boolean;
   readonly unboundedInput: boolean;
+  readonly hasDocumentation: boolean;
 };
 
 /**
- * Scan the bounded prefix from the same opened source bytes that were hashed.
- * Only booleans leave the scanner, so no source text is retained in evidence.
+ * Detect comment-like documentation outside quoted literals. This avoids
+ * treating a URL such as `https://example.test` as a source comment while
+ * remaining bounded to the already-read source prefix.
  */
+function containsCommentOrDocumentation(text: string): boolean {
+  if (text.includes("'''") || text.includes('\"\"\"')) return true;
+  let quote: "'" | "\"" | "`" | undefined;
+  let escaped = false;
+  let code = "";
+  for (const character of text) {
+    if (quote !== undefined) {
+      if (escaped) {
+        escaped = false;
+        code += /[\r\n]/u.test(character) ? character : " ";
+      } else if (character === "\\") {
+        escaped = true;
+        code += " ";
+      } else if (character === quote) {
+        quote = undefined;
+        code += " ";
+      } else {
+        code += /[\r\n]/u.test(character) ? character : " ";
+      }
+      continue;
+    }
+    if (character === "'" || character === "\"" || character === "`") {
+      quote = character;
+      code += " ";
+    } else {
+      code += character;
+    }
+  }
+  return /\/\/|\/\*|<!--[\s\S]*?-->|(?:^|[\r\n])\s*(?:#|--)/u.test(code);
+}
+
 function scanBoundedSource(bytes: Buffer): RiskPatternMatches {
   if (bytes.includes(0)) {
     return {
@@ -410,7 +443,8 @@ function scanBoundedSource(bytes: Buffer): RiskPatternMatches {
       emptyFunction: false,
       catchAndIgnore: false,
       credentialLikeString: false,
-      unboundedInput: false
+      unboundedInput: false,
+      hasDocumentation: false
     };
   }
   const text = bytes.toString("utf8");
@@ -419,7 +453,10 @@ function scanBoundedSource(bytes: Buffer): RiskPatternMatches {
     emptyFunction: /(?:\bfunction\s+[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\{\s*\}|=>\s*\{\s*\})/u.test(text),
     catchAndIgnore: /\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/u.test(text),
     credentialLikeString: /\b(?:password|passwd|secret|api[_-]?key|token)\b\s*[:=]\s*["'][^"']{4,}["']/iu.test(text),
-    unboundedInput: /\b(?:req|request)\.(?:body|query|params)\b|\bprocess\.stdin\b/iu.test(text)
+    unboundedInput: /\b(?:req|request)\.(?:body|query|params)\b|\bprocess\.stdin\b/iu.test(text),
+    // This intentionally recognizes comments rather than trying to infer
+    // documentation quality. JSDoc is covered by the block-comment branch.
+    hasDocumentation: containsCommentOrDocumentation(text)
   };
 }
 
@@ -765,6 +802,35 @@ function modulesWithResolvedImports(snapshot: CodeIndexSnapshot): ReadonlySet<st
   return importedPaths;
 }
 
+type ResolvedImport = {
+  readonly fact: CodeIndexImport;
+  readonly target: CodeIndexSourcePath;
+};
+
+function eligibleModulePaths(snapshot: CodeIndexSnapshot): ReadonlySet<string> {
+  return new Set(
+    snapshot.coverage
+      .filter((coverage) => !isTestFile(coverage.path) && isEligibleSourceForTestNeighbor(coverage))
+      .map((coverage) => coverage.path)
+  );
+}
+
+function resolvedModuleImports(
+  snapshot: CodeIndexSnapshot,
+  modulePaths: ReadonlySet<string>
+): ResolvedImport[] {
+  const links: ResolvedImport[] = [];
+  for (const fact of sorted(snapshot.imports, (left, right) =>
+    compareStrings(left.path, right.path) || compareStrings(left.specifier, right.specifier) || compareStrings(left.id, right.id)
+  )) {
+    if (!modulePaths.has(fact.path)) continue;
+    for (const target of importTargetPaths(fact, modulePaths)) {
+      links.push({ fact, target: codeIndexSourcePathSchema.parse(target) });
+    }
+  }
+  return links;
+}
+
 function importFactEvidence(
   sqliteArtifactPath: ArtifactPath,
   sqliteSha256: CodeIndexSha256,
@@ -835,6 +901,76 @@ function collectArchitectureSignals(input: {
   }
 
   const modulesWithImports = modulesWithResolvedImports(snapshot);
+  const modulePaths = eligibleModulePaths(snapshot);
+  const resolvedImports = resolvedModuleImports(snapshot, modulePaths);
+  const importedModulePaths = new Set<string>(resolvedImports.map((link) => link.target));
+  for (const modulePath of sorted([...modulePaths], compareStrings)) {
+    if (importedModulePaths.has(modulePath)) continue;
+    const observation = sourceObservationFor(observations, modulePath);
+    addSignal(
+      signals,
+      "orphan-module",
+      "minor",
+      `Module ${modulePath} is not imported by any other module; it may be dead code or an entry point.`,
+      [sourceEvidence(observation, "Source file with no resolved incoming module import.")]
+    );
+  }
+
+  const resolvedImportByPair = new Map<string, ResolvedImport>();
+  for (const link of resolvedImports) {
+    const key = `${link.fact.path}\u0000${link.target}`;
+    if (!resolvedImportByPair.has(key)) resolvedImportByPair.set(key, link);
+  }
+  for (const link of resolvedImports) {
+    const sourcePath = link.fact.path;
+    const targetPath = link.target;
+    if (compareStrings(sourcePath, targetPath) >= 0) continue;
+    const reciprocal = resolvedImportByPair.get(`${targetPath}\u0000${sourcePath}`);
+    if (reciprocal === undefined) continue;
+    addSignal(
+      signals,
+      "circular-dependency",
+      "major",
+      `Circular dependency detected: ${sourcePath} <-> ${targetPath}`,
+      [
+        sourceEvidence(sourceObservationFor(observations, sourcePath), "Source file on the first side of a reciprocal module import."),
+        sourceEvidence(sourceObservationFor(observations, targetPath), "Source file on the second side of a reciprocal module import."),
+        importFactEvidence(sqliteArtifactPath, sqliteSha256, link.fact),
+        importFactEvidence(sqliteArtifactPath, sqliteSha256, reciprocal.fact)
+      ]
+    );
+  }
+
+  const importersByTarget = new Map<string, Map<string, ResolvedImport>>();
+  for (const link of resolvedImports) {
+    if (link.fact.path === link.target) continue;
+    const importers = importersByTarget.get(link.target) ?? new Map<string, ResolvedImport>();
+    if (!importers.has(link.fact.path)) importers.set(link.fact.path, link);
+    importersByTarget.set(link.target, importers);
+  }
+  for (const [targetPath, importers] of [...importersByTarget.entries()].sort(([left], [right]) => compareStrings(left, right))) {
+    if (importers.size <= 10) continue;
+    const targetObservation = sourceObservationFor(observations, targetPath);
+    const importerLinks = [...importers.values()].sort((left, right) =>
+      compareStrings(left.fact.path, right.fact.path) || compareStrings(left.fact.id, right.fact.id)
+    );
+    const evidence = [
+      sourceEvidence(targetObservation, "Target module receiving resolved imports."),
+      ...importerLinks.flatMap((link) => [
+        sourceEvidence(sourceObservationFor(observations, link.fact.path), "Importer contributing to resolved module fan-in."),
+        importFactEvidence(sqliteArtifactPath, sqliteSha256, link.fact)
+      ])
+    ];
+    addSignal(
+      signals,
+      "high-fan-in",
+      "informational",
+      `Module ${targetPath} is imported by ${importers.size} files; changes to it have wide impact.`,
+      evidence,
+      evidence.length > MAX_SIGNAL_EVIDENCE
+    );
+  }
+
   for (const fact of snapshot.exports) {
     if (!fact.name || modulesWithImports.has(fact.path)) continue;
     const observation = sourceObservationFor(observations, fact.path);
@@ -871,7 +1007,7 @@ function collectArchitectureSignals(input: {
 
   for (const coverage of snapshot.coverage) {
     const observation = sourceObservationFor(observations, coverage.path);
-    if (coverage.status === "parser-error") {
+    if (coverage.status === "parser-error" || coverage.status === "partial") {
       addSignal(
         signals,
         "parser-error",
@@ -956,7 +1092,10 @@ async function collectRiskSignals(input: {
       addSignal(signals, "unbounded-input", "major", `Potentially unbounded input access pattern present in ${sourcePath}; runtime validation and limits are not proven by static structure.`, [sourceEvidence(observation, "Bounded source read containing unbounded-input pattern.")]);
     }
     if (eligibleTestNeighborSources.has(sourcePath) && !linkedSources.has(sourcePath)) {
-      addSignal(signals, "missing-test-neighbor", "minor", `No conservative test-to-source neighbor was found for ${sourcePath}; static absence is not proof that no test exists.`, [sourceEvidence(observation, "Source file without a conservative test neighbor link.")]);
+      addSignal(signals, "test-coverage-gap", "moderate", `Source file ${sourcePath} has no corresponding test file; test coverage is incomplete.`, [sourceEvidence(observation, "Source file without a conservative corresponding test file.")]);
+    }
+    if (eligibleTestNeighborSources.has(sourcePath) && !patternMatches.hasDocumentation) {
+      addSignal(signals, "documentation-gap", "minor", `Source file ${sourcePath} has no extracted documentation; consider adding module-level comments.`, [sourceEvidence(observation, "Bounded source read with no detected comment or JSDoc documentation.")]);
     }
     if (isManifestOrCi(sourcePath)) {
       addSignal(

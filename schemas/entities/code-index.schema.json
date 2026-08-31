@@ -110,6 +110,7 @@
             "type": "string",
             "enum": [
               "parsed",
+              "partial",
               "metadata-only",
               "size-limited",
               "opaque",

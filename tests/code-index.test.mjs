@@ -490,7 +490,7 @@ test('reports malformed TypeScript as parser-error without aborting other files'
   );
 
   const broken = result.coverage.find(({ path }) => path === 'broken.ts');
-  assert.equal(broken.status, 'parser-error');
+  assert.equal(broken.status, 'partial');
   assert.ok(broken.diagnostics?.length > 0);
   assert.match(broken.diagnostics[0], /parser error|syntax|error/i);
   assert.equal(result.coverage.find(({ path }) => path === 'ok.ts').status, 'parsed');

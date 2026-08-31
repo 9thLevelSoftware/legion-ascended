@@ -96,7 +96,7 @@ test("code index coverage accepts each status and bounded per-file metadata", ()
 
 test("code index coverage rejects invalid statuses and paths", () => {
   const invalidStatus = validSnapshot();
-  invalidStatus.coverage[0].status = "partial";
+  invalidStatus.coverage[0].status = "invalid-status";
   assert.equal(codeIndexSnapshotSchema.safeParse(invalidStatus).success, false);
 
   const invalidPath = validSnapshot();

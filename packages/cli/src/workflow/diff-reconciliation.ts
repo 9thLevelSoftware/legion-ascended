@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, rmSync, statSync } from "node:fs";
+import { lstatSync, readFileSync, readlinkSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
 import type { TaskContract } from "@legion/protocol";
@@ -134,13 +134,25 @@ function splitLines(value: string): readonly string[] {
 /**
  * Hash a file's current bytes so two observations can be compared by content.
  *
- * Returns `undefined` when the file cannot be read — deleted, oversized, or
- * permission-denied. Callers treat an unknown hash as "assume it changed",
- * because an unreadable file is not evidence that nothing happened to it.
+ * Symlinks are hashed by their link target without following them. This keeps
+ * stable directory links such as `.legion/project/workflow/map/latest`
+ * attributable by identity instead of treating an unreadable target directory
+ * as an unknown file on every observation.
+ *
+ * Returns `undefined` when the file cannot be read — deleted, binary-unreadable,
+ * oversized, or permission-denied. Callers treat an unknown hash as "assume it
+ * changed", because an unreadable file is not evidence that nothing happened to
+ * it.
  */
 function hashFileContent(absolutePath: string): string | undefined {
   try {
-    if (statSync(absolutePath).size > MAX_HASHED_BYTES) return undefined;
+    const metadata = lstatSync(absolutePath);
+    if (metadata.isSymbolicLink()) {
+      return createHash("sha256")
+        .update(`symlink\u0000${readlinkSync(absolutePath, "utf8")}`, "utf8")
+        .digest("hex");
+    }
+    if (!metadata.isFile() || metadata.size > MAX_HASHED_BYTES) return undefined;
     return createHash("sha256").update(readFileSync(absolutePath)).digest("hex");
   } catch {
     return undefined;

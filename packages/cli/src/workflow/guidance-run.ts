@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, symlink, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import { loadProject, stableProtocolJson } from "@legion/artifacts";
@@ -163,6 +163,45 @@ export async function writeGuidanceRun(input: {
     text: stableProtocolJson(document)
   });
   return document;
+}
+
+const MAX_RETAINED_RUNS = 3;
+
+export async function updateLatestSymlink(repositoryRoot: string, paths: GuidanceRunPaths): Promise<void> {
+  const workflowRoot = path.join(repositoryRoot, ".legion", "project", "workflow", paths.workflow);
+  const latestPath = path.join(workflowRoot, "latest");
+  const runDir = path.join(repositoryRoot, ...paths.artifactRoot.split("/"));
+  try {
+    await unlink(latestPath);
+  } catch {
+    // Ignore if doesn't exist
+  }
+  try {
+    await symlink(runDir, latestPath, "dir");
+  } catch {
+    // Symlink creation may fail on some platforms; non-critical
+  }
+}
+
+export async function cleanupOldRuns(repositoryRoot: string, workflow: string): Promise<void> {
+  const workflowRoot = path.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+  let entries;
+  try {
+    entries = await readdir(workflowRoot, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  const runDirs = entries
+    .filter((entry) => entry.isDirectory() && entry.name !== "latest")
+    .map((entry) => entry.name)
+    .sort((a, b) => b.localeCompare(a)); // newest first
+  for (const dir of runDirs.slice(MAX_RETAINED_RUNS)) {
+    try {
+      await rm(path.join(workflowRoot, dir), { recursive: true, force: true });
+    } catch {
+      // Cleanup failure is non-critical
+    }
+  }
 }
 
 export async function runGuidanceExecutor(input: {

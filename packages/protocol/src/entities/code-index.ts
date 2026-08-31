@@ -23,6 +23,7 @@ export type CodeIndexProfile = z.infer<typeof codeIndexProfileSchema>;
 
 export const codeIndexCoverageStatusSchema = z.enum([
   "parsed",
+  "partial",
   "metadata-only",
   "size-limited",
   "opaque",

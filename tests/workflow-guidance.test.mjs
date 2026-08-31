@@ -149,7 +149,7 @@ test("map refresh, check, and query produce deterministic codebase artifacts", a
     // getLatestCodebaseMap scans the newest twenty map runs to find the map, so
     // recording reads evicted the refresh that produced it.
     const mapRuns = await readdir(path.join(root, ".legion", "project", "workflow", "map"));
-    assert.equal(mapRuns.length, 1, `expected only the refresh to be recorded, found ${mapRuns.join(", ")}`);
+    assert.equal(mapRuns.filter((entry) => entry !== "latest").length, 1, `expected only the refresh to be recorded, found ${mapRuns.join(", ")}`);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -455,9 +455,9 @@ test("structural refresh covers the code-index fixture matrix within the scoped 
       "--created-at", "2026-06-23T12:06:00.000Z",
       "--json"
     ]);
-    assert.equal(refresh.exitCode, 1, refresh.stderr);
+    assert.equal(refresh.exitCode, 0, refresh.stderr);
     const payload = parseJsonOutput(refresh);
-    assert.equal(payload.status, "blocked");
+    assert.equal(payload.status, "completed");
     assert.ok(payload.diagnostics.some(({ code }) => code === "map_parser_error"));
     const snapshot = await readJson(root, payload.semanticIndexArtifactPath);
     const coverageByPath = new Map(snapshot.coverage.map((coverage) => [coverage.path, coverage]));
@@ -466,7 +466,7 @@ test("structural refresh covers the code-index fixture matrix within the scoped 
       "fixture/polyglot/src/worker.py": { status: "parsed", language: "python" },
       "fixture/polyglot/config/service.yaml": { status: "parsed", language: "yaml" },
       "fixture/polyglot/package.json": { status: "parsed", language: "json" },
-      "fixture/malformed/broken.ts": { status: "parser-error", language: "typescript" },
+      "fixture/malformed/broken.ts": { status: "partial", language: "typescript" },
       "fixture/generated/generated.ts": { status: "parsed", language: "typescript" },
       // The workflow's authored-source collector omits text above 512 KiB, so
       // the refresh records this file as opaque. The parser-level assertion
